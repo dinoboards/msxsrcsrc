@@ -20,10 +20,11 @@ MYSIZE	EQU	10
                                 ; +4    current phantom drive (used with 1 physical drive)
                                 ; +5    saved drivenumber (DSKFMT)
                                 ; +6    saved RAWFLG (DSKFMT)
-                                ; +7    not used
-                                ; +8    number of physical drives
+                                ; +7    saved format choice (DSKFMT)
+                                ; +8    not used
+                                ; +9    number of physical drives
 
-SECLEN          equ     512
+SECLEN  EQU     512
 
 J4022  	EQU     4022H
 BDOS    EQU     0F37DH
@@ -173,7 +174,7 @@ J7511:	PUSH	BC
 	CALL	GETWRK
 	LD	A,01H	; 1 
 	CALL	C7DA2
-	LD	L,02H	; 2 
+	LD	L,2
 	JR	NC,J7520
 	DEC	L
 J7520:	LD	(IX+9),L
@@ -181,14 +182,14 @@ J7520:	LD	(IX+9),L
 	LD	(D7FF5),A
 	POP	AF
 	JR	Z,J752D
-	LD	L,02H	; 2 
+	LD	L,2
 J752D:	POP	BC
 	RET
 
 INIENV:
 J752F:	CALL	GETWRK
 	XOR	A
-	LD	B,09H	; 9 
+	LD	B,9
 J7535:	LD	(HL),A
 	INC	HL
 	DJNZ	J7535
@@ -224,7 +225,7 @@ J755A:	LD	A,H
 	LD	DE,($SECBUF)
 	PUSH	HL
 	PUSH	BC
-	LD	BC,C.0200
+	LD	BC,SECLEN
 	PUSH	IX
 	CALL	XFER
 	POP	IX
@@ -303,7 +304,7 @@ C75DD:	PUSH	HL
 	PUSH	IY
 	CALL	C7DDD
 	PUSH	HL
-	CALL	C.FFCF
+	CALL	DISINT
 	POP	HL
 	DI
 	LD	A,(D7FF4)
@@ -331,7 +332,7 @@ J760C:	LD	A,(BC)
 	JP	(IY)
 
 I7617:	EI
-	CALL	C.FFD4
+	CALL	ENAINT
 	POP	IY
 	POP	IX
 	POP	BC
@@ -358,7 +359,7 @@ C7632:	PUSH	BC
 	PUSH	HL
 	EX	DE,HL
 	LD	HL,($SECBUF)
-	LD	BC,C.0200
+	LD	BC,SECLEN
 	OR	A
 	SBC	HL,BC
 	EX	DE,HL
@@ -376,7 +377,7 @@ C7632:	PUSH	BC
 	JR	NC,J7686
 	PUSH	IX
 	CALL	C7DDD
-	CALL	C.FFCF
+	CALL	DISINT
 	DI
 	LD	A,80H
 	LD	(D7FF0),A
@@ -395,7 +396,7 @@ J766D:	LD	A,(BC)
 	JP	(HL)
 
 I7675:	EI
-	CALL	C.FFD4
+	CALL	ENAINT
 	POP	IX
 	POP	HL
 	POP	DE
@@ -417,7 +418,7 @@ J7686:	LD	HL,($SECBUF)
 	PUSH	DE
 	PUSH	HL
 	LD	DE,($SECBUF)
-	LD	BC,C.0200
+	LD	BC,SECLEN
 J769C:	LD	A,(DE)
 	CPI
 	SCF
@@ -505,7 +506,7 @@ J7709:	LD	A,H
 	PUSH	IX
 	EX	DE,HL
 	LD	HL,($SECBUF)
-	LD	BC,C.0200
+	LD	BC,SECLEN
 	CALL	XFER
 	POP	IX
 	POP	BC
@@ -556,7 +557,7 @@ C7761:	PUSH	HL
 	PUSH	IY
 	CALL	C7DDD
 	PUSH	HL
-	CALL	C.FFCF
+	CALL	DISINT
 	POP	HL
 	DI
 	LD	A,(D7FF4)
@@ -584,7 +585,7 @@ J7790:	LD	A,(BC)
 	JP	(IY)
 
 I779B:	EI
-	CALL	C.FFD4
+	CALL	ENAINT
 	POP	IY
 	POP	IX
 	POP	BC
@@ -640,7 +641,7 @@ J77E5:	PUSH	BC
 	BIT	1,C
 	LD	C,E
 	LD	B,D
-	LD	DE,I$0009
+	LD	DE,9
 	JR	Z,J77F0
 	DEC	E
 J77F0:	PUSH	IX
@@ -912,7 +913,7 @@ J7982:	LD	IY,I754C
 	PUSH	BC
 	PUSH	HL
 	LD	C,0F8H
-	LD	DE,I.0001
+	LD	DE,1
 	LD	HL,($SECBUF)
 	CALL	C7705
 	JR	C,J79B4
@@ -960,7 +961,7 @@ C79B7:	EI
 	ADD	HL,BC
 	LD	BC,I7458
 	ADD	HL,BC
-	LD	BC,I$0012
+	LD	BC,18
 	PUSH	DE
 	LDIR
 	POP	HL
@@ -986,10 +987,10 @@ J7A0F:	LD	HL,I754C
 	CALL	GETWRK
 	POP	BC
 	LD	A,C
-	CP	03H	; 3 
-	JP	NC,J7AB3
-	OR	A
-	JP	Z,J7AB3
+	CP	03H			; format choice >= 3 ?
+	JP	NC,J7AB3		; yep, quit with error
+	OR	A			; format choice = 0 ?
+	JP	Z,J7AB3			; yep, quit with error
 	DEC	A
 	LD	(IX+7),A
 	LD	A,D
@@ -1003,13 +1004,11 @@ J7A0F:	LD	HL,I754C
 	LD	A,(D7FF4)
 	RES	0,A
 	LD	(D7FF4),A		; select side 0
-J7A42	EQU	$-1
 	EX	AF,AF'
 	PUSH	AF
 J7A45:	XOR	A
 	EX	AF,AF'
 J7A47:	LD	B,0AH	; 10 
-J7A48	EQU	$-1
 J7A49:	PUSH	BC
 	CALL	C7BE9
 	AND	0C4H
@@ -1022,8 +1021,8 @@ J7A49:	PUSH	BC
 J7A58:	LD	A,(RAWFLG)
 	OR	A
 	JR	NZ,J7A90
-J7A5E:	BIT	0,(IX+7)
-	JR	Z,J7A79
+J7A5E:	BIT	0,(IX+7)		; format double sided ?
+	JR	Z,J7A79			; nope,
 	LD	A,(D7FF4)
 	BIT	0,A			; currently on side 1 ?
 J7A69:	RES	0,A
@@ -1073,11 +1072,11 @@ J7A97:	EX	AF,AF'
 	LD	A,0AH	; 10 
 	RET
 
-J7AB3:	LD	A,10H	; 16 
-	LD	BC,I$023E
-J7AB6	EQU	$-2
-	LD	BC,I$063E
-J7AB9	EQU	$-2
+J7AB3:	LD	A,16
+	DEFB	001H
+J7AB6:	LD	A,2
+	DEFB	001H
+J7AB9:	LD	A,6
 	SCF
 	RET
 
@@ -1093,12 +1092,12 @@ J7ABD:	EX	AF,AF'
 	LD	HL,I7E37
 	LD	DE,($SECBUF)
 	PUSH	DE
-	LD	BC,I$00C5
+	LD	BC,L7E37
 	LDIR
 	POP	HL
-	BIT	0,(IX+7)
-	JR	Z,J7AFA
-	LD	BC,I$0013
+	BIT	0,(IX+7)		; format double sided ?
+	JR	Z,J7AFA			; nope,
+	LD	BC,19
 	ADD	HL,BC
 	LD	(HL),0A0H
 	INC	HL
@@ -1112,7 +1111,7 @@ J7ABD:	EX	AF,AF'
 	INC	HL
 	INC	HL
 	LD	(HL),02H	; 2 
-J7AFA:	LD	BC,I$013B
+J7AFA:	LD	BC,SECLEN-L7E37
 J7AFD:	XOR	A
 	LD	(DE),A
 	INC	DE
@@ -1124,17 +1123,17 @@ J7AFD:	XOR	A
 	LD	HL,($SECBUF)
 	LD	B,01H	; 1 
 	LD	C,0F8H
-	BIT	0,(IX+7)
-	JR	Z,J7B16
+	BIT	0,(IX+7)		; format double sided ?
+	JR	Z,J7B16			; nope,
 	INC	C
-J7B16:	LD	DE,C.0000
+J7B16:	LD	DE,0
 	PUSH	HL
 	CALL	C7556
 	POP	HL
 	JP	C,J7BD3
 	LD	A,0F8H
-	BIT	0,(IX+7)
-	JR	Z,J7B2A
+	BIT	0,(IX+7)		; format double sided ?
+	JR	Z,J7B2A			; nope,
 	INC	A
 J7B2A:	LD	(HL),A
 	INC	HL
@@ -1153,10 +1152,10 @@ J7B39:	LD	(HL),A
 	DJNZ	J7B39
 	LD	B,01H	; 1 
 	LD	C,0F8H
-	BIT	0,(IX+7)
-	JR	Z,J7B48
+	BIT	0,(IX+7)		; format double sided ?
+	JR	Z,J7B48			; nope,
 	INC	C
-J7B48:	LD	DE,I.0001
+J7B48:	LD	DE,1
 	LD	HL,($SECBUF)
 	PUSH	HL
 	PUSH	BC
@@ -1167,9 +1166,9 @@ J7B48:	LD	DE,I.0001
 	JP	C,J7BD3
 	PUSH	HL
 	PUSH	BC
-	LD	DE,I.0003
-	BIT	0,(IX+7)
-	JR	Z,J7B67
+	LD	DE,3
+	BIT	0,(IX+7)		; format double sided ?
+	JR	Z,J7B67			; nope,
 	INC	DE
 J7B67:	LD	A,(IX+5)
 	CALL	C7556
@@ -1186,26 +1185,26 @@ J7B67:	LD	A,(IX+5)
 	POP	HL
 	PUSH	HL
 	PUSH	BC
-	LD	DE,I$0002
+	LD	DE,2
 	LD	A,(IX+5)
 	CALL	C7556
 	POP	BC
 	POP	HL
 	JP	C,J7BD3
-	BIT	0,(IX+7)
-	JR	Z,J7BA5
+	BIT	0,(IX+7)		; format double sided ?
+	JR	Z,J7BA5			; nope,
 	PUSH	HL
-	LD	DE,I.0003
+	LD	DE,3
 	LD	A,(IX+5)
 	CALL	C7556
 	POP	HL
 	JP	C,J7BD3
 	LD	B,09H	; 9 
-	LD	DE,BDOS
+	LD	DE,5
 	JR	J7BAA
 
 J7BA5:	LD	B,08H	; 8 
-	LD	DE,I$0004
+	LD	DE,4
 J7BAA:	LD	A,(IX+5)
 J7BAD:	PUSH	AF
 	PUSH	BC
@@ -1213,8 +1212,8 @@ J7BAD:	PUSH	AF
 	PUSH	HL
 	LD	B,01H	; 1 
 	LD	C,0F8H
-	BIT	0,(IX+7)
-	JR	Z,J7BBC
+	BIT	0,(IX+7)		; format double sided ?
+	JR	Z,J7BBC			; nope,
 	INC	C
 J7BBC:	CALL	C7556
 	JP	C,J7BE3
@@ -1256,7 +1255,7 @@ C7BE9:	PUSH	IX
 	PUSH	HL
 	EX	AF,AF'
 	PUSH	AF
-	CALL	C.FFCF
+	CALL	DISINT
 	DI
 	POP	AF
 	EX	AF,AF'
@@ -1427,7 +1426,7 @@ J7CFD:	LD	A,(DE)
 I7D08:	EX	AF,AF'
 	PUSH	AF
 	EI
-	CALL	C.FFD4
+	CALL	ENAINT
 	POP	AF
 	EX	AF,AF'
 	POP	IX
@@ -1539,7 +1538,7 @@ C7DA2:	LD	(D7FF5),A
 	LD	(D7FF0),A
 	EX	(SP),HL
 	EX	(SP),HL
-	LD	HL,I$AFC8
+	LD	HL,45000
 J7DB2:	LD	A,(D7FF0)
 	RRA
 	JR	NC,J7DC6
@@ -1565,7 +1564,7 @@ J7DC6:	AND	02H	; 2
 
 
 C7DCB:	PUSH	HL
-	LD	HL,I$FA00
+	LD	HL,64000
 J7DCF:	LD	A,(D7FF0)
 	RLA
 	JR	NC,J7DDB
@@ -1591,7 +1590,7 @@ C7DDD:	LD	A,(D7FF0)
 ;	    Outputs ________________________
 
 C7DE5:	PUSH	HL
-	LD	HL,I$BB80
+	LD	HL,48000
 	JR	J7DFB
 
 ;	 Subroutine __________________________
@@ -1599,7 +1598,7 @@ C7DE5:	PUSH	HL
 ;	    Outputs ________________________
 
 C7DEB:	PUSH	HL
-	LD	HL,I$5DC0
+	LD	HL,24000
 	JR	J7DFB
 
 ;	 Subroutine __________________________
@@ -1607,11 +1606,11 @@ C7DEB:	PUSH	HL
 ;	    Outputs ________________________
 
 C7DF1:	PUSH	HL
-	LD	HL,I.0960
+	LD	HL,2400
 	JR	J7DFB
 
 ?7DF7:	PUSH	HL
-	LD	HL,I.0960
+	LD	HL,2400
 J7DFB:	DEC	HL
 	LD	A,H
 	OR	L
@@ -1647,7 +1646,7 @@ J7DFB:	DEC	HL
 	CALL	GETWRK
 	POP	HL
 	LD	A,0FFH
-	LD	(IX),A
+	LD	(IX+0),A
 	OR	A
 	RET
 
@@ -1660,7 +1659,7 @@ J7DFB:	DEC	HL
 	CALL	GETWRK
 	POP	HL
 	XOR	A
-	LD	(IX),A
+	LD	(IX+0),A
 	RET
 
 I7E37:
@@ -1744,6 +1743,7 @@ DC09F:  DEFB    0
 DC0C4:  DEFB    0
 
         .DEPHASE
+L7E37	EQU	$-I7E37
 
         DEFS    07F00H-$,0
 
