@@ -59,18 +59,18 @@ I$007E	EQU	007EH	; ----I
 I$009B	EQU	009BH	; ----I
 C.009C	EQU	009CH	; -C---
 C.009F	EQU	009FH	; -C---
-C.00A2	EQU	00A2H	; -C---
+CHPUT	EQU	00A2H	; -C---
 LPTOUT	EQU	00A5H	; -C---
 LPTSTT	EQU	00A8H	; -C---
-C.00B4	EQU	00B4H	; -C---
-C.00B7	EQU	00B7H	; -C--I
-C$00C0	EQU	00C0H	; -C---
-C$00E1	EQU	00E1H	; -C---
-C$00E4	EQU	00E4H	; -C---
-C.00E7	EQU	00E7H	; -C---
-C$00EA	EQU	00EAH	; -C---
-C$00ED	EQU	00EDH	; -C---
-C.00F0	EQU	00F0H	; -C--I
+QINLIN	EQU	00B4H	; -C---
+BREAKX	EQU	00B7H	; -C--I
+BEEP	EQU	00C0H	; -C---
+TAPION	EQU	00E1H	; -C---
+TAPIN	EQU	00E4H	; -C---
+TAPIOF	EQU	00E7H	; -C---
+TAPOON	EQU	00EAH	; -C---
+TAPOUT	EQU	00EDH	; -C---
+TAPOOF	EQU	00F0H	; -C--I
 I$00F1	EQU	00F1H	; ----I
 I$00F2	EQU	00F2H	; ----I
 C.00F3	EQU	00F3H	; -C--I
@@ -600,8 +600,7 @@ I$FB20	EQU	0FB20H	; ----I
 I$FBD8	EQU	0FBD8H	; ----I
 D.FBE0	EQU	0FBE0H	; ---LI
 I$FBF0	EQU	0FBF0H	; ----I
-D.FC4A	EQU	0FC4AH	; --S--
-D$FC4B	EQU	0FC4BH	; ---L-
+HIMEM	EQU	0FC4AH	; --S--
 I$FC82	EQU	0FC82H	; ----I
 D.FC9B	EQU	0FC9BH	; --SL-
 D$FCA9	EQU	0FCA9H	; ---L-
@@ -622,6 +621,7 @@ D.FD9A	EQU	0FD9AH	; --SLI
 D.FD9B	EQU	0FD9BH	; --SL-
 D$FD9C	EQU	0FD9CH	; --S--
 D$FD9E	EQU	0FD9EH	; --S--
+
 H.TIMI	EQU	0FD9FH	; ----I
 
 I.FF00	EQU	0FF00H	; ----I
@@ -630,7 +630,7 @@ D.FF3E	EQU	0FF3EH	; --S-I
 D$FF3F	EQU	0FF3FH	; --S--
 D$FF40	EQU	0FF40H	; --S--
 D$FF42	EQU	0FF42H	; --S--
-D.FFB6	EQU	0FFB6H	; --S-I
+H.LPTO	EQU	0FFB6H	; --S-I
 I.FFC0	EQU	0FFC0H	; ----I
 X.FFCA	EQU	0FFCAH	; -CS-I
 D$FFCB	EQU	0FFCBH	; --S--
@@ -1500,7 +1500,7 @@ C$44E1:	PUSH	BC
 ;	     Outputs ________________________
 
 C.44F4:	PUSH	IX
-	LD	IX,C.00B7
+	LD	IX,BREAKX
 	CALL	C.45A2
 	POP	IX
 	RET
@@ -1538,7 +1538,7 @@ J.4526:	LD	A,B
 ;	     Outputs ________________________
 
 C.4528:	PUSH	AF
-	CALL	C.00A2
+	CALL	CHPUT
 	EI
 	LD	A,(D.F563)
 	AND	A
@@ -3546,8 +3546,8 @@ J$5067:	CALL	C.506D
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.506D:	LD	A,(D$FC4B)
-	CP	0DEH
+C.506D:	LD	A,(HIMEM+1)
+	CP	HIGH 0DE00H
 	RET	NC
 	LD	E,7
 	JP	J.61C8			; BASIC out of memory error
@@ -3628,9 +3628,9 @@ C.50DC:	EI
 	LD	A,(D.FD88)
 	OR	A
 	RET	Z
-	LD	B,3CH	; "<"
-J$50E4:	CALL	LPTSTT
-	JR	NZ,J$50F7
+	LD	B,60
+J$50E4:	CALL	LPTSTT			; printer ready ?
+	JR	NZ,J$50F7		; yep,
 	DEC	B
 	RET	Z
 	JR	J$50E4
@@ -3643,13 +3643,13 @@ C.50ED:	EI
 	LD	A,(D.FD88)
 	OR	A
 	RET	Z
-	CALL	LPTSTT
-	RET	Z
-J$50F7:	LD	A,83H
-	LD	HL,(D.FD7F)
+	CALL	LPTSTT			; printer ready ?
+	RET	Z			; nope, quit
+J$50F7:	LD	A,83H			; slot 3-0
+	LD	HL,(D.FD7F)		; spooler GET pointer
 	CALL	RDSLT
 	EI
-	CALL	C.08C9
+	CALL	C.08C9			; write byte to printer port (NOT ACCORDING TO MSX RULES!)
 	INC	HL
 	BIT	7,H
 	JR	Z,J$510A
@@ -3662,12 +3662,16 @@ J$510A:	LD	(D.FD7F),HL
 	LD	(D.FD88),A
 	RET
 
+;	  Subroutine H.LPTO handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.5118:	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	PUSH	AF
 J$511C:	EI
-	CALL	C.00B7
+	CALL	BREAKX
 	JR	NC,J$512C
 	XOR	A
 	LD	(D.F415),A
@@ -3689,7 +3693,7 @@ J$512C:	DI
 J$513D:	POP	AF
 	PUSH	AF
 	LD	E,A
-	LD	A,83H
+	LD	A,83H			; slot 3-0
 	CALL	WRSLT
 	INC	HL
 	BIT	7,H
@@ -3719,23 +3723,22 @@ J$515E:	LD	E,36H
 	LD	HL,H.TIMI
 	LD	DE,C.FD83
 	DI
-	LDIR
+	LDIR				; save H.TIMI
 	LD	C,5
-I$517A	EQU	$-1
 	LD	HL,I$51A4
 	LD	DE,H.TIMI
-	LDIR
-	LD	C,05H	; 5 
+	LDIR				; install spooler H.TIMI handler
+	LD	C,5
 	LD	HL,I$51A9
-	LD	DE,D.FFB6
-	LDIR
+	LD	DE,H.LPTO
+	LDIR				; install spooler H.LPTO handler
 	XOR	A
 	LD	(D.FD88),A
 	LD	HL,D.FD7F
-	LD	B,04H	; 4 
+	LD	B,4
 J$5196:	LD	(HL),A
 	INC	HL
-	DJNZ	J$5196
+	DJNZ	J$5196			; initialize spooler GET/PUT pointers
 	DEC	A
 	LD	HL,SLTWRK + 0*32 + 0*8 + 0*2 +0
 	SET	5,(HL)			; ramdisk disabled
@@ -3745,12 +3748,12 @@ J$5196:	LD	(HL),A
 	RET
 
 I$51A4:	RST	30H
-	DEFB	08FH
+	DEFB	08FH			; slot 3-3
 	DEFW	C.50B4
 	RET
 
 I$51A9:	RST	30H
-	DEFB	08FH
+	DEFB	08FH			; slot 3-3
 	DEFW	C.5118
 	RET
 
@@ -3770,7 +3773,7 @@ J$51AE:	LD	E,36H
 	DI
 	LDIR
 	LD	A,0C9H
-	LD	(D.FFB6),A
+	LD	(H.LPTO+0),A
 	XOR	A
 	LD	(D.F415),A
 	LD	HL,SLTWRK + 0*32 + 0*8 + 0*2 +0
@@ -3801,7 +3804,7 @@ J$51DE:	LD	E,3BH
 	OR	A
 	JP	Z,J.61C8		; BASIC File not found
 J$5200:	DI
-	LD	HL,X.0000
+	LD	HL,0
 	LD	(D.FD7F),HL
 	LD	A,0FFH
 	LD	(D.FD88),A
@@ -3815,7 +3818,7 @@ J$5200:	DI
 ;	     Outputs ________________________
 
 C.5210:	LD	A,(D.7FFF)
-	OR	60H
+	OR	60H			; 01100000b: looks like invoke SRAM on page 2
 	LD	(D.7FFF),A
 	LD	(D.80BE),SP
 I$521C:	LD	SP,I$87FF
@@ -3827,12 +3830,12 @@ I$521C:	LD	SP,I$87FF
 	CALL	C$5934
 	CP	8FH
 	JR	Z,J$5242
-	CALL	C$5BBB
-	CALL	C$52EF
+	CALL	C$5BBB			; PSG
+	CALL	C$52EF			; RP501
 	CALL	C$5259
-I$5236:	CALL	C.5B9D
-	CALL	C$531C
-	CALL	C$5BD7
+I$5236:	CALL	C.5B9D			; STOP pressed and released
+	CALL	C$531C			; RP501
+	CALL	C$5BD7			; PSG
 	CALL	C$59D3
 J$5242:	POP	IY
 	POP	IX
@@ -3841,7 +3844,7 @@ J$5242:	POP	IY
 	POP	HL
 	LD	SP,(D.80BE)
 	LD	A,(D.7FFF)
-	AND	9FH
+	AND	9FH			; 10011111b: looks like invoke ROM on page 2
 	LD	(D.7FFF),A
 	XOR	A
 	JP	J$1437
@@ -4891,21 +4894,21 @@ C$5934:	XOR	A
 	BIT	1,A			; CTRL pressed ?
 	JR	NZ,C.5962		; nope,
 	LD	A,B
-	AND	01H	; 1 
-	LD	(D.80E5),A
+	AND	01H
+	LD	(D.80E5),A		; SHIFT status
 	LD	A,(D.8001)
 	BIT	6,A
 	JR	Z,C.5962
-	LD	A,02H	; 2 
+	LD	A,02H
 	OUT	(99H),A
 	LD	A,8FH
-	OUT	(99H),A
+	OUT	(99H),A			; select VDP status register 2
 	EX	(SP),HL
 	EX	(SP),HL
-	IN	A,(99H)
+	IN	A,(99H)			; read VDP status register
 	LD	(D.80C9),A
-	BIT	0,A
-	JR	Z,J$596C
+	BIT	0,A			; command executing ?
+	JR	Z,J$596C		; nope,
 ;
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -4915,7 +4918,7 @@ C$5934:	XOR	A
 C.5962:	LD	A,(X.800F)
 	OUT	(99H),A
 	LD	A,8FH
-	OUT	(99H),A
+	OUT	(99H),A			; select VDP status register
 	RET
 
 J$596C:	CALL	C.5962
@@ -5331,7 +5334,7 @@ C$5BBB:	LD	HL,I.80E0
 	IN	A,(0A0H)
 	LD	(D.813F),A
 	LD	A,08H	; 8 
-	LD	B,03H	; 3 
+	LD	B,3
 	LD	E,00H
 J$5BC9:	PUSH	AF
 	CALL	C$5BEC
@@ -6341,7 +6344,7 @@ J.61C8:	LD	IY,0
 ;	     Outputs ________________________
 
 C.61D3:	PUSH	IX
-	CALL	C$00C0
+	CALL	BEEP
 	POP	IX
 	RET
 
@@ -6354,16 +6357,20 @@ J$61DC:	CALL	C$D900
 	RET	NZ
 J$61E0:	JP	J.0156
 
+;	  Subroutine about to start european word processor
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$61E3:	LD	HL,I.621F
 J$61E6:	LD	A,(HL)
 	OR	A
 	JR	Z,J$61F0
-	CALL	C.00A2
+	CALL	CHPUT
 	INC	HL
 	JR	J$61E6
 
-J$61F0:	CALL	C.00B4
-	JR	NC,J$61F8
+J$61F0:	CALL	QINLIN
+	JR	NC,J$61F8		; input not stopped, continue
 J.61F5:	POP	HL
 	XOR	A
 	RET
@@ -6371,50 +6378,40 @@ J.61F5:	POP	HL
 J$61F8:	INC	HL
 	LD	A,(HL)
 	AND	0DFH
-	CP	59H	; "Y"
-	JR	NZ,J.61F5
+	CP	"Y"
+	JR	NZ,J.61F5		; not 'Y', quit
 	INC	HL
 	LD	A,(HL)
 	OR	A
-	JR	NZ,J.61F5
-	LD	SP,(D.FC4A)
+	JR	NZ,J.61F5		; more than just 'Y', quit
+	LD	SP,(HIMEM)
 	LD	A,0FCH
 	OUT	(0A8H),A		; select primairy slot 3 on page 3,2 and 1
 	LD	A,(D.7FFF)
 	AND	0FCH
-	OR	02H
+	OR	02H			; select segment 2 ??
 	LD	(D.7FFF),A
 	LD	A,3CH
 	LD	(D.FFFF),A		; select secundairy slot 0 on page 3, secundairy slot 3 on page 2 and 1
 	JP	X.8000
 
-I.621F:	DEC	C
-	LD	A,(BC)
-	LD	B,C
-	LD	(HL),D
-	LD	H,L
-	JR	NZ,J$629F
-	LD	L,A
-	LD	(HL),L
-	JR	NZ,J$629D
-	LD	(HL),L
-	LD	(HL),D
-	LD	H,L
-	JR	NZ,J$6257
-	LD	E,C
-	CPL
-	LD	C,(HL)
-	ADD	HL,HL
-	JR	NZ,J.6235
+I.621F:	DEFB	13,10
+	DEFB	"Are you sure (Y/N) "
+	DEFB	0
+
+;	  Subroutine about to start japanese word processor
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J.6235:	LD	HL,I.621F
 J$6238:	LD	A,(HL)
 	OR	A
 	JR	Z,J$6242
-	CALL	C.00A2
+	CALL	CHPUT
 	INC	HL
 	JR	J$6238
 
-J$6242:	CALL	C.00B4
+J$6242:	CALL	QINLIN
 	JR	NC,J$624A
 J.6247:	POP	HL
 	XOR	A
@@ -6423,18 +6420,19 @@ J.6247:	POP	HL
 J$624A:	INC	HL
 	LD	A,(HL)
 	AND	0DFH
-	CP	59H	; "Y"
+	CP	"Y"
 	JR	NZ,J.6247
 	INC	HL
 	LD	A,(HL)
 	OR	A
 	JR	NZ,J.6247
+
 J$6257:	LD	HL,C.D8FB
 	LD	B,0AH	; 10 
 J$625C:	LD	(HL),0C9H
 	INC	HL
 	DJNZ	J$625C
-	LD	SP,(D.FC4A)
+	LD	SP,(HIMEM)
 	CALL	C.61DB
 	CALL	C$7C68
 	CALL	C.7CBC
@@ -6442,7 +6440,7 @@ J$625C:	LD	(HL),0C9H
 	CALL	C$7E24
 J.6274:	CALL	C.7F14
 	CALL	C.7F56
-	LD	SP,(D.FC4A)
+	LD	SP,(HIMEM)
 	CALL	C.61DB
 	XOR	A
 	LD	(D.DAD9),A
@@ -6470,7 +6468,7 @@ J$62A6:	CALL	C.633D
 	LD	(HL),A
 	INC	HL
 	DJNZ	J$62A6
-	CALL	C.00E7
+	CALL	TAPIOF
 	LD	A,(D.F86C)
 	LD	B,A
 	LD	A,(D$F877)
@@ -6557,7 +6555,7 @@ I$6331:	LD	(HL),A
 	LD	A,D
 	OR	E
 	JR	NZ,J$632C
-	CALL	C.00E7
+	CALL	TAPIOF
 	OR	A
 	RET
 
@@ -6568,9 +6566,9 @@ I$6331:	LD	(HL),A
 C.633D:	PUSH	HL
 	PUSH	DE
 	PUSH	BC
-	CALL	C$00E4
+	CALL	TAPIN
 	JP	NC,J.639B
-J$6346:	CALL	C.00E7
+J$6346:	CALL	TAPIOF
 	POP	BC
 	POP	DE
 	POP	HL
@@ -6585,7 +6583,7 @@ C.634E:	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	PUSH	AF
-	CALL	C$00E1
+	CALL	TAPION
 	JP	NC,J.639A
 	POP	AF
 	JR	J$6346
@@ -6608,7 +6606,7 @@ J$636E:	LD	A,(HL)
 	CALL	C.63A6
 	RET	C
 	DJNZ	J$636E
-	CALL	C.00F0
+	CALL	TAPOOF
 	OR	A
 	RET
 
@@ -6628,7 +6626,7 @@ J$6380:	LD	A,(HL)
 	LD	A,D
 	OR	E
 	JR	NZ,J$6380
-	CALL	C.00F0
+	CALL	TAPOOF
 	OR	A
 	RET
 
@@ -6640,7 +6638,7 @@ C.6391:	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	PUSH	AF
-	CALL	C$00EA
+	CALL	TAPOON
 	JR	C,J.639F
 J.639A:	POP	AF
 J.639B:	POP	BC
@@ -6649,7 +6647,7 @@ J.639B:	POP	BC
 	RET
 
 J.639F:	POP	AF
-	CALL	C.00F0
+	CALL	TAPOOF
 	SCF
 	JR	J.639B
 
@@ -6661,7 +6659,7 @@ C.63A6:	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	PUSH	AF
-	CALL	C$00ED
+	CALL	TAPOUT
 	JR	C,J.639F
 	JR	J.639A
 
@@ -6679,8 +6677,8 @@ J$63B1:	CALL	C$7BD2
 	JP	J.726C
 
 J$63CA:	CALL	C$7EC0
-	LD	A,0CH	; 12 
-	LD	(D.FFFF),A
+	LD	A,0CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3,2 and 0, secunairy slot 3 on page 1
 	JP	J.6274
 
 J.63D5:	XOR	A
@@ -6699,7 +6697,7 @@ J.63E4:	CALL	C.7F56
 	CALL	C.7A20
 	CALL	C.7A93
 	CALL	C.7F1A
-J.63FE:	LD	SP,(D.FC4A)
+J.63FE:	LD	SP,(HIMEM)
 	XOR	A
 	LD	(D.DAD9),A
 	CALL	C.74D0
@@ -6864,8 +6862,8 @@ J$653D:	CP	3FH	; "?"
 J$6551:	CALL	C$7E30
 	JP	J.6482
 
-?.6557:	LD	A,0CH	; 12 
-	LD	(D.FFFF),A
+?.6557:	LD	A,0CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3,2 and 0, secunairy slot 3 on page 1
 	CALL	C.7F14
 	JP	J.63E4
 
@@ -8687,11 +8685,11 @@ J.7131:	POP	HL
 	SCF
 	RET
 
-J$7134:	LD	SP,(D.FC4A)
+J$7134:	LD	SP,(HIMEM)
 	CALL	C$7C32
 	JP	J.6274
 
-J.713E:	LD	SP,(D.FC4A)
+J.713E:	LD	SP,(HIMEM)
 	CALL	C$7BD8
 	JP	C,J.6274
 	DEC	A
@@ -8761,7 +8759,7 @@ C.71AB:	PUSH	BC
 	LD	(D.DAD9),A
 	RET
 
-J.71C9:	LD	SP,(D.FC4A)
+J.71C9:	LD	SP,(HIMEM)
 	CALL	C$7BDE
 	JP	C,J.6274
 	DEC	A
@@ -8821,10 +8819,10 @@ J$723A:	CALL	C.633D
 	LD	A,D
 	OR	E
 	JR	NZ,J$723A
-	CALL	C.00E7
+	CALL	TAPIOF
 	RET
 
-J$724B:	CALL	C.00E7
+J$724B:	CALL	TAPIOF
 	CALL	C.61D3
 	LD	HL,I.0E0F
 	LD	BC,I$8659
@@ -8847,7 +8845,7 @@ J.726C:	CALL	C$7BE4
 J$727C:	CALL	C$7EBA
 	JR	J.726C
 
-J.7281:	LD	SP,(D.FC4A)
+J.7281:	LD	SP,(HIMEM)
 	CALL	C$7BF0
 	JP	C,J.726C
 	DEC	A
@@ -8869,7 +8867,7 @@ I$7299:	LD	(D.F884),A
 	EI
 	RET
 
-J.72A6:	LD	SP,(D.FC4A)
+J.72A6:	LD	SP,(HIMEM)
 	CALL	C$7BFC
 	JP	C,J.7281
 	DEC	A
@@ -9065,7 +9063,7 @@ C.73D5:	LD	A,1CH
 ;	     Outputs ________________________
 
 C.73DF:	DI
-	CALL	C.00B7
+	CALL	BREAKX
 	JR	C,C.73DF
 	EI
 	CALL	C.61D3
@@ -9082,7 +9080,7 @@ J$73F4:	DEC	HL
 	LD	(D.FC9B),A
 	RET
 
-J.7401:	LD	SP,(D.FC4A)
+J.7401:	LD	SP,(HIMEM)
 	CALL	C$7C02
 	JP	C,J.7281
 	CP	0DH	; 13 
@@ -9160,11 +9158,11 @@ J$746D:	LD	HL,I.140E
 J$7475:	LD	BC,I$8A01
 	JR	J$746D
 
-J$747A:	CALL	C.00B7
+J$747A:	CALL	BREAKX
 	JR	C,J$747A
 	RET
 
-J.7480:	LD	SP,(D.FC4A)
+J.7480:	LD	SP,(HIMEM)
 	CALL	C$7C08
 	JP	C,J.726C
 	DEC	A
@@ -10162,14 +10160,14 @@ J$7B7F:	CALL	C$7C38
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$7B85:	LD	A,0CH	; 12 
-	LD	(D.FFFF),A
+C$7B85:	LD	A,0CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3,2 and 0, secunairy slot 3 on page 1
 	PUSH	BC
 	PUSH	DE
 	PUSH	HL
 	PUSH	IX
 	POP	HL
-	LD	BC,CPMADR
+	LD	BC,6
 	LD	DE,I$F5A0
 	PUSH	DE
 	LDIR
@@ -10177,16 +10175,16 @@ C$7B85:	LD	A,0CH	; 12
 	POP	HL
 	POP	DE
 	POP	BC
-J$7B9E:	LD	A,3CH	; "<"
-	LD	(D.FFFF),A
+J$7B9E:	LD	A,3CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3 and 0, secunairy slot 3 on page 2 and 1
 	RET
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.7BA4:	LD	A,0CH	; 12 
-	LD	(D.FFFF),A
+C.7BA4:	LD	A,0CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3,2 and 0, secunairy slot 3 on page 1
 	PUSH	IX
 	POP	HL
 	DEC	HL
@@ -10428,7 +10426,7 @@ J.7C78:	EXX
 	PUSH	AF
 	LD	A,(D.7FFF)
 	LD	(D.DAD0),A
-	AND	0FCH
+	AND	0FCH			; select segment 0 ??
 J.7C83:	LD	(D.7FFF),A
 	LD	A,(D.DAD0)
 	LD	H,A
@@ -10448,7 +10446,7 @@ J.7C83:	LD	(D.7FFF),A
 	EX	(SP),HL
 	PUSH	AF
 	LD	A,H
-	LD	(D.7FFF),A
+	LD	(D.7FFF),A		; restore segment
 	POP	AF
 	POP	HL
 	RET
@@ -10493,7 +10491,7 @@ J.7CC6:	EXX
 	LD	A,(D.7FFF)
 	LD	(D.DAD0),A
 	AND	0FCH
-	OR	01H	; 1 
+	OR	01H			; select segment 1 ??
 	JP	J.7C83
 
 ;	  Subroutine __________________________
@@ -10708,8 +10706,8 @@ J$7DEC:	CALL	C.7EDE
 	LD	HL,I.0200
 	JP	J$7DB6
 
-?.7DFC:	LD	A,0CH	; 12 
-	LD	(D.FFFF),A
+?.7DFC:	LD	A,0CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3,2 and 0, secunairy slot 3 on page 1
 	LD	D,H
 	LD	E,L
 	LD	(HL),00H
@@ -10721,8 +10719,8 @@ J$7DEC:	CALL	C.7EDE
 	EX	DE,HL
 	LD	BC,I$4F35
 	LDIR
-	LD	A,3CH	; "<"
-	LD	(D.FFFF),A
+	LD	A,3CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3 and 0, secunairy slot 3 on page 2 and 1
 	RET
 
 ;	  Subroutine __________________________
@@ -11183,7 +11181,7 @@ J.7F92:	EXX
 	LD	A,(D.7FFF)
 	LD	(D.DAD0),A
 	AND	0FCH
-	OR	03H	; 3 
+	OR	03H			; select segment 2 ??
 	JP	J.7C83
 
 ?.7FA2:	NOP
@@ -11237,18 +11235,11 @@ J.7F92:	EXX
 D.7FFF:	SBC	A,H
 
 X.8000:	DI
-D.8001:	LD	A,30H	; "0"
-D.8002	EQU	$-1
-D$8003:	LD	(D.FFFF),A
-D$8004	EQU	$-2
-D$8005	EQU	$-1
+D.8001:	LD	A,30H
+D$8003:	LD	(D.FFFF),A		; secundairy slot 0 on page 3,1 and 0, secundairy slot 3 on page 2
 D$8006:	LDIR
-D.8007	EQU	$-1
-D$8008:	LD	A,3CH	; "<"
-D.8009	EQU	$-1
-D$800A:	LD	(D.FFFF),A
-D$800B	EQU	$-2
-D$800C	EQU	$-1
+D$8008:	LD	A,3CH
+D$800A:	LD	(D.FFFF),A		; secundairy slot 0 on page 3 and 0, secundairy slot 3 on page 2 and 1
 D.800D:	EI
 	RET
 
@@ -11262,7 +11253,6 @@ X.800F:	PUSH	HL
 	PUSH	AF
 	LD	HL,I.0015
 	LD	DE,I.4002
-D.8017	EQU	$-2
 	LD	A,0C0H
 	CALL	C.7F02
 	POP	AF
@@ -15356,14 +15346,14 @@ J$9871:	CALL	C$7E9C
 	POP	HL
 	DI
 	LD	A,0FFH
-	OUT	(0A8H),A
-	LD	A,30H	; "0"
-	LD	(D.FFFF),A
+	OUT	(0A8H),A		; primairy slot 3 on page 3,2,1 and 0
+	LD	A,30H
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3,1 and 0, secundairy slot 3 on page 2
 	LDIR
-	LD	A,3CH	; "<"
-	LD	(D.FFFF),A
+	LD	A,3CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3 and 0, secundairy slot 3 on page 2 and 1
 	LD	A,0FCH
-	OUT	(0A8H),A
+	OUT	(0A8H),A		; primairy slot 3 on page 3,2 and 1, primairy slot 0 on page 0
 	EI
 	CALL	C.61D3
 	RET
@@ -16639,10 +16629,10 @@ J$A348:	CP	1EH
 	RST	20H
 	JP	Z,J.A2F3
 	DI
-	LD	A,30H	; "0"
-	LD	(D.FFFF),A
+	LD	A,30H
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3,1 and 0, secunairy slot 3 on page 2
 	LD	A,0FFH
-	OUT	(0A8H),A
+	OUT	(0A8H),A		; primairy slot 3 on page 3,2,1 and 0
 I$A363	EQU	$-1
 J.A364:	LD	B,H
 	LD	C,L
@@ -16663,10 +16653,10 @@ J$A366:	LD	A,(HL)
 	LD	A,L
 	CP	E
 	JR	NZ,J.A364
-	LD	A,3CH	; "<"
-	LD	(D.FFFF),A
+	LD	A,3CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3 and 0, secunairy slot 3 on page 2 and 1
 	LD	A,0FCH
-	OUT	(0A8H),A
+	OUT	(0A8H),A		; primairy slot 3 on page 3,2 and 1, primairy slot 0 on page 0
 	EI
 	PUSH	BC
 	POP	IX
@@ -16855,8 +16845,8 @@ J$A489:	CP	0E0H
 J.A48F:	LD	(D.DAC8),A
 	DI
 	LD	HL,I.2800
-	LD	A,30H	; "0"
-	LD	(D.FFFF),A
+	LD	A,30H
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3,1 and 0, secundairy slot 3 on page 2
 	LD	A,0FFH
 	OUT	(0A8H),A
 J$A49F:	LD	A,(HL)
@@ -16869,8 +16859,8 @@ J$A4A7:	LD	B,A
 	LD	A,(D.DAC8)
 	CP	B
 	JR	NZ,J.A4BF
-J$A4AE:	LD	A,3CH	; "<"
-	LD	(D.FFFF),A
+J$A4AE:	LD	A,3CH
+	LD	(D.FFFF),A		; select secundairy slot 0 on page 3, secundairy slot 3 on page 2 and 1
 	LD	A,0FCH
 	OUT	(0A8H),A
 	EI
