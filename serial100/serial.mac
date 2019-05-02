@@ -1,6 +1,7 @@
 ; SERIAL.MAC
 ;
 ; MSX-SERIAL first generation (as used in the Spectravideo SVI-738 serial interface)
+;   looks like the oldest version, because it has bugs which other versions had fixed
 ;
 ; Source re-created by Z80DIS 2.2
 ; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
@@ -1308,7 +1309,6 @@ A46C6:  push    hl
 ;         Subroutine CALL COMTERM statement
 ;            Inputs  ________________________
 ;            Outputs ________________________
-;            Remark  BUGFIX: _COMTERM in basic program
 
 A46E0:  call    A4C38                   ; evaluate comidentifier and check if this one
         call    A4CA1
@@ -1320,7 +1320,7 @@ A46E0:  call    A4C38                   ; evaluate comidentifier and check if th
         call    A4523
         defb    ")"
 A46F2:  push    hl
-        pop     ix
+        pop     ix			; save BASIC pointer in IX (is this safe ??)
         call    A4C32                   ; port open ?
         jp      nz,A4488                ; yep,
         ld      iy,(NULBUF)
@@ -1360,13 +1360,13 @@ A471D:  ld      (hl),0
         ld      (BUF+6),a
         call    A4924                   ; cursor on
         push    iy
-        pop     hl
+        pop     hl			; use NULBUF as FCB
         ld      e,4                     ; random (raw) mode
         ld      c,120                   ; buffersize 120
         call    A426A                   ; OPEN
 A474E:  ei
-        push    iy
-        pop     hl
+        push    iy			;
+        pop     hl			; unneeded code, because OPEN does save FCB address
         call    A4321                   ; LOC
         ld      a,l
         or      h                       ; something in receivebuffer ?
@@ -1414,15 +1414,15 @@ A4783:  call    A4946                   ; STOP or CTRL-STOP signaled ?
         call    A44E8                   ; character to screen
         jp      A474E                   ; loop
 
-A47AF:  push    iy
-        pop     hl
+A47AF:  push    iy			;
+        pop     hl			; unneeded code, because OPEN does save FCB address
         call    A429A                   ; CLOSE
         ld      hl,BUF+8
         ld      de,FNKSTR+5*16
         ld      bc,00030H
         ldir
         push    ix
-        pop     hl
+        pop     hl			; restore BASIC pointer (is it safe to assume nothing has changed IX ??)
         ld      a,(BUF+6)
         and     a
         push    af

@@ -1,6 +1,7 @@
 ; SERIAL.MAC
 ;
-; MSX-SERIAL first generation (as used in the Sanyo MRS-001 serial interface), looks like the oldest version known
+; MSX-SERIAL first generation (as used in the Sanyo MRS-001 serial interface)
+;   looks later than SVI-728 version, because it has the CALSLT fix and additional COMTERM fix
 ;
 ; Source re-created by Z80DIS 2.2
 ; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
@@ -1293,6 +1294,7 @@ J46C6:  PUSH    HL
 ;         Subroutine CALL COMTERM statement
 ;            Inputs  ________________________
 ;            Outputs ________________________
+;            Remark  BUGFIX: _COMTERM in basic program, run away BASIC pointer
 
 C46E0:  CALL    C4C2E
         CALL    C4C97
@@ -1303,7 +1305,7 @@ C46E0:  CALL    C4C2E
         JR      Z,J46F2
         CALL    C4523
         ADD     HL,HL
-J46F2:  LD      (SERTMP+9),HL
+J46F2:  LD      (SERTMP+9),HL		; save BASIC pointer
         CALL    C4C28
         JP      NZ,J4488
         XOR     A
@@ -1341,12 +1343,12 @@ J4719:  LD      (HL),00H
         LD      A,(CSRSR)
         LD      (SERTMP+6),A
         CALL    C491A
-        LD      HL,(NULBUF)
-        LD      E,04H
-        LD      C,78H
-        CALL    C426A
+        LD      HL,(NULBUF)		; use NULBUF as FCB
+        LD      E,4
+        LD      C,120
+        CALL    C426A			; rs232 OPEN
 J474A:  EI
-        CALL    C4321
+        CALL    C4321			; rs232 LOC
         LD      A,L
         OR      H
         JR      Z,J477C
@@ -1393,12 +1395,12 @@ J477C:  CALL    C493C
         CALL    C44E8
         JP      J474A
 
-J47A8:  CALL    C429A
+J47A8:  CALL    C429A			; rs232 close
         LD      HL,SERTMP+8
         LD      DE,FNKSTR+5*16
         LD      BC,48
         LDIR
-        LD      HL,(SERTMP+9)
+        LD      HL,(SERTMP+9)		; restore BASIC pointer
         LD      A,(SERTMP+6)
         AND     A
         PUSH    AF
