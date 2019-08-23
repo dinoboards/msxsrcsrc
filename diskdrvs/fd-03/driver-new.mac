@@ -206,7 +206,7 @@ J74F3:	PUSH	AF
 	JR	NC,J74FE
 	SET	3,(IX+1)
 J74FE:	CALL	ENAINT
-	CALL	C7819
+	CALL	C7819			; terminate fdc command
 	LD	A,(D7FC0)
 	LD	A,04H	; 4 
 	LD	(D7FE0),A
@@ -283,13 +283,13 @@ J756B:	BIT	2,(IX+4)
 	CALL	C773A
 	POP	HL
 	RET	C
-	CALL	C7BF7
+	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 	CALL	C7762
 	JP	C,J772A
-	CALL	C7BEB
+	CALL	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	CALL	C7762
 	JP	C,J7730
-	CALL	C7BF7
+	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 	PUSH	HL
 	PUSH	BC
 	LD	DE,($SECBUF)
@@ -305,7 +305,7 @@ J756B:	BIT	2,(IX+4)
 	POP	BC
 	POP	HL
 	RET	C
-	CALL	C7C7
+	CALL	C7C37			; wait ?? ms
 	AND	A
 	DEC	B
 	RET	Z
@@ -380,8 +380,8 @@ C760E:	LD	(D7FC2),A
 C7615:	LD	A,1			; sector 1
 	CALL	C760E			; select sector on track
 	CALL	C7C21			; wait fdc ready
-	CALL	C7C28
-	CALL	C7BEB
+	CALL	C7C28			; 2x step in with, 1x track update
+	CALL	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	INC	(IX+6)			; next track
 	RET
 
@@ -409,7 +409,7 @@ J7636:	PUSH	HL
 	POP	BC
 	LD	A,(IX+8)
 	LD	(D7FC2),A
-J764A:	LD	(IX+11),00H
+J764A:	LD	(IX+11),0
 J764E:	LD	E,05H	; 5 
 J7650:	CALL	C79E6			; is diskdrive ready ?
 	JR	C,J76B3			; nope,
@@ -447,17 +447,17 @@ J7685:	SET	2,(IX+2)
 	JR	Z,J76A9
 	DEC	E
 	JR	NZ,J769D
-	CALL	C7C4B
-J7698:	CALL	C7BF7
+	CALL	C7C4B			; step out without trackupdate
+J7698:	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 	JR	J764E
 
 J769D:	DEC	E
 	JR	Z,J7698
 	DEC	E
 	JR	NZ,J76AE
-	CALL	C7C16
-	CALL	C7C19
-J76A9:	CALL	C7BEE
+	CALL	C7C16			; 2x step in without trackupdate
+	CALL	C7C19			; step in without trackupdate
+J76A9:	CALL	C7BEE			; 2x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	JR	J764E
 
 J76AE:	DEC	D
@@ -508,13 +508,13 @@ J76ED:	PUSH	HL
 	CALL	C773A
 	POP	HL
 	RET	C
-	CALL	C7BF7
+	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 	LD	D,(IX+9)
 	PUSH	DE
 	CALL	C7762
 	POP	DE
 	JR	C,J772A
-	CALL	C7BEB
+	CALL	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	LD	A,(IX+9)
 	LD	(IX+9),D
 	LD	D,A
@@ -525,21 +525,21 @@ J76ED:	PUSH	HL
 	LD	A,(IX+9)
 	AND	D
 	LD	(IX+9),A
-	CALL	C7BF7
+	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 J771B:	LD	A,(IX+8)
 	LD	(D7FC2),A
 	CALL	C77B4
 	RET	C
-	CALL	C7C7
+	CALL	C7C37			; wait ?? ms
 	AND	A
 	RET
 
 J772A:	PUSH	AF
-	CALL	C7BEE
+	CALL	C7BEE			; 2x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	JR	J7734
 
 J7730:	PUSH	AF
-	CALL	C7BF7
+	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 J7734:	LD	(IX+9),00H
 	POP	AF
 	RET
@@ -705,7 +705,7 @@ J7814:	LD	A,(DE)
 	RET	C
 	DJNZ	J7814
 
-;	  Subroutine __________________________
+;	  Subroutine terminate fdc command
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1036,7 +1036,7 @@ J79CD:	LD	A,(DE)
 	ADD	A,A
 	RET	C
 	DJNZ	J79CD
-	JP	C7819
+	JP	C7819			; terminate fdc command
 
 I79D5:	CALL	C7823
 	RET	C
@@ -1132,7 +1132,7 @@ J7A3A:	CALL	DIV16
 
 J7A6C:	BIT	1,(IX+2)
 	JP	NZ,J7835
-	CALL	C7819
+	CALL	C7819			; terminate fdc command
 	CALL	C79FD
 	RET	C
 	BIT	0,(IX+1)
@@ -1176,8 +1176,8 @@ J7ABD:	LD	A,E
 	PUSH	AF
 	CALL	C7C6A			; seek track
 	POP	AF
-	JP	NC,C7C7
-	JP	J7BF1
+	JP	NC,C7C37		; wait ?? ms
+	JP	J7BF1			; step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1278,7 +1278,7 @@ J7B5C:	DEC	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7B62:	CALL	C7819
+C7B62:	CALL	C7819			; terminate fdc command
 	LD	HL,0
 J7B68:	LD	A,(D7FC0)
 	AND	02H	; 2 
@@ -1312,22 +1312,22 @@ C7B88:	LD	(D7FE0),A
 
 C7B8F:	LD	A,(IX+3)
 	AND	0F0H
-	OR	02H	; 2 
+	OR	02H
 	LD	(IX+3),A
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7B99:	LD	H,0AH	; 10 
-J7B9B:	LD	L,00H
+C7B99:	LD	H,10
+J7B9B:	LD	L,0
 	PUSH	BC
-	LD	B,04H	; 4 
-J7BA0:	CALL	C7BEE
+	LD	B,4
+J7BA0:	CALL	C7BEE			; 2x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	RRA
-	RRA
-	JR	NC,J7BA9
-	LD	L,01H	; 1 
+	RRA				; at track 0 ?
+	JR	NC,J7BA9		; nope,
+	LD	L,1
 J7BA9:	DJNZ	J7BA0
 	POP	BC
 	DEC	L
@@ -1336,13 +1336,13 @@ J7BA9:	DJNZ	J7BA0
 	JR	NZ,J7B9B
 	JR	J7BCC
 
-J7BB4:	CALL	C7C16
-	CALL	C7C2F
+J7BB4:	CALL	C7C16			; 2x step in without trackupdate
+	CALL	C7C2F			; 2x step in without trackupdate, wait ?? ms
 	LD	HL,0180H
-J7BBD:	CALL	C7C4B
+J7BBD:	CALL	C7C4B			; step out without trackupdate
 	RRA
-	RRA
-	JR	C,J7BCF
+	RRA				; at track 0 ?
+	JR	C,J7BCF			; yep,
 	DEC	HL
 	LD	A,L
 	OR	H
@@ -1352,60 +1352,88 @@ J7BCC:	JP	J7835
 
 J7BCF:	XOR	A
 	LD	(D7FC1),A
-	CALL	C7C7
-	CALL	C7C16
-	CALL	C7C16
+	CALL	C7C37			; wait ?? ms
+	CALL	C7C16			; 2x step in without trackupdate
+	CALL	C7C16			; 2x step in without trackupdate
 	LD	A,(IX+3)
-	AND	0FH	; 15 
-	SUB	02H	; 2 
+	AND	0FH
+	SUB	02H
 	JP	M,J7BFB
-	JR	Z,J7BF1
+	JR	Z,J7BF1			; step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	DEC	A
-	JR	Z,C7BEE
-;	  Subroutine __________________________
+	JR	Z,C7BEE			; 2x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
+
+;	  Subroutine 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7BEB:	CALL	C7C19
-;	  Subroutine __________________________
+C7BEB:	CALL	C7C19			; step in without trackupdate
+
+;	  Subroutine 2x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7BEE:	CALL	C7C19
-J7BF1:	CALL	C7C32
-	CALL	C7C7
-;	  Subroutine __________________________
+C7BEE:	CALL	C7C19			; step in without trackupdate
+
+;	  Subroutine step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7BF7:	LD	A,60H	; "`"
-	JR	J7C34
+J7BF1:	CALL	C7C32			; step in without trackupdate, wait ?? ms
+	CALL	C7C37			; wait ?? ms
 
-J7BFB:	CALL	C7C7
-	INC	A
-	JR	Z,J7C04
-J7C01:	CALL	C7C4B
-J7C04:	JR	C7BF7
-
-?7C06:	CALL	C7C48
-	CALL	C7C4B
-	JR	J7C01
-
-?7C0E:	CALL	C7C16
-	CALL	C7C16
-	JR	C7BEB
-
-;	  Subroutine __________________________
+;	  Subroutine step out without trackupdate and wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7C16:	CALL	C7C19
+C7BF7:	LD	A,60H			; step out without trackupdate
+	JR	J7C34			; execute seek command, wait ready and wait ?? ms
+
 ;	  Subroutine __________________________
+;	     Inputs  A = ?
+;	     Outputs ________________________
+
+J7BFB:	CALL	C7C37			; wait ?? ms
+	INC	A			; FFH ?
+	JR	Z,J7C04			; yep, skip
+
+;	  Subroutine 2x step out without trackupdate and wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7C19:	LD	A,40H	; "@"
-;	  Subroutine __________________________
+J7C01:	CALL	C7C4B			; step out without trackupdate
+J7C04:	JR	C7BF7			; step out without trackupdate and wait ?? ms
+
+;	  Subroutine 5x step out without trackupdate and wait ?? ms
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?7C06:	CALL	C7C48			; 2x step out without trackupdate
+	CALL	C7C4B			; step out without trackupdate
+	JR	J7C01			; 2x step out without trackupdate and wait ?? ms
+
+;	  Subroutine 5x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?7C0E:	CALL	C7C16			; 2x step in without trackupdate
+	CALL	C7C16			; 2x step in without trackupdate
+	JR	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
+
+;	  Subroutine 2x step in without trackupdate
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C7C16:	CALL	C7C19			; step in without trackupdate
+
+;	  Subroutine step in without trackupdate
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C7C19:	LD	A,40H			; step in without trackupdate
+					; execute seek command and wait ready
+
+;	  Subroutine execute seek command and wait ready
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1413,7 +1441,8 @@ C7C1B:	LD	(D7FC0),A
 	EX	(SP),HL
 	NOP
 	EX	(SP),HL
-;	  Subroutine __________________________
+
+;	  Subroutine wait fdc ready
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1422,30 +1451,38 @@ C7C21:	LD	A,(D7FC0)
 	JR	C,C7C21
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine 2x step in, 1x track update
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7C28:	CALL	C7C19
-	LD	A,50H	; "P"
-	JR	C7C1B
+C7C28:	CALL	C7C19			; step in without trackupdate
+	LD	A,50H			; step in with trackupdate
+	JR	C7C1B			; execute seek command and wait ready
 
-;	  Subroutine __________________________
+;	  Subroutine 2x step in without trackupdate, wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7C2F:	CALL	C7C19
-;	  Subroutine __________________________
+C7C2F:	CALL	C7C19			; step in without trackupdate
+
+;	  Subroutine step in without trackupdate, wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7C32:	LD	A,40H	; "@"
-J7C34:	CALL	C7C1B
-;	  Subroutine __________________________
+C7C32:	LD	A,40H			; step in without trackupdate
+					; execute seek command, wait ready and wait ?? ms
+
+;	  Subroutine execute seek command, wait ready and wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7C7:	PUSH	BC
+J7C34:	CALL	C7C1B			; execute seek command and wait ready
+
+;	  Subroutine wait ?? ms
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C7C37:	PUSH	BC
 	LD	BC,0E418H
 J7C3B:	DJNZ	J7C3B
 	DEC	C
@@ -1454,42 +1491,55 @@ J7C3B:	DJNZ	J7C3B
 	AND	A
 	RET
 
-?7C43:	CALL	C7C4B
-	JR	C7BF7
-
-;	  Subroutine __________________________
+;	  Subroutine 2x step out without trackupdate, wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7C48:	CALL	C7C4B
-;	  Subroutine __________________________
+?7C43:	CALL	C7C4B			; step out without trackupdate
+	JR	C7BF7			; step out without trackupdate and wait ?? ms
+
+;	  Subroutine 2x step out without trackupdate
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7C4B:	LD	A,60H	; "`"
-	JR	C7C1B
+C7C48:	CALL	C7C4B			; step out without trackupdate
 
-?7C4F:	CALL	C7C4B
-	LD	A,70H	; "p"
-	JR	J7C34
+;	  Subroutine step out without trackupdate
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-?7C56:	LD	A,70H	; "p"
-	JR	C7C1B
+C7C4B:	LD	A,60H			; step out without trackupdate
+	JR	C7C1B			; execute seek command and wait ready
+
+;	  Subroutine 2x step out, 1x trackupdate, wait ?? ms
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?7C4F:	CALL	C7C4B			; step out without trackupdate
+	LD	A,70H			; step out with trackupdate
+	JR	J7C34			; execute seek command, wait ready and wait ?? ms
+
+;	  Subroutine step out with trackupdate
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?7C56:	LD	A,70H			; step out with trackupdate
+	JR	C7C1B			; execute seek command and wait ready
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7C5A:	LD	A,(IX+11)
-	AND	A
-	RET	Z
-	DEC	A
-	JR	Z,C7BF7
-	DEC	A
-	JR	Z,C7BEE
-	DEC	A
-	JR	Z,C7BEB
-	JR	J7C01
+	AND	A			; 00H ?
+	RET	Z			; yep, quit
+	DEC	A			; 01H ?
+	JR	Z,C7BF7			; yep, step out without trackupdate and wait ?? ms
+	DEC	A			; 02H ?
+	JR	Z,C7BEE			; yep, 2x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
+	DEC	A			; 03H ?
+	JR	Z,C7BEB			; yep, 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
+	JR	J7C01			; 2x step out without trackupdate and wait ?? ms
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1529,7 +1579,7 @@ C7C8A:	ADD	A,A
 	JR	J7D1B
 
 INIHRD:
-	CALL	C7819
+	CALL	C7819			; terminate fdc command
 	LD	HL,D7FF0
 	LD	A,(HL)			; reset diskchange diskdrive 1
 	LD	(HL),A			; reset diskchange diskdrive 0
@@ -1552,9 +1602,9 @@ J7CBD:	XOR	A
 	CALL	C7CDD
 	LD	B,05H	; 5 
 J7CC9:	LD	A,7
-	CALL	CHPUT
-	CALL	C7C7
-	CALL	C7C7
+	CALL	CHPUT			; beep
+	CALL	C7C37			; wait ?? ms
+	CALL	C7C37			; wait ?? ms
 	DJNZ	J7CC9
 	LD	A,0FFH
 	LD	(ENSTOP),A
@@ -1609,7 +1659,7 @@ J7D3B:	XOR	A
 J7D3E:	LD	(HL),A
 	INC	HL
 	DJNZ	J7D3E
-	LD	(IX+3),22H	; """
+	LD	(IX+3),22H
 	LD	HL,I7D81
 	JP	SETINT
 
@@ -1984,11 +2034,11 @@ J80DB:	LD	A,10H	; 16
 J80DF:	RES	2,(IX+4)
 	CALL	C.79E6			; is diskdrive ready ?
 	RET	C			; nope, quit with NOT READY error
-	CALL	C.7BF7
+	CALL	C.7BF7			; step out without trackupdate and wait ?? ms
 	CALL	C833E
-	CALL	C.7BEB
+	CALL	C.7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	CALL	C833E
-	CALL	C.7BF7
+	CALL	C.7BF7			; step out without trackupdate and wait ?? ms
 	CALL	C.79E6			; is diskdrive ready ?
 	RET	C			; nope, quit with NOT READY error
 	LD	C,00H
@@ -2013,14 +2063,14 @@ J80DF:	RES	2,(IX+4)
 	CALL	C8173
 	RET	C
 	CALL	C.7C2B
-	CALL	C.7BEB
+	CALL	C.7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	LD	B,00H
 	LD	C,01H	; 1 
 
 J8131:	CALL	C833E
-	CALL	C.7BEB
+	CALL	C.7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	CALL	C833E
-	CALL	C.7BF7
+	CALL	C.7BF7			; step out without trackupdate and wait ?? ms
 	CALL	C.79E6			; is diskdrive ready ?
 	RET	C			; nope, quit with NOT READY error
 	CALL	C81C8			; format track
@@ -2035,7 +2085,7 @@ J814D:	INC	C
 	CP	80
 	JR	Z,J815B
 	CALL	C.7C2B
-	CALL	C.7BEB
+	CALL	C.7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	JR	J8131
 
 J815B:	PUSH	BC
@@ -2332,7 +2382,7 @@ J8329:	LD	A,(HL)
 	LD	A,D
 	LD	(D.7FC3),A
 	DJNZ	J8329
-	JP	C.7819
+	JP	C.7819			; terminate fdc command
 
 J8338:	DI
 	CALL	C833E
@@ -2373,24 +2423,24 @@ J8365:	LD	A,(DE)
 I8370:	LD	A,B
 	AND	0F7H
 	LD	(D.7FE0),A
-	CALL	C.7C37
+	CALL	C.7C37			; wait ?? ms
 	POP	BC
 	AND	A
 	RET
 
 C837C:	CALL	C7B8F			; restore with forced zero
 	RET	C
-	LD	HL,C.0000
-	LD	DE,C.0000
-	LD	C,28H	; "("
+	LD	HL,0
+	LD	DE,0
+	LD	C,40
 	CALL	C8408
 	RET	C
-	LD	C,25H	; "%"
+	LD	C,37
 	CALL	C8408
 	RET	C
 	PUSH	HL
 	AND	A
-	LD	HL,I.0011
+	LD	HL,17
 	SBC	HL,DE
 	POP	HL
 	JR	NC,J83CF
@@ -2410,7 +2460,7 @@ J83AC:	JR	J83AF
 
 J83AE:	INC	C
 J83AF:	LD	A,C
-	CP	07H	; 7 
+	CP	7
 	JR	Z,J83CF
 	DEC	A
 	JR	Z,J83CF
@@ -2469,8 +2519,8 @@ J8401:	LD	A,03H	; 3
 C8408:	LD	(IX+6),C		; set current track
 	CALL	C.7C6A			; seek track
 	CALL	C$7C11
-	LD	B,07H	; 7 
-J8413:	CALL	C.7BF7
+	LD	B,7
+J8413:	CALL	C.7BF7			; step out without trackupdate and wait ?? ms
 	CALL	C.79E6			; is diskdrive ready ?
 	JR	C,J8442			; nope,
 	PUSH	BC
@@ -2478,7 +2528,7 @@ J8413:	CALL	C.7BF7
 	PUSH	HL
 	CALL	C8457
 	JR	C,J843F
-	LD	HL,C.0000
+	LD	HL,0
 	LD	D,L
 J8427:	ADD	HL,DE
 	DJNZ	J8427
@@ -2494,8 +2544,8 @@ J8427:	ADD	HL,DE
 	EX	DE,HL
 	POP	BC
 	DJNZ	J8413
-J8437:	CALL	C$7C16
-	CALL	C$7BEE
+J8437:	CALL	C$7C16			; 2x step in without trackupdate
+	CALL	C$7BEE			; 2x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	AND	A
 	RET
 
@@ -2644,7 +2694,7 @@ J850B:	LD	A,(DE)
 	ADD	A,A
 	RET	C
 	DJNZ	J850B
-	JP	C.7819
+	JP	C.7819			; terminate fdc command
 
 I8513:	LD	A,(D.7FC0)
 	CALL	C$7827
@@ -2822,8 +2872,8 @@ C8634:	LD	A,(HL)
 C8641:	PUSH	HL
 	LD	HL,I8651
 	CALL	C86FE			; write PSG registers
-	LD	B,02H	; 2 
-J864A:	CALL	C.7C37
+	LD	B,2
+J864A:	CALL	C.7C37			; wait ?? ms
 	DJNZ	J864A
 	POP	HL
 	RET
@@ -2841,8 +2891,8 @@ I8651:	LD	E,H
 
 J865F:	LD	HL,I866D
 	CALL	C86FE			; write PSG registers
-	LD	B,19H
-J8667:	CALL	C.7C37
+	LD	B,25
+J8667:	CALL	C.7C37			; wait ?? ms
 	DJNZ	J8667
 	RET
 
@@ -2905,8 +2955,8 @@ J86B1:	LD	B,5
 	CALL	C86F1
 	LD	HL,I8A2C
 	CALL	C.7CDD
-	LD	B,1EH
-J86DF:	CALL	C.7C37
+	LD	B,30
+J86DF:	CALL	C.7C37			; wait ?? ms
 	DJNZ	J86DF
 	CALL	C8719
 	POP	IX
@@ -2921,8 +2971,8 @@ I86EC:	DEFB	"OERO",0
 ;	     Outputs ________________________
 
 C86F1:	CALL	C.7CDD
-	LD	B,1EH
-J86F6:	CALL	C.7C37
+	LD	B,30
+J86F6:	CALL	C.7C37			; wait ?? ms
 	DJNZ	J86F6
 ;
 ;	  Subroutine __________________________
@@ -3030,7 +3080,7 @@ J878D:	LD	B,5
 	EI
 	LD	HL,I8770
 	CALL	C.7CDD
-	CALL	C.7819
+	CALL	C.7819			; terminate fdc command
 	LD	D,0			; diskdrive 0
 	CALL	C.7E1C			; select diskdrive variables
 	LD	A,01H	; 1 
@@ -3039,11 +3089,11 @@ J878D:	LD	B,5
 	LD	C,0FH	; 15 
 J87AD:	CALL	C.79E6			; is diskdrive ready ?
 	JR	C,J87AD			; nope,
-	CALL	C.7C37
+	CALL	C.7C37			; wait ?? ms
 	CALL	C.79E6			; is diskdrive ready ?
 	JR	C,J87AD			; nope,
-	CALL	C.7C37
-J87BD:	CALL	C.7C37
+	CALL	C.7C37			; wait ?? ms
+J87BD:	CALL	C.7C37			; wait ?? ms
 	CALL	C$79FD
 	LD	A,01H	; 1 
 	JR	C,J87C9
@@ -3053,10 +3103,10 @@ J87C9:	SLA	C
 	JR	NZ,J87EE
 J87CF:	CALL	C.79E6			; is diskdrive ready ?
 	JR	NC,J87CF		; yep,
-	CALL	C.7C37
+	CALL	C.7C37			; wait ?? ms
 	CALL	C.79E6			; is diskdrive ready ?
 	JR	NC,J87CF		; yep,
-	CALL	C.7C37
+	CALL	C.7C37			; wait ?? ms
 	DJNZ	J87AD
 	LD	A,00H
 J87E3:	LD	(D.7FE0),A
@@ -4280,11 +4330,11 @@ C$98F7:	CALL	C.9533			; jumptable: is diskdrive ready
 	LD	DE,0
 	LD	C,40
 	CALL	C.998A
-	RET	C
+	RET	C			; error, quit
 	CALL	C.9D53			; to new line
 	LD	C,37
 	CALL	C.998A
-	RET	C
+	RET	C			; error, quit
 	PUSH	HL
 	AND	A
 	LD	HL,17
@@ -4328,18 +4378,18 @@ J.9951:	LD	A,0CH	; 12
 	SET	1,(IX+2)
 	RET
 
-J$9959:	LD	C,4EH	; "N"
+J$9959:	LD	C,78
 	CALL	C.998A
-	RET	C
-	LD	C,4BH	; "K"
+	RET	C			; error, quit
+	LD	C,75
 	CALL	C.998A
-	RET	C
-	LD	C,06H	; 6 
+	RET	C			; error, quit
+	LD	C,6
 	CALL	C.998A
-	RET	C
-	LD	C,03H	; 3 
+	RET	C			; error, quit
+	LD	C,3
 	CALL	C.998A
-	RET	C
+	RET	C			; error, quit
 	LD	B,H
 	LD	C,L
 	PUSH	HL
