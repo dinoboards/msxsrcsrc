@@ -1424,12 +1424,17 @@ J7C04:	JR	C7BF7			; step out without trackupdate and wait ?? ms
 	CALL	C7C4B			; step out without trackupdate
 	JR	J7C01			; 2x step out without trackupdate and wait ?? ms
 
-;	  Subroutine 5x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
+;	  Subroutine 7x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 ?7C0E:	CALL	C7C16			; 2x step in without trackupdate
-	CALL	C7C16			; 2x step in without trackupdate
+
+;	  Subroutine 5x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C7C11:	CALL	C7C16			; 2x step in without trackupdate
 	JR	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 
 ;	  Subroutine 2x step in without trackupdate
@@ -2461,20 +2466,20 @@ C837C:	CALL	C7B8F			; restore with forced zero
 	LD	C,40
 	CALL	C8408
 	RET	C			; error, quit
-	LD	C,37
+	LD	C,40-3
 	CALL	C8408
 	RET	C			; error, quit
 	PUSH	HL
 	AND	A
 	LD	HL,17
 	SBC	HL,DE
-	POP	HL
-	JR	NC,J83CF
+	POP	HL			; found less then 18 sectors ?
+	JR	NC,J83CF		; yep, quit with OTHER error
 	LD	B,H
 	LD	C,L
 	PUSH	HL
 	PUSH	DE
-	CALL	DIV16
+	CALL	DIV16			; BC = BC/DE
 	ADD	HL,HL
 	POP	DE
 	LD	A,E
@@ -2487,9 +2492,9 @@ J83AC:	JR	J83AF
 J83AE:	INC	C
 J83AF:	LD	A,C
 	CP	7
-	JR	Z,J83CF
+	JR	Z,J83CF			; quit with OTHER error
 	DEC	A
-	JR	Z,J83CF
+	JR	Z,J83CF			; quit with OTHER error
 	DEC	A
 	LD	B,A
 	LD	A,(IX+3)
@@ -2510,20 +2515,20 @@ J83CF:	LD	A,12
 J83D7:	LD	C,78
 	CALL	C8408
 	RET	C			; error, quit
-	LD	C,75
+	LD	C,78-3
 	CALL	C8408
 	RET	C			; error, quit
 	LD	C,6
 	CALL	C8408
 	RET	C			; error, quit
-	LD	C,3
+	LD	C,6-3
 	CALL	C8408
 	RET	C			; error, quit
 	LD	B,H
 	LD	C,L
 	PUSH	HL
 	PUSH	DE
-	CALL	DIV16
+	CALL	DIV16			; BC = BC/DE
 	ADD	HL,HL
 	POP	DE
 	LD	A,E
@@ -2533,41 +2538,41 @@ J83D7:	LD	C,78
 	JR	Z,J8401
 	JR	J83AC
 
-J8401:	LD	A,03H	; 3 
+J8401:	LD	A,3
 	CP	C
 	JR	C,J83AC
 	JR	J83AE
 
 ;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Inputs  HL = ?, DE = record counter so far
+;	     Outputs HL = ?, DE = record counter updated
 
 C8408:	LD	(IX+6),C		; set current track
 	CALL	C7C6A			; seek to track
-	CALL	C7C11
+	CALL	C7C11			; 5x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	LD	B,7
 J8413:	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 	CALL	C79E6			; is diskdrive ready ?
-	JR	C,J8442			; nope,
+	JR	C,J8442			; nope, quit
 	PUSH	BC
 	PUSH	DE
 	PUSH	HL
-	CALL	C8457
-	JR	C,J843F
+	CALL	C8457			; count records on track
+	JR	C,J843F			; error, quit
 	LD	HL,0
 	LD	D,L
 J8427:	ADD	HL,DE
 	DJNZ	J8427
 	LD	B,H
-	LD	C,L
+	LD	C,L			; * counter
 	POP	HL
-	ADD	HL,BC
+	ADD	HL,BC			; add
 	LD	B,D
 	LD	C,E
 	POP	DE
 	EX	DE,HL
 	ADD	HL,BC
-	EX	DE,HL
+	EX	DE,HL			; add records on track
 	POP	BC
 	DJNZ	J8413
 J8437:	CALL	C7C16			; 2x step in without trackupdate
@@ -2598,19 +2603,19 @@ C8448:	LD	A,07H	; 7
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Outputs E = number of records
 
 C8457:	PUSH	HL
 	PUSH	BC
-	LD	A,01H	; 1 
+	LD	A,1			; start record = 1
 	BIT	1,(IX+1)		; 9 sectors per track ?
 	LD	C,8
 	JR	NZ,J8465		; nope,
 	LD	C,9
 J8465:	CALL	C8478
-	JR	C,J8475
-	LD	E,00H
-	LD	B,10H	; 16 
+	JR	C,J8475			; error, quit
+	LD	E,0
+	LD	B,16
 J846E:	ADD	HL,HL
 	JR	NC,J8472
 	INC	E
