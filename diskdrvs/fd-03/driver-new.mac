@@ -14,15 +14,18 @@
 MYSIZE	EQU	14		; workspace for disk driver
                                 ; +0 motor off timer
                                 ; +1 b3 = last dskio operation failed, b2 = last dskchg was changed, b1 = 8 sectors per track, b0 = 40 tracks
-                                ; +2 b3 = last dskchg invalid mediabyte,b2 = , b1 = , b0 =
-                                ; +3 TR offset
-                                ; +4 b4 = NI0I enabled, b3 = , b2 = read/write dskio operation, b1 = unused, b0 = current panthom drive
+				;    b7 = other drive b3, b6 = other drive b2, b5 = other drive b1, b4 = other drive b0
+                                ; +2 b3 = last dskchg invalid mediabyte, b2 = reshuffle done, b1 = TRoffset invalid, b0 = disk verified ok
+				;    b7 = other drive b3, b6 = other drive b2, b5 = other drive b1, b4 = other drive b0
+                                ; +3 b3-b0 = TR offset
+				;    b7-b4 = TR offset other drive
+                                ; +4 b4 = NI0I enabled, b3 = transfer via page 2 driver, b2 = read/write dskio operation, b1 = unused, b0 = current panthom drive
                                 ; +5 current physical diskdrive
                                 ; +6 current phantom diskdrive
                                 ; +7 current track of other diskdrive
                                 ; +8 current sector on track
-                                ; +9 current diskdrive ?? mask
-                                ; +10 other diskdrive ?? mask
+                                ; +9 current diskdrive record mask
+                                ; +10 other diskdrive record mask
                                 ; +11 track reshuffle tries
                                 ; +12 slotid disk driver ROM
                                 ; +13 physical diskdrives connected
@@ -184,9 +187,9 @@ J748F:	DI
 	LD	SP,IY			; restore current stackpointer
 	EI
 	JR	C,J74F3			; errror, finish dskio operation
-	CALL	C7E29
-	SET	0,(IX+2)
-	LD	(IX+9),0FFH
+	CALL	C7E29			; clear disk flags
+	SET	0,(IX+2)		; disk verfified ok
+	LD	(IX+9),0FFH		; record mask (all records)
 	RES	0,(IX+1)		; 80 tracks
 	RES	1,(IX+1)		; 9 sectors per track
 	JR	J74F3			; finish dskio operation
@@ -237,11 +240,11 @@ J7521:	SUB	(IX+8)			; - current record
 
 J752A:	LD	C,B
 J752B:	DEC	HL
-	LD	A,6BH
+	LD	A,(HIGH 6C00H-1)
 	CP	H
 	INC	HL
 	LD	E,1
-	JR	NC,J754A
+	JR	NC,J754A		; transfer can be done via page 2 driver
 	DEC	HL
 	LD	A,H
 	INC	HL
@@ -250,14 +253,14 @@ J752B:	DEC	HL
 	LD	E,A
 	LD	A,0FH
 	SUB	E
-	JR	Z,J756B
+	JR	Z,J756B			; transfer via $SECBUF
 	CP	C
 	LD	E,0FFH
 	JR	Z,J7547
 	JR	NC,J754A
 J7547:	LD	C,A
 	LD	E,0
-J754A:	SET	3,(IX+4)
+J754A:	SET	3,(IX+4)		; transfer via page 2 driver
 	PUSH	BC
 	PUSH	DE
 	CALL	C762B
@@ -283,17 +286,17 @@ J756B:	BIT	2,(IX+4)		; dskio read operation ?
 	JR	Z,J75BA			; yep,
 	CALL	C79FD			; check if write protected
 	RET	C			; not ready or write protected, quit
-	LD	C,1
+	LD	C,1			; 1 record
 	PUSH	HL
-	CALL	C773A
+	CALL	C773A			; verify record
 	POP	HL
-	RET	C
+	RET	C			; error, quit
 	CALL	C7BF7			; step out without trackupdate and wait ?? ms
-	CALL	C7762
-	JP	C,J772A
-	CALL	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
-	CALL	C7762
-	JP	C,J7730
+	CALL	C7762			; verify records on track
+	JP	C,J772A			; error, 2x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
+	CALL	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms, clear mask
+	CALL	C7762			; verify records on track
+	JP	C,J7730			; error, step out without trackupdate and wait ?? ms, clear mask
 	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 	PUSH	HL
 	PUSH	BC
@@ -305,23 +308,23 @@ J756B:	BIT	2,(IX+4)		; dskio read operation ?
 	LD	A,(IX+8)
 	LD	(D7FC2),A		; set current record
 	LD	C,1			; 1 sector
-	RES	3,(IX+4)
-	CALL	C77B4			; write sectors
+	RES	3,(IX+4)		; transfer not via page 2 driver
+	CALL	C77B4			; write sector
 	POP	BC
 	POP	HL
-	RET	C
+	RET	C			; error, quit
 	CALL	C7C37			; wait ?? ms
 	AND	A
-	DEC	B
-	RET	Z
+	DEC	B			; more sectors ?
+	RET	Z			; nope, quit
 	JR	J75D5
 
 J75BA:	PUSH	HL
 	LD	HL,($SECBUF)
-	LD	C,1
-	CALL	C7627
+	LD	C,1			; 1 sector
+	CALL	C7627			; read sector
 	POP	HL
-	RET	C
+	RET	C			; error, quit
 	PUSH	HL
 	PUSH	BC
 	EX	DE,HL
@@ -329,11 +332,11 @@ J75BA:	PUSH	HL
 	LD	BC,512
 	CALL	XFER
 	POP	BC
-	POP	HL
-	DEC	B
-	RET	Z
+	POP	HL			; to transfer address
+	DEC	B			; more sectors ?
+	RET	Z			; nope, quit
 J75D5:	INC	H
-	INC	H
+	INC	H			; update transfer address
 	CALL	C75FD			; prepare for next sector
 J75DA:	BIT	1,(IX+1)		; 9 sectors per track ?
 	LD	A,8+1
@@ -347,9 +350,9 @@ J75E4:	SUB	(IX+8)			; - current record
 
 J75ED:	LD	C,B
 J75EE:	PUSH	BC
-	CALL	C7627
+	CALL	C7627			; read sectors
 	POP	BC
-	RET	C
+	RET	C			; error, quit
 	LD	A,B
 	SUB	C
 	LD	B,A
@@ -394,7 +397,7 @@ C7615:	LD	A,1			; sector 1
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7627:	RES	3,(IX+4)
+C7627:	RES	3,(IX+4)		; transfer not via page 2 driver
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -421,12 +424,12 @@ J764E:	LD	E,5
 J7650:	CALL	C79E6			; is diskdrive ready ?
 	JR	C,J76B3			; nope,
 	PUSH	DE
-	BIT	3,(IX+4)
-	JR	Z,J7661
+	BIT	3,(IX+4)		; transfer via page 2 driver ?
+	JR	Z,J7661			; nope,
 	CALL	C7E57			; read multiple sectors to page 1
 	JR	J7664
 
-J7661:	CALL	C77EC			; read sectors
+J7661:	CALL	C77EC			; read multiple sectors
 J7664:	POP	DE
 	JR	C,J76B3			; unrecoverable error, quit
 	JR	Z,J76B9			; no error,
@@ -447,7 +450,7 @@ J7664:	POP	DE
 	JR	Z,J7685
 	DEC	E
 	JR	NZ,J7650		; next try
-J7685:	SET	2,(IX+2)
+J7685:	SET	2,(IX+2)		; reshuffle done
 	INC	(IX+11)			; increase track reshuffle tries
 	LD	E,(IX+11)
 	DEC	E			; 01H ?
@@ -508,31 +511,31 @@ J76CA:	CALL	C79FD			; check if write protected
 	SRL	H
 	RR	L
 	LD	A,(IX+9)
-	AND	L
-	CP	L
+	AND	L			; mask with record mask
+	CP	L			; less or more records ?
 	POP	HL
-	JR	Z,J771B
+	JR	Z,J771B			; nope, skip mask update
 J76ED:	PUSH	HL
-	CALL	C773A
+	CALL	C773A			; verify records
 	POP	HL
 	RET	C
 	CALL	C7BF7			; step out without trackupdate and wait ?? ms
-	LD	D,(IX+9)
+	LD	D,(IX+9)		; save current record mask
 	PUSH	DE
-	CALL	C7762
+	CALL	C7762			; verify records on track
 	POP	DE
-	JR	C,J772A
+	JR	C,J772A			; error, 2x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	CALL	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
 	LD	A,(IX+9)
-	LD	(IX+9),D
+	LD	(IX+9),D		; restore record mask
 	LD	D,A
 	PUSH	DE
-	CALL	C7762
+	CALL	C7762			; verify records on track
 	POP	DE
-	JR	C,J7730
+	JR	C,J7730			; error, step out without trackupdate and wait ?? ms, clear mask
 	LD	A,(IX+9)
 	AND	D
-	LD	(IX+9),A
+	LD	(IX+9),A		; update record mask
 	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 J771B:	LD	A,(IX+8)
 	LD	(D7FC2),A		; set current record
@@ -548,7 +551,7 @@ J772A:	PUSH	AF
 
 J7730:	PUSH	AF
 	CALL	C7BF7			; step out without trackupdate and wait ?? ms
-J7734:	LD	(IX+9),0
+J7734:	LD	(IX+9),0		; mask all records off
 	POP	AF
 	RET
 
@@ -599,8 +602,8 @@ J7770:	LD	A,(D7FC1)
 	AND	A			; currently on track 0 ?
 	JR	NZ,J7789		; nope,
 	LD	E,(IX+9)
-	LD	D,00H
-	EX	DE,HL
+	LD	D,0
+	EX	DE,HL			; record mask
 	ADD	HL,HL
 	LD	A,L
 	CPL
@@ -653,12 +656,12 @@ C77B4:	LD	E,5
 J77B6:	CALL	C79E6			; is diskdrive ready ?
 	RET	C			; nope, quit with NOT READY error
 	PUSH	DE
-	BIT	3,(IX+4)
-	JR	Z,J77C6
+	BIT	3,(IX+4)		; transfer via page 2 driver ?
+	JR	Z,J77C6			; nope,
 	CALL	C7E8C			; write multiple sectors from page 1
 	JR	J77C9
 
-J77C6:	CALL	C7839			; write sectors
+J77C6:	CALL	C7839			; write multiple sectors
 J77C9:	POP	DE
 	RET	C			; unrecoverable error, quit
 	JP	Z,J76BC			; no error,
@@ -860,7 +863,7 @@ I78CA:	LD	A,L
 	RR	L
 	LD	A,(IX+9)
 	OR	L
-	LD	(IX+9),A
+	LD	(IX+9),A		; update record mask
 	POP	BC
 	POP	HL
 	AND	A
@@ -1127,21 +1130,21 @@ J7A3A:	CALL	DIV16
 	CALL	C7AD4			; prepare for diskdrive
 	POP	HL
 	RET	C
-	BIT	0,(IX+2)
-	JR	NZ,J7ABD
+	BIT	0,(IX+2)		; disk verified ok ?
+	JR	NZ,J7ABD		; yep, skip prepare part 2
 	CALL	C79E6			; is diskdrive ready ?
 	RET	C			; nope, quit with NOT READY error
 	BIT	2,(IX+4)		; dskio read operation ?
 	JR	NZ,J7A6C		; nope,
 	BIT	0,(IX+1)		; 80 tracks media ?
-	JR	NZ,J7ABD		; nope,
-	BIT	2,(IX+2)
-	JR	Z,J7ABD
-	BIT	1,(IX+2)
-	JR	NZ,J7ABD
-	JR	J7A82
+	JR	NZ,J7ABD		; nope, skip prepare part 2
+	BIT	2,(IX+2)		; reshuffle done ?
+	JR	Z,J7ABD			; nope, skip prepare part 2
+	BIT	1,(IX+2)		; TRoffset invalid ?
+	JR	NZ,J7ABD		; yep, skip prepare part 2
+	JR	J7A82			; prepare part 2
 
-J7A6C:	BIT	1,(IX+2)
+J7A6C:	BIT	1,(IX+2)		; TRoffset invalid ?
 	JP	NZ,J7835		; yep, quit with OTHER ERROR
 	CALL	C7819			; terminate fdc command
 	CALL	C79FD			; check if write protected
@@ -1245,10 +1248,10 @@ J7B1E:	INC	HL
 	RRCA
 	LD	(HL),A
 	DJNZ	J7B1E			; switch status flags diskdrive
-	LD	B,(IX+10)
-	LD	A,(IX+9)
+	LD	B,(IX+10)		; record mask other drive
+	LD	A,(IX+9)		; record mask current drive
 	LD	(IX+10),A
-	LD	(IX+9),B		; switch ?? diskdrive
+	LD	(IX+9),B		; switch record mask
 	POP	BC
 	AND	A
 	RET
@@ -1763,8 +1766,8 @@ J7DD3:	AND	B			; disk change ?
 	RET
 
 J7DEB:	SET	2,(IX+1)		; flag disk changed
-	CALL	C7E29
-	LD	(IX+9),0
+	CALL	C7E29			; clear disk flags
+	LD	(IX+9),0		; mask off all records
 	PUSH	HL
 	LD	A,D
 	LD	DE,1
@@ -2501,15 +2504,15 @@ J83AF:	LD	A,C
 	AND	0F0H
 	OR	B
 	LD	(IX+3),A		; update TRoffset
-	CALL	C7BDC
-	SET	0,(IX+2)
-	RES	2,(IX+2)
+	CALL	C7BDC			; apply TRoffset
+	SET	0,(IX+2)		; disk verified ok
+	RES	2,(IX+2)		; reset reshuffle done
 	AND	A
 	RET
 
 J83CF:	LD	A,12
 	SCF
-	SET	1,(IX+2)
+	SET	1,(IX+2)		; TRoffset invalid
 	RET
 
 J83D7:	LD	C,78
@@ -4258,14 +4261,14 @@ J9931:	LD	A,C
 	OR	B
 	LD	(IX+3),A
 	CALL	C9A52
-	SET	0,(IX+2)
-	RES	2,(IX+2)
+	SET	0,(IX+2)		; disk verified ok
+	RES	2,(IX+2)		; reset reshuffle done
 	AND	A
 	RET
 
 J9951:	LD	A,12
 	SCF
-	SET	1,(IX+2)
+	SET	1,(IX+2)		; TRoffset invalid
 	RET
 
 J9959:	LD	C,78
