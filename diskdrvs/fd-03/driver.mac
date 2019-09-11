@@ -13,16 +13,19 @@
 
 MYSIZE	EQU	12		; workspace for disk driver
                                 ; +0 motor off timer
-                                ; +1
-                                ; +2
-                                ; +3
+                                ; +1 b3 = TRoffset invalid, b2 = TRoffset determined, b1 = last dskio operation failed, b0 = track verified
+                                ;    b7 = , b6 = , b5 = , b4 =
+                                ; +2 b2 = last dskchg was changed, b1 = last dskchg invalid mediabyte, b0 = reshuffle done
+                                ;    b6 = , b5 = , b4 =
+                                ; +3 b3-b0 = TRoffset
+                                ;    b7-b4 = TRoffset other diskdrive
                                 ; +4 current physical diskdrive
                                 ; +5 current phantom diskdrive
                                 ; +6 current track
-                                ; +7 current track of non-current diskdrive
+                                ; +7 current track of other diskdrive
                                 ; +8 current sector on track
-                                ; +9
-                                ; +10
+                                ; +9 full track retries counter
+                                ; +10 track reshuffle tries
                                 ; +11 physical diskdrives connected
 
 SECLEN	EQU	512
@@ -63,7 +66,7 @@ I7405:
         DEFB	1
         DEFW	3
 
-;	  Subroutine __________________________
+;	  Subroutine get driver workarea
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -76,6 +79,10 @@ C7429:	PUSH	AF
 	POP	AF
 	RET
 
+;	  Subroutine DSKFMT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 DSKFMT:
 	CALL	C7429			; get driver workarea
 	CALL	C7ACA			; select diskdrive variables
@@ -85,7 +92,7 @@ DSKFMT:
 	CALL	NC,C7AD7		; no error, clear ?? flags
 	JR	J7455			; end io operation
 
-;	  Subroutine __________________________
+;	  Subroutine DSKIO
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -139,7 +146,7 @@ J7487:	LD	A,D
 
 J7491:	LD	C,B
 J7492:	DEC	HL
-	LD	A,6BH	; "k"
+	LD	A,(HIGH 6C00H-1)
 	CP	H
 	INC	HL
 	LD	E,D
@@ -150,7 +157,7 @@ J7492:	DEC	HL
 	AND	1EH
 	RRCA
 	LD	E,A
-	LD	A,0FH	; 15 
+	LD	A,0FH
 	SUB	E
 	JR	Z,J74D6
 	CP	C
@@ -158,9 +165,9 @@ J7492:	DEC	HL
 	JR	Z,J74AD
 	JR	NC,J74B0
 J74AD:	LD	C,A
-	LD	E,00H
+	LD	E,0
 J74B0:	EX	AF,AF'
-	LD	A,01H	; 1 
+	LD	A,1
 	INC	A
 	EX	AF,AF'
 	PUSH	BC
@@ -184,10 +191,10 @@ J74CB:	INC	B
 	RET	Z
 	CALL	C7533			; next sector
 	LD	A,H
-	AND	A
-	JP	M,J7519
+	AND	A			; transfer to page 2 or 3 ?
+	JP	M,J7519			; yep, direct transfer
 J74D6:	EX	AF,AF'
-	JR	NC,J74F6
+	JR	NC,J74F6		; read operation,
 	EX	AF,AF'
 	PUSH	HL
 	PUSH	DE
@@ -262,7 +269,7 @@ C7533:	LD	A,(IX+8)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C753A:	LD	(D7FC2),A		; current sector
+C753A:	LD	(D7FC2),A		; set current record
 	LD	(IX+8),A
 	RET
 
@@ -278,7 +285,7 @@ C7541:	CALL	C7666
 	CALL	C7948			; 3x Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
 	INC	(IX+6)
 
-;	  Subroutine Clear ? flag
+;	  Subroutine clear track verified flag
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -298,8 +305,8 @@ C755A:	EX	AF,AF'
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C755F:	LD	A,02H	; 2 
-	LD	(IX+9),A
+C755F:	LD	A,2
+	LD	(IX+9),A		; 2 full track retries
 	JR	J757A
 
 J7566:	PUSH	HL
@@ -311,9 +318,9 @@ J7566:	PUSH	HL
 	CALL	C79C7			; seek to track
 	POP	BC
 	LD	A,(IX+8)
-	LD	(D7FC2),A
+	LD	(D7FC2),A		; set current record
 J757A:	LD	(IX+10),0
-J757E:	LD	E,05H	; 5 
+J757E:	LD	E,5
 J7580:	CALL	C7AE8			; is diskdrive ready ?
 	JR	C,J75ED			; nope,
 	PUSH	DE
@@ -324,7 +331,7 @@ J7580:	CALL	C7AE8			; is diskdrive ready ?
 	JR	J7593
 
 J758F:	EX	AF,AF'
-	CALL	C7604
+	CALL	C7604			; write multiple sectors
 J7593:	POP	DE
 	JR	C,J75ED
 	JR	Z,J75F3
@@ -335,7 +342,7 @@ J759E:	SCF
 	DEC	E
 	JR	Z,J75B7
 	PUSH	BC
-	LD	A,(D7FC2)
+	LD	A,(D7FC2)		; current record
 	LD	B,(IX+8)
 	LD	(IX+8),A
 	SUB	B
@@ -350,7 +357,7 @@ J759E:	SCF
 J75B7:	EX	AF,AF'
 	JR	C,J75E5
 	EX	AF,AF'
-	SET	0,(IX+2)
+	SET	0,(IX+2)		; reshuffle done
 	INC	(IX+10)
 	LD	E,(IX+10)
 	DEC	E
@@ -410,7 +417,7 @@ C7604:	CALL	C797E			; wait for command ready
 	LD	B,0
 	SLA	C
 	EX	AF,AF'
-	JR	NC,J7630		; read,
+	JR	NC,J7630		; read, read mutiple sectors
 	EX	AF,AF'
 	LD	A,0B0H
 	LD	(D7FC0),A		; Write multiple sectors command
@@ -456,7 +463,7 @@ C764E:	LD	A,0D0H
 I7656:	POP	BC
 	POP	HL
 	LD	A,(D7FC0)		; read command status
-	JP	J7C80
+	JP	J7C80			; enable ints and check if error (after write)
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -477,18 +484,18 @@ C7666:	EX	AF,AF'
 	RET
 
 J766B:	EX	AF,AF'
-	BIT	0,(IX+1)
+	BIT	0,(IX+1)		; ?? test done ?
 	RET	NZ			; yep, quit
 	PUSH	DE
 	CALL	C797E			; wait for command ready
 	CALL	C79A0			; 2x Step Out (without trackregister update) and wait (head settle)
-	CALL	C768E
+	CALL	C768E			; fake format track
 	CALL	C797E			; wait for command ready
 	CALL	C796E			; 5x Step In (without trackregister update) and wait (head settle)
-	CALL	C768E
+	CALL	C768E			; fake format track
 	CALL	C79A0			; 2x Step Out (without trackregister update) and wait (head settle)
 	POP	DE
-	SET	0,(IX+1)
+	SET	0,(IX+1)		; ?? test done
 	AND	A
 	RET
 
@@ -567,9 +574,9 @@ J76EF:	CALL	DIV16
 	LD	C,L
 	POP	AF
 	CALL	C7719			; preprare for drive
-	CALL	C778D
+	CALL	C778D			; determine TRoffset when needed
 	POP	HL
-	RET	C
+	RET	C			; error, quit
 	LD	A,E
 	CALL	C753A			; set current sector
 	LD	(IX+6),C
@@ -664,107 +671,107 @@ J7787:	DEC	HL
 	JR	NZ,J7787
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine determine TRoffset when needed
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C778D:	AND	A
-	BIT	2,(IX+1)
-	RET	NZ
+	BIT	2,(IX+1)		; TRoffset determined ?
+	RET	NZ			; yep, quit
 	CALL	C7AE8			; is diskdrive ready ?
-	RET	C			; nope,
+	RET	C			; nope, quit
 	EX	AF,AF'
-	JR	C,J77A7
+	JR	C,J77A7			; write operation, determine TRoffset
 	EX	AF,AF'
-	BIT	0,(IX+2)
-	RET	Z
-	BIT	3,(IX+1)
-	RET	NZ
-	JR	J77AE
+	BIT	0,(IX+2)		; reshuffle done ?
+	RET	Z			; nope, quit
+	BIT	3,(IX+1)		; TRoffset invalid ?
+	RET	NZ			; yep, quit
+	JR	J77AE			; determine TRoffset
 
 J77A7:	EX	AF,AF'
-	BIT	3,(IX+1)
-	JR	NZ,J781B
+	BIT	3,(IX+1)		; TRoffset invalid ?
+	JR	NZ,J781B		; yep, TRoffset invalid and quit with OTHER error
 J77AE:	PUSH	BC
 	PUSH	DE
-	CALL	C78E9
-	JP	C,J7818
-	LD	HL,0
-	LD	DE,0
+	CALL	C78E9			; reset TRoffset
+	JP	C,J7818			; error, quit
+	LD	HL,0			; counter ??
+	LD	DE,0			; total records found
 	LD	C,40
 	LD	(IX+6),C
 	CALL	C79C7			; seek to track
 	CALL	C796E			; 5x Step In (without trackregister update) and wait (head settle)
-	CALL	C7824
-	LD	C,37
+	CALL	C7824			; count records on track with 7x step out
+	LD	C,40-3
 	LD	(IX+6),C
 	CALL	C79C7			; seek to track
 	CALL	C796E			; 5x Step In (without trackregister update) and wait (head settle)
-	CALL	C7824
-	JR	C,J7818
+	CALL	C7824			; count records on track with 7x step out
+	JR	C,J7818			; error, quit
 	PUSH	HL
 	AND	A
 	LD	HL,17
 	SBC	HL,DE
-	POP	HL
-	JR	NC,J781B
+	POP	HL			; found less then 18 sectors ?
+	JR	NC,J781B		; yep, TRoffset invalid and quit with OTHER error
 	LD	B,H
 	LD	C,L
 	PUSH	DE
-	CALL	DIV16
+	CALL	DIV16			; HL = BC/DE
 	ADD	HL,HL
 	POP	DE
-	LD	A,E
+	LD	A,E			; records found
 	CP	L
 	JR	C,J77F9
 	JR	Z,J77F4
 	JR	J77FA
 
-J77F4:	LD	A,03H	; 3 
+J77F4:	LD	A,3
 	CP	C
 	JR	C,J77FA
 J77F9:	INC	C
 J77FA:	LD	A,C
-	CP	07H	; 7 
-	JR	Z,J781B
+	CP	7
+	JR	Z,J781B			; ,TRoffset invalid and quit with OTHER error
 	DEC	A
-	JR	Z,J781B
+	JR	Z,J781B			; ,TRoffset invalid and quit with OTHER error
 	DEC	A
 	LD	B,A
 	LD	A,(IX+3)
 	AND	0F0H
 	OR	B
-	LD	(IX+3),A
-	CALL	C7939
-	SET	2,(IX+1)
-	RES	0,(IX+2)
+	LD	(IX+3),A		; update TRoffset
+	CALL	C7939			; apply TRoffset
+	SET	2,(IX+1)		; TRoffset determined
+	RES	0,(IX+2)		; no reshuffle done
 J7818:	POP	DE
 	POP	BC
 	RET
 
-J781B:	LD	A,0CH	; 12 
+J781B:	LD	A,12
 	SCF
-	SET	3,(IX+1)
+	SET	3,(IX+1)		; TRoffset invalid
 	JR	J7818
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	  Subroutine count records on track with 7x step out
+;	     Inputs  HL = counter, DE = total records
+;	     Outputs HL = counter updated, DE = total records updated
 
-C7824:	LD	B,07H	; 7 
+C7824:	LD	B,7
 J7826:	CALL	C7954			; Step Out (without trackregister update) and wait (head settle)
 	CALL	C7AE8			; is diskdrive ready ?
 	JR	C,J784F			; nope,
 	PUSH	BC
 	PUSH	DE
 	PUSH	HL
-	CALL	C785E
+	CALL	C785E			; count records on track
 	LD	HL,0
 	LD	D,L
 J7838:	ADD	HL,DE
 	DJNZ	J7838
 	LD	B,H
-	LD	C,L
+	LD	C,L			; 
 	POP	HL
 	ADD	HL,BC
 	LD	B,D
@@ -772,36 +779,36 @@ J7838:	ADD	HL,DE
 	POP	DE
 	EX	DE,HL
 	ADD	HL,BC
-	EX	DE,HL
+	EX	DE,HL			; add records on track
 	POP	BC
 	DJNZ	J7826
 J7848:	CALL	C7973			; 2x Step In (without trackregister update)
 	CALL	C794B			; 2x Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
 	RET
 
-J784F:	LD	A,07H	; 7 
+J784F:	LD	A,7
 	CP	B
-	JP	Z,J7966
+	JP	Z,J7966			; 3x Step Out (without trackregister update) and wait (head settle) and quit
 	DEC	B
 	JR	Z,J7848
-	LD	A,05H	; 5 
+	LD	A,5
 	SUB	B
-	JP	J793E
+	JP	J793E			; ?? and quit
 
-;	  Subroutine __________________________
+;	  Subroutine count records on track
 ;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Outputs E = records found
 
 C785E:	PUSH	HL
 	PUSH	BC
-	LD	HL,0
-	LD	B,1BH
+	LD	HL,0			; no records found so far
+	LD	B,3*9
 J7865:	PUSH	BC
-	CALL	C789D
-	JR	NC,J7872
-	CP	08H	; 8 
+	CALL	C789D			; read address
+	JR	NC,J7872		; no error,
+	CP	8			; record not found ?
 	POP	BC
-	JR	NZ,J788B
+	JR	NZ,J788B		; nope, quit with error
 	JR	J788D
 
 J7872:	LD	DE,0
@@ -809,32 +816,32 @@ J7872:	LD	DE,0
 J7876:	RL	E
 	RL	D
 	DEC	C
-	JR	NZ,J7876
+	JR	NZ,J7876		; calculate record OR mask
 	LD	A,D
 	OR	H
 	LD	H,A
 	LD	A,E
 	OR	L
-	LD	L,A
+	LD	L,A			; combine with current record found
 	POP	BC
 	INC	A
 	JR	NZ,J788B
 	LD	A,H
-	DEC	A
-	JR	Z,J788D
+	DEC	A			; all 9 records found ?
+	JR	Z,J788D			; yep, quit record search
 J788B:	DJNZ	J7865
-J788D:	LD	E,00H
-	LD	B,10H	; 16 
+J788D:	LD	E,0
+	LD	B,16
 J7891:	SRL	L
 	RL	H
 	JR	NC,J7898
 	INC	E
-J7898:	DJNZ	J7891
+J7898:	DJNZ	J7891			; count records found
 	POP	BC
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine read address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -866,14 +873,18 @@ J78C6:	LD	A,(DE)
 	JP	C764E			; terminate command
 
 I78CE:	LD	A,(D7FC0)		; read command status
-	CALL	C7BFB
-	RET	C
+	CALL	C7BFB			; enable ints and check if error (after read)
+	RET	C			; unrecoverable error, quit
 	SCF
-	RET	NZ
-	LD	A,(D7FC2)
+	RET	NZ			; recoverable error, quit
+	LD	A,(D7FC2)		; current record
 	CP	(IX+6)
 	RET	Z
-	LD	A,08H	; 8 
+	LD	A,8
+
+;	  Subroutine OEMSTA
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 OEMSTA:
 	SCF
@@ -884,23 +895,23 @@ OEMSTA:
 ;	     Outputs ________________________
 
 C78E2:	LD	(D7FE0),A
-	LD	IX,I7A1B
+	LD	IX,I7A1D+1-3
 
-;	  Subroutine __________________________
+;	  Subroutine reset TRoffset
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C78E9:	LD	A,(IX+3)
 	AND	0F0H
-	OR	02H	; 2 
+	OR	2
 	LD	(IX+3),A
 
-;	  Subroutine __________________________
+;	  Subroutine 
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C78F3:	CALL	C7555			; clear ? flag
-	LD	H,27H
+C78F3:	CALL	C7555			; clear track verified flag
+	LD	H,39
 J78F8:	LD	L,0
 	PUSH	BC
 	LD	B,4
@@ -908,11 +919,11 @@ J78FD:	CALL	C794B			; 2x Step In (without trackregister update), wait (head sett
 	RRA
 	RRA				; on track 0 ?
 	JR	NC,J7906		; nope,
-	LD	L,1
+	LD	L,1			; yep, set flag track 0 reached
 J7906:	DJNZ	J78FD
 	POP	BC
-	DEC	L
-	JR	NZ,J7911
+	DEC	L			; track 0 reached ?
+	JR	NZ,J7911		; nope,
 	DEC	H
 	JR	NZ,J78F8
 	JR	J7929			; quit with OTHER ERROR
@@ -937,13 +948,18 @@ J792C:	XOR	A
 	CALL	C7973			; 2x Step In (without trackregister update)
 	CALL	C7973			; 2x Step In (without trackregister update)
 
-;	  Subroutine __________________________
+;	  Subroutine apply TRoffset
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;			00	2x step out
+;			01	1x step out
+;			02	1x step in, 1x step out
+;			03	2x step in, 1x step out
+;			04	3x step in, 1x step out
 
 C7939:	LD	A,(IX+3)
-	AND	0FH	; 15 
-J793E:	SUB	02H	; 2 
+	AND	0FH
+J793E:	SUB	2
 	JP	M,J7958
 	JR	Z,C794E			; Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
 	DEC	A
@@ -991,6 +1007,11 @@ J7961:	JR	C7954			; Step Out (without trackregister update) and wait (head settl
 ;	     Outputs ________________________
 
 C7963:	CALL	C79A5			; 2x Step Out (without trackregister update)
+
+;	  Subroutine 3x Step Out (without trackregister update) and wait (head settle)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J7966:	CALL	C79A8			; Step Out (without trackregister update)
 	JR	J795E			; 2x Step Out (without trackregister update) and wait (head settle)
 
@@ -1134,7 +1155,7 @@ C79C7:	PUSH	HL
 	LD	A,C
 	LD	(D7FC1),A
 	POP	HL
-	JP	C7555			; clear ? flag
+	JP	C7555			; clear track verified flag
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1151,6 +1172,10 @@ C79DB:	ADD	A,A
 	EX	(SP),HL
 	LD	A,10H			; Seek command
 	JR	C7978
+
+;	  Subroutine INIHRD
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 INIHRD:
 ?79EC:	CALL	C764E			; terminate command
@@ -1169,6 +1194,10 @@ J7A03:	LD	(D7FC3),A		; number of physical drives in WD1792 DataPrt
 	LD	(D7FE0),A		; motor on, do not select physical diskdrive
 	RET
 
+;	  Subroutine DRIVES
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 DRIVES:
 ?7A0C:	PUSH	AF
 	CALL	C7429			; get driver workarea
@@ -1177,10 +1206,14 @@ DRIVES:
 	LD	L,A
 	XOR	A
 	LD	(D7FE0),A		; motor off, do not select physical diskdrive
-I7A1B:	POP	AF
+	POP	AF
 	RET	Z
-	LD	L,2
+I7A1D:	LD	L,2
 	RET
+
+;	  Subroutine INIENV
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 INIENV:
 ?7A20:	CALL	GETWRK
@@ -1189,7 +1222,7 @@ INIENV:
 J7A26:	LD	(HL),A
 	INC	HL
 	DJNZ	J7A26
-	LD	(IX+3),22H
+	LD	(IX+3),22H		; initialize TRoffset diskdrives
 	LD	HL,I7A34
 	JP	SETINT
 
@@ -1211,6 +1244,10 @@ I7A34:	PUSH	AF
 J7A47:	POP	AF
 	JP	PRVINT
 
+;	  Subroutine MTOFF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 MTOFF:
 ?7A4B:	CALL	C7429			; get driver workarea
 	DI
@@ -1219,6 +1256,10 @@ MTOFF:
 	LD	(D7FE0),A		; motor on, do not select physical diskdrive
 	EI
 	RET
+
+;	  Subroutine DSKCHG
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 DSKCHG:
 ?7A58:	CALL	C7429			; get driver workarea
@@ -1249,15 +1290,15 @@ J7A7E:	JR	NZ,J7AFB		; yep, NOT READY error
 J7A86:	AND	B
 	LD	B,01H			; DISK NOT CHANGED
 	JR	NZ,J7A9E
-	BIT	2,(IX+2)
-	JR	Z,J7A9E
+	BIT	2,(IX+2)		; status previous DSKCHG was CHANGED ?
+	JR	Z,J7A9E			; nope,
 	BIT	1,(IX+1)		; error in last DSKIO operation ?
 	JR	NZ,J7ABD		; yep, quit with DISK CHANGE UNKOWN
-	BIT	1,(IX+2)
-	JR	NZ,J7AC1
+	BIT	1,(IX+2)		; last dskchg invalid mediabyte ?
+	JR	NZ,J7AC1		; yep, quit with OTHER ERROR
 	RET
 
-J7A9E:	SET	2,(IX+2)
+J7A9E:	SET	2,(IX+2)		; flag disk changed
 	CALL	C7AD7			; clear ?? flags
 	PUSH	HL
 	LD	A,D
@@ -1275,7 +1316,7 @@ J7ABD:	LD	B,0FFH			; DISK CHANGE UNKNOWN
 	AND	A
 	RET
 
-J7AC1:	SET	1,(IX+2)
+J7AC1:	SET	1,(IX+2)		; last dskchg invalid mediabyte
 	JP	J7C0D			; quit with OTHER ERROR error
 
 J7AC8:	POP	DE
@@ -1299,8 +1340,8 @@ C7ACA:	BIT	1,(IX+11)		; 2 physical diskdrives ?
 C7AD7:	LD	A,(IX+1)
 	AND	0F0H
 	LD	(IX+1),A		; clear ?? flags
-	RES	0,(IX+2)		; clear ? flag
-	RES	1,(IX+2)		; clear ? flag
+	RES	0,(IX+2)		; no reshuffle done
+	RES	1,(IX+2)		; no last dskchg invalid mediabyte
 	RET
 
 ;	  Subroutine is diskdrive ready
@@ -1321,7 +1362,7 @@ J7AFB:	LD	A,02H
 	SCF				; NOT READY error
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine GETDPB
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1332,7 +1373,7 @@ C7AFF:	EX	DE,HL
 	SUB	0F8H
 	RET	C
 	JR	Z,J7B0B
-	CP	02H	; 2 
+	CP	2
 	SCF
 	RET	NZ
 J7B0B:	RRCA
@@ -1360,7 +1401,7 @@ C7B20:	PUSH	HL
 	PUSH	BC
 	LD	HL,I7B85
 	LD	DE,($SECBUF)
-	LD	BC,I$008C
+	LD	BC,L7B85
 	LDIR
 	LD	HL,I7B73
 	JR	J7B46
@@ -1374,7 +1415,7 @@ C7B34:	PUSH	HL
 	PUSH	BC
 	LD	HL,I7C11
 	LD	DE,($SECBUF)
-	LD	BC,I$008A
+	LD	BC,L7C11
 	LDIR
 	LD	HL,I7B67
 J7B46:	LD	E,(HL)
@@ -1406,24 +1447,19 @@ J7B63:	POP	BC
 	POP	HL
 	RET
 
-I7B67:	LD	B,00H
-	DEC	DE
-	NOP
-	DEC	A
-	NOP
-	LD	D,H
-	NOP
-	LD	E,A
-	DEFB	0,0,0
-I7B73:	LD	B,00H
-	DEC	DE
-	NOP
-	DEC	A
-	NOP
-	LD	D,H
-	NOP
-	LD	E,A
-	DEFB	0,0,0
+I7B67:	DEFW	W0006
+	DEFW	W001B
+	DEFW	W003D
+	DEFW	W0054
+	DEFW	W005F
+	DEFW	0
+
+I7B73:	DEFW	R0006
+	DEFW	R001B
+	DEFW	R003D
+	DEFW	R0054
+	DEFW	R005F
+	DEFW	0
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1442,29 +1478,29 @@ I7B85:
 	PUSH	DE
 	PUSH	BC
 	CALL	GETSLT
-	LD	(D.002F),A
-	LD	H,80H
+R0006:	LD	(R002E+1),A
+	LD	H,HIGH 8000H
 	CALL	ENASLT
 	EI
 	LD	A,(RAMAD1)
-	LD	H,40H	; "@"
+	LD	H,HIGH 4000H
 	CALL	ENASLT
 	EI
 	POP	BC
 	POP	DE
 	POP	HL
-	CALL	C.003B
+R001B:	CALL	R003B
 	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	PUSH	AF
 	LD	A,(RAMAD2)
-	LD	H,80H
+	LD	H,HIGH 8000H
 	CALL	ENASLT
 	EI
 	CALL	ENAKRN
-	LD	A,00H
-	LD	H,40H	; "@"
+R002E:	LD	A,0
+	LD	H,HIGH 4000H
 	CALL	ENASLT
 	EI
 	POP	AF
@@ -1473,28 +1509,28 @@ I7B85:
 	POP	HL
 	RET
 
-?7BC0:	PUSH	HL
+R003B:	PUSH	HL
 	PUSH	BC
-	LD	DE,I$0071
+R003D:	LD	DE,R0071
 	PUSH	DE
 	LD	DE,D7FE0+04000H
 	CALL	DISINT
 	DI
-	LD	B,00H
+	LD	B,0
 	SLA	C
 	LD	A,90H
-	LD	(D7FC0+04000H),A
-J7BD6:	LD	A,(DE)
+	LD	(D7FC0+04000H),A	; Read multiple sectors command
+R0051:	LD	A,(DE)
 	ADD	A,A			; INTRQ ?
 	RET	C			; yep, quit
-	JP	P,J.0051		; no DRQ, wait
+R0054:	JP	P,R0051			; no DRQ, wait
 	LD	A,(D7FC3+04000H)
 	LD	(HL),A
 	INC	HL
-	DJNZ	J7BD6
+	DJNZ	R0051
 	DEC	C
-	JP	NZ,J.0051
-	LD	B,50H	; "P"
+R005F:	JP	NZ,R0051
+	LD	B,80
 J7BE9:	LD	A,(DE)
 	ADD	A,A			; INTRQ ?
 	RET	C			; yep, quit
@@ -1505,27 +1541,27 @@ J7BF3:	EX	(SP),HL
 	EX	(SP),HL
 	RET
 
-?7BF6:	POP	BC
+R0071:	POP	BC
 	POP	HL
 	LD	A,(D7FC0+04000H)
 
-;	  Subroutine __________________________
+;	  Subroutine enable ints and check if error (after read)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7BFB:	EI
 	CALL	ENAINT			; enable interrupts
-	AND	1CH
+	AND	1CH			; ignore not ready, write protect, record type, drq and busy bits
 	RET	Z
 	LD	E,A
-	BIT	4,E
-	LD	A,08H	; 8 
+	BIT	4,E			; record not found ?
+	LD	A,8			; RECORD NOT FOUND error, recoverable
 	RET	NZ
-	BIT	3,E
-	LD	A,04H	; 4 
+	BIT	3,E			; crc error ?
+	LD	A,4			; CRC error, recoverable
 	RET	NZ
 J7C0D:	SCF
-	LD	A,0CH	; 12 
+	LD	A,12			; OTHER error, unrecoverable
 	RET
 
 	.DEPHASE
@@ -1538,29 +1574,29 @@ I7C11:
 	PUSH	DE
 	PUSH	BC
 	CALL	GETSLT
-	LD	(D.002F),A
-	LD	H,80H
+	LD	(W002E+1),A
+	LD	H,HIGH 8000H
 	CALL	ENASLT
 	EI
 	LD	A,(RAMAD1)
-	LD	H,40H	; "@"
+	LD	H,HIGH 4000H
 	CALL	ENASLT
 	EI
 	POP	BC
 	POP	DE
 	POP	HL
-	CALL	C.003B
+W001B:	CALL	W003B
 	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	PUSH	AF
 	LD	A,(RAMAD2)
-	LD	H,80H
+	LD	H,HIGH 8000H
 	CALL	ENASLT
 	EI
 	CALL	ENAKRN
-	LD	A,00H
-	LD	H,40H	; "@"
+W002E:	LD	A,0
+	LD	H,HIGH 4000H
 	CALL	ENASLT
 	EI
 	POP	AF
@@ -1569,57 +1605,66 @@ I7C11:
 	POP	HL
 	RET
 
-?7C4C:	PUSH	HL
+W003B:	PUSH	HL
 	PUSH	BC
-	LD	DE,I$006A
+W003D:	LD	DE,W006A
 	PUSH	DE
 	LD	DE,D7FE0+04000H
 	CALL	DISINT
 	DI
-	LD	B,00H
+	LD	B,0
 	SLA	C
 	LD	A,0B0H
-	LD	(D7FC0+04000H),A
-J7C62:	LD	A,(DE)
+	LD	(D7FC0+04000H),A	; Write multiple sectors command
+W0051:	LD	A,(DE)
 	ADD	A,A			; INTRQ ?
 	RET	C			; yep, quit
-	JP	P,J.0051		; no DRQ, wait
+W0054:	JP	P,W0051			; no DRQ, wait
 	LD	A,(HL)
 	LD	(D7FC3+04000H),A
 	INC	HL
-	DJNZ	J7C62
+	DJNZ	W0051
 	DEC	C
-	JP	NZ,J.0051
+W005F:	JP	NZ,W0051
 	LD	A,0D0H
 	LD	(D7FC0+04000H),A
 	EX	(SP),HL
 	EX	(SP),HL
 	RET
 
-?7C7B:	POP	BC
+W006A:	POP	BC
 	POP	HL
 	LD	A,(D7FC0+04000H)
+
+;	  Subroutine enable ints and check if error (after write)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J7C80:	EI
 	CALL	ENAINT			; enable interrupts
-	AND	5CH	; "\"
+	AND	5CH			; ignore not ready, record type, drq, busy bits
 	RET	Z
 	LD	E,A
-	BIT	4,E
-	LD	A,08H	; 8 
+	BIT	4,E			; record not found ?
+	LD	A,8			; RECORD NOT FOUND error, recoverable
 	RET	NZ
-	BIT	3,E
-	LD	A,04H	; 4 
+	BIT	3,E			; crc error ?
+	LD	A,4			; CRC error, recoverable
 	RET	NZ
 	SCF
-	BIT	6,E
-	LD	A,00H
+	BIT	6,E			; write protect ?
+	LD	A,0			; WRITE PROTECT error, unrecoverable
 	RET	NZ
-	LD	A,0CH	; 12 
+	LD	A,12			; OTHER error, unrecoverable
 	RET
 
 	.DEPHASE
 
 L7C11	EQU	$-I7C11
+
+;	  Subroutine CHOICE
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 CHOICE:
 ?7C9B:	LD	HL,0
@@ -1631,7 +1676,7 @@ CHOICE:
 
 C7C9F:	CALL	C7AE8			; is diskdrive ready ?
 	RET	C			; nope, quit
-	CALL	C78E9
+	CALL	C78E9			; reset TRoffset
 	JR	NC,J7CAC
 J7CA8:	LD	A,16
 	SCF
@@ -1650,7 +1695,7 @@ J7CAC:	LD	C,79
 	CALL	C7E39			; format track
 	RET	C
 	CALL	C7948			; 3x Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
-	CALL	C768E
+	CALL	C768E			; fake format track
 	DEC	B
 	JR	J7CCF
 
@@ -1665,7 +1710,7 @@ J7CCF:	CALL	C79B3			; Step Out
 	CALL	C7E39			; format track
 	RET	C
 	CALL	C7948			; 3x Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
-	CALL	C768E
+	CALL	C768E			; fake format track
 	CALL	C797E			; wait for command ready
 	CALL	C7985			; 2x Step In (with 1 track update)
 	CALL	C794E			; Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
@@ -1674,7 +1719,7 @@ J7CCF:	CALL	C79B3			; Step Out
 	DJNZ	J7CC9
 	CALL	C79B3			; Step Out
 	CALL	C7963			; 5x Step Out (without trackregister update) and wait (head settle)
-	CALL	C768E
+	CALL	C768E			; fake format track
 	CALL	C7948			; 3x Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
 	CALL	C7D29
 	RET	C
@@ -1683,12 +1728,12 @@ J7CCF:	CALL	C79B3			; Step Out
 	LD	(IX+6),0
 	EX	AF,AF'
 	SCF
-	EX	AF,AF'
+	EX	AF,AF'			; flag write operation
 	PUSH	HL
 	LD	HL,I7D4B
 	LD	A,1
-	LD	(D7FC2),A
-	LD	(IX+8),A		; sector 1
+	LD	(D7FC2),A		; current record = 1
+	LD	(IX+8),A
 	LD	C,A			; 1 sector
 	CALL	C755A			; write sectors (boot sector)
 	POP	HL
@@ -1702,18 +1747,18 @@ J7CCF:	CALL	C79B3			; Step Out
 ;	     Outputs ________________________
 
 C7D29:	LD	A,1
-	LD	(D7FC2),A
+	LD	(D7FC2),A		; current record = 1
 	LD	D,16
 J7D30:	CALL	C7AE8			; is diskdrive ready ?
 	RET	C
 	LD	HL,I$4000
 	LD	A,(D7FC2)
-	LD	C,A
-	LD	A,0AH	; 10 
+	LD	C,A			; current record
+	LD	A,9+1
 	SUB	C
 	LD	C,A
 	PUSH	DE
-	CALL	C7604
+	CALL	C7604			; write multiple sectors
 	POP	DE
 	RET	C
 	RET	Z
@@ -1825,7 +1870,7 @@ C7E10:	LD	HL,($SECBUF)
 	LDIR
 	LD	A,2			; sector 2
 	CALL	C7E2E
-	RET	C
+	RET	C			; error, quit
 	LD	A,4			; sector 4
 
 ;	  Subroutine __________________________
