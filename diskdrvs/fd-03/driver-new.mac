@@ -1576,32 +1576,32 @@ C7C5A:	LD	A,(IX+11)
 
 C7C6A:	PUSH	HL
 	LD	A,(D7FC1)
-	LD	H,A
-	CALL	C7C8A			; seek to track
+	LD	H,A			; current track
+	CALL	C7C8A			; seek 1/2 distance
 	LD	A,H
-	CALL	C7C8A			; seek to track
+	CALL	C7C8A			; seek 1/2 distance
 	BIT	0,(IX+1)		; 80 tracks media ?
 	JR	Z,J7C84			; yep,
 	LD	A,H
-	CALL	C7C8A			; seek to track
+	CALL	C7C8A			; seek 1/2 distance
 	LD	A,H
-	CALL	C7C8A			; seek to track
+	CALL	C7C8A			; seek 1/2 distance
 J7C84:	LD	A,C
 	LD	(D7FC1),A		; update track register
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine seek 1/2 distance
+;	     Inputs  A = start track, C = end track
 ;	     Outputs ________________________
 
-C7C8A:	ADD	A,A			; 2x ??
-	LD	(D7FC1),A		; in track register
+C7C8A:	ADD	A,A
+	LD	(D7FC1),A		; fake double start position
 	EX	(SP),HL
 	EX	(SP),HL
-	LD	A,C			; requested track
-	ADD	A,A			; 2x ??
-	LD	(D7FC3),A		; in data register
+	LD	A,C
+	ADD	A,A
+	LD	(D7FC3),A		; fake double end position (so number of steps is doubled)
 	EX	(SP),HL
 	EX	(SP),HL
 	LD	A,10H			; seek
@@ -2074,9 +2074,9 @@ J80DF:	RES	2,(IX+4)		; dskio read operation
 	CALL	C79E6			; is diskdrive ready ?
 	RET	C			; nope, quit with NOT READY error
 	CALL	C7BF7			; step out without trackupdate and wait ?? ms
-	CALL	C833E
+	CALL	C833E			; erase track
 	CALL	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
-	CALL	C833E
+	CALL	C833E			; erase track
 	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 	CALL	C79E6			; is diskdrive ready ?
 	RET	C			; nope, quit with NOT READY error
@@ -2106,9 +2106,9 @@ J80DF:	RES	2,(IX+4)		; dskio read operation
 	LD	B,00H
 	LD	C,01H	; 1 
 
-J8131:	CALL	C833E
+J8131:	CALL	C833E			; erase track
 	CALL	C7BEB			; 3x step in without trackupdate, 2x wait ?? ms, step out without trackupdate, wait ?? ms
-	CALL	C833E
+	CALL	C833E			; erase track
 	CALL	C7BF7			; step out without trackupdate and wait ?? ms
 	CALL	C79E6			; is diskdrive ready ?
 	RET	C			; nope, quit with NOT READY error
@@ -2423,8 +2423,12 @@ J8329:	LD	A,(HL)
 	DJNZ	J8329
 	JP	C7819			; terminate fdc command
 
+;	  Subroutine erase track (DI/EI)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J8338:	DI
-	CALL	C833E
+	CALL	C833E			; erase track
 	EI
 	RET
 
@@ -3340,7 +3344,7 @@ I8D01:	JP	C79E6			; +00 is diskdrive ready ?
 ?8D0D:	JP	J7885			; +12 ?
 ?8D10:	JP	J79A4			; +15 read address
 ?8D13:	JP	J81C2			; +18 format track
-?8D16:	JP	J8338			; +21 erase track
+?8D16:	JP	J8338			; +21 erase track (DI/EI)
 ?8D19:	JP	J78F6			; +24 verify records on track
 ?8D1C:	JP	C7C6A			; +27 seek to track
 ?8D1F:	JP	C7B99			; +30 restore (seek to track 0)

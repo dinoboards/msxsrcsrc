@@ -489,17 +489,17 @@ J766B:	EX	AF,AF'
 	PUSH	DE
 	CALL	C797E			; wait for command ready
 	CALL	C79A0			; 2x Step Out (without trackregister update) and wait (head settle)
-	CALL	C768E			; fake format track
+	CALL	C768E			; erase track
 	CALL	C797E			; wait for command ready
 	CALL	C796E			; 5x Step In (without trackregister update) and wait (head settle)
-	CALL	C768E			; fake format track
+	CALL	C768E			; erase track
 	CALL	C79A0			; 2x Step Out (without trackregister update) and wait (head settle)
 	POP	DE
 	SET	0,(IX+1)		; ?? test done
 	AND	A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine erase track
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1149,11 +1149,11 @@ C79B7:	LD	A,(IX+10)
 C79C7:	PUSH	HL
 	LD	A,(D7FC1)
 	LD	H,A			; current track
-	CALL	C79DB
+	CALL	C79DB			; seek 1/2 distance
 	LD	A,H
-	CALL	C79DB
+	CALL	C79DB			; seek 1/2 distance
 	LD	A,C
-	LD	(D7FC1),A
+	LD	(D7FC1),A		; update current track
 	POP	HL
 	JP	C7555			; clear track verified flag
 
@@ -1162,12 +1162,12 @@ C79C7:	PUSH	HL
 ;	     Outputs ________________________
 
 C79DB:	ADD	A,A
-	LD	(D7FC1),A
+	LD	(D7FC1),A		; fake double start position
 	EX	(SP),HL
 	EX	(SP),HL
 	LD	A,C
 	ADD	A,A
-	LD	(D7FC3),A
+	LD	(D7FC3),A		; fake double end position (so number of steps is doubled)
 	EX	(SP),HL
 	EX	(SP),HL
 	LD	A,10H			; Seek command
@@ -1695,7 +1695,7 @@ J7CAC:	LD	C,79
 	CALL	C7E39			; format track
 	RET	C
 	CALL	C7948			; 3x Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
-	CALL	C768E			; fake format track
+	CALL	C768E			; erase track
 	DEC	B
 	JR	J7CCF
 
@@ -1710,7 +1710,7 @@ J7CCF:	CALL	C79B3			; Step Out
 	CALL	C7E39			; format track
 	RET	C
 	CALL	C7948			; 3x Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
-	CALL	C768E			; fake format track
+	CALL	C768E			; erase track
 	CALL	C797E			; wait for command ready
 	CALL	C7985			; 2x Step In (with 1 track update)
 	CALL	C794E			; Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
@@ -1719,7 +1719,7 @@ J7CCF:	CALL	C79B3			; Step Out
 	DJNZ	J7CC9
 	CALL	C79B3			; Step Out
 	CALL	C7963			; 5x Step Out (without trackregister update) and wait (head settle)
-	CALL	C768E			; fake format track
+	CALL	C768E			; erase track
 	CALL	C7948			; 3x Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
 	CALL	C7D29
 	RET	C
