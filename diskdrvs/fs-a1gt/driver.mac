@@ -14,7 +14,17 @@
 
 
 FIRSID	EQU	08FH		; internal firmware slotid
+
+	IFDEF	DOS2
+
 MYSIZE	EQU	31		; size of environment
+
+	ELSE
+
+MYSIZE	EQU	26		; size of environment
+
+	ENDIF
+
 SECLEN	EQU	512
 
 
@@ -25,6 +35,9 @@ DSKBAS	EQU	04022H
 
 
         IFDEF	DOS2
+
+	DEFS	07000H-$,0
+
 
 ; DPB ROMdrive
 
@@ -443,19 +456,21 @@ L7280:	LD	E,C
         LD	DE,000C0H	; page
         JP	L71F6		; start transfer
 
-L7297:	DB	0,0,0		; not bootable
-         DB	"SRAMdisk"
-         DW	512
-        DB	1
-        DW	1
-        DB	1
-        DW	16
-        DW	34
-        DB	0FFh
-        DW	1
-        DW	1
-        DW	1
-        DW	0
+L7297:	DB	0		; first byte not x86 JMP (0E9H or 0EBH), so not bootable
+	DB	0
+	DB	0
+        DB	"SRAMdisk"	; volume name
+        DW	512		; 512 bytes per sector
+        DB	1		; 1 sector per cluster
+        DW	1		; reserved sectors
+        DB	1		; 1 FAT
+        DW	16		; 16 root directory entries
+        DW	34		; 34 total number of sectors
+        DB	0FFh		; media descriptor byte
+        DW	1		; 1 sector per FAT
+        DW	34		; 34 sectors per track
+        DW	1		; 1 side
+        DW	0		; 0 hidden sectors
 
 L72B5:	LD	(IX+30),L	; set # of logical drives
         LD	H,A
@@ -718,7 +733,7 @@ L73DB:	DB	0F9h
         DB	2
         DB	112
         DW	10
-        DW	318
+        DW	316
         DB	1
         DW	3
 
@@ -1229,7 +1244,16 @@ L777C:	LD	(HL),A
 
         ENDIF
 
+	IFDEF	DOS2
+
         LD	HL,L7FD4
+
+	ELSE
+	
+	LD	HL,L7789
+	
+	ENDIF
+
         JP	SETINT		; SETINT
 
 ; diskdrive interrupt handler
@@ -1270,6 +1294,9 @@ DSKCHG:	EI
         POP	AF
         POP	BC
         POP	HL
+	
+	IFDEF	DOS2
+
         LD	B,(IX+7)
         DEC	B
         JR	NZ,L77BD	; double drive system
@@ -1312,6 +1339,44 @@ L77F3:	PUSH	AF
         POP	AF
         RET
 
+	ELSE
+
+	AND	A
+	LD	B,(IX+2)
+	JR	NZ,J77DE
+	LD	B,(IX+1)
+J77DE:	INC	B
+	DEC	B
+	LD	B,1
+	RET	NZ
+	PUSH	BC
+	PUSH	HL
+	LD	DE,1
+	LD	HL,($SECBUF)
+	AND	A
+	CALL	DSKIO
+	JR	C,J7808
+	LD	HL,($SECBUF)
+	LD	B,(HL)
+	POP	HL
+	PUSH	BC
+	CALL	GETDPB
+	LD	A,12
+	JR	C,J7808
+	POP	AF
+	POP	BC
+	CP	C
+	SCF
+	CCF
+	LD	B,0FFH
+	RET	NZ
+	INC	B
+	RET
+J7808:	POP	DE
+	POP	DE
+	RET
+	
+	ENDIF
 
 ; GETDPB
 ;
@@ -2440,7 +2505,7 @@ L7F24:	LD	(HL),1
 L7F2D:
         .PHASE	0C01EH
 
-        RET	NC
+LC01E:  RET	NC
         LD	(LC058+1),DE
         LD	(LC0C4),A
         LD	(HL),LOW LC056
@@ -2486,34 +2551,22 @@ LC079:	DEFB	"Boot error",13,10
 
 LC09F:	defb	0
         defb	"MSXDOS  SYS"
-        defw 	0
-        defw	0
-        defb	0,0,0,0
-        defw	0
-        defw	0
-        defb	0
-        defb	0
-        defw	0
-        defw	0
-        defw	0
-        defb	0
-        defb	0,0,0,0
+L_BOOT	EQU	$-LC01E
 
-LC0C4:	defb	0
+LC0C4	EQU	LC09F+37
 
         .DEPHASE
 
-L_BOOT	EQU	$-L7F2D
+	IFNDEF	DOS2
 
+	DEFS	07FD0H-$,0
 
-        IFNDEF	DOS2
-
-        DEFS	07FD4H-$,0
-
+L7FD0:	LD	(L7FF0),A
+	RET
+	
 L7FD4:	JP	L7789
 
-        ENDIF
-
+	ENDIF
 
 ; S1990 FDD registers
 

@@ -138,19 +138,19 @@ J7483:	EX	AF,AF'
 	CALL	C7B20			; put sector read routine in SECBUF
 
 J7487:	LD	A,D
-	SUB	(IX+8)
-	CP	B
+	SUB	(IX+8)			; number of records left on this track
+	CP	B			; number of sectors requested
 	JR	NC,J7491
-	LD	C,A
+	LD	C,A			; use number of records left on this track
 	JR	J7492
 
-J7491:	LD	C,B
+J7491:	LD	C,B			; use number of sectors requested
 J7492:	DEC	HL
 	LD	A,(HIGH 6C00H-1)
 	CP	H
 	INC	HL
 	LD	E,D
-	JR	NC,J74B0
+	JR	NC,J74B0		; use RAM routines only
 	DEC	HL
 	LD	A,H
 	INC	HL
@@ -159,11 +159,11 @@ J7492:	DEC	HL
 	LD	E,A
 	LD	A,0FH
 	SUB	E
-	JR	Z,J74D6
+	JR	Z,J74D6			; use SECBUF as temporary transfer
 	CP	C
 	LD	E,0FFH
-	JR	Z,J74AD
-	JR	NC,J74B0
+	JR	Z,J74AD			; use RAM routines first and SECBUF methode later
+	JR	NC,J74B0		; use RAM routines only
 J74AD:	LD	C,A
 	LD	E,0
 J74B0:	EX	AF,AF'
@@ -172,14 +172,14 @@ J74B0:	EX	AF,AF'
 	EX	AF,AF'
 	PUSH	BC
 	PUSH	DE
-	CALL	C755F
+	CALL	C755F			; read/write sectors
 	POP	DE
 	POP	BC
-	RET	C
+	RET	C			; error, quit
 	LD	A,B
 	SUB	C
-	LD	B,A
-	JR	Z,J74CB
+	LD	B,A			; update sectors requested
+	JR	Z,J74CB			; nothing left,
 	INC	E
 	DEC	E
 	JR	Z,J74CB
@@ -187,8 +187,8 @@ J74B0:	EX	AF,AF'
 	JR	J7487
 
 J74CB:	INC	B
-	DEC	B
-	RET	Z
+	DEC	B			; any sectors left ?
+	RET	Z			; nope, quit
 	CALL	C7533			; next sector
 	LD	A,H
 	AND	A			; transfer to page 2 or 3 ?
@@ -564,11 +564,11 @@ J76DF:	EX	(SP),HL
 	LD	DE,8			; nope,
 	JR	NZ,J76EF
 	INC	DE			; yep, 
-J76EF:	CALL	DIV16
+J76EF:	CALL	DIV16			; BC/DE
 	LD	D,E
-	INC	D
+	INC	D			; last record number on track
 	LD	E,L
-	INC	E			; sectornumber (1 based)
+	INC	E			; record number (1 based)
 	LD	L,C			; track
 	POP	BC
 	LD	C,L
