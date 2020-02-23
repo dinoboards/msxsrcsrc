@@ -105,7 +105,7 @@ C7445:	EI
 	EX	AF,AF'
 	CALL	C7471			; do sector operation
 	JR	C,J7455			; error,
-	CALL	C7666
+	CALL	C7666			; erase around track if write operation
 
 J7455:	PUSH	AF
 	RES	1,(IX+1)		; clear DSKIO operation error flag
@@ -115,7 +115,7 @@ J7460:	CALL	C764E			; terminate command
 	LD	A,(D7FC0)		; reset INTRQ
 	LD	A,04H
 	LD	(D7FE0),A		; motor on, do not select physical diskdrive
-	LD	(IX+0),4*60		; motor off timer 4 seconds (60Hz ints)
+	LD	(IX+0),4*60		; motor off timer 4 seconds (assume 60Hz ints)
 	POP	AF
 	RET
 
@@ -183,13 +183,13 @@ J74B0:	EX	AF,AF'
 	INC	E
 	DEC	E
 	JR	Z,J74CB
-	CALL	C7541			; next track
+	CALL	C7541			; select next track
 	JR	J7487
 
 J74CB:	INC	B
 	DEC	B			; any sectors left ?
 	RET	Z			; nope, quit
-	CALL	C7533			; next sector
+	CALL	C7533			; select next sector
 	LD	A,H
 	AND	A			; transfer to page 2 or 3 ?
 	JP	M,J7519			; yep, direct transfer
@@ -235,7 +235,7 @@ J74F6:	EX	AF,AF'
 	RET	Z
 J7514:	INC	H
 	INC	H
-	CALL	C7533			; next sector
+	CALL	C7533			; select next sector
 
 J7519:	LD	A,D
 	SUB	(IX+8)
@@ -253,19 +253,19 @@ J7524:	PUSH	BC
 	SUB	C
 	LD	B,A
 	RET	Z			; done, quit
-	CALL	C7541			; next track
+	CALL	C7541			; select next track
 	JR	J7519
 
-;	  Subroutine __________________________
+;	  Subroutine select next sector
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7533:	LD	A,(IX+8)
 	INC	A
 	CP	D
-	JR	NC,C7541		; yep, next track
+	JR	NC,C7541		; yep, select next track
 
-;	  Subroutine __________________________
+;	  Subroutine select sector
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -273,13 +273,13 @@ C753A:	LD	(D7FC2),A		; set current record
 	LD	(IX+8),A
 	RET
 
-;	  Subroutine next track
+;	  Subroutine select next track
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7541:	CALL	C7666
+C7541:	CALL	C7666			; erase around track if write operation
 	LD	A,1
-	CALL	C753A			; current sector = 1
+	CALL	C753A			; select sector 1
 	CALL	C797E			; wait for command ready
 	CALL	C7985			; 2x Step In (with 1 track update)
 	CALL	C7948			; 3x Step In (without trackregister update), wait (head settle) and Step Out (without trackregister update)
@@ -321,7 +321,7 @@ J7566:	PUSH	HL
 	LD	(D7FC2),A		; set current record
 J757A:	LD	(IX+10),0		; reset reshuffle count
 J757E:	LD	E,5
-J7580:	CALL	C7AE8			; is diskdrive ready ?
+J7580:	CALL	C7AE8			; check if media in diskdrive
 	JR	C,J75ED			; nope,
 	PUSH	DE
 	EX	AF,AF'
@@ -452,20 +452,20 @@ J7649:	LD	A,(DE)
 	RET	C			; yep, quit
 	DJNZ	J7649
 
-;	  Subroutine __________________________
+;	  Subroutine terminate command
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C764E:	LD	A,0D0H
 	LD	(D7FC0),A		; Terminate command
-	JP	J7BF3
+	JP	J7BF3			; wait and quit
 
 I7656:	POP	BC
 	POP	HL
 	LD	A,(D7FC0)		; read command status
 	JP	J7C80			; enable ints and check if error (after write)
 
-;	  Subroutine __________________________
+;	  Subroutine disable interrupts
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -474,7 +474,7 @@ C765E:	LD	DE,D7FE0
 	DI
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine erase around track if write operation
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -491,7 +491,7 @@ J766B:	EX	AF,AF'
 	CALL	C79A0			; 2x Step Out (without trackregister update) and wait (head settle)
 	CALL	C768E			; erase track
 	CALL	C797E			; wait for command ready
-	CALL	C796E			; 5x Step In (without trackregister update) and wait (head settle)
+	CALL	C796E			; 5x Step In (without trackregister update), 1x Step Out (without trackregister update) and wait (head settle)
 	CALL	C768E			; erase track
 	CALL	C79A0			; 2x Step Out (without trackregister update) and wait (head settle)
 	POP	DE
@@ -510,7 +510,7 @@ C768E:	PUSH	BC
 	BIT	0,(IX+4)		; current diskdrive 0 ?
 	JR	Z,J769C			; yep, select diskdrive 0
 	INC	B			; no, select diskdrive 1
-J769C:	LD	A,0CH			; ??, motor on
+J769C:	LD	A,0CH			; set ?? bit, motor on
 	OR	B
 	LD	B,A
 	CALL	C765E			; disable interrupts
@@ -531,7 +531,7 @@ J76B5:	LD	A,(DE)
 	JR	J76B5
 
 I76C0:	LD	A,B
-	AND	0F7H			; reset ??
+	AND	0F7H			; reset ?? bit
 	LD	(D7FE0),A		; motor on, select diskdrive
 	EI
 	CALL	ENAINT			; enable interrupts
@@ -578,7 +578,7 @@ J76EF:	CALL	DIV16			; BC/DE
 	POP	HL
 	RET	C			; error, quit
 	LD	A,E
-	CALL	C753A			; set current sector
+	CALL	C753A			; select sector
 	LD	(IX+6),C
 	LD	A,(D7FC1)
 	CP	C			; already on track ?
@@ -619,7 +619,7 @@ J773A:	INC	A
 	CP	H			; requested diskdrive same as current ?
 	RET	Z			; yep, quit
 
-;	  Subroutine __________________________
+;	  Subroutine switch diskdrive variables
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -647,9 +647,9 @@ J7763:	INC	HL
 	RET
 
 J776F:	LD	A,H
-	CP	(IX+5)
+	CP	(IX+5)			; same phantom drive ?
 	LD	(IX+5),A
-	RET	Z
+	RET	Z			; yep, quit
 	PUSH	IX
 	PUSH	DE
 	PUSH	BC
@@ -660,7 +660,7 @@ J776F:	LD	A,H
 	AND	A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine wait for diskdrive motor spinup
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -678,7 +678,7 @@ J7787:	DEC	HL
 C778D:	AND	A
 	BIT	2,(IX+1)		; TRoffset determined ?
 	RET	NZ			; yep, quit
-	CALL	C7AE8			; is diskdrive ready ?
+	CALL	C7AE8			; check if media in diskdrive
 	RET	C			; nope, quit
 	EX	AF,AF'
 	JR	C,J77A7			; write operation, determine TRoffset
@@ -701,12 +701,12 @@ J77AE:	PUSH	BC
 	LD	C,40
 	LD	(IX+6),C
 	CALL	C79C7			; seek to track 40
-	CALL	C796E			; 5x Step In (without trackregister update) and wait (head settle)
+	CALL	C796E			; 5x Step In (without trackregister update), 1x Step Out (without trackregister update) and wait (head settle)
 	CALL	C7824			; count records on track with 7x step out
 	LD	C,40-3
 	LD	(IX+6),C
 	CALL	C79C7			; seek to track 37
-	CALL	C796E			; 5x Step In (without trackregister update) and wait (head settle)
+	CALL	C796E			; 5x Step In (without trackregister update), 1x Step Out (without trackregister update) and wait (head settle)
 	CALL	C7824			; count records on track with 7x step out
 	JR	C,J7818			; error, quit
 	PUSH	HL
@@ -760,7 +760,7 @@ J781B:	LD	A,12
 
 C7824:	LD	B,7
 J7826:	CALL	C7954			; Step Out (without trackregister update) and wait (head settle)
-	CALL	C7AE8			; is diskdrive ready ?
+	CALL	C7AE8			; check if media in diskdrive
 	JR	C,J784F			; nope,
 	PUSH	BC
 	PUSH	DE
@@ -1015,13 +1015,13 @@ C7963:	CALL	C79A5			; 2x Step Out (without trackregister update)
 J7966:	CALL	C79A8			; Step Out (without trackregister update)
 	JR	J795E			; 2x Step Out (without trackregister update) and wait (head settle)
 
-;	  Subroutine 7x Step In (without trackregister update) and wait (head settle)
+;	  Subroutine 7x Step In (without trackregister update), 1x Step Out (without trackregister update) and wait (head settle)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 ?796B:	CALL	C7973			; 2x Step In (without trackregister update)
 
-;	  Subroutine 5x Step In (without trackregister update) and wait (head settle)
+;	  Subroutine 5x Step In (without trackregister update), 1x Step Out (without trackregister update) and wait (head settle)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1049,7 +1049,7 @@ C7978:	LD	(D7FC0),A
 	NOP
 	EX	(SP),HL
 
-;	  Subroutine __________________________
+;	  Subroutine wait for command ready
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1112,7 +1112,7 @@ C79A5:	CALL	C79A8			; Step Out (without trackregister update)
 C79A8:	LD	A,60H			; Step Out (without trackregister update) command
 	JR	C7978
 
-;	  Subroutine 2x Step Out (without 1 track update)
+;	  Subroutine 2x Step Out (without 1 track update) and wait (head settle)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1226,21 +1226,21 @@ J7A26:	LD	(HL),A
 	LD	HL,I7A34
 	JP	SETINT
 
-;	  Subroutine __________________________
+;	  Subroutine interrupt handler disk driver
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 I7A34:	PUSH	AF
 	CALL	GETWRK
 	LD	A,(HL)
-	AND	A
-	JR	Z,J7A47
-	CP	0FFH
-	JR	Z,J7A47
+	AND	A			; motor off timer already finished ?
+	JR	Z,J7A47			; yep, quit interrupt handler
+	CP	0FFH			; motor off timer disabled ?
+	JR	Z,J7A47			; yep, quit interrupt handler
 	DEC	A
-	LD	(HL),A
-	JR	NZ,J7A47
-	LD	(D7FE0),A		; motor off, do not select physical diskdrive
+	LD	(HL),A			; decrease motor off timer
+	JR	NZ,J7A47		; timer not finished, quit interrupt handler
+	LD	(D7FE0),A		; timer finished: motor off, do not select physical diskdrive
 J7A47:	POP	AF
 	JP	PRVINT
 
@@ -1252,7 +1252,7 @@ MTOFF:
 ?7A4B:	CALL	C7429			; get driver workarea
 	DI
 	XOR	A
-	LD	(IX+0),A
+	LD	(IX+0),A		; motor off timer finished
 	LD	(D7FE0),A		; motor on, do not select physical diskdrive
 	EI
 	RET
@@ -1274,7 +1274,7 @@ DSKCHG:
 	BIT	1,(IX+11)		; 2 physical diskdrives ?
 	JR	Z,J7A7B			; nope,
 	LD	B,A
-	AND	02H			; READY bit diskdrive 1
+	AND	02H			; MEDIA-IN diskdrive 1
 	JR	NZ,J7A7E		; yep, NOT READY error
 	LD	A,(D7FF0)		; read ?? (reset diskchange diskdrive 1)
 	LD	A,B
@@ -1282,7 +1282,7 @@ DSKCHG:
 	JR	J7A86
 
 J7A7B:	LD	B,A
-	AND	01H			; READY bit diskdrive 0
+	AND	01H			; MEDIA-IN bit diskdrive 0
 J7A7E:	JR	NZ,J7AFB		; yep, NOT READY error
 	LD	(D7FF0),A		; write ?? (reset diskchange diskdrive 0)
 	LD	A,B
@@ -1322,7 +1322,7 @@ J7AC1:	SET	1,(IX+2)		; last dskchg invalid mediabyte
 J7AC8:	POP	DE
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine select diskdrive variables
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1333,7 +1333,7 @@ C7ACA:	BIT	1,(IX+11)		; 2 physical diskdrives ?
 	RET	Z			; yep, quit
 	JP	J774B			; switch diskdrive variables
 
-;	  Subroutine __________________________
+;	  Subroutine clear ?? flags
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1344,7 +1344,7 @@ C7AD7:	LD	A,(IX+1)
 	RES	1,(IX+2)		; no last dskchg invalid mediabyte
 	RET
 
-;	  Subroutine is diskdrive ready
+;	  Subroutine check if media in diskdrive
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1352,10 +1352,10 @@ C7AE8:	CALL	C797E			; wait for command ready
 	PUSH	BC
 	LD	B,01H
 	BIT	0,(IX+4)		; current diskdrive 0 ?
-	JR	Z,J7AF5			; yep, use READY bit diskdrive 0
-	INC	B			; nop, use READY bit diskdrive 1
+	JR	Z,J7AF5			; yep, use MEDIA-IN bit diskdrive 0
+	INC	B			; nop, use MEDIA-IN bit diskdrive 1
 J7AF5:	LD	A,(D7FE0)
-	AND	B			; read READY bit
+	AND	B			; read MEDIA-IN bit
 	POP	BC
 	RET	Z
 J7AFB:	LD	A,02H
@@ -1392,7 +1392,7 @@ J7B0B:	RRCA
 	LDIR
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine put sector read routine in SECBUF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1406,7 +1406,7 @@ C7B20:	PUSH	HL
 	LD	HL,I7B73
 	JR	J7B46
 
-;	  Subroutine __________________________
+;	  Subroutine put sector write routine in SECBUF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1536,7 +1536,7 @@ J7BE9:	LD	A,(DE)
 	RET	C			; yep, quit
 	DJNZ	J7BE9
 	LD	A,0D0H
-	LD	(D7FC0+04000H),A
+	LD	(D7FC0+04000H),A	; terminate command
 J7BF3:	EX	(SP),HL
 	EX	(SP),HL
 	RET
@@ -1674,7 +1674,7 @@ CHOICE:
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7C9F:	CALL	C7AE8			; is diskdrive ready ?
+C7C9F:	CALL	C7AE8			; check if media in diskdrive
 	RET	C			; nope, quit
 	CALL	C78E9			; reset TRoffset, seek to track 0 and apply TRoffset
 	JR	NC,J7CAC
@@ -1688,7 +1688,7 @@ J7CAC:	LD	C,79
 	AND	A			; sector operations are read
 	EX	AF,AF'
 	LD	B,80
-	CALL	C7AE8			; is diskdrive ready ?
+	CALL	C7AE8			; check if media in diskdrive
 	RET	C			; nope, quit
 	LD	C,B
 	DEC	C
@@ -1703,8 +1703,8 @@ J7CC9:	CALL	C79A8			; Step Out (without trackregister update)
 	CALL	C79B3			; Step Out
 J7CCF:	CALL	C79B3			; Step Out
 	CALL	C7963			; 5x Step Out (without trackregister update) and wait (head settle)
-	CALL	C7AE8			; is diskdrive ready ?
-	RET	C
+	CALL	C7AE8			; check if media in diskdrive
+	RET	C			; nope, quit
 	LD	C,B
 	DEC	C
 	CALL	C7E39			; format track
@@ -1740,7 +1740,7 @@ J7CCF:	CALL	C79B3			; Step Out
 	RET	C			; error, quit
 	CALL	C7E10			; write 1st FAT sector of both FATs
 	RET	C			; error, quit
-	JP	C7666
+	JP	C7666			; erase around track if write operation
 
 ;	  Subroutine read sectors from track
 ;	     Inputs  Cx' = 0
@@ -1749,8 +1749,8 @@ J7CCF:	CALL	C79B3			; Step Out
 C7D29:	LD	A,1
 	LD	(D7FC2),A		; current record = 1
 	LD	D,16
-J7D30:	CALL	C7AE8			; is diskdrive ready ?
-	RET	C
+J7D30:	CALL	C7AE8			; check if media in diskdrive
+	RET	C			; nope, quit
 	LD	HL,04000H
 	LD	A,(D7FC2)
 	LD	C,A			; current record
@@ -1877,7 +1877,7 @@ C7E10:	LD	HL,($SECBUF)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7E2E:	CALL	C753A			; set current sector
+C7E2E:	CALL	C753A			; select sector
 	LD	HL,($SECBUF)
 	LD	C,1			; 1 sector
 	JP	C755A			; write sectors (force using ROM routines)
@@ -1895,7 +1895,7 @@ C7E39:	CALL	C797E			; wait for command ready
 	CALL	C765E			; disable interrupts
 	EX	DE,HL
 	LD	A,0F0H
-	LD	E,01H	; 1 
+	LD	E,1
 	LD	(D7FC0),A		; Format track command
 	EX	(SP),HL
 	EX	(SP),HL
@@ -2110,7 +2110,7 @@ D7FC3:	DEFB	00H			; DataPrt
 	DEFB	00H,00H,01H,00H,00H,00H,01H,00H
 
 D7FE0:	DEFB	08H			; b3 (w) ?, b2 (w) motor on, b1 (w) ds1, b0 (w) ds0
-					; b7 (r) INTRQ, b6 (r) DRQ, b3 (r) dskchg ds1, b2 (r) dskchg ds0, b1 (r) ready ds1, b0 (r) ready ds0
+					; b7 (r) INTRQ, b6 (r) DRQ, b3 (r) dskchg ds1, b2 (r) dskchg ds0, b1 (r) media in ds1, b0 (r) media in ds0
 	DEFB	00H,3CH,3CH,3CH,3CH,3CH,3CH
 	DEFB	3CH,3CH,3CH,3CH,3CH,3CH,3CH,3CH
 
