@@ -1,8 +1,19 @@
-;  
-;   CX5EXT -> Source re-created by Z80DIS 2.2
-;      Z80DIS was written by Kenneth Gielow
-;                            Palo Alto, CA
+; EXT.MAC
+
+; CX5MII extension rom for 80 column mode (V9938)
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
         .Z80
+        ASEG
         ORG	4000H
 
 RDSLT	EQU	000CH
@@ -13,6 +24,11 @@ GICINI	EQU	0090H
 CHGET	EQU	009FH
 BEEP	EQU	00C0H
 FNKSB	EQU	00C9H
+
+M4055   EQU     4055H                   ; syntax error
+M4666   EQU     4666H                   ; get next basic character
+M475A   EQU     475AH                   ; illegal function call
+M521C   EQU     521CH                   ; evaluate byte operand
 
 LINL40	EQU	0F3AEH
 LINL32	EQU	0F3AFH
@@ -70,8 +86,8 @@ ATRBAS	EQU	0F928H
 
 DPPAGE	EQU	0FAF5H
 ACPAGE	EQU	0FAF6H
-AVCSAV	EQU	0FAF7H
-LOGOPR	EQU	0FB02H
+DFAF7	EQU	0FAF7H
+DFB02	EQU	0FB02H
 
 BASROM	EQU	0FBB1H
 LINTTB	EQU	0FBB2H
@@ -121,6 +137,11 @@ D$FFFF	EQU	0FFFFH
         DEFW	0
         DEFW	0
         DEFW	0
+
+;	  Subroutine set screen 0 width and change to screen mode 0
+;	     Inputs  A = 0, E = screen 0 width
+;	     Outputs ________________________
+;	     Remark  UNUSED
 
 ?.4010:	PUSH	AF
         LD	A,E
@@ -192,7 +213,7 @@ I$4068:	DEFB	"Ver 1.0"
 
 C$406F:	LD	HL,I$405C
         LD	B,12
-        JR	J.407B
+        JR	J.407B                  ; print release string and quit
 
 ;	  Subroutine CALL @VER statement
 ;	     Inputs  ________________________
@@ -200,6 +221,7 @@ C$406F:	LD	HL,I$405C
 
 C$4076:	LD	HL,I$4068
         LD	B,7
+
 J.407B:	PUSH	BC
         PUSH	HL
         LD	A,(HL)
@@ -209,7 +231,7 @@ J.407B:	PUSH	BC
         POP	BC
         DJNZ	J.407B
         POP	HL
-        OR	A
+        OR	A                       ; flag statement executed
         RET
 
 ;	  Subroutine CALL CLS statement
@@ -304,7 +326,7 @@ J$4110:	INC	HL
 J$4114:	LD	A,C
         AND	0CH
         OR	(HL)
-        OR	B                       ; calculate slotid
+        OR	B                       ; calculate slotid of this ROM
         LD	HL,I$41C0
         LD	DE,H.WIDT
         LD	BC,5
@@ -363,9 +385,9 @@ J$4114:	LD	A,C
         LD	BC,16
         LD	HL,I$4A9A
         LD	DE,RG8SAV
-        LDIR
+        LDIR                            ; initialize new VDP readback system variables
         EI
-        RET
+        RET                             ; quit
 
 I$41C0:	RST	30H
         DEFB	0
@@ -454,17 +476,17 @@ C$4209:	LD	IX,RDSLT
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.420F:	LD	IX,I$4666
+C.420F:	LD	IX,M4666
         JR	J.4231
 
 ;	  Subroutine evaluate byte operand
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4215:	LD	IX,I$521C
+C.4215:	LD	IX,M521C
         JR	J.4231
 
-;	  Subroutine clear sprites
+;	  Subroutine clear sprites (mode 1 sprites)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -482,14 +504,14 @@ C.4221:	LD	IX,BEEP
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J$4227:	LD	IX,I$4055
+J$4227:	LD	IX,M4055
         JR	J.4231
 
 ;	  Subroutine illegal function call
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J.422D:	LD	IX,I$475A
+J.422D:	LD	IX,M475A
 
 ;	  Subroutine invoke main bios routine
 ;	     Inputs  ________________________
@@ -499,7 +521,8 @@ J.4231:	DI
         PUSH	AF
         IN	A,(0A8H)
         AND	0FCH
-        OUT	(0A8H),A
+        OUT	(0A8H),A                ; select primairy slot 0 on page 0
+                                        ; (note this only works if slot 0 is not expanded, as with the CX5MII)
         XOR	A
         PUSH	AF
         POP	IY
@@ -593,13 +616,13 @@ J.42AE:	DI
         LD	BC,H.WIDT+4
         JP	J.433B                  ; take control from caller and quit
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine initialize CLMLST
+;	     Inputs  A = E = screen width
 ;	     Outputs ________________________
 
-C.42B9:	SUB	0EH
+C.42B9:	SUB	14
         JR	NC,C.42B9
-        ADD	A,1CH
+        ADD	A,14+14
         CPL
         INC	A
         ADD	A,E
@@ -636,7 +659,7 @@ J$42E4:	CALL	C.4248
         OR	E
         LD	(RG1SAV),A
         PUSH	HL
-        CALL	C$421B			; CLRSPR
+        CALL	C$421B			; clear sprites (mode 1 sprites)
         POP	HL
         DEC	HL
         CALL	C.420F			; get next BASIC char
@@ -679,7 +702,7 @@ J$433F:	LD	E,(HL)
         INC	HL
         EX	DE,HL
         OR	A
-        SBC	HL,BC                   ; check if word equals return address
+        SBC	HL,BC                   ; check if word equals return address (very dangerous methode, bound to go wrong!)
         EX	DE,HL
         JR	NZ,J$433F               ; nope, next
         LD	D,H
@@ -702,13 +725,13 @@ J$433F:	LD	E,(HL)
         EI
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine evaluate cassettespeed operand and set it up
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$435F:	CALL	C.4215			; evaluate byte operand 
         DEC	A
-        CP	02H	; 2 
+        CP	1+1
         JP	NC,J.422D		; illegal function call
         PUSH	HL
         LD	BC,5
@@ -721,32 +744,32 @@ J$4373:	LD	DE,LOW
         POP	HL
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine hide sprites
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.437A:	LD	A,(FORCLR)
         LD	E,A
         LD	HL,(ATRBAS)
-        LD	BC,02000H
-J$4384:	CALL	C.4530                  ; check if in v9338 graphic screen mode (multi color sprites)
-        LD	A,0D1H
+        LD	BC,32*256+0
+J$4384:	CALL	C.4530                  ; check if in v9338 graphic screen mode (mode 2 sprites)
+        LD	A,209                   ; special Y coordinate to disable mode 1 sprite
         JR	C,J$438D		; nope,
-        LD	A,0D9H
+        LD	A,217                   ; special Y coordinate to disable mode 2 sprite
 J$438D:	CALL	C.4759                  ; write byte to VRAM (128K)
         INC	HL
         INC	HL
         LD	A,C
         CALL	C.4759                  ; write byte to VRAM (128K)
         INC	HL
-        INC	C
+        INC	C                       ; next sprite pattern (assume 8x8 sprite)
         LD	A,(RG1SAV)
         RRC	A
-        RRC	A
-        JR	NC,J$43A4
+        RRC	A                       ; 16x16 sprites ?
+        JR	NC,J$43A4               ; nope,
         INC	C
         INC	C
-        INC	C
+        INC	C                       ; yep, sprite pattern up by 4
 J$43A4:	LD	A,E
         CALL	C.4759                  ; write byte to VRAM (128K)
         INC	HL
@@ -757,7 +780,7 @@ J$43A4:	LD	A,E
         LD	BC,00200H
         SBC	HL,BC
         LD	A,(FORCLR)
-        JP	C.4C33
+        JP	C.4C33                  ; fill VRAM
 
 ;	  Subroutine H.TOTE handler
 ;	     Inputs  A = text screen mode
@@ -800,9 +823,9 @@ I$43DB:	DEFW	C.43E3
 
 C.43E3:	XOR	A
         LD	(OLDSCR),A
-        CALL	C.44C3
+        CALL	C.44C3                  ; initalize color palette, vertical scroll, disable display output
         LD	A,(LINL40)
-        LD	(LINLEN),A
+        LD	(LINLEN),A              ; current screen width
         LD	HL,00800H
         LD	(TXTCOL),HL
         LD	HL,(TXTNAM)
@@ -812,21 +835,22 @@ C.43E3:	XOR	A
         JR	C,J$4406
         LD	HL,01000H
 J$4406:	LD	(CGPBAS),HL
-        CALL	C$457D
+        CALL	C$457D                  ; initialize screen mode 0 name, character, pattern, attribute address
+
 J$440C:	CALL	C.4C10
         CALL	C.4BAB                  ; clear text screen
         CALL	C$4C79			; initialize patterngenerator with msx characterset
-        JP	C.453C			; wait until VDP command is done and enable vdp display output
+        JP	C.453C			; wait for finished vertical retrace and enable vdp display output
 
 ;	  Subroutine chgmod screen mode 1
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4418:	LD	A,01H	; 1 
+C.4418:	LD	A,1
         LD	(OLDSCR),A
-        CALL	C.44C3
+        CALL	C.44C3                  ; initalize color palette, vertical scroll, disable display output
         LD	A,(LINL32)
-J$4423:	LD	(LINLEN),A
+J$4423:	LD	(LINLEN),A              ; current screen width
         LD	HL,(T32NAM)
         LD	(NAMBAS),HL
         LD	HL,(T32CGP)
@@ -835,20 +859,20 @@ J$4423:	LD	(LINLEN),A
         LD	(PATBAS),HL
         LD	HL,(T32ATR)
         LD	(ATRBAS),HL
-        CALL	C$45D7
-        CALL	C.437A
+        CALL	C$45D7                  ; initialize screen mode 1 name, character, pattern, attribute address
+        CALL	C.437A                  ; hide sprites
         JR	J$440C
 
 ;	  Subroutine chgmod screen mode 2
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4446:	LD	A,02H	; 2 
-        CALL	C.44C3
+C.4446:	LD	A,2
+        CALL	C.44C3                  ; initalize color palette, vertical scroll, disable display output
         LD	HL,(GRPATR)
         CALL	C$446F
         PUSH	HL
-        CALL	C$460D
+        CALL	C$460D                  ; initialize screen mode 2 name, character, pattern, attribute address
         POP	HL
         CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
         XOR	A
@@ -859,8 +883,8 @@ J.445C:	OUT	(98H),A
         DJNZ	J.445C
         CALL	C.4BDC                  ; clear screen 2/4
 J$4466:	CALL	C.4C10
-        CALL	C.437A
-        JP	C.453C			; wait until VDP command is done and enable vdp display output
+        CALL	C.437A                  ; hide sprites
+        JP	C.453C			; wait for finished vertical retrace and enable vdp display output
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -879,8 +903,8 @@ C$446F:	LD	(ATRBAS),HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4485:	LD	A,03H	; 3 
-        CALL	C.44C3
+C.4485:	LD	A,3
+        CALL	C.44C3                  ; initalize color palette, vertical scroll, disable display output
         LD	HL,(MLTPAT)
         LD	(PATBAS),HL
         LD	HL,(MLTATR)
@@ -890,7 +914,7 @@ C.4485:	LD	A,03H	; 3
         LD	HL,(MLTNAM)
         LD	(NAMBAS),HL
         PUSH	HL
-        CALL	C$4654
+        CALL	C$4654                  ; initialize screen mode 3 name, character, pattern, attribute address
         POP	HL
         CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
         LD	DE,6
@@ -908,7 +932,7 @@ J$44B2:	OUT	(98H),A
         CALL	C.4BF4                  ; clear screen 3
         JR	J$4466
 
-;	  Subroutine __________________________
+;	  Subroutine initalize color palette, vertical scroll, disable display output
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -919,16 +943,16 @@ C.44C3:	LD	(SCRMOD),A
         LD	HL,00100H
         LD	(ASPCT1),HL
         LD	(ASPCT2),HL
-        CALL	C.4A13
-        CALL	C$4546			; wait until VDP command is done and disable vdp display output
-        CALL	C$46F7			; initialize all palettes
-        LD	B,00H
+        CALL	C.4A13                  ; wait for VDP command to finish
+        CALL	C$4546			; wait for finished vertical retrace and disable vdp display output
+        CALL	C$46F7			; initialize color palette
+        LD	B,0
         LD	C,23
         JP	C.4551			; vertical scroll 0
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	  Subroutine get VRAM address color palette
+;	     Inputs  (SCRMOD) = screen mode
+;	     Outputs HL = VRAM address
 
 C$44E6:	PUSH	AF
         LD	A,(SCRMOD)
@@ -938,9 +962,9 @@ C$44E6:	PUSH	AF
         LD	C,A
         LD	B,00H
         LD	A,(LINLEN)
-        CP	40+1
+        CP	40+1                    ; TEXT40 mode ?
         JR	NC,J$44FA
-        DEC	BC
+        DEC	BC                      ; yep, use entry 0
 J$44FA:	ADD	HL,BC
         ADD	HL,BC
         POP	BC
@@ -963,21 +987,21 @@ I$450A:	DEFW	00400H
         DEFW	03C00H
         DEFW	02020H
 
-;	  Subroutine __________________________
+;	  Subroutine wait for finished vertical retrace
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4514:	LD	A,02H
-        CALL	C.4A20
+C.4514:	LD	A,2
+        CALL	C.4A20                  ; read VDP status register 2
         AND	40H
         JR	NZ,C.4514
-J$451D:	LD	A,02H
-        CALL	C.4A20
+J$451D:	LD	A,2
+        CALL	C.4A20                  ; read VDP status register 2
         AND	40H
         JR	Z,J$451D
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine set functionkey display mode and check if in graphic screen mode
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1007,20 +1031,20 @@ C.4536:	LD	A,(SCRMOD)
         CP	05H
         RET
 
-;	  Subroutine wait until VDP command is done and enable vdp display output
+;	  Subroutine wait for finished vertical retrace and enable vdp display output
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.453C:	CALL	C.4514			; wait until VDP command is done
+C.453C:	CALL	C.4514			; wait for finished vertical retrace
         LD	A,(RG1SAV)
         OR	60H                     ; enable display, enable vertical retrace interrupt
         JR	J$454E
 
-;	  Subroutine wait until VDP command is done and disable vdp display output
+;	  Subroutine wait for finished vertical retrace and disable vdp display output
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4546:	CALL	C.4514			; wait until VDP command is done
+C$4546:	CALL	C.4514			; wait for finished vertical retrace
         LD	A,(RG1SAV)
         AND	3FH                     ; reset unused bit, disable display
 J$454E:	LD	B,A
@@ -1062,30 +1086,30 @@ J$4576:	POP	DE
         EI
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize screen mode 0 name, character, pattern, attribute address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$457D:	CALL	C.46DB
+C$457D:	CALL	C.46DB                  ; set 192 lines
         LD	A,(LINLEN)
-        CP	40+1
-        LD	B,00H
+        CP	40+1                    ; TEXT80 mode ?
+        LD	B,0
         JR	C,J$458B
-        LD	B,04H	; 4 
-J$458B:	LD	C,10H	; 16 
-        CALL	C.46E4
+        LD	B,4
+J$458B:	LD	C,10H
+        CALL	C.46E4                  ; initialize vdp mode
         LD	A,(LINLEN)
-        CP	40+1
+        CP	40+1                    ; TEXT80 mode ?
         LD	A,(DPPAGE)
-        JR	NC,J$45AD
+        JR	NC,J$45AD               ; yep,
         ADD	A,A
         LD	HL,(TXTCGP)
         LD	B,00H
-        CALL	C.4694
+        CALL	C.4694                  ; initialize character address
         ADD	A,A
         LD	HL,(TXTNAM)
-        CALL	C.4688
-        JP	J.4802
+        CALL	C.4688                  ; initialize name address
+        JP	J.4802                  ; initialize VDP registers
 
 J$45AD:	LD	A,(DPPAGE)
         PUSH	AF
@@ -1093,28 +1117,28 @@ J$45AD:	LD	A,(DPPAGE)
         ADD	A,A
         LD	B,00H
         LD	HL,(CGPBAS)
-        CALL	C.4694
+        CALL	C.4694                  ; initialize character address
         ADD	A,A
         LD	B,03H	; 3 
         LD	HL,(TXTNAM)
-        CALL	C.4688
+        CALL	C.4688                  ; initialize name address
         POP	AF
         LD	HL,(TXTCOL)
         LD	E,00H
         SRL	A
         RR	E
         LD	D,A
-        LD	B,07H	; 7 
-        CALL	C.46A2
-        JP	J.4802
+        LD	B,7
+        CALL	C.46A2                  ; initialize color address
+        JP	J.4802                  ; initialize VDP registers
 
-;	  Subroutine __________________________
+;	  Subroutine initialize screen mode 1 name, character, pattern, attribute address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$45D7:	CALL	C.46DB
+C$45D7:	CALL	C.46DB                  ; set 192 lines
         LD	BC,0
-        CALL	C.46E4
+        CALL	C.46E4                  ; initialize vdp mode
         LD	A,(DPPAGE)
         LD	C,A
         LD	B,00H
@@ -1122,30 +1146,30 @@ C$45D7:	CALL	C.46DB
         ADD	A,A
         ADD	A,A
         ADD	A,A
-        CALL	C.4694
+        CALL	C.4694                  ; initialize character address
         LD	HL,(T32PAT)
-        CALL	C.46CE
+        CALL	C.46CE                  ; initialize pattern address
         LD	HL,(T32NAM)
         ADD	A,A
-        CALL	C.4688
+        CALL	C.4688                  ; initialize name address
         LD	E,B
         LD	D,C
         LD	HL,(T32COL)
-        CALL	C.46A2
+        CALL	C.46A2                  ; initialize color address
         SRL	D
         RR	E
         LD	HL,(T32ATR)
         JR	J.464E
 
-;	  Subroutine __________________________
+;	  Subroutine initialize screen mode 2 name, character, pattern, attribute address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$460D:	XOR	A
         PUSH	AF
         LD	BC,00200H
-        CALL	C.46E4
-        CALL	C.46DB
+        CALL	C.46E4                  ; initialize vdp mode
+        CALL	C.46DB                  ; set 192 lines
         LD	A,(DPPAGE)
         LD	C,A
         LD	B,03H	; 3 
@@ -1153,18 +1177,18 @@ C$460D:	XOR	A
         ADD	A,A
         ADD	A,A
         ADD	A,A
-        CALL	C.4694
+        CALL	C.4694                  ; initialize character address
         LD	HL,(GRPPAT)
-        CALL	C.46CE
+        CALL	C.46CE                  ; initialize pattern address
         LD	HL,(GRPNAM)
         ADD	A,A
         LD	B,00H
-        CALL	C.4688
+        CALL	C.4688                  ; initialize name address
         LD	E,B
         LD	D,C
         LD	B,7FH
         LD	HL,(GRPCOL)
-        CALL	C.46A2
+        CALL	C.46A2                  ; initialize color address
         SRL	D
         RR	E
         POP	AF
@@ -1172,30 +1196,31 @@ C$460D:	XOR	A
         LD	HL,(GRPATR)
         JR	Z,J.464E
         LD	HL,(ATRBAS)
-J.464E:	CALL	C$46B9
-        JP	J.4802
 
-;	  Subroutine __________________________
+J.464E:	CALL	C$46B9                  ; initialize attribute address
+        JP	J.4802                  ; initialize VDP registers
+
+;	  Subroutine initialize screen mode 3 name, character, pattern, attribute address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4654:	CALL	C.46DB
+C$4654:	CALL	C.46DB                  ; set 192 lines
         LD	BC,00008H
-        CALL	C.46E4
+        CALL	C.46E4                  ; initialize vdp mode
         LD	A,(DPPAGE)
         LD	C,A
         LD	B,00H
         LD	HL,(MLTCGP)
-I$4666:	ADD	A,A
+	ADD	A,A
         ADD	A,A
         ADD	A,A
-        CALL	C.4694
+        CALL	C.4694                  ; initialize character address
         LD	HL,(MLTPAT)
-        CALL	C.46CE
+        CALL	C.46CE                  ; initialize pattern address
         LD	HL,(MLTNAM)
         ADD	A,A
         LD	B,00H
-        CALL	C.4688
+        CALL	C.4688                  ; initialize name address
         LD	E,B
         LD	D,C
         SRL	D
@@ -1204,8 +1229,8 @@ I$4666:	ADD	A,A
         LD	HL,(MLTATR)
         JR	J.464E
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine initialize name address
+;	     Inputs  
 ;	     Outputs ________________________
 
 C.4688:	LD	L,A
@@ -1217,7 +1242,7 @@ C.4688:	LD	L,A
         LD	A,L
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize character address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1231,7 +1256,7 @@ C.4694:	LD	L,A
         LD	A,L
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize color address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1252,9 +1277,14 @@ C.46A2:	PUSH	AF
         POP	AF
         RET
 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;	     Remark  UNUSED
+
 ?.46B6:	LD	HL,(ATRBAS)
 
-;	  Subroutine __________________________
+;	  Subroutine initialize attribute address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1273,9 +1303,14 @@ C$46B9:	PUSH	AF
         POP	AF
         RET
 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;	     Remark  UNUSED
+
 ?.46CB:	LD	HL,(PATBAS)
 
-;	  Subroutine __________________________
+;	  Subroutine initialize pattern address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1288,7 +1323,7 @@ C.46CE:	LD	L,A
         LD	A,L
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine set 192 lines
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1297,8 +1332,8 @@ C.46DB:	LD	A,(RG9SAV)
         LD	(RG9SAV),A
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine initialize vdp mode
+;	     Inputs  B = M5 M4 M3, C = M1 M2
 ;	     Outputs ________________________
 
 C.46E4:	LD	A,(RG0SAV)
@@ -1311,19 +1346,19 @@ C.46E4:	LD	A,(RG0SAV)
         LD	(RG1SAV),A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize color palette
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$46F7:	PUSH	HL
         LD	HL,I$470B
-        LD	B,10H	; 16 
-        LD	D,00H
+        LD	B,16
+        LD	D,0
 J$46FF:	LD	A,(HL)
         INC	HL
         LD	E,(HL)
         INC	HL
-        CALL	C$472B
+        CALL	C$472B                  ; write color palette
         INC	D
         DJNZ	J$46FF
         POP	HL
@@ -1346,8 +1381,8 @@ I$470B:	DEFB	000H,000H
         DEFB	055H,005H
         DEFB	077H,007H
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine write color palette
+;	     Inputs  D = color number, A = , E =
 ;	     Outputs ________________________
 
 C$472B:	PUSH	BC
@@ -1362,9 +1397,9 @@ C$472B:	PUSH	BC
         POP	AF
         LD	A,E
         OUT	(9AH),A
-        CALL	C$44E6
+        CALL	C$44E6                  ; get VRAM address color palette
         PUSH	AF
-        CALL	C.4F56                  ; set b7 LOGOPR
+        CALL	C.4F56                  ; start VRAM access
         CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
         EX	(SP),HL
         EX	(SP),HL
@@ -1374,7 +1409,7 @@ C$472B:	PUSH	BC
         POP	AF
         LD	A,E
         OUT	(99H),A
-        CALL	C.4F5E                  ; reset b7 LOGOPR
+        CALL	C.4F5E                  ; stop VRAM access
         POP	HL
         POP	BC
         RET
@@ -1382,6 +1417,7 @@ C$472B:	PUSH	BC
 ;	  Subroutine write byte to VRAM
 ;	     Inputs  HL = VRAM address (16K), (ACPAGE) = active page
 ;	     Outputs ________________________
+;	     Remark  UNUSED
 
 ?.4756:	CALL	C.476A                  ; mask VRAM address to 16K
 
@@ -1390,7 +1426,7 @@ C$472B:	PUSH	BC
 ;	     Outputs ________________________
 
 C.4759:	PUSH	AF
-I$475A:	CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
+	CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
         POP	AF
         OUT	(98H),A
         RET
@@ -1398,6 +1434,7 @@ I$475A:	CALL	C.477C                  ; setup VRAM latch for VRAM write operation
 ;	  Subroutine read byte from VRAM (16K)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;	     Remark  UNUSED
 
 ?.4761:	CALL	C.476A                  ; mask VRAM address to 16K
         CALL	C.4771                  ; setup VRAM latch for VRAM read operation (16K)
@@ -1442,9 +1479,10 @@ C.477C:	PUSH	BC
         OR	40H                     ; setup for VRAM write
         JR	J.47AA
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine setup for VRAM write
+;	     Inputs  HL = VRAM adddress, (ACPAGE) = active page
 ;	     Outputs ________________________
+;	     Remark  (ACPAGE) <> 0 does not work due bug
 
 C$478A:	PUSH	BC
         PUSH	DE
@@ -1458,9 +1496,10 @@ C$478A:	PUSH	BC
         OR	40H                     ; setup for VRAM write
         JR	J.47AA
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine setup for VRAM read
+;	     Inputs  HL = VRAM adddress, (ACPAGE) = active page
 ;	     Outputs ________________________
+;	     Remark  (ACPAGE) <> 0 does not work due bug
 
 C$479C:	PUSH	BC
         PUSH	DE
@@ -1479,7 +1518,7 @@ J.47AA:	PUSH	AF
         RLC	A
         DI
         OUT	(99H),A
-        LD	A,8EH
+        LD	A,128+14
         OUT	(99H),A                 ; write VRAM address latch b16-14
         LD	A,L
         OUT	(99H),A
@@ -1502,7 +1541,7 @@ C.47C5:	LD	A,(SCRMOD)
         LD	HL,I$47D5
         JR	NZ,J$47DD               ; nope, calculate absolute address
         EX	DE,HL
-        LD	D,A			; D=0 (b23-b16) VRAM address
+        LD	D,A			; D=0 (b16) VRAM address
         RET
 
 I$47D5:	DEFW	C.47E6
@@ -1525,8 +1564,14 @@ C.47E6:	LD	A,(LINLEN)
         JR	C,J$47F6                ; TEXT40 mode,
         JR	J$47F5                  ; TEXT80 mode,
 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;	     Remark  UNUSED
+
 ?.47F2:	ADD	A,A
         ADD	A,A
+
 C.47F4:	ADD	A,A
 J$47F5:	ADD	A,A
 J$47F6:	ADD	A,A
@@ -1541,31 +1586,35 @@ J$47F6:	ADD	A,A
         LD	D,A
         RET
 
+;	  Subroutine initialize VDP registers
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J.4802:	PUSH	AF
         PUSH	BC
         PUSH	DE
         PUSH	HL
-        CALL	C.4F46                  ; set b0 LOGOPR
+        CALL	C.4F46                  ; start VDP register access
         DI
         XOR	A
         OUT	(99H),A
-        LD	A,91H
-        OUT	(99H),A
-        CALL	C.4514			; wait until VDP command is done
+        LD	A,128+17
+        OUT	(99H),A                 ; control register pointer = 0
+        CALL	C.4514			; wait for finished vertical retrace
         LD	HL,RG0SAV
-        LD	B,08H	; 8 
+        LD	B,8
 J$4819:	LD	A,(HL)
         INC	HL
         OUT	(9BH),A
         DJNZ	J$4819
         LD	HL,RG8SAV
-        LD	B,10H	; 16 
+        LD	B,16
 J$4824:	LD	A,(HL)
         INC	HL
         OUT	(9BH),A
         DJNZ	J$4824
         EI
-        CALL	C.4F4E                  ; reset b0 LOGOPR
+        CALL	C.4F4E                  ; stop VDP register access
         POP	HL
         POP	DE
         POP	BC
@@ -1575,6 +1624,7 @@ J$4824:	LD	A,(HL)
 ;	  Subroutine evaluate logical operation
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;	     Remark  UNUSED
 
 ?.4833:	AND	A
         JR	Z,J$485F
@@ -1584,17 +1634,17 @@ J$4824:	LD	A,(HL)
         LD	A,B
         POP	BC
         RET	C                       ; nope, quit
-        CP	0F8H
+        CP	0F8H                    ; XOR ?
         JR	Z,J$485D
-        CP	0F7H
+        CP	0F7H                    ; OR ?
         JR	Z,J$485A
-        CP	0F6H
+        CP	0F6H                    ; AND ?
         JR	Z,J$4857
-        CP	0C3H
+        CP	0C3H                    ; PRESET ?
         JR	Z,J$4854
-        CP	0C2H
+        CP	0C2H                    ; PSET ?
         SCF
-        RET	NZ
+        RET	NZ                      ; nope, quit with
         XOR	A
         DEFB	0C2H
 J$4854:	LD	A,4
@@ -1605,32 +1655,33 @@ J$485A:	LD	A,2
         DEFB	0C2H
 J$485D:	LD	A,3
 J$485F:	OR	D
-        LD	(AVCSAV),A
+        LD	(DFAF7),A               ; save logical operation
         RET
 
 ;	  Subroutine draw box line
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;	     Remark  UNUSED
 
 ?.4864:	CALL	C.4AAA
         CALL	C.4CCC
         CALL	C.4AAA
         CALL	C.4CCC
         CALL	C.4CA5
-        JR	Z,C.48A6
+        JR	Z,C.48A6                ; draw line and quit
         CALL	C,C$4CCF
         CALL	C.4CB7
-        JR	Z,C.48A6
+        JR	Z,C.48A6                ; draw line and quit
         CALL	C,C.4CC2
         LD	HL,(GYPOS)
         PUSH	HL
         PUSH	DE
         EX	DE,HL
-        CALL	C.48A6
+        CALL	C.48A6                  ; draw line
         POP	HL
         LD	(GYPOS),HL
         EX	DE,HL
-        CALL	C.48A6
+        CALL	C.48A6                  ; draw line
         POP	HL
         DEC	HL
         INC	DE
@@ -1639,7 +1690,7 @@ J$485F:	OR	D
         PUSH	BC
         LD	C,L
         LD	B,H
-        CALL	C.48A6
+        CALL	C.48A6                  ; draw line
         POP	HL
         LD	(GXPOS),HL
         LD	C,L
@@ -1670,47 +1721,47 @@ C.48A6:	PUSH	BC
         EX	DE,HL
         JR	NC,J$48CF
         EX	AF,AF'
-        OR	04H	; 4 
+        OR	04H
         EX	AF,AF'
 J$48CF:	POP	HL
         CALL	C.4242			; compare
         JR	C,J$48DA
         EX	DE,HL
         EX	AF,AF'
-        OR	01H	; 1 
+        OR	01H
         EX	AF,AF'
 J$48DA:	EX	(SP),HL
-        CALL	C.4F46                  ; set b0 LOGOPR
-        CALL	C.4A13
-        LD	A,24H	; "$"
+        CALL	C.4F46                  ; start VDP register access
+        CALL	C.4A13                  ; wait for VDP command to finish
+        LD	A,36
         DI
         OUT	(99H),A
-        LD	A,91H
-        OUT	(99H),A
+        LD	A,128+17
+        OUT	(99H),A                 ; control register pointer = 36
         LD	A,C
         OUT	(9BH),A
         LD	A,B
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set DX
         LD	A,L
         OUT	(9BH),A
         LD	A,(ACPAGE)		; active page
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set DY
         LD	A,E
         OUT	(9BH),A
         LD	A,D
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set NX
         POP	HL
         LD	A,L
         OUT	(9BH),A
         LD	A,H
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set NY
         LD	A,(ATRBYT)
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set attribute
         EX	AF,AF'
-        OUT	(9BH),A
-        LD	A,(AVCSAV)
-        AND	0FH	; 15 
-        OR	70H	; "p"
+        OUT	(9BH),A                 ; set argument
+        LD	A,(DFAF7)               ; logical operation
+        AND	0FH
+        OR	70H                     ; vdp LINE cmd
         EI
         POP	HL
         LD	(GXPOS),HL
@@ -1724,13 +1775,14 @@ J$48DA:	EX	(SP),HL
 ;	  Subroutine draw box filled
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;	     Remark  UNUSED
 
 ?.4921:	CALL	C.4AAA
-        CALL	C.4F46                  ; set b0 LOGOPR
+        CALL	C.4F46                  ; start VDP register access
         LD	L,C
         LD	H,B
         LD	A,E
-        CALL	C.4A3B
+        CALL	C.4A3B                  ; set DX and DY
         CALL	C.4CCC
         CALL	C.4AAA
         CALL	C.4CCC
@@ -1750,57 +1802,77 @@ J$4941:	INC	HL
         EX	AF,AF'
 J$494C:	INC	HL
         POP	DE
-        CALL	C.4A5A
+        CALL	C.4A5A                  ; set NX and NY
         EX	AF,AF'
-        CALL	C.4A71
+        CALL	C.4A71                  ; set argument
         EX	AF,AF'
         LD	A,(ATRBYT)
-        CALL	C.4A87
-        AND	0FH	; 15 
-        ADD	A,80H
-        CALL	C.4A7C
-        JP	C.4F4E                  ; reset b0 LOGOPR
+        CALL	C.4A87                  ; set attribute
+        AND	0FH
+        ADD	A,80H                   ; LMMV cmd
+        CALL	C.4A7C                  ; start vdp cmd
+        JP	C.4F4E                  ; stop VDP register access
 
-?.4966:	LD	B,04H	; 4 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;	     Remark  UNUSED
+
+?.4966:	LD	B,4
         JR	J.4974
 
-?.496A:	LD	B,06H	; 6 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;	     Remark  UNUSED
+
+?.496A:	LD	B,6
         JR	J.4974
 
-?.496E:	LD	B,02H	; 2 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;	     Remark  UNUSED
+
+?.496E:	LD	B,2
         JR	J.4974
 
-?.4972:	LD	B,00H
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;	     Remark  UNUSED
+
+?.4972:	LD	B,0
 J.4974:	PUSH	BC
-        CALL	C$49B3
+        CALL	C$49B3                  ; set SX, SY, attribute
         POP	AF
         DI
         OUT	(99H),A
-        LD	A,0ADH
+        LD	A,128+45
+        OUT	(99H),A                 ; set argument
+        LD	A,60H
         OUT	(99H),A
-        LD	A,60H	; "`"
-        OUT	(99H),A
-        LD	A,0AEH
-        OUT	(99H),A
-        CALL	C.4A13
-        AND	10H	; 16 
+        LD	A,128+46
+        OUT	(99H),A                 ; vdp SEARCH cmd
+        CALL	C.4A13                  ; wait for VDP command to finish
+        AND	10H
         RET	Z
-        LD	A,08H	; 8 
+        LD	A,08H
         DI
         OUT	(99H),A
-        LD	A,8FH
+        LD	A,128+15
         OUT	(99H),A
         IN	A,(99H)
         LD	L,A
-        LD	A,09H	; 9 
+        LD	A,09H
         OUT	(99H),A
-        LD	A,8FH
+        LD	A,128+15
         OUT	(99H),A
         IN	A,(99H)
         PUSH	AF
         XOR	A
         OUT	(99H),A
-        LD	A,8FH
+        LD	A,128+15
         OUT	(99H),A
         EI
         POP	AF
@@ -1809,82 +1881,92 @@ J.4974:	PUSH	BC
         SCF
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine set SX, SY, attribute
+;	     Inputs  A = attribute
 ;	     Outputs ________________________
 
 C$49B3:	PUSH	AF
-        CALL	C.4A13
-        LD	A,20H	; " "
+        CALL	C.4A13                  ; wait for VDP command to finish
+        LD	A,32
         DI
         OUT	(99H),A
-        LD	A,91H
-        OUT	(99H),A
+        LD	A,128+17
+        OUT	(99H),A                 ; control register pointer = 32
         LD	A,L
         OUT	(9BH),A
         LD	A,H
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set SX
         LD	A,E
         OUT	(9BH),A
         LD	A,(ACPAGE)		; active page
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set SY
         POP	AF
         OUT	(99H),A
-        LD	A,0ACH
-        OUT	(99H),A
+        LD	A,128+44
+        OUT	(99H),A                 ; set attribute
         EI
         RET
 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;	     Remark  UNUSED
+
 ?.49D7:	PUSH	DE
-        CALL	C$4A35
+        CALL	C$4A35                  ; set SX and SY
         XOR	A
-        CALL	C.4A71
-        LD	A,40H	; "@"
-        CALL	C.4A7C
-        CALL	C.4A13
-        LD	A,07H	; 7 
-        CALL	C.4A20
+        CALL	C.4A71                  ; set argument
+        LD	A,40H                   ; POINT cmd
+        CALL	C.4A7C                  ; start vdp cmd
+        CALL	C.4A13                  ; wait for VDP command to finish
+        LD	A,7
+        CALL	C.4A20                  ; read VDP status register 7
         EI
         POP	DE
         RET
 
-?.49EF:	CALL	C.4F46                  ; set b0 LOGOPR
-        CALL	C.4A3B
-        LD	A,2CH	; ","
-        OUT	(99H),A
-        LD	A,91H
-        OUT	(99H),A
-        LD	A,(ATRBYT)
-        OUT	(9BH),A
-        XOR	A
-        OUT	(9BH),A
-        LD	A,(AVCSAV)
-        AND	0FH	; 15 
-        OR	50H	; "P"
-        OUT	(9BH),A
-        CALL	C.4F4E                  ; reset b0 LOGOPR
-        EI
-        RET
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;	     Remark  UNUSED
 
-C.4A13:	LD	A,02H	; 2 
-        CALL	C.4A20
+?.49EF:	CALL	C.4F46                  ; start VDP register access
+        CALL	C.4A3B                  ; set DX and DY
+        LD	A,44
+        OUT	(99H),A
+        LD	A,128+17
+        OUT	(99H),A                 ; control register pointer = 44
+        LD	A,(ATRBYT)
+        OUT	(9BH),A                 ; set attribute
+        XOR	A
+        OUT	(9BH),A                 ; argument = 0
+        LD	A,(DFAF7)               ; logical operation
+        AND	0FH
+        OR	50H                     ; vdp PSET cmd
+        OUT	(9BH),A
+        CALL	C.4F4E                  ; stop VDP register access
+        EI
+        RET
+
+;	  Subroutine wait for VDP command to finish
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4A13:	LD	A,2
+        CALL	C.4A20                  ; read VDP status register 2
         EI
         RRC	A
         JR	C,C.4A13
         RLC	A
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine read VDP status register
+;	     Inputs  A = status register
 ;	     Outputs ________________________
 
 C.4A20:	DI
         OUT	(99H),A
-        LD	A,8FH
+        LD	A,128+15
         OUT	(99H),A
         PUSH	HL
         POP	HL
@@ -1892,104 +1974,109 @@ C.4A20:	DI
         PUSH	AF
         XOR	A
         OUT	(99H),A
-        LD	A,8FH
+        LD	A,128+15
         OUT	(99H),A
         POP	AF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine set SX and SY
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4A35:	PUSH	AF
-        LD	A,20H	; " "
+        LD	A,32                    ; SX
         PUSH	AF
         JR	J$4A3F
 
-;	  Subroutine __________________________
+;	  Subroutine set DX and DY
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4A3B:	PUSH	AF
-        LD	A,24H	; "$"
+        LD	A,36                    ; DX
         PUSH	AF
-J$4A3F:	CALL	C.4A13
+J$4A3F:	CALL	C.4A13                  ; wait for VDP command to finish
         DI
         POP	AF
         OUT	(99H),A
-        LD	A,91H
-        OUT	(99H),A
+        LD	A,128+17
+        OUT	(99H),A                 ; set control register pointer
         LD	A,L
         OUT	(9BH),A
         LD	A,H
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set SX or DX
         POP	AF
         OUT	(9BH),A
         LD	A,(ACPAGE)		; active page
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set SY or DY
         EI
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine set NX and NY
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4A5A:	LD	A,28H	; "("
+C.4A5A:	LD	A,40
         DI
         OUT	(99H),A
-        LD	A,91H
-        OUT	(99H),A
+        LD	A,128+17
+        OUT	(99H),A                 ; control register pointer = 40
         LD	A,E
         OUT	(9BH),A
         LD	A,D
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set NX
         LD	A,L
         OUT	(9BH),A
         LD	A,H
-        OUT	(9BH),A
+        OUT	(9BH),A                 ; set NY
         EI
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine set argument
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4A71:	PUSH	AF
         DI
         OUT	(99H),A
-        LD	A,0ADH
+        LD	A,128+45
         OUT	(99H),A
         EI
         POP	AF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine start vdp cmd
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4A7C:	PUSH	AF
         DI
         OUT	(99H),A
-        LD	A,0AEH
+        LD	A,128+46
         OUT	(99H),A
         EI
         POP	AF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine set attribute
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4A87:	PUSH	AF
         DI
         OUT	(99H),A
-        LD	A,0ACH
-        OUT	(99H),A
+        LD	A,128+44
+        OUT	(99H),A                 ; set attribute
         EI
         POP	AF
         RET
 
+;	     Data    __________________________
+;	     Remark  UNUSED
+
 ?.4A92:	DEFB	000H,060H,000H,000H,000H,000H,000H,000H
+
+;	     Data    vdp register 8-23
 
 I$4A9A:	DEFB	000H,002H,000H,000H,000H,000H,000H,000H
         DEFB	000H,000H,000H,000H,000H,03BH,005H,000H
@@ -2010,7 +2097,7 @@ C.4AAA:	CALL	C.4536                  ; check if in v9338 graphic screen mode (bi
         LD	HL,0
         JR	J$4AC8
 
-J$4ABE:	LD	DE,000C0H
+J$4ABE:	LD	DE,192
         CALL	C.4242			; compare
         JR	C,J$4ACA
         EX	DE,HL
@@ -2023,7 +2110,7 @@ J$4ACA:	EX	(SP),HL
         LD	HL,0
         JR	J$4ADE
 
-J$4AD4:	LD	DE,00100H
+J$4AD4:	LD	DE,256
         CALL	C.4242			; compare
         JR	C,J$4AE0
         EX	DE,HL
@@ -2051,7 +2138,7 @@ J$4AF0:	PUSH	HL
         LD	HL,0
         JR	J$4B08
 
-J$4AFE:	LD	DE,000D4H
+J$4AFE:	LD	DE,212
         CALL	C.4242			; compare
         JR	C,J$4B0A
         EX	DE,HL
@@ -2066,9 +2153,9 @@ J$4B0A:	EX	(SP),HL
 
 J$4B14:	LD	A,(SCRMOD)
         AND	02H	; 2 
-        LD	DE,00200H
+        LD	DE,512
         JR	NZ,J$4B21
-        LD	DE,00200H
+        LD	DE,512
 J$4B21:	CALL	C.4242			; compare
         JR	C,J$4B2A
         EX	DE,HL
@@ -2081,6 +2168,11 @@ J$4B2A:	LD	A,B
         POP	DE
         POP	HL
         RET
+
+;	  Subroutine CLS basic statement
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;	     Remark  UNUSED
 
 ?.4B32:	RET	NZ
 
@@ -2118,26 +2210,26 @@ C$4B3F:	CALL	C.4530                  ; check if in v9338 graphic screen mode (mu
 J$4B53:	PUSH	AF
         PUSH	DE
         PUSH	HL
-        CALL	C.4A13
+        CALL	C.4A13                  ; wait for VDP command to finish
         LD	A,(BAKCLR)
         CALL	C$4B8C
-        CALL	C.4A87
+        CALL	C.4A87                  ; set attribute
         XOR	A
         LD	H,A
         LD	L,A
-        CALL	C.4A3B
+        CALL	C.4A3B                  ; set DX and DY
         XOR	A
-        CALL	C.4A71
+        CALL	C.4A71                  ; set argument
         LD	A,(SCRMOD)
-        AND	02H	; 2 
+        AND	02H
         LD	DE,00100H
         JR	Z,J$4B79
         LD	DE,00200H
 J$4B79:	LD	HL,000D4H
-        CALL	C.4A5A
-        LD	A,0C0H
-        CALL	C.4A7C
-        CALL	C.4A13
+        CALL	C.4A5A                  ; set NX and NY
+        LD	A,0C0H                  ; HMMV cmd
+        CALL	C.4A7C                  ; start vdp cmd
+        CALL	C.4A13                  ; wait for VDP command to finish
         POP	HL
         POP	DE
         POP	BC
@@ -2150,7 +2242,7 @@ J$4B79:	LD	HL,000D4H
 
 C$4B8C:	LD	B,A
         LD	A,(SCRMOD)
-        CP	08H	; 8 
+        CP	8
         LD	A,B
         RET	Z
         RLC	A
@@ -2160,7 +2252,7 @@ C$4B8C:	LD	B,A
         OR	B
         LD	B,A
         LD	A,(SCRMOD)
-        CP	06H	; 6 
+        CP	6
         LD	A,B
         RET	NZ
         RRC	A
@@ -2177,7 +2269,7 @@ C.4BAB:	LD	A,(SCRMOD)
         LD	HL,(NAMBAS)
         JR	NZ,J$4BC5
         LD	A,(LINLEN)
-        CP	29H	; ")"
+        CP	40+1
         JR	NC,J$4BC0
         LD	BC,003C0H
         JR	J.4BC8
@@ -2186,9 +2278,9 @@ J$4BC0:	LD	BC,00780H
         JR	J.4BC8
 
 J$4BC5:	LD	BC,00300H
-J.4BC8:	LD	A,20H	; " "
-        CALL	C.4C33
-        CALL	C.4C09
+J.4BC8:	LD	A," "
+        CALL	C.4C33                  ; fill VRAM
+        CALL	C.4C09                  ; cursor position to home
         LD	HL,LINTTB
         LD	B,18H
 J$4BD5:	LD	(HL),B
@@ -2205,11 +2297,11 @@ C.4BDC:	CALL	C.4C5D
         PUSH	BC
         LD	HL,(GRPCOL)
         LD	A,(BAKCLR)
-        CALL	C.4C33
+        CALL	C.4C33                  ; fill VRAM
         LD	HL,(GRPCGP)
         POP	BC
         XOR	A
-J$4BF1:	JP	C.4C33
+J$4BF1:	JP	C.4C33                  ; fill VRAM
 
 ;	  Subroutine clear screen 3
 ;	     Inputs  ________________________
@@ -2225,9 +2317,9 @@ C.4BF4:	CALL	C.4C5D
         OR	(HL)
         LD	HL,(MLTCGP)
         LD	BC,00600H
-        JP	J$4BF1
+        JP	J$4BF1                  ; fill VRAM
 
-;	  Subroutine __________________________
+;	  Subroutine cursor position to home
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2256,14 +2348,14 @@ C.4C10:	CALL	C.4536                  ; check if in v9338 graphic screen mode (bi
         ADD	A,A
         OR	(HL)
         LD	HL,(T32COL)
-        LD	BC,00020H
+        LD	BC,32
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine fill VRAM
+;	     Inputs  HL = VRAM address, BC = size, A = byte
 ;	     Outputs ________________________
 
 C.4C33:	PUSH	AF
-        CALL	C.4F56                  ; set b7 LOGOPR
+        CALL	C.4F56                  ; start VRAM access
         CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
         LD	A,C
         OR	A
@@ -2274,7 +2366,7 @@ J.4C40:	OUT	(98H),A
         DEC	C
         JR	NZ,J.4C40
         DJNZ	J.4C40
-        CALL	C.4F5E                  ; reset b7 LOGOPR
+        CALL	C.4F5E                  ; stop VRAM access
         RET
 
 J$4C4B:	LD	HL,BAKCLR
@@ -2285,8 +2377,8 @@ J$4C4B:	LD	HL,BAKCLR
         ADD	A,A
         OR	(HL)
         JR	J$4C60
-;	-----------------
-J$4C58:	CP	08H	; 8 
+
+J$4C58:	CP	08H
         CALL	NZ,C.4C66
 
 ;	  Subroutine __________________________
@@ -2304,10 +2396,10 @@ J$4C60:	LD	B,A
 
 C.4C66:	PUSH	AF
         LD	A,(BAKCLR)
-        AND	0FH	; 15 
+        AND	0FH
         LD	(BAKCLR),A
         LD	A,(FORCLR)
-        AND	0FH	; 15 
+        AND	0FH
         LD	(FORCLR),A
         POP	AF
         RET
@@ -2317,12 +2409,12 @@ C.4C66:	PUSH	AF
 ;	     Outputs ________________________
 
 C$4C79:	CALL	H.INIP
-        CALL	C.4F56                  ; set b7 LOGOPR
+        CALL	C.4F56                  ; start VRAM access
         LD	HL,(CGPBAS)
         CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
         LD	A,(CGPNT+0)
         LD	HL,(CGPNT+1)
-        LD	BC,00800H
+        LD	BC,256*8
         PUSH	AF
 J$4C8F:	POP	AF
         PUSH	AF
@@ -2337,7 +2429,7 @@ J$4C8F:	POP	AF
         LD	A,C
         OR	B
         JR	NZ,J$4C8F
-        CALL	C.4F5E                  ; reset b7 LOGOPR
+        CALL	C.4F5E                  ; stop VRAM access
         POP	AF
         RET
 
@@ -2417,17 +2509,17 @@ C.4CDB:	PUSH	HL
         LD	(HL),A
         JR	Z,J$4CF2
         POP	AF
-        SUB	40H	; "@"
-        CP	20H	; " "
+        SUB	40H
+        CP	20H
         JR	C,J$4CF0
-        ADD	A,40H	; "@"
+        ADD	A,40H
 J$4CEE:	CP	A
         SCF
 J$4CF0:	POP	HL
         RET
 
 J$4CF2:	POP	AF
-        CP	01H	; 1 
+        CP	01H
         JR	NZ,J$4CEE
         LD	(HL),A
         POP	HL
@@ -2499,7 +2591,7 @@ J$4D25:	LD	E,(HL)
         EI
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine setup for OTIR/INIR
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2516,15 +2608,15 @@ C.4D4E:	EX	DE,HL
 ;	     Inputs  HL = VRAM address, DE = memory address, BC = size
 ;	     Outputs ________________________
 
-C$4D56:	CALL	C.4F56                  ; set b7 LOGOPR
-        CALL	C$479C
-        CALL	C.4D4E
+C$4D56:	CALL	C.4F56                  ; start VRAM access
+        CALL	C$479C                  ; setup for VRAM read
+        CALL	C.4D4E                  ; setup for OTIR/INIR
         LD	C,98H
 J$4D61:	INIR
         DEC	A
         JR	NZ,J$4D61
         EX	DE,HL
-        CALL	C.4F5E                  ; reset b7 LOGOPR
+        CALL	C.4F5E                  ; stop VRAM access
         RET
 
 ;	  Subroutine copy memory to VRAM
@@ -2532,15 +2624,15 @@ J$4D61:	INIR
 ;	     Outputs ________________________
 
 C$4D6B:	EX	DE,HL
-        CALL	C.4F56                  ; set b7 LOGOPR
-        CALL	C$478A
-        CALL	C.4D4E
+        CALL	C.4F56                  ; start VRAM access
+        CALL	C$478A                  ; setup for VRAM write
+        CALL	C.4D4E                  ; setup for OTIR/INIR
         LD	C,98H
 J$4D77:	OTIR
         DEC	A
         JR	NZ,J$4D77
         EX	DE,HL
-        CALL	C.4F5E                  ; reset b7 LOGOPR
+        CALL	C.4F5E                  ; stop VRAM access
         RET
 
 ;	  Subroutine __________________________
@@ -2553,24 +2645,29 @@ C.4D81:	CALL	C.4CDB
         JR	NZ,J$4D95
         LD	HL,ESCCNT
         LD	A,(HL)
-        AND	A
-        JP	NZ,J$4E31
+        AND	A                       ; in ESC sequence ?
+        JP	NZ,J$4E31               ; yep, handle
         LD	A,C
-        CP	20H	; " "
-        JR	C,J$4DB6
-J$4D95:	LD	HL,(CSRY)
-        CP	7FH
-        JP	Z,J$5067
+        CP	20H                     ; control character ?
+        JR	C,J$4DB6                ; yep, handle
+J$4D95:	LD	HL,(CSRY)               ; get cursor position
+        CP	7FH                     ; DEL control code ?
+        JP	Z,J$5067                ; yep, handle
         CALL	C.4EC3                  ; write character to VRAM
-        CALL	C.4F69
+        CALL	C.4F69                  ; next column
         RET	NZ
         XOR	A
         CALL	C$4F35
-        LD	H,01H	; 1 
-C.4DAA:	CALL	C.4F86
+        LD	H,1
+
+;	  Subroutine cursor to new line
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4DAA:	CALL	C.4F86                  ; cursor down
         RET	NZ
-        CALL	C.4F8E
-        LD	L,01H	; 1 
+        CALL	C.4F8E                  ; set cursor position
+        LD	L,1
         JP	C.4FAD
 
 J$4DB6:	LD	HL,C.4DD1-2
@@ -2591,7 +2688,7 @@ C.4DBB:	INC	HL
         LD	C,(HL)
         INC	HL
         LD	B,(HL)
-        LD	HL,(CSRY)
+        LD	HL,(CSRY)               ; get cursor position
         CALL	C.4DCF
         XOR	A
         RET
@@ -2606,73 +2703,73 @@ C.4DCF:	PUSH	BC
 C.4DD1:	DEFB	7
         DEFW	C.4221                  ; beep
         DEFB	8
-        DEFW	C.4F71
+        DEFW	C.4F71                  ; cursor left
         DEFB	9
-        DEFW	C.4F96
+        DEFW	C.4F96                  ; cursor to next tab
         DEFB	10
-        DEFW	C.4DAA
+        DEFW	C.4DAA                  ; cursor to new line
         DEFB	11
-        DEFW	C.4FA4
+        DEFW	C.4FA4                  ; cursor to home
         DEFB	12
         DEFW	C.4BAB                  ; clear text screen
         DEFB	13
-        DEFW	C.4FA6
+        DEFW	C.4FA6                  ; cursor to begin of line
         DEFB	27
-        DEFW	C.4E2B
+        DEFW	C.4E2B                  ; start ESC sequence
         DEFB	28
-        DEFW	C.4F80
+        DEFW	C.4F80                  ; cursor right with warp around
         DEFB	29
-        DEFW	C.4F71
+        DEFW	C.4F71                  ; cursor left
         DEFB	30
-        DEFW	C.4F7C
+        DEFW	C.4F7C                  ; cursor up
         DEFB	31
-        DEFW	C.4F86
+        DEFW	C.4F86                  ; cursor down
 
-C.4DF5:	DEFB	"j"
+I$4DF5:	DEFB	"j"
         DEFW	C.4BAB                  ; clear text screen
         DEFB	"E"
         DEFW	C.4BAB                  ; clear text screen
         DEFB	"K"
         DEFW	C.5072                  ; erase to end of line
         DEFB	"J"
-        DEFW	C.508F
+        DEFW	C.508F                  ; erase to end of screen
         DEFB	"l"
         DEFW	C.5070                  ; erase line
         DEFB	"L"
-        DEFW	C.4FFB
+        DEFW	C.4FFB                  ; insert line
         DEFB	"M"
-        DEFW	C.4FAA
+        DEFW	C.4FAA                  ; delete line
         DEFB	"Y"
-        DEFW	C.4E28
+        DEFW	C.4E28                  ; in ESC Y sequence
         DEFB	"A"
-        DEFW	C.4F7C
+        DEFW	C.4F7C                  ; cursor up
         DEFB	"B"
-        DEFW	C.4F86
+        DEFW	C.4F86                  ; cursor down
         DEFB	"C"
-        DEFW	C.4F69
+        DEFW	C.4F69                  ; cursor right
         DEFB	"D"
-        DEFW	C.4F7A
+        DEFW	C.4F7A                  ; cursor left
         DEFB	"H"
-        DEFW	C.4C09
+        DEFW	C.4C09                  ; cursor position to home
         DEFB	"x"
-        DEFW	C.4E22
+        DEFW	C.4E22                  ; in ESX x sequence
         DEFB	"y"
-        DEFW	C.4E25
+        DEFW	C.4E25                  ; in ESX y sequence
 
-C.4E22:	LD	A,1
+C.4E22:	LD	A,1                     ; start of ESC x sequence
         DEFB	1
-C.4E25:	LD	A,2
+C.4E25:	LD	A,2                     ; start of ESX y sequence
         DEFB	1
-C.4E28:	LD	A,4
+C.4E28:	LD	A,4                     ; start of ESC Y sequence
         DEFB	1
-C.4E2B:	LD	A,0FFH
+C.4E2B:	LD	A,0FFH                  ; start of ESC sequence
         LD	(ESCCNT),A
         RET
 
 J$4E31:	JP	P,J$4E3F
         LD	(HL),00H
         LD	A,C
-        LD	HL,C.4DF5-2
+        LD	HL,I$4DF5-2
         LD	C,15
         JP	C.4DBB
 
@@ -2686,7 +2783,7 @@ J$4E3F:	DEC	A
         LD	DE,CSRX
         JR	Z,J$4E55
         LD	(HL),03H	; 3 
-        CALL	C.4F3C
+        CALL	C.4F3C                  ; get last line
         DEC	DE
 J$4E55:	LD	B,A
         LD	A,C
@@ -2732,6 +2829,7 @@ C$4E7C:	PUSH	HL
 ;	  Subroutine read line from VRAM
 ;	     Inputs  L = line
 ;	     Outputs ________________________
+;	     Remark  UNUSED
 
 ?.4E81:	PUSH	HL
         LD	H,1                     ; col 1
@@ -2755,6 +2853,7 @@ C$4E95:	PUSH	HL
 ;	  Subroutine write line to VRAM
 ;	     Inputs  L = line
 ;	     Outputs ________________________
+;	     Remark  UNUSED
 
 ?.4E9A:	PUSH	HL
         LD	H,1                     ; col 1
@@ -2774,12 +2873,12 @@ J$4EA4:	LD	B,0
 
 C.4EAF:	PUSH	HL
         CALL	C.4EF2                  ; convert coordinate to VRAM address
-        CALL	C.4F56                  ; set b7 LOGOPR
+        CALL	C.4F56                  ; start VRAM access
         CALL	C.4771                  ; setup VRAM latch for VRAM read operation (16K)
         EX	(SP),HL
         EX	(SP),HL
         IN	A,(98H)
-        CALL	C.4F5E                  ; reset b7 LOGOPR
+        CALL	C.4F5E                  ; stop VRAM access
         LD	C,A
         POP	HL
         RET
@@ -2790,11 +2889,11 @@ C.4EAF:	PUSH	HL
 
 C.4EC3:	PUSH	HL
         CALL	C.4EF2                  ; convert coordinate to VRAM address
-        CALL	C.4F56                  ; set b7 LOGOPR
+        CALL	C.4F56                  ; start VRAM access
         CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
         LD	A,C
         OUT	(98H),A
-        CALL	C.4F5E                  ; reset b7 LOGOPR
+        CALL	C.4F5E                  ; stop VRAM access
         POP	HL
         RET
 
@@ -2802,24 +2901,24 @@ C.4EC3:	PUSH	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4ED5:	CALL	C.4F56                  ; set b7 LOGOPR
+C$4ED5:	CALL	C.4F56                  ; start VRAM access
         CALL	C.4771                  ; setup VRAM latch for VRAM read operation (16K)
         EX	DE,HL
         LD	C,98H
         INIR
-        JP	C.4F5E                  ; reset b7 LOGOPR
+        JP	C.4F5E                  ; stop VRAM access
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4EE3:	CALL	C.4F56                  ; set b7 LOGOPR
+C$4EE3:	CALL	C.4F56                  ; start VRAM access
         EX	DE,HL
         CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
         EX	DE,HL
         LD	C,98H
         OTIR
-        JP	C.4F5E                  ; reset b7 LOGOPR
+        JP	C.4F5E                  ; stop VRAM access
 
 ;	  Subroutine convert coordinate to VRAM address
 ;	     Inputs  H = col, L = line
@@ -2884,7 +2983,7 @@ C.4F27:	PUSH	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4F33:	DEFB    0F6H
+C.4F33:	DEFB    03EH
 
 C$4F34: XOR     A
 
@@ -2898,7 +2997,7 @@ C$4F35:	PUSH	AF
         LD	(DE),A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine get last line
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2909,55 +3008,55 @@ C.4F3C:	LD	A,(CNSDFG)
         POP	HL
         RET
 
-;	  Subroutine set b0 LOGOPR
+;	  Subroutine start VDP register access
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4F46:	PUSH	AF
-        LD	A,(LOGOPR)
+        LD	A,(DFB02)
         OR	01H
         JR	J.4F64
 
-;	  Subroutine reset b0 LOGOPR
+;	  Subroutine stop VDP register access
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4F4E:	PUSH	AF
-        LD	A,(LOGOPR)
+        LD	A,(DFB02)
         AND	0FEH
         JR	J.4F64
 
-;	  Subroutine set b7 LOGOPR
+;	  Subroutine start VRAM access
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4F56:	PUSH	AF
-        LD	A,(LOGOPR)
+        LD	A,(DFB02)
         OR	80H
         JR	J.4F64
 
-;	  Subroutine reset b7 LOGOPR
+;	  Subroutine stop VRAM access
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4F5E:	PUSH	AF
-        LD	A,(LOGOPR)
+        LD	A,(DFB02)
         AND	7FH
-J.4F64:	LD	(LOGOPR),A
+J.4F64:	LD	(DFB02),A
         POP	AF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine cursor right
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4F69:	LD	A,(LINLEN)
-        CP	H
-        RET	Z
+        CP	H                       ; already at the end of line ?
+        RET	Z                       ; yep, quit
         INC	H
-        JR	C.4F8E
+        JR	C.4F8E                  ; set cursor position
 
-;	  Subroutine __________________________
+;	  Subroutine cursor left
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2966,30 +3065,38 @@ C.4F71:	CALL	C.4F7A
         LD	A,(LINLEN)
         LD	H,A
         DEFB	011H
-C.4F7A:	LD	A,025H
-C.4F7C:	DEC	L
-        RET	Z
-        JR	C.4F8E
 
-;	  Subroutine __________________________
+C.4F7A: DEC     H
+        DEFB    03EH
+
+;	  Subroutine cursor up
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4F80:	CALL	C.4F69
+C.4F7C:	DEC	L                       ; already on the first line ?
+
+        RET	Z                       ; yep, quit
+        JR	C.4F8E                  ; set cursor position
+
+;	  Subroutine cursor right with warp around
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4F80:	CALL	C.4F69                  ; cursor right
         RET	NZ
-        LD	H,01H	; 1 
+        LD	H,1
 
-;	  Subroutine __________________________
+;	  Subroutine cursor down
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4F86:	CALL	C.4F3C
-        CP	L
-        RET	Z
+C.4F86:	CALL	C.4F3C                  ; get last line
+        CP	L                       ; already on the last line ?
+        RET	Z                       ; yep, quit
         JR	C,J$4F92
         INC	L
 
-;	  Subroutine __________________________
+;	  Subroutine set cursor position
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2998,32 +3105,44 @@ C.4F8E:	LD	(CSRY),HL
 
 J$4F92:	DEC	L
         XOR	A
-        JR	C.4F8E
+        JR	C.4F8E                  ; set cursor position
 
-C.4F96:	LD	A,20H	; " "
+;	  Subroutine cursor to next tab
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4F96:	LD	A," "
         CALL	C.4D81
         LD	A,(CSRX)
         DEC	A
-        AND	07H	; 7 
+        AND	07H
         JR	NZ,C.4F96
         RET
 
-C.4FA4:	LD	L,01H	; 1 
+;	  Subroutine cursor to home
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4FA4:	LD	L,1
+
+;	  Subroutine cursor to begin of line
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4FA6:	LD	H,1
+        JR	C.4F8E                  ; set cursor position
+
+;	  Subroutine delete line
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4FAA:	CALL	C.4FA6                  ; cursor to begin of line
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4FA6:	LD	H,01H	; 1 
-        JR	C.4F8E
-
-C.4FAA:	CALL	C.4FA6
-
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
-
-C.4FAD:	CALL	C.4F3C
+C.4FAD:	CALL	C.4F3C                  ; get last line
         SUB	L
         RET	C
         JP	Z,J.504C
@@ -3042,7 +3161,7 @@ C.4FAD:	CALL	C.4F3C
         POP	HL
         PUSH	AF
         LD	A,(LINLEN)
-        CP	29H	; ")"
+        CP	40+1
         JR	NC,J$4FE1
         POP	AF
 J$4FD1:	PUSH	AF
@@ -3072,13 +3191,17 @@ J$4FE2:	PUSH	AF
         JR	NZ,J$4FE2
 J$4FF8:	JP	J.504C
 
-C.4FFB:	CALL	C.4FA6
+;	  Subroutine insert line
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4FFB:	CALL	C.4FA6                  ; cursor to begin of line
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4FFE:	CALL	C.4F3C
+C$4FFE:	CALL	C.4F3C                  ; get last line
         LD	H,A
         SUB	L
         RET	C
@@ -3128,14 +3251,14 @@ J$5034:	PUSH	AF
         POP	AF
         DEC	A
         JR	NZ,J$5034
-J$504A:	LD	H,01H	; 1 
+J$504A:	LD	H,1
 J.504C:	PUSH	HL
-        LD	HL,(CSRY)
+        LD	HL,(CSRY)               ; save cursor position
         EX	(SP),HL
-        LD	(CSRY),HL
+        LD	(CSRY),HL               ; set new cursor position
         CALL	C$505C
         POP	HL
-        LD	(CSRY),HL
+        LD	(CSRY),HL               ; restore cursor position
         RET
 
 ;	  Subroutine __________________________
@@ -3148,7 +3271,7 @@ C$505C:	LD	A,1BH
         CALL	C.41FD                  ; output to current channel
         RET
 
-J$5067:	CALL	C.4F71
+J$5067:	CALL	C.4F71                  ; cursor left
         RET	Z
         LD	C," "
         JP	C.4EC3                  ; write character to VRAM
@@ -3166,7 +3289,7 @@ C.5070:	LD	H,1
 C.5072:	CALL	C.4F33
         PUSH	HL
         CALL	C.4EF2                  ; convert coordinate to VRAM address
-        CALL	C.4F56                  ; set b7 LOGOPR
+        CALL	C.4F56                  ; start VRAM access
         CALL	C.477C                  ; setup VRAM latch for VRAM write operation (128K)
         POP	HL
 J$5080:	LD	A," "
@@ -3175,17 +3298,21 @@ J$5080:	LD	A," "
         LD	A,(LINLEN)
         CP	H
         JR	NC,J$5080
-        CALL	C.4F5E                  ; reset b7 LOGOPR
+        CALL	C.4F5E                  ; stop VRAM access
         RET
+
+;	  Subroutine erase to end of screen
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.508F:	PUSH	HL
         CALL	C.5072                  ; erase to end of line
         POP	HL
-        CALL	C.4F3C
+        CALL	C.4F3C                  ; get last line
         CP	L
         RET	C
         RET	Z
-        LD	H,01H	; 1 
+        LD	H,1
         INC	L
         JR	C.508F
 
@@ -3205,7 +3332,7 @@ C.509F:	LD	A,(CSRSR)
 
 C.50A8:	CALL	C.452A                  ; check if in graphic screen mode
         RET	NC			; yep, quit
-        LD	HL,(CSRY)
+        LD	HL,(CSRY)               ; get cursor position
         PUSH	HL
         CALL	C.4EAF                  ; read character from VRAM
         LD	(CURSAV),A
@@ -3267,7 +3394,7 @@ C.50F4:	LD	A,(CSRSR)
 
 C.50FD:	CALL	C.452A                  ; check if in graphic screen mode
         RET	NC			; yep, quit
-        LD	HL,(CSRY)
+        LD	HL,(CSRY)               ; get cursor position
         LD	A,(CURSAV)
         LD	C,A
         JP	C.4EC3                  ; write character to VRAM
@@ -3357,7 +3484,7 @@ C.515D:	PUSH	HL
 ;	     Outputs ________________________
 
 C$516B:	XOR	A                       ; disable function key display
-        CALL	C.4527
+        CALL	C.4527                  ; set functionkey display mode and check if in graphic screen mode
         RET	NC                      ; not in textmode, quit
         PUSH	HL
         LD	HL,(CRTCNT)
@@ -3376,10 +3503,10 @@ C$516B:	XOR	A                       ; disable function key display
 ;	     Outputs ________________________
 
 C$5183:	LD	A,0FFH                  ; enable function key display
-        CALL	C.4527
+        CALL	C.4527                  ; set functionkey display mode and check if in graphic screen mode
         RET	NC                      ; not in textmode, quit
         PUSH	HL
-        LD	A,(CSRY)
+        LD	A,(CSRY)                ; get line of cursor position
         LD	HL,CRTCNT
         CP	(HL)                    ; cursor on last line ?
         LD	A,0AH                   ; new line
@@ -3463,7 +3590,7 @@ C.5211:	PUSH	BC
         LD	HL,(CRTCNT)
         CALL	C.5143
         CALL	C.5221                  ; blank LINWRK
-I$521C:	POP	HL
+	POP	HL
         POP	BC
         LD	A,0FFH
         RET
@@ -3574,7 +3701,7 @@ C$5282:	LD	A,"?"
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.528C:	LD	HL,(CSRY)
+C.528C:	LD	HL,(CSRY)               ; get cursor position
         DEC	L
         CALL	NZ,C.4F33
         INC	L
@@ -3592,14 +3719,14 @@ J$529B:	CALL	C$41F7			; chget
         LD	HL,BUFMIN
         RET	Z
         CCF
-        RET
+C.52B2: RET
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.52B3:	PUSH	AF
-C.52B2:	CP	09H	; 9 
+	CP	09H	; 9 
         JR	NZ,J$52C7
         POP	AF
 J$52B9:	LD	A,20H	; " "
@@ -3640,7 +3767,7 @@ C.52E5:	XOR	A
         LD	(CSTYLE),A
         JP	C.509F
 
-C.52F1:	DEFB	8
+I$52F1:	DEFB	8
         DEFW	C.541D
         DEFB	18
         DEFW	C.539F
@@ -3760,8 +3887,8 @@ C.539F:	LD	HL,INSFLG
 ;	     Outputs ________________________
 
 C$53AC:	CALL	C.50F4
-        LD	HL,(CSRY)
-        LD	C,20H	; " "
+        LD	HL,(CSRY)               ; get cursor position
+        LD	C," "
 J$53B4:	PUSH	HL
 J$53B5:	PUSH	BC
         CALL	C.4EAF                  ; read character from VRAM
@@ -3779,7 +3906,7 @@ J$53B5:	PUSH	BC
         CALL	C.4F27			; get LINTTB entry
         JR	Z,J$5405
         LD	A,C
-        CP	20H	; " "
+        CP	" "
         PUSH	AF
         JR	NZ,J.53DE
         LD	A,(LINLEN)
@@ -3792,17 +3919,17 @@ J.53DE:	CALL	C$4F34
         INC	L
         PUSH	BC
         PUSH	HL
-        CALL	C.4F3C
+        CALL	C.4F3C                  ; get last line
         CP	L
         JR	C,J$53EF
         CALL	C$4FFE
         JR	J$53FE
 
-J$53EF:	LD	HL,CSRY
+J$53EF:	LD	HL,CSRY                 ; get cursor position
         DEC	(HL)
         JR	NZ,J$53F6
         INC	(HL)
-J$53F6:	LD	L,01H	; 1 
+J$53F6:	LD	L,1
         CALL	C.4FAD
         POP	HL
         DEC	L
@@ -3823,7 +3950,7 @@ C.540A:	LD	A,(LINLEN)
         JR	NZ,J.5451
 J$5415:	LD	A,1CH
         CALL	C.41FD                  ; output to current channel
-        LD	HL,(CSRY)
+        LD	HL,(CSRY)               ; get cursor position
 C.541D:	PUSH	HL
         CALL	C.50F4
         POP	HL
@@ -3839,7 +3966,7 @@ C.541D:	PUSH	HL
         JR	NZ,J.5435
         EX	(SP),HL
 J.5435:	POP	HL
-J$5436:	LD	(CSRY),HL
+J$5436:	LD	(CSRY),HL               ; set cursor position
 J$5439:	LD	A,(LINLEN)
         CP	H
         JR	Z,J.5451
@@ -3869,7 +3996,7 @@ J.5451:	LD	C," "
 
 C.546A:	CALL	C.50F4
         CALL	C.552A
-        LD	(CSRY),HL
+        LD	(CSRY),HL               ; set cursor position
         JR	J.547A
 
 C.5475:	PUSH	HL
@@ -3890,7 +4017,7 @@ J.5489:	CALL	C.509F
         JP	C.52E5			; change to block cursor
 
 C.5493:	CALL	C.50F4
-        LD	HL,(CSRY)
+        LD	HL,(CSRY)               ; get cursor position
         DEC	L
 J$549A:	INC	L
         CALL	C.4F27			; get LINTTB entry
@@ -3903,7 +4030,7 @@ J$54A5:	DEC	H
         CALL	C.4EAF                  ; read character from VRAM
         CP	20H	; " "
         JR	Z,J$54A5
-J$54AF:	CALL	C.4F80
+J$54AF:	CALL	C.4F80                  ; cursor right with warp around
         JR	J.5489
 
 C.54B4:	CALL	C.50F4
@@ -3923,16 +4050,16 @@ J$54CD:	CALL	C.54F0
 J$54D4:	CALL	C.54F0
         JR	Z,J.5489
         JR	C,J$54D4
-        CALL	C.4F80
+        CALL	C.4F80                  ; cursor right with warp around
         JR	J.5489
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.54E0:	LD	HL,(CSRY)
-        CALL	C.4F80
-        CALL	C.4F3C
+C.54E0:	LD	HL,(CSRY)               ; get cursor position
+        CALL	C.4F80                  ; cursor right with warp around
+        CALL	C.4F3C                  ; get last line
         LD	E,A
         LD	A,(LINLEN)
         LD	D,A
@@ -3942,10 +4069,10 @@ C.54E0:	LD	HL,(CSRY)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.54F0:	LD	HL,(CSRY)
-        CALL	C.4F71
+C.54F0:	LD	HL,(CSRY)               ; get cursor position
+        CALL	C.4F71                  ; cursor left
         LD	DE,00101H
-J$54F9:	LD	HL,(CSRY)
+J$54F9:	LD	HL,(CSRY)               ; get cursor position
         CALL	C.4242			; compare
         RET	Z
         LD	DE,I$5526
@@ -4027,5 +4154,7 @@ C$5555:	LD	A,(TRPTBL+01EH)
         RET	Z
         SCF
         RET
+
+        DEFS	08000H-$,0FFH
 
         END
