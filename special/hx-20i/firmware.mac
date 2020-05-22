@@ -2,27 +2,44 @@
 ;   HX20IWOR -> Source re-created by Z80DIS 2.2
 ;      Z80DIS was written by Kenneth Gielow
 ;                            Palo Alto, CA
+
+; Firmware is in slot 3-3, lower 32KB RAM in in slot 3-0
+
+
 	.Z80
 	ORG	4000H
+
+; RAMDISK layout:
+; 0000H-002FH ?
+; 0030H-012FH 64 file entries
+; 	+0 i/o channel pointer
+; 	+2 directory entry pointer
+; 0130H-017FH ?
+; 0180H-01FFH FAT
+; 0200H-05FFH 32 directory entries
+;	+0 filename
+;	+8 fileextension
+;	+11 <not used>
+;	+12 write protect
+;	+13 file open
+;	+14 current cluster
+;	+15 first cluster
+;	+16 last cluster
+;	+17 length of file
+;	+19 file extend failed
+;	+20 file append ?
+;	+21 <not used>
+; 0600H-7FFFH data 'sectors'
+
 J.0000	EQU	0000H	; J---I
 I.0001	EQU	0001H	; ----I
-CPMADR	EQU	0006H	; ----I
-I.0009	EQU	0009H	; ----I
-I$000A	EQU	000AH	; ----I
-I$000B	EQU	000BH	; ----I
 RDSLT	EQU	000CH	; -C---
-I$000D	EQU	000DH	; ----I
-C$0011	EQU	0011H	; -C---
-I$0013	EQU	0013H	; ----I
 WRSLT	EQU	0014H	; -C---
 CALSLT	EQU	001CH	; -C---
-I.0020	EQU	0020H	; ----I
 D$0022	EQU	0022H	; --S--
 ENASLT	EQU	0024H	; -C---
 I.0030	EQU	0030H	; ----I
 I$0035	EQU	0035H	; ----I
-C.0038	EQU	0038H	; -C---
-I$0064	EQU	0064H	; ----I
 DBUF	EQU	0080H	; ----I
 CHPUT	EQU	00A2H	; -C---
 LPTOUT	EQU	00A5H	; -C---
@@ -36,7 +53,6 @@ TAPOON	EQU	00EAH	; -C---
 TAPOUT	EQU	00EDH	; -C---
 TAPOOF	EQU	00F0H	; -C---
 I.0103	EQU	0103H	; ----I
-I.0108	EQU	0108H	; ----I
 CALBAS	EQU	0159H	; JC---
 I.0180	EQU	0180H	; ----I
 I$01FA	EQU	01FAH	; ----I
@@ -65,6 +81,10 @@ I$39FF	EQU	39FFH	; ----I
 D$3B2C	EQU	3B2CH	; ---L-
 I$3C1E	EQU	3C1EH	; ----I
 I$3D1E	EQU	3D1EH	; ----I
+M4055	EQU	4055H			; syntax error
+M406F	EQU	406FH          		; BASIC error
+M4666	EQU	4666H			; CHRGTR
+M475A	EQU	475AH			; illegal function call error
 J602A	EQU	602AH	; J----
 J602F	EQU	602FH	; J----
 J604D	EQU	604DH	; J----
@@ -75,20 +95,20 @@ C6220	EQU	6220H	; -C---
 C6586	EQU	6586H	; -C---
 C65A4	EQU	65A4H	; -C---
 C6686	EQU	6686H	; -C---
-I6A0E	EQU	6A0EH	; ----I
+M6A0E	EQU	6A0EH			; evaluate filespecification
 C6A1C	EQU	6A1CH	; -C---
-I6B24	EQU	6B24H	; ----I
+M6B24	EQU	6B24H			; close i/o channel
 C6D91	EQU	6D91H	; -C---
 C6D98	EQU	6D98H	; -C---
 C6DA1	EQU	6DA1H	; -C---
 C6DA9	EQU	6DA9H	; -C---
 C6DB6	EQU	6DB6H	; -C---
 C6DC9	EQU	6DC9H	; -C---
-I6E6B	EQU	6E6BH	; ----I
-I6E6E	EQU	6E6EH	; ----I
-I6E77	EQU	6E77H	; ----I
-I6E80	EQU	6E80H	; ----I
-I6E86	EQU	6E86H	; ----I
+M6E6B	EQU	6E6BH			; bad filename error
+M6E6E	EQU	6E6EH			; file already open
+M6E77	EQU	6E77H			; file not open error
+M6E80	EQU	6E80H			; internal error
+M6E86	EQU	6E86H			; sequential i/o only error
 C6F5C	EQU	6F5CH	; -C---
 C6F67	EQU	6F67H	; -C---
 C.7049	EQU	7049H	; -C--I
@@ -243,30 +263,32 @@ D.D8CD	EQU	0D8CDH	; --SL-
 D.D8CF	EQU	0D8CFH	; --SL-
 I$DE00	EQU	0DE00H	; ----I
 
-DISKVE	EQU	0F323H	; --S--
-BDOS	EQU	0F37DH	; -C---
-I$F604	EQU	0F604H	; ----I
-VALTYP	EQU	0F663H	; --S--
-ONELIN	EQU	0F6B9H	; ---L-
-DAC	EQU	0F7F6H	; --S--
-PTRFIL	EQU	0F864H	; --S--
-FILNAM	EQU	0F866H	; ----I
-NLONLY	EQU	0F87CH	; --S--
-BOTTOM	EQU	0FC48H	; --SL-
-HIMEM	EQU	0FC4AH	; ---L-
-FLBMEM	EQU	0FCAEH	; --S--
-EXPTBL	EQU	0FCC1H	; ---L-
+DISKVE	EQU	0F323H
+BDOS	EQU	0F37DH
+BUF	EQU	0F55EH
+VALTYP	EQU	0F663H
+ONELIN	EQU	0F6B9H
+DAC	EQU	0F7F6H
+PTRFIL	EQU	0F864H
+FILNAM	EQU	0F866H
+NLONLY	EQU	0F87CH
+BOTTOM	EQU	0FC48H
+HIMEM	EQU	0FC4AH
+FLBMEM	EQU	0FCAEH
+EXPTBL	EQU	0FCC1H
 
 SLTWRK	EQU	0FD09H
-D.FD24	EQU	0FD24H	; SLTWRK + 0*32 + 3*8 + 1*2 +1
-D.FD69	EQU	0FD69H	; SLTWRK + 3*32 + 0*8 + 0*2 +0
-D.FD6A	EQU	0FD6AH	; SLTWRK + 3*32 + 0*8 + 0*2 +1
-D.FD6B	EQU	0FD6BH	; SLTWRK + 3*32 + 0*8 + 1*2 +0
-D.FD6C	EQU	0FD6CH	; SLTWRK + 3*32 + 0*8 + 1*2 +1
-D.FD6E	EQU	0FD6EH	; SLTWRK + 3*32 + 0*8 + 2*2 +1
-D.FD6F	EQU	0FD6FH	; SLTWRK + 3*32 + 0*8 + 3*2 +0
-D.FD70	EQU	0FD70H	; SLTWRK + 3*32 + 0*8 + 3*2 +1
-D.FD87	EQU	0FD87H	; SLTWRK + 3*32 + 3*8 + 3*2 +0
+; SLTWRK + main_slot*32 + sub_slot*8 + page*2.
+
+D.FD24	EQU	0FD24H	; SLTWRK + 0*32 + 3*8 + 1*2 +1		; bending the rules, slot 0-3 does not exists
+D.FD69	EQU	0FD69H	; SLTWRK + 3*32 + 0*8 + 0*2 +0		; bending the rules, slot 3-0 page 0 is RAM
+D.FD6A	EQU	0FD6AH	; SLTWRK + 3*32 + 0*8 + 0*2 +1		; bending the rules, slot 3-0 page 0 is RAM
+D.FD6B	EQU	0FD6BH	; SLTWRK + 3*32 + 0*8 + 1*2 +0		; bending the rules, slot 3-0 page 1 is RAM
+D.FD6C	EQU	0FD6CH	; SLTWRK + 3*32 + 0*8 + 1*2 +1		; bending the rules, slot 3-0 page 1 is RAM
+D.FD6E	EQU	0FD6EH	; SLTWRK + 3*32 + 0*8 + 2*2 +1		; bending the rules, slot 3-0 page 2 is not used
+D.FD6F	EQU	0FD6FH	; SLTWRK + 3*32 + 0*8 + 3*2 +0		; bending the rules, slot 3-0 page 3 is not used
+D.FD70	EQU	0FD70H	; SLTWRK + 3*32 + 0*8 + 3*2 +1		; bending the rules, slot 3-0 page 3 is not used
+D.FD87	EQU	0FD87H	; SLTWRK + 3*32 + 3*8 + 3*2 +0		; bending the rules, slot 3-3 page 3 is not used
 
 PROCNM	EQU	0FD89H	; ----I
 H.STKE	EQU	0FEDAH	; ----I
@@ -280,7 +302,7 @@ I4000:	DEFB	"AB"			; extension header
         DEFW    0			; extension BASIC program (no BASIC program)
         DEFS    6,0			; extension reserved
 
-	DEFB	0,0
+	DEFB	0,0			; left over ??
 
 ;	  Subroutine extension STATEMENT handler
 ;	     Inputs  ________________________
@@ -297,7 +319,7 @@ I4012:	EI
 	PUSH	DE			; start statement handler
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine statement recognized ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -393,22 +415,22 @@ I40A8: 	DEFB    "MEM"
 J40B2:	LD	IX,M6E77		; file not open error
 	JR	J40DA
 
-J40B8:	LD	IX,M6E80
+J40B8:	LD	IX,M6E80		; internal error
 	JR	J40DA
 
-J40BE:	LD	IX,M6E6E
+J40BE:	LD	IX,M6E6E		; file already open
 	JR	J40DA
 
-J40C4:	LD	IX,M6E86
+J40C4:	LD	IX,M6E86		; sequential i/o only error
 	JR	J40DA
 
-J40CA:	LD	IX,M4055
+J40CA:	LD	IX,M4055		; syntax error
 	JR	J40DA
 
-J40D0:	LD	IX,M475A
+J40D0:	LD	IX,M475A		; illegal function call error
 	JR	J40DA
 
-J40D6:	LD	IX,M6E6B
+J40D6:	LD	IX,M6E6B		; bad filename error
 J40DA:	PUSH	IY
 	LD	IY,(EXPTBL+0-1)
 	CALL	CALSLT
@@ -423,7 +445,7 @@ I40E6:  DEFW    I42E5			; OPEN
         DEFW    I4436			; LOC function
         DEFW    I445F			; LOF function
         DEFW    I4474			; EOF function
-        DEFW    J40D0			; FPOS function
+        DEFW    J40D0			; FPOS function, illegal function call error
         DEFW    C44A2			; Backup character
 
 ;	  Subroutine _MEMINI handler
@@ -431,33 +453,38 @@ I40E6:  DEFW    I42E5			; OPEN
 ;	     Outputs ________________________
 
 I40FA:	CALL	C416C			; end of statement ?
-	JR	NZ,J4144		; nope,
+	JR	NZ,J4144		; nope, quit statement not handled yet
 	PUSH	HL
 	LD	A,(D.FD87)
 	OR	A			; RAMDISK initialized ?
 	JR	Z,J4112			; nope,
 	CALL	C46B7			; select internal RAM on page 0
-	CALL	C491F
-	JP	C,J496B
+	CALL	C491F			; all file entries free ?
+	JP	C,J496B			; nope, file still open error
 	CALL	C46DA			; restore page 0
-J4112:	CALL	C48E7
-	JR	C,J4141
+J4112:	CALL	C48E7			; are you sure ?
+	JR	C,J4141			; nope, quit
 	CALL	C488A
 	LD	A,0F5H
-	LD	(D.FD6A),A
+	LD	(D.FD6A),A		; device id ?
 	LD	A,0FFH
 	LD	(D.FD87),A		; RAMDISK initialized
 	LD	A,(H.ERRP+1)
-	CP	8FH
-	JR	Z,J4141
+	CP	8FH			; H.ERRP redirected to this ROM (slot 3-3) ?
+	JR	Z,J4141			; yep, skip H.ERRP setup
 	DI
-	LD	(D.FD6F),A
+	LD	(D.FD6F),A		; save slotid orginal H.ERRP
 	LD	A,8FH
-	LD	(H.ERRP+1),A
+	LD	(H.ERRP+1),A		; slotid 3-3
 	LD	HL,(H.ERRP+2)
 	LD	(D.FD70),HL
 	LD	HL,I49A4
 	LD	(H.ERRP+2),HL
+
+					; enable H.ERRP missing:
+;	LD	A,0F7H
+;	LD	(H.ERRP+0),A
+
 	EI
 J4141:	POP	HL
 	OR	A
@@ -477,11 +504,11 @@ I4146:	CALL	C416C			; end of statement ?
 	OR	A			; RAMDISK initialized ?
 	JR	Z,J415E			; nope,
 	CALL	C46B7			; select internal RAM on page 0
-	CALL	C491F
-	JP	C,J496B
+	CALL	C491F			; all file entries free ?
+	JP	C,J496B			; nope, file still open error
 	CALL	C46DA			; restore page 0
-J415E:	CALL	C48E7
-	JR	C,J4167
+J415E:	CALL	C48E7			; are you sure ?
+	JR	C,J4167			; nope, quit
 	XOR	A
 	LD	(D.FD87),A		; RAMDISK not initialized
 J4167:	POP	HL
@@ -506,30 +533,30 @@ C416C:	LD	A,(HL)
 ;	     Outputs ________________________
 
 I4172:	LD	A,(HL)
-	CP	28H	; "("
-	JP	NZ,J40CA
+	CP	"("
+	JP	NZ,J40CA		;  ,syntax error
 	INC	HL
-	CALL	C4650
+	CALL	C4650			; check RAMDISK initialized, select internal RAM on page 0
 	CALL	C46DA			; restore page 0
-	CALL	C48CC
-	CALL	C462E
+	CALL	C48CC			; clear PROCNM
+	CALL	C462E			; evaluate filespecification
 	LD	A,(HL)
-	CP	29H	; ")"
-	JP	NZ,J4950
+	CP	")"
+	JP	NZ,J4950		; restore page 0, quit with syntax error
 	INC	HL
 	PUSH	HL
-	CALL	C469C
-	JP	NZ,J4956
+	CALL	C469C			; check if MEM/MEM0 device
+	JP	NZ,J4956		; restore page 0, quit with bad filename error
 	CALL	C46B7			; select internal RAM on page 0
-	CALL	C45AE
-	JP	NZ,J495F
+	CALL	C45AE			; find directory entry
+	JP	NZ,J495F		; not found, file not found error
 	LD	A,(IX+13)
-	OR	A
-	JP	NZ,J496B
+	OR	A			; file open ?
+	JP	NZ,J496B		; yep, file still open error
 	LD	A,(IX+12)
-	OR	A
-	JP	NZ,J4977
-	CALL	C47CF
+	OR	A			; file write protected ?
+	JP	NZ,J4977		; yep, Write protected
+	CALL	C47CF			; delete file
 	CALL	C46DA			; restore page 0
 	POP	HL
 	OR	A
@@ -540,54 +567,53 @@ I4172:	LD	A,(HL)
 ;	     Outputs ________________________
 
 I41B3:	LD	A,(HL)
-	CP	28H	; "("
-	JP	NZ,J40CA
+	CP	"("
+	JP	NZ,J40CA		;  ,syntax error
 	INC	HL
-	CALL	C4650
+	CALL	C4650			; check RAMDISK initialized, select internal RAM on page 0
 	CALL	C46DA			; restore page 0
-	CALL	C48CC
-	CALL	C462E
+	CALL	C48CC			; clear PROCNM
+	CALL	C462E			; evaluate filespecification
 	PUSH	HL
-	CALL	C469C
+	CALL	C469C			; check if MEM/MEM0 device
 	POP	HL
-	JP	NZ,J4956
+	JP	NZ,J4956		; restore page 0, quit with bad filename error
 	CALL	C46B7			; select internal RAM on page 0
-	CALL	C45AE
-	JP	NZ,J495F
+	CALL	C45AE			; find directory entry
+	JP	NZ,J495F		; not found, file not found error
 	LD	A,(IX+13)
-	OR	A
-	JP	NZ,J496B
+	OR	A			; file open ?
+	JP	NZ,J496B		; yep, file still open error
 	LD	A,(IX+12)
-	OR	A
-	JP	NZ,J4977
+	OR	A			; file write protected ?
+	JP	NZ,J4977		; yep, Write protected
 	CALL	C46DA			; restore page 0
 	PUSH	IX
 	DEC	HL
-	LD	IX,I4666
-	CALL	CALBAS
-	CP	41H	; "A"
-	JP	NZ,J4950
+	LD	IX,M4666
+	CALL	CALBAS			; CHRGTR
+	CP	"A"
+	JP	NZ,J4950		; restore page 0, quit with syntax error
 	INC	HL
 	LD	A,(HL)
-	CP	53H	; "S"
-	JP	NZ,J4950
-	LD	IX,I4666
-	CALL	CALBAS
-	JP	Z,J494A
-	CALL	C48CC
-	CALL	C462E
+	CP	"S"
+	JP	NZ,J4950		; restore page 0, quit with syntax error
+	LD	IX,M4666
+	CALL	CALBAS			; CHRGTR
+	JP	Z,J494A			; restore page 0, quit with illegal function call error
+	CALL	C48CC			; clear PROCNM
+	CALL	C462E			; evaluate filespecification
 	PUSH	HL
-	CALL	C469C
+	CALL	C469C			; check if MEM/MEM0 device
 	POP	HL
-	JP	NZ,J4956
+	JP	NZ,J4956		; restore page 0, quit with bad filename error
 	LD	A,(HL)
-	CP	29H	; ")"
-	JP	NZ,J4950
+	CP	")"
+	JP	NZ,J4950		; restore page 0, quit with syntax error
 	INC	HL
 	CALL	C46B7			; select internal RAM on page 0
-I421E	EQU	$-2
-	CALL	C45AE
-	JP	Z,J496E
+	CALL	C45AE			; find directory entry
+	JP	Z,J496E			; found, File already exists
 	POP	DE
 	INC	DE
 	PUSH	HL
@@ -601,62 +627,62 @@ I421E	EQU	$-2
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-I4232:	CALL	C4650
+I4232:	CALL	C4650			; check RAMDISK initialized, select internal RAM on page 0
 	XOR	A
 	LD	(D.FD24),A
 	LD	(D.FD69),A
 	CALL	C46DA			; restore page 0
-	CALL	C487F
+	CALL	C487F			; new line
 	CALL	C46B7			; select internal RAM on page 0
 	PUSH	HL
 	LD	HL,I.0200
-	LD	DE,I.0020
-	LD	B,20H	; " "
+	LD	DE,32
+	LD	B,32
 J424E:	LD	A,(HL)
-	CP	0E5H
-	JR	NZ,J4290
+	CP	0E5H			; deleted/unused entry ?
+	JR	NZ,J4290		; nope,
 J4253:	ADD	HL,DE
-	DJNZ	J424E
+	DJNZ	J424E			; next directory entry
 	CALL	C46DA			; restore page 0
 	LD	A,(D.FD69)
-	OR	A
-	CALL	NZ,C487F
+	OR	A			; found at least 1 file ?
+	CALL	NZ,C487F		; yep, new line
 	LD	A,(D.FD24)
 	OR	A
-	CALL	NZ,C487F
+	CALL	NZ,C487F		; yep, new line
 	LD	A,(D.FD69)
 	OR	A
-	JP	Z,J495F
+	JP	Z,J495F			; file not found error
 	CALL	C46B7			; select internal RAM on page 0
 	LD	HL,I.0180
-	LD	C,00H
-	LD	B,80H
+	LD	C,0
+	LD	B,128
 J4278:	LD	A,(HL)
 	INC	HL
-	OR	A
+	OR	A			; cluster free ?
 	JR	NZ,J427E
-	INC	C
+	INC	C			; yep, increase free clusters
 J427E:	DJNZ	J4278
-	LD	A,C
-	CALL	C48D9
+	LD	A,C			; number of free clusters
+	CALL	C48D9			; calculate address offset cluster (= number of bytes free)
 	CALL	C46DA			; restore page 0
-	CALL	C47E8
-	CALL	C4831
+	CALL	C47E8			; convert integer to text
+	CALL	C4831			; print bytes free
 	POP	HL
 	OR	A
 	RET
 
 J4290:	LD	A,0FFH
-	LD	(D.FD69),A
+	LD	(D.FD69),A		; found file
 	PUSH	BC
 	PUSH	HL
 	LD	B,08H	; 8 
 	INC	HL
 	CALL	C42D3
 	LD	A,(HL)
-	CP	20H	; " "
+	CP	" "
 	JR	Z,J42A4
-	LD	A,2EH	; "."
+	LD	A,"."
 J42A4:	PUSH	AF
 	CALL	C46DA			; restore page 0
 	POP	AF
@@ -670,7 +696,7 @@ J42A4:	PUSH	AF
 	CPL
 	LD	(D.FD24),A
 	JP	Z,J42CC
-	CALL	C487F
+	CALL	C487F			; new line
 J42C5:	CALL	C46B7			; select internal RAM on page 0
 	POP	HL
 	POP	BC
@@ -700,164 +726,168 @@ C42D3:	PUSH	BC
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-I42E5:	CALL	C4650
-	CALL	C45AE
+I42E5:	CALL	C4650			; check RAMDISK initialized, select internal RAM on page 0
+	CALL	C45AE			; find directory entry
 	PUSH	AF
-	LD	A,E
-	CP	01H	; 1 
-	JP	Z,J44A9
-	CP	02H	; 2 
-	JP	Z,J44E8
-	CP	04H	; 4 
-	JP	Z,J4944
-	CP	08H	; 8 
-	JP	Z,J4526
-	JP	J4938
+	LD	A,E			; mode
+	CP	01H			; sequential input ?
+	JP	Z,J44A9			; yep,
+	CP	02H			; sequential output ?
+	JP	Z,J44E8			; yep,
+	CP	04H			; random ?
+	JP	Z,J4944			; yep, restore page 0, quit with sequential i/o only error
+	CP	08H			; append ?
+	JP	Z,J4526			; yep,
+	JP	J4938			; restore page 0, quit with internal error
+
+;	  Subroutine restore page 0
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J4304:	CALL	C46DA			; restore page 0
 	RET
 
 ;	  Subroutine MEM DEVICE CLOSE
-;	     Inputs  ________________________
+;	     Inputs  HL = i/o channel pointer
 ;	     Outputs ________________________
 
-I4308:	CALL	C4650
-	CALL	C460B
-	JP	C,J4938
+I4308:	CALL	C4650			; check RAMDISK initialized, select internal RAM on page 0
+	CALL	C460B			; find file entry
+	JP	C,J4938			; not found, restore page 0, quit with internal error
 	PUSH	HL
-	LD	A,(HL)
-	CP	01H	; 1 
-	JR	Z,J4362
+	LD	A,(HL)			; file mode
+	CP	1			; sequential input ?
+	JR	Z,J4362			; yep, skip flush buffer
 	LD	A,(IX+19)
-	OR	A
-	JR	NZ,J4362
+	OR	A			; file extend failed ?
+	JR	NZ,J4362		; yep, skipp flush buffer
 	PUSH	HL
 I431E:	POP	IY
 	LD	C,(IY+6)
-	LD	B,00H
+	LD	B,00H			; position in buffer (relative)
 	PUSH	BC
 	PUSH	HL
 	ADD	HL,BC
-	LD	BC,I.0009
-	ADD	HL,BC
+	LD	BC,9
+	ADD	HL,BC			; position in buffer
 	LD	A,1AH
 J432E:	LD	(HL),A
 	INC	HL
 	INC	(IY+6)
-	JR	NZ,J432E
+	JR	NZ,J432E		; fill remainer of buffer with CTRL-Z (eof)
 	POP	HL
-	LD	BC,I.0009
-	ADD	HL,BC
+	LD	BC,9
+	ADD	HL,BC			; start of i/o channel buffer
 	PUSH	HL
-	LD	A,(IX+14)
-	DEC	A
-	CALL	C48D9
+	LD	A,(IX+14)		; current cluster
+	DEC	A			; zero based
+	CALL	C48D9			; calculate address offset cluster
 	LD	HL,I.0600
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; address of data sector
 	POP	HL
-	CALL	C4715
+	CALL	C4715			; write 'sector' to lower 32KB RAM (buffer of i/o channel)
 	POP	BC
 	LD	L,(IX+17)
-	LD	H,(IX+18)
+	LD	H,(IX+18)		; length of file
 	LD	A,(IX+20)
 	CP	0FFH
 	JR	NZ,J435B
-	LD	L,00H
+	LD	L,0
 J435B:	ADD	HL,BC
 	LD	(IX+17),L
-	LD	(IX+18),H
-J4362:	LD	(IX+13),00H
-	LD	(IX+19),00H
-	LD	(IX+20),00H
+	LD	(IX+18),H		; update length of file
+J4362:	LD	(IX+13),0		; file not open
+	LD	(IX+19),0		; file extend not failed
+	LD	(IX+20),0
 	POP	HL
-	CALL	C47AA
+	CALL	C47AA			; free file entry
 	CALL	C46DA			; restore page 0
 	RET
 
 ;	  Subroutine MEM DEVICE Sequential output
-;	     Inputs  ________________________
+;	     Inputs  C = character
 ;	     Outputs ________________________
 
 I4376:	PUSH	HL
 	PUSH	BC
-	CALL	C4650
+	CALL	C4650			; check RAMDISK initialized, select internal RAM on page 0
 	PUSH	HL
 	POP	IY
 	LD	A,(IY+6)
 	LD	C,A
-	LD	B,00H
+	LD	B,0			; position in buffer (relative)
 	ADD	HL,BC
-	LD	BC,I.0009
-	ADD	HL,BC
+	LD	BC,9
+	ADD	HL,BC			; position in buffer
 	POP	BC
-	LD	(HL),C
-	INC	(IY+6)
-	JR	NZ,J43D9
+	LD	(HL),C			; put in buffer
+	INC	(IY+6)			; update position in buffer (relative)
+	JR	NZ,J43D9		; buffer not full, quit
 	POP	HL
 	PUSH	HL
-	CALL	C460B
-	JP	C,J4938
+	CALL	C460B			; find file entry
+	JP	C,J4938			; not found, restore page 0, quit with internal error
 	LD	A,(IX+19)
-	OR	A
-	JP	NZ,J4971
-	LD	BC,I.0009
+	OR	A			; file extend failed ?
+	JP	NZ,J4971		; yep, RAM disk full
+	LD	BC,9
 	ADD	HL,BC
 	PUSH	HL
-	LD	A,(IX+14)
-	DEC	A
-	CALL	C48D9
+	LD	A,(IX+14)		; current cluster
+	DEC	A			; zero based
+	CALL	C48D9			; calculate address offset cluster
 	LD	HL,I.0600
 	ADD	HL,DE
 	EX	DE,HL
 	POP	HL
-	CALL	C4715
+	CALL	C4715			; write 'sector' to lower 32KB RAM (i/o channel buffer)
 	INC	(IY+5)
 	INC	(IX+18)
-	LD	(IX+17),00H
-	LD	(IX+20),00H
-	CALL	C45D1
-	JP	C,J43DE
+	LD	(IX+17),0		; update length of file to the next 256 byte size
+	LD	(IX+20),0
+	CALL	C45D1			; allocate free cluster
+	JP	C,J43DE			; no free clusters, file extend failed
 	LD	C,(IX+14)
-	LD	(IX+14),A
-	LD	(IX+16),A
+	LD	(IX+14),A		; update current cluster
+	LD	(IX+16),A		; update last cluster
 	LD	HL,I.0180
 	DEC	C
-	LD	B,00H
+	LD	B,0
 	ADD	HL,BC
-	LD	(HL),A
+	LD	(HL),A			; allocate cluster
 J43D9:	POP	HL
 	CALL	C46DA			; restore page 0
 	RET
 
-J43DE:	LD	(IX+19),0FFH
-	JP	J4971
+J43DE:	LD	(IX+19),0FFH		; file extend failed
+	JP	J4971			; RAM disk full
 
 ;	  Subroutine MEM DEVICE Sequential input
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C43E5:	CALL	C4650
+C43E5:	CALL	C4650			; check RAMDISK initialized, select internal RAM on page 0
 	PUSH	HL
 	PUSH	HL
 	POP	IY
 	LD	A,(IY+3)
-	CP	1AH
-	JR	Z,J4433
-	OR	A
-	JR	NZ,J440A
+	CP	1AH			; at end of file ?
+	JR	Z,J4433			; yep, return eof
+	OR	A			; backup character ?
+	JR	NZ,J440A		; yep, use that
 	LD	C,(IY+6)
-	INC	C
-	JR	Z,J4416
-	LD	B,00H
+	INC	C			; at end of buffer ?
+	JR	Z,J4416			; yep, get next cluster of file
+	LD	B,0
 	ADD	HL,BC
-	LD	C,09H	; 9 
-	ADD	HL,BC
-	LD	A,(HL)
-	CP	1AH
-	JR	Z,J4433
-	INC	(IY+6)
-J440A:	LD	(IY+3),00H
+	LD	C,9
+	ADD	HL,BC			; position in buffer
+	LD	A,(HL)			; get character
+	CP	1AH			; CTRL-Z (eof) ?
+	JR	Z,J4433			; yep, return eof
+	INC	(IY+6)			; update position (relative)
+J440A:	LD	(IY+3),0		; no backup character
 	OR	A
 J440F:	PUSH	AF
 	CALL	C46DA			; restore page 0
@@ -865,22 +895,21 @@ J440F:	PUSH	AF
 	POP	HL
 	RET
 
-J4416:	CALL	C460B
-	JP	C,J4938
-	CALL	C4776
-I441E	EQU	$-1
-	JR	Z,J4433
-	LD	(IY+6),00H
-	INC	(IY+5)
-	LD	A,(IY+9)
-	CP	1AH
-	JR	NZ,J440A
-	LD	(IY+3),1AH
+J4416:	CALL	C460B			; find file entry
+	JP	C,J4938			; not found, restore page 0, quit with internal error
+	CALL	C4776			; get next cluster of file
+	JR	Z,J4433			; no more cluster, return eof
+	LD	(IY+6),0		; update position in buffer (relative)
+	INC	(IY+5)			; update cluster (relative)
+	LD	A,(IY+9)		; get character
+	CP	1AH			; CTRL-Z (eof) ?
+	JR	NZ,J440A		; nope, return
+	LD	(IY+3),1AH		; backup character eof (at end of file)
 J4433:	SCF
 	JR	J440F
 
 ;	  Subroutine MEM DEVICE LOC Function
-;	     Inputs  ________________________
+;	     Inputs  HL = i/o channel pointer
 ;	     Outputs ________________________
 
 I4436:	PUSH	HL
@@ -890,7 +919,7 @@ I4436:	PUSH	HL
 	LD	A,(HL)
 	CP	01H	; 1 
 	JR	NZ,J445B
-	LD	BC,I.0108
+	LD	BC,256+9-1
 	ADD	HL,BC
 	LD	B,00H
 J4449:	LD	A,(HL)
@@ -911,25 +940,25 @@ J445B:	EX	DE,HL
 	JP	J4494
 
 ;	  Subroutine MEM DEVICE LOF Function
-;	     Inputs  ________________________
+;	     Inputs  HL = i/o channel pointer
 ;	     Outputs ________________________
 
-I445F:	CALL	C4650
-	CALL	C460B
-	JP	C,J4938
+I445F:	CALL	C4650			; check RAMDISK initialized, select internal RAM on page 0
+	CALL	C460B			; find file entry
+	JP	C,J4938			; not found, restore page 0, quit with internal error
 	LD	L,(IX+17)
-	LD	H,(IX+18)
+	LD	H,(IX+18)		; length of file
 	CALL	C46DA			; restore page 0
 	JP	J4494
 
 ;	  Subroutine MEM DEVICE EOF Function
-;	     Inputs  ________________________
+;	     Inputs  HL = i/o channel pointer
 ;	     Outputs ________________________
 
-I4474:	CALL	C4650
+I4474:	CALL	C4650			; check RAMDISK initialized, select internal RAM on page 0
 	LD	A,(HL)
-	CP	01H	; 1 
-	JP	NZ,J4968
+	CP	1
+	JP	NZ,J4968		; Bad file mode
 	CALL	C46DA			; restore page 0
 	CALL	C43E5
 	PUSH	AF
@@ -938,10 +967,10 @@ I4474:	CALL	C4650
 	JR	C,J449D
 	LD	C,A
 	CALL	C44A2
-	LD	HL,J.0000
+	LD	HL,0
 J4491:	CALL	C46DA			; restore page 0
 J4494:	LD	(DAC+2),HL
-	LD	A,02H	; 2 
+	LD	A,2
 	LD	(VALTYP),A
 	RET
 
@@ -949,7 +978,7 @@ J449D:	LD	HL,D.FFFF
 	JR	J4491
 
 ;	  Subroutine MEM DEVICE Backup character
-;	     Inputs  ________________________
+;	     Inputs  HL = i/o channel pointer, C = character
 ;	     Outputs ________________________
 
 C44A2:	PUSH	HL
@@ -957,16 +986,20 @@ C44A2:	PUSH	HL
 	LD	(IY+3),C
 	RET
 
+;	  Subroutine MEM DEVICE OPEN sequential input
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J44A9:	POP	AF
-	JP	NZ,J495F
+	JP	NZ,J495F		; file not found, file not found error
 	LD	A,(IX+13)
-	OR	A
-	JP	NZ,J4962
-	CALL	C4636
-	JP	C,J495C
-	CALL	C4766
-	CALL	C473B
-	LD	(IX+13),0FFH
+	OR	A			; file open ?
+	JP	NZ,J4962		; yep, File already open
+	CALL	C4636			; find free file entry
+	JP	C,J495C			; not found, bad file number error
+	CALL	C4766			; register i/o channel pointer and directory entry pointer
+	CALL	C473B			; initialize i/o channel
+	LD	(IX+13),0FFH		; flag file is open
 	LD	A,(IX+15)
 	LD	(IX+14),A
 	PUSH	HL
@@ -978,67 +1011,75 @@ J44A9:	POP	AF
 
 J44D4:	PUSH	HL
 	PUSH	DE
-	CALL	C4798
+	CALL	C4798			; read cluster in i/o channel buffer
 	LD	A,(IY+9)
 J44DC:	LD	(IY+3),A
 	LD	(IY+6),00H
 	POP	DE
 	POP	HL
-	JP	J4304
+	JP	J4304			; restore page 0
+
+;	  Subroutine MEM DEVICE OPEN sequential output
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J44E8:	POP	AF
-	JR	NZ,J44FD
+	JR	NZ,J44FD		; file not found, 
 	LD	A,(IX+13)
-	OR	A
-	JP	NZ,J4962
+	OR	A			; file open ?
+	JP	NZ,J4962		; yep, File already open
 	LD	A,(IX+12)
-	CP	0FFH
-	JP	Z,J4977
-	CALL	C47CF
-J44FD:	CALL	C45ED
-	JP	C,J4974
-	CALL	C4636
-	JP	C,J495C
-	CALL	C45D1
-	JP	C,J4971
+	CP	0FFH			; file write protected ?
+	JP	Z,J4977			; yep, Write protected
+	CALL	C47CF			; delete file
+J44FD:	CALL	C45ED			; find free directory entry
+	JP	C,J4974			; no free, Too many files
+	CALL	C4636			; find free file entry
+	JP	C,J495C			; not found, bad file number error
+	CALL	C45D1			; allocate free cluster
+	JP	C,J4971			; no free cluster, RAM disk full
 	PUSH	AF
 	CALL	C465B
 	POP	AF
-	LD	(IX+14),A
-	LD	(IX+15),A
-	LD	(IX+16),A
-	CALL	C4766
-	CALL	C473B
-	JP	J4304
+	LD	(IX+14),A		; current cluster
+	LD	(IX+15),A		; first cluster
+	LD	(IX+16),A		; last cluster
+	CALL	C4766			; register i/o channel pointer and directory entry pointer
+	CALL	C473B			; initialize i/o channel
+	JP	J4304			; restore page 0
+
+;	  Subroutine MEM DEVICE OPEN append
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J4526:	POP	AF
-	JP	NZ,J495F
+	JP	NZ,J495F		; file not found, file not found error
 	LD	A,(IX+12)
 	CP	0FFH
-	JP	Z,J495F
-	CALL	C4636
-	JP	C,J495C
-	CALL	C4766
-	CALL	C473B
-	LD	A,(IX+16)
-	LD	(IX+14),A
+	JP	Z,J495F			; file not found error
+	CALL	C4636			; find free file entry
+	JP	C,J495C			; not found, bad file number error
+	CALL	C4766			; register i/o channel pointer and directory entry pointer
+	CALL	C473B			; initialize i/o channel
+	LD	A,(IX+16)		; last cluster
+	LD	(IX+14),A		; current cluster
 	PUSH	HL
-	LD	BC,I.0009
-	ADD	HL,BC
+	LD	BC,9
+	ADD	HL,BC			; i/o channel buffer
 	PUSH	HL
-	DEC	A
-	CALL	C48D9
+	DEC	A			; zero based
+	CALL	C48D9			; calculate address offset cluster
 	LD	HL,I.0600
 	ADD	HL,DE
 	POP	DE
-	CALL	C46F1
+	CALL	C46F1			; read 'sector' from lower 32KB RAM in i/o channel buffer
 	POP	HL
 	PUSH	HL
 	POP	IY
 	PUSH	HL
-	LD	BC,I.0108
+	LD	BC,256+9-1
 	ADD	HL,BC
-	LD	B,00H
+	LD	B,0
 J4561:	LD	A,(HL)
 	DEC	HL
 	CP	1AH
@@ -1054,48 +1095,48 @@ J456C:	LD	A,B
 J4575:	LD	(IY+6),B
 	LD	(IY+3),C
 J457B:	POP	HL
-	LD	(IX+13),0FFH
-	JP	J4304
+	LD	(IX+13),0FFH		; file is open
+	JP	J4304			; restore page 0
 
-J4583:	CALL	C45D1
-	JP	C,J45A5
-	LD	C,(IX+14)
-	LD	(IX+14),A
-	LD	(IX+16),A
+J4583:	CALL	C45D1			; allocate free cluster
+	JP	C,J45A5			; no free cluster,
+	LD	C,(IX+14)		; current cluster
+	LD	(IX+14),A		; update current cluster
+	LD	(IX+16),A		; update last cluster
 	LD	HL,I.0180
 	DEC	C
-	LD	B,00H
+	LD	B,0
 	ADD	HL,BC
-	LD	(HL),A
-	LD	(IY+6),00H
-	LD	(IY+3),00H
+	LD	(HL),A			; update FAT chain
+	LD	(IY+6),0
+	LD	(IY+3),0
 	JP	J457B
 
 J45A5:	POP	HL
-	LD	(HL),00H
-	CALL	C47AA
-	JP	J4971
+	LD	(HL),0
+	CALL	C47AA			; free file entry
+	JP	J4971			; RAM disk full
 
-;	  Subroutine __________________________
+;	  Subroutine find directory entry
 ;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Outputs IX = directory entry if found
 
 C45AE:	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	LD	HL,I.0200
-	LD	DE,I.0020
-	LD	B,20H	; " "
+	LD	DE,32
+	LD	B,32
 J45B9:	LD	A,(HL)
-	CP	0E5H
-	JR	NZ,J45C5
+	CP	0E5H			; deleted/unused entry ?
+	JR	NZ,J45C5		; nope, check
 J45BE:	ADD	HL,DE
-	DJNZ	J45B9
-	OR	0FFH
+	DJNZ	J45B9			; next directory entry
+	OR	0FFH			; not found
 	JR	J45CD
 
-J45C5:	CALL	C4686
-	JR	NZ,J45BE
+J45C5:	CALL	C4686			; compare with directory entry
+	JR	NZ,J45BE		; not equal, next entry
 	PUSH	HL
 	POP	IX
 J45CD:	POP	BC
@@ -1103,19 +1144,19 @@ J45CD:	POP	BC
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine allocate free cluster
 ;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Outputs C = cluster number
 
 C45D1:	PUSH	HL
 	LD	HL,I.0180
-	LD	B,80H
-	LD	C,01H	; 1 
+	LD	B,128
+	LD	C,1
 J45D9:	LD	A,(HL)
-	OR	A
-	JR	Z,J45E8
-	CP	0FEH
-	JR	Z,J45E5
+	OR	A			; cluster free ?
+	JR	Z,J45E8			; yep,
+	CP	0FEH			; end of FAT ?
+	JR	Z,J45E5			; yep, quit
 	INC	C
 	INC	HL
 	DJNZ	J45D9
@@ -1124,11 +1165,11 @@ J45E5:	SCF
 	RET
 
 J45E8:	LD	A,C
-	LD	(HL),0FFH
+	LD	(HL),0FFH		; last cluster of file
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine find free directory entry
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1136,11 +1177,11 @@ C45ED:	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	LD	HL,I.0200
-	LD	DE,I.0020
-	LD	B,20H	; " "
+	LD	DE,32
+	LD	B,32
 J45F8:	LD	A,(HL)
-	CP	0E5H
-	JR	Z,J4603
+	CP	0E5H			; deleted/unused entry ?
+	JR	Z,J4603			; yep, quit
 	ADD	HL,DE
 	DJNZ	J45F8
 	SCF
@@ -1154,14 +1195,14 @@ J4607:	POP	BC
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	  Subroutine find file entry
+;	     Inputs  HL = i/o channel pointer
+;	     Outputs IX = directory entry pointer
 
 C460B:	PUSH	DE
 	EX	DE,HL
 	LD	HL,I.0030
-	LD	B,40H	; "@"
+	LD	B,64
 J4612:	LD	A,E
 	CP	(HL)
 	INC	HL
@@ -1187,26 +1228,25 @@ J462B:	EX	DE,HL
 	POP	DE
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine evaluate filespecification
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C462E:	LD	IX,I6A0E
+C462E:	LD	IX,M6A0E		; evaluate filespecification
 	CALL	CALBAS
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine find free file entry
 ;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Outputs IY = file entry
 
 C4636:	PUSH	HL
 	LD	HL,I.0030
-	LD	B,40H	; "@"
+	LD	B,64
 J463C:	LD	A,(HL)
 	INC	HL
 	OR	(HL)
 	JR	Z,J4649
-J4640	EQU	$-1
 	INC	HL
 	INC	HL
 	INC	HL
@@ -1222,7 +1262,7 @@ J4649:	DEC	HL
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine check RAMDISK initialized, select internal RAM on page 0
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1243,13 +1283,13 @@ C465B:	PUSH	HL
 	LD	D,H
 	LD	E,L
 	XOR	A
-	LD	B,20H	; " "
+	LD	B,32
 J4665:	LD	(HL),A
-I4666:	INC	HL
+	INC	HL
 	DJNZ	J4665
-	LD	(IX+13),0FFH
-	LD	A,(D.FD6A)
-	LD	(IX),A
+	LD	(IX+13),0FFH		; file is open
+	LD	A,(D.FD6A)		; device id ?
+	LD	(IX+0),A
 	INC	DE
 	CALL	C467A
 	POP	DE
@@ -1291,7 +1331,7 @@ J4698:	POP	BC
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine check if MEM/MEM0 device
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1321,7 +1361,7 @@ I46B2:  DEFB    "MEM0"
 ;	     Outputs ________________________
 
 C46B7:	IN	A,(0A8H)
-	LD	(D.FD6B),A
+	LD	(D.FD6B),A		; save primairy slot register
 	LD	C,A
 	AND	3FH
 	OR	0C0H
@@ -1337,7 +1377,7 @@ C46B7:	IN	A,(0A8H)
 	OR	03H
 	OUT	(0A8H),A		; primairy slot 3 on page 0
 	LD	A,B
-	LD	(D.FD6C),A
+	LD	(D.FD6C),A		; save secundairy slot register
 	RET
 
 ;	  Subroutine restore page 0
@@ -1345,32 +1385,32 @@ C46B7:	IN	A,(0A8H)
 ;	     Outputs ________________________
 
 C46DA:	LD	A,(D.FD6C)
-	LD	B,A
+	LD	B,A			; saved secundairy slot register slot 3
 	LD	A,(D.FD6B)
-	LD	C,A
-	AND	3FH	; "?"
+	LD	C,A			; saved primairy slot register
+	AND	3FH
 	OR	0C0H
-	OUT	(0A8H),A
+	OUT	(0A8H),A		; select slot 3 in page 3 (to access secundairy slotregister)
 	LD	A,B
-	LD	(D.FFFF),A
+	LD	(D.FFFF),A		; restore secundairy slot register
 	LD	A,C
-	OUT	(0A8H),A
+	OUT	(0A8H),A		; restore primairy slot register
 	EI
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine read 'sector' from lower 32KB RAM
+;	     Inputs  HL = lower RAM address, DE = transfer address
 ;	     Outputs ________________________
 
 C46F1:	LD	A,H
-	CP	40H	; "@"
-	JP	C,J470F
-	CALL	C46DA
-	LD	B,00H
+	CP	40H			; page 0 transfer ?
+	JP	C,J470F			; yep, direct access
+	CALL	C46DA			; restore page 0
+	LD	B,0
 J46FC:	PUSH	BC
 	PUSH	DE
 	LD	A,83H
-	CALL	RDSLT
+	CALL	RDSLT			; read byte from slot 3-0
 	EI
 	POP	DE
 	LD	(DE),A
@@ -1378,22 +1418,22 @@ J46FC:	PUSH	BC
 	INC	HL
 	INC	DE
 	DJNZ	J46FC
-	CALL	C46B7
+	CALL	C46B7			; select internal RAM on page 0
 	RET
 
 J470F:	LD	BC,256
 	LDIR
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine write 'sector' to lower 32KB RAM
+;	     Inputs  HL = transfer address, DE = lower RAM address
 ;	     Outputs ________________________
 
 C4715:	LD	A,D
-	CP	40H	; "@"
-	JP	C,J4735
+	CP	40H			; page 0 transfer ?
+	JP	C,J4735			; yep, direct access
 	EX	DE,HL
-	CALL	C46DA
+	CALL	C46DA			; restore page 0
 	LD	B,00H
 J4721:	LD	A,(DE)
 	PUSH	BC
@@ -1407,19 +1447,19 @@ J4721:	LD	A,(DE)
 	INC	HL
 	INC	DE
 	DJNZ	J4721
-	CALL	C46B7
+	CALL	C46B7			; select internal RAM on page 0
 	RET
 
 J4735:	LD	BC,256
 	LDIR
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine initialize i/o channel
+;	     Inputs  HL = i/o channel pointer, IX = directory entry pointer
 ;	     Outputs ________________________
 
-C473B:	LD	(PTRFIL),HL
-	LD	(HL),E
+C473B:	LD	(PTRFIL),HL		; set basic interpeter input/output device
+	LD	(HL),E			; save file open mode
 	PUSH	HL
 	PUSH	DE
 	PUSH	IX
@@ -1427,26 +1467,26 @@ C473B:	LD	(PTRFIL),HL
 	POP	IX
 	INC	HL
 	LD	DE,I475D
-	LD	B,09H	; 9 
+	LD	B,9
 J474C:	LD	A,(DE)
 	LD	(HL),A
 	INC	DE
 	INC	HL
 	DJNZ	J474C
 	LD	A,(D.FD6A)
-	LD	(IX+4),A
+	LD	(IX+4),A		; device id ?
 	POP	IX
 	POP	DE
 	POP	HL
 	RET
 
-I475D:	DEFB	0,0,0,0,0,0,0,0
-	RST	38H
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+I475D:	DEFB	0,0,0,0,0,0,0,0,0FFH
+
+;	  Subroutine register i/o channel pointer and directory entry pointer
+;	     Inputs  HL = i/o channel pointer, IX = directory entry pointer, IY = file entry
 ;	     Outputs ________________________
 
-C4766:	LD	(IY),L
+C4766:	LD	(IY+0),L
 	LD	(IY+1),H
 	PUSH	IX
 	POP	BC
@@ -1454,55 +1494,55 @@ C4766:	LD	(IY),L
 	LD	(IY+3),B
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine get next cluster of file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4776:	LD	A,(IX+14)
-	CP	(IX+16)
-	RET	Z
+C4776:	LD	A,(IX+14)		; current cluster
+	CP	(IX+16)			; = last cluster ?
+	RET	Z			; yep, quit
 	PUSH	HL
 	LD	HL,I.0180
-	DEC	A
+	DEC	A			; zero based
 	LD	C,A
-	LD	B,00H
+	LD	B,0
 	ADD	HL,BC
 	LD	A,(HL)
 	POP	HL
-	CP	0FFH
-	RET	Z
-	LD	(IX+14),A
+	CP	0FFH			; FAT chain end ?
+	RET	Z			; yep, quit
+	LD	(IX+14),A		; update current cluster
 	PUSH	HL
 	PUSH	DE
-	CALL	C4798
+	CALL	C4798			; read cluster in i/o channel buffer
 	OR	0FFH
 	POP	DE
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine read cluster in i/o channel buffer
+;	     Inputs  HL = i/o channel, A = cluster
 ;	     Outputs ________________________
 
-C4798:	LD	BC,I.0009
+C4798:	LD	BC,9
 	ADD	HL,BC
 	PUSH	HL
-	DEC	A
-	CALL	C48D9
+	DEC	A			; zero based
+	CALL	C48D9			; calculate address offset cluster
 	LD	HL,I.0600
 	ADD	HL,DE
 	POP	DE
-	CALL	C46F1
+	CALL	C46F1			; read 'sector' from lower 32KB RAM
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine free file entry
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C47AA:	PUSH	DE
 	EX	DE,HL
 	LD	HL,I.0030
-	LD	B,40H	; "@"
+	LD	B,64
 J47B1:	LD	A,E
 	CP	(HL)
 	INC	HL
@@ -1531,35 +1571,35 @@ J47CC:	EX	DE,HL
 	POP	DE
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine delete file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C47CF:	LD	(IX),0E5H
-	LD	A,(IX+15)
+C47CF:	LD	(IX+0),0E5H		; directory entry unused
+	LD	A,(IX+15)		; first cluster
 	PUSH	HL
 	LD	B,00H
-J47D9:	DEC	A
+J47D9:	DEC	A			; zero based
 	LD	C,A
 	LD	HL,I.0180
 	ADD	HL,BC
-	LD	A,(HL)
-	LD	(HL),00H
-	CP	0FFH
-	JR	NZ,J47D9
+	LD	A,(HL)			; next cluster
+	LD	(HL),0			; free cluster
+	CP	0FFH			; end of FAT chain ?
+	JR	NZ,J47D9		; nope, continue
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine convert integer to text
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C47E8:	EX	DE,HL
 	EXX
-	LD	HL,I.3030
-	LD	DE,I.3030
+	LD	HL,"0"*256+"0"
+	LD	DE,"0"*256+"0"
 	EXX
-	LD	DE,I$2710
+	LD	DE,10000
 J47F4:	OR	A
 	SBC	HL,DE
 	JR	C,J47FE
@@ -1569,7 +1609,7 @@ J47F4:	OR	A
 	JR	J47F4
 
 J47FE:	ADD	HL,DE
-	LD	DE,I$03E8
+	LD	DE,1000
 J4802:	OR	A
 	SBC	HL,DE
 	JR	C,J480C
@@ -1579,7 +1619,7 @@ J4802:	OR	A
 	JR	J4802
 
 J480C:	ADD	HL,DE
-	LD	DE,I$0064
+	LD	DE,100
 J4810:	OR	A
 	SBC	HL,DE
 	JR	C,J481A
@@ -1589,7 +1629,7 @@ J4810:	OR	A
 	JR	J4810
 
 J481A:	ADD	HL,DE
-	LD	DE,I$000A
+	LD	DE,10
 J481E:	OR	A
 	SBC	HL,DE
 	JR	C,J4828
@@ -1599,7 +1639,7 @@ J481E:	OR	A
 	JR	J481E
 
 J4828:	ADD	HL,DE
-	LD	A,30H	; "0"
+	LD	A,"0"
 	ADD	A,L
 	PUSH	AF
 	EX	AF,AF'
@@ -1607,7 +1647,7 @@ J4828:	ADD	HL,DE
 	EX	AF,AF'
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine print bytes free
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1653,13 +1693,13 @@ I4871:  DEFB    " Bytes free"
         DEFB    13,10
         DEFB    0
 
-;	  Subroutine __________________________
+;	  Subroutine new line
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C487F:	LD	A,0DH	; 13 
+C487F:	LD	A,13
 	CALL	CHPUT
-	LD	A,0AH	; 10 
+	LD	A,10
 	CALL	CHPUT
 	RET
 
@@ -1667,58 +1707,58 @@ C487F:	LD	A,0DH	; 13
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C488A:	CALL	C46B7
-	LD	HL,J.0000
-	LD	DE,I.0001
-	LD	BC,I$01FF
-	LD	(HL),00H
-	LDIR
+C488A:	CALL	C46B7			; select internal RAM on page 0
+	LD	HL,0000H
+	LD	DE,0000H+1
+	LD	BC,2*256-1
+	LD	(HL),0
+	LDIR				; clear file entries and FAT
 	INC	HL
 	INC	DE
-	LD	BC,I$39FF
+	LD	BC,(54+4)*256-1		; ?? should be (58+4)*256-1
 	LD	(HL),0E5H
-	LDIR
+	LDIR				; clear directory and data sectors
 	JR	J48BA
 
-?48A5:	CALL	C46DA
-	LD	HL,I4000
+?48A5:	CALL	C46DA			; restore page 0
+	LD	HL,4000H
 	LD	E,0E5H
 J48AD:	LD	A,83H
 	CALL	WRSLT
 	INC	HL
 	BIT	7,H
-J48B5:	JR	Z,J48AD
-	CALL	C46B7
-J48BA:	LD	HL,I$01FA
-	LD	B,06H	; 6 
+	JR	Z,J48AD			; clear data sectors page 1
+	CALL	C46B7			; select internal RAM on page 0
+J48BA:	LD	HL,I.0180+128-6
+	LD	B,6
 J48BF:	LD	(HL),0FEH
 	INC	HL
-	DJNZ	J48BF
+	DJNZ	J48BF			; mark unusable clusters
 	XOR	A
-	LD	(D$0022),A
-	CALL	C46DA
+	LD	(D$0022),A		; ??
+	CALL	C46DA			; restore page 0
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine clear PROCNM
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C48CC:	PUSH	HL
 	LD	HL,PROCNM
-	LD	B,10H	; 16 
-J48D2:	LD	(HL),00H
+	LD	B,16
+J48D2:	LD	(HL),0
 	INC	HL
 	DJNZ	J48D2
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine calculate address offset cluster
+;	     Inputs  A = clusternumber (zero based)
 ;	     Outputs ________________________
 
 C48D9:	PUSH	BC
-	LD	B,08H	; 8 
-	LD	D,00H
+	LD	B,8
+	LD	D,0
 	OR	A
 J48DF:	RLA
 	RL	D
@@ -1727,7 +1767,7 @@ J48DF:	RLA
 	POP	BC
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine are you sure ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1744,7 +1784,7 @@ J48F5:	CALL	QINLIN
 	INC	HL
 	LD	A,(HL)
 	AND	0DFH
-	CP	59H	; "Y"
+	CP	"Y"
 	JR	NZ,J4908
 	INC	HL
 	LD	A,(HL)
@@ -1758,30 +1798,16 @@ J4908:	SCF
 	POP	HL
 	RET
 
-I490B:	LD	B,C
-	LD	(HL),D
-	LD	H,L
-	JR	NZ,J4989
-	LD	L,A
-	LD	(HL),L
-	JR	NZ,J4987
-	LD	(HL),L
-	LD	(HL),D
-	LD	H,L
-	JR	NZ,J4941
-	LD	E,C
-	CPL
-	LD	C,(HL)
-	ADD	HL,HL
-	JR	NZ,C491F
-;
-;	  Subroutine __________________________
+I490B:	DEFB	"Are you sure (Y/N) "
+	DEFB	0
+
+;	  Subroutine all file entries free ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C491F:	PUSH	HL
 	LD	HL,I.0030
-	LD	B,00H
+	LD	B,0
 J4925:	LD	A,(HL)
 	OR	A
 	JR	NZ,J492F
@@ -1795,116 +1821,129 @@ J492F:	SCF
 	POP	HL
 	RET
 
-?4932:	CALL	C46DA
-	JP	J40B2
+?4932:	CALL	C46DA			; restore page 0
+	JP	J40B2			; file not open error
 
-J4938:	CALL	C46DA
-	JP	J40B8
+J4938:	CALL	C46DA			; restore page 0
+	JP	J40B8			; internal error
 
-?493E:	CALL	C46DA
-J4941:	JP	J40BE
+?493E:	CALL	C46DA			; restore page 0
+	JP	J40BE			; file already open
 
-J4944:	CALL	C46DA
-	JP	J40C4
+J4944:	CALL	C46DA			; restore page 0
+	JP	J40C4			; sequential i/o only error
 
-J494A:	CALL	C46DA
-	JP	J40D0
+J494A:	CALL	C46DA			; restore page 0
+	JP	J40D0			; illegal function call error
 
-J4950:	CALL	C46DA
-	JP	J40CA
+J4950:	CALL	C46DA			; restore page 0
+	JP	J40CA			; syntax error
 
-J4956:	CALL	C46DA
-	JP	J40D6
+J4956:	CALL	C46DA			; restore page 0
+	JP	J40D6			; bad filename error
 
-J495C:	LD	E,34H	; "4"
-	LD	BC,I$351E
-J495F	EQU	$-2
-	LD	BC,I$361E
-J4962	EQU	$-2
-	LD	BC,I$3C1E
-	LD	BC,I$3D1E
-J4968	EQU	$-2
-	LD	BC,I401E
-J496B	EQU	$-2
-	LD	BC,I411E
-J496E	EQU	$-2
-	LD	BC,I421E
-J4971	EQU	$-2
-	LD	BC,I431E
-J4974	EQU	$-2
-	LD	BC,I441E
-J4977	EQU	$-2
-	CALL	C46DA
+J495C:	LD	E,34H			; Bad file number
+	DEFB	001H
+
+J495F:	LD	E,35H			; File not found
+	DEFB	001H
+
+J4962:	LD	E,36H			; File already open
+	DEFB	001H
+
+	LD	E,3CH			; Bad allocation table
+	DEFB	001H
+
+J4968:	LD	E,3DH			; Bad file mode
+	DEFB	001H
+
+J496B:	LD	E,40H			; File still open
+	DEFB	001H
+
+J496E:	LD	E,41H			; File already exists
+	DEFB	001H
+
+J4971:	LD	E,42H			; RAM disk full
+	DEFB	001H
+
+J4974:	LD	E,43H			; Too many files
+	DEFB	001H
+
+J4977:	LD	E,44H			; Write protected
+	CALL	C46DA			; restore page 0
 J497C:	XOR	A
 	LD	(NLONLY),A
 	LD	(FLBMEM),A
 	LD	HL,(ONELIN)
 	LD	A,L
-J4987:	OR	H
-	JR	NZ,J498F
-J4989	EQU	$-1
+	OR	H			; on error defined ?
+	JR	NZ,J498F		; yep,
 	LD	A,0FFH
-	LD	(D.FD6E),A
+	LD	(D.FD6E),A		; flag handle error message
 J498F:	XOR	A
 	PUSH	DE
-	LD	IX,I6B24
-	CALL	CALBAS
+	LD	IX,M6B24
+	CALL	CALBAS			; close i/o channel
 	POP	DE
-	LD	IX,I406F
-	JP	CALBAS
+	LD	IX,M406F
+	JP	CALBAS			; BASIC error
 
 ;	  Subroutine MEM DEVICE Random access
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-I49A0:	LD	E,3DH	; "="
+I49A0:	LD	E,3DH			; Bad file mode
 	JR	J497C
 
+;	Subroutine	extended errorhandler (H.ERRP)
+;	Inputs		HL = errortext pointer, E=errorcode
+;	Outputs		HL = errortext pointer, E=errorcode
+
 I49A4:	LD	A,(D.FD6E)
-	OR	A
-	JR	Z,J49D2
+	OR	A			; handle error message ?
+	JR	Z,J49D2			; nope, use old H.ERRP handler
 	XOR	A
-	LD	(D.FD6E),A
+	LD	(D.FD6E),A		; reset flag handle error message
 	LD	HL,I49E6
 J49B1:	LD	A,(HL)
-	OR	A
-	RET	Z
-	CP	E
-	JR	Z,J49BC
+	OR	A			; end of errorlist ?
+	RET	Z			; yep, quit
+	CP	E			; found error ?
+	JR	Z,J49BC			; yep,
 	INC	HL
 	INC	HL
 	INC	HL
-	JR	J49B1
+	JR	J49B1			; next entry
 
 J49BC:	INC	HL
 	LD	E,(HL)
 	INC	HL
-	LD	D,(HL)
-	LD	HL,I$F604
+	LD	D,(HL)			; address error text
+	LD	HL,BUF+258-92
 	PUSH	HL
-	LD	(HL),00H
+	LD	(HL),0			; end of 'previous' error text
 	INC	HL
 J49C7:	LD	A,(DE)
 	LD	(HL),A
 	INC	DE
 	INC	HL
 	OR	A
-	JR	NZ,J49C7
+	JR	NZ,J49C7		; copy error text to temporary buffer
 	POP	HL
-	LD	E,01H	; 1 
+	LD	E,1			; 
 	RET
 
 J49D2:	LD	A,(D.FD6F)
-	OR	A
+	OR	A			; BUG: should be CP 0C9H
 	RET	Z
 	PUSH	AF
 	POP	IY
 	PUSH	HL
-	LD	HL,(D.FD70)
+	LD	HL,(D.FD70)		; address H.ERRP handler
 	PUSH	HL
 	POP	IX
 	POP	HL
-	CALL	CALSLT
+	CALL	CALSLT			; call orginal H.ERRP handler
 	RET
 
 I49E6:  DEFB    034H
@@ -1960,7 +1999,6 @@ C4AAB:	CALL	C4B2F
 	CALL	C4B66
 	JR	NZ,C4AAB
 	LD	DE,I.D390
-J4AB6	EQU	$-1
 	LD	B,07H	; 7 
 	LD	A,(DE)
 J4ABA:	CP	20H	; " "
@@ -1968,8 +2006,7 @@ J4ABA:	CP	20H	; " "
 	PUSH	HL
 	PUSH	DE
 	PUSH	BC
-	LD	BC,CPMADR
-J4AC2	EQU	$-2
+	LD	BC,6
 	LDIR
 	POP	BC
 	POP	DE
@@ -1990,7 +2027,6 @@ J4AD5:	LD	A,31H	; "1"
 	JR	NZ,C4AAB
 	INC	HL
 	LD	A,30H	; "0"
-J4ADC	EQU	$-1
 	CP	(HL)
 	JR	NZ,C4AAB
 	INC	HL
@@ -2015,7 +2051,6 @@ J4AED:	RET	C
 ;	     Outputs ________________________
 
 C4AF9:	CALL	C4B2F
-J4AFB	EQU	$-1
 	RET	C
 J4AFD:	CALL	C4B66
 	JR	Z,C4AF9
@@ -2155,7 +2190,7 @@ J4BB0:	LD	(DE),A
 	INC	DE
 	DJNZ	J4BB0
 	LD	HL,I.D390
-	LD	BC,CPMADR
+	LD	BC,6
 	LDIR
 	CALL	C4C7E
 	LD	HL,(D.D382)
@@ -2226,7 +2261,7 @@ J4C0A:	LD	A,(HL)
 ;	     Outputs ________________________
 
 C4C2F:	LD	HL,D.D6A6
-	LD	DE,J.0000
+	LD	DE,0
 	LD	E,(HL)
 	INC	HL
 	XOR	A
@@ -2336,7 +2371,7 @@ C4C9F:	CALL	C4E94
 	CALL	C4E76
 	OR	A
 	JP	NZ,J4CCA
-	LD	HL,I$0013
+	LD	HL,19
 	ADD	HL,DE
 	EX	DE,HL
 	LD	A,(DE)
@@ -2452,7 +2487,7 @@ J4D67:	PUSH	DE
 	LD	B,80H
 	LD	IX,D.D6A6
 J4D75:	LD	A,(DE)
-	LD	(IX),A
+	LD	(IX+0),A
 	INC	IX
 	INC	DE
 	DEC	HL
@@ -2462,7 +2497,7 @@ J4D75:	LD	A,(DE)
 	DJNZ	J4D75
 	JR	J4D67
 
-J4D85:	LD	(IX),00H
+J4D85:	LD	(IX+0),00H
 	INC	IX
 	DJNZ	J4D85
 	CALL	C4E7F
@@ -2572,7 +2607,7 @@ C4E12:	LD	HL,I$D3B0
 	LD	(DISKVE),HL
 	LD	DE,I4E2B
 	EX	DE,HL
-	LD	BC,I$000D
+	LD	BC,13
 	LDIR
 	POP	HL
 	LD	(D.D3AB),HL
@@ -2711,7 +2746,7 @@ C4EA5:	PUSH	HL
 	CALL	C4EBA
 	LD	HL,I4EC5
 	LD	DE,I.D681
-	LD	BC,I$000B
+	LD	BC,11
 	LDIR
 	POP	BC
 	POP	DE
@@ -3682,7 +3717,7 @@ C54ED:	LD	(D.D89F),HL
 	OR	A
 	JP	P,J5505
 	EX	DE,HL
-	LD	HL,J.0000
+	LD	HL,0
 	OR	A
 	SBC	HL,DE
 J5505:	LD	E,00H
@@ -4656,12 +4691,16 @@ I5A82:	JR	NZ,J5AB2
 	CCF
 	DEFB	021H
 
+;	  Subroutine _WORDPROCESSOR handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 I5A8A:	LD	HL,(BOTTOM)
 	LD	DE,0C000H
 	CALL	C6DC9
 	JR	C,J5AA9
 	LD	HL,(HIMEM)
-	LD	DE,I$DE00
+	LD	DE,0DE00H
 	CALL	C6DB6
 	JR	C,J5AA9
 	LD	A,10H	; 16 
@@ -4671,9 +4710,9 @@ I5A8A:	LD	HL,(BOTTOM)
 
 J5AA9:	LD	HL,H.STKE
 	LD	(HL),0C9H
-	LD	IX,I6E80
-J5AB2:	CALL	CALBAS
-	JP	J.0000
+	LD	IX,M6E80
+	CALL	CALBAS			; internal error
+	JP	0
 
 J5AB8:	LD	A,8FH
 	LD	(D.D0A4),A		; firmware slot 3-3
@@ -5317,3 +5356,4 @@ J5FDB:	JP	NZ,J602F
 
 J5FFD:	JP	NZ,J602F
 	END
+
