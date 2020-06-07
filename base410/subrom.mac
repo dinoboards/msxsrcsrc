@@ -1,6 +1,6 @@
 ; SUBROM.MAC
 
-; MSX SUBROM, MSX Turbo-R version (v4.1)
+; MSX SUBROM, MSX Turbo-R version (version 4.1)
 
 ; Source re-created by Z80DIS 2.2
 ; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
@@ -10820,7 +10820,7 @@ J3715:  CALL    C3A69                   ; read directory entry
         DJNZ    J3715                   ; next entry
 J3726:  POP     HL
         XOR     A
-        LD      DE,03FFH
+        LD      DE,1023
         SBC     HL,DE
         JR      C,J3795                 ; ramdisk size <1023, no ramdisk
         INC     H                       ; round up
@@ -10837,7 +10837,7 @@ J3735:  INC     C
 J373E:  INC     C
         CALL    C3A7D                   ; update FAT entry content
         DJNZ    J373E                   ; next entry
-        LD      HL,LINWRK
+        LD      HL,LINWRK+0
         LD      DE,LINWRK+1
         LD      C,16-1
         LD      (HL),B
@@ -10855,7 +10855,8 @@ J3755:  CALL    C3A6A                   ; write directory entry
         PUSH    HL
         CALL    C27E2                   ; print number
         CALL    C3820                   ; string to interpreter output (string direct after call)
-        DEFM    ' bytes allocated',13,10,0
+        DEFM    ' bytes allocated',13,10
+	DEFB	0
         POP     HL
         INC     H
         INC     H
@@ -10871,7 +10872,8 @@ J3755:  CALL    C3A6A                   ; write directory entry
 J3795:  XOR     A
         LD      (SLTWRK+0),A            ; memory disk not initialized, enabled, search RAM
         CALL    C3820                   ; string to interpreter output (string direct after call)
-        DEFM    'No RAM disk',13,10,0
+        DEFM    'No RAM disk',13,10
+	DEFB	0
         POP     HL
         RET
 
@@ -10924,7 +10926,8 @@ J37F2:  LD      DE,16
         CALL    C3868                   ; fpos (mem device)
         CALL    C27E2                   ; print number
         CALL    C3820                   ; string to interpreter output (string direct after call)
-        DEFM    ' bytes free',13,10,0
+        DEFM    ' bytes free',13,10
+	DEFB	0
         POP     HL
         RET
 
@@ -11080,12 +11083,14 @@ J38C3:  LD      A,(DE)
         OR      A
         JR      NZ,J38C3
         RET
+
 J38CD:  SUB     "0"
         RET     NZ
         OR      (HL)
         RET
 
-I38D2:  DEFB    "MEM0",0
+I38D2:  DEFB    "MEM0"
+	DEFB	0
 
 ;       Subroutine      CALL MNAME statement
 ;       Inputs          ________________________
@@ -11128,6 +11133,9 @@ C3904:  CALL    C3B8E                   ; check if memory disk initialized
         JR      Z,J3929                 ; yep, handle
         CP      8                       ; sequential append ?
         JR      Z,J3962                 ; yep, handle
+
+;         open for sequential input
+
         POP     AF
         JR      NZ,J3963                ; sequential input and file not found, file not found error
         OR      A                       ; file open ?
@@ -11141,6 +11149,8 @@ C3904:  CALL    C3B8E                   ; check if memory disk initialized
 C3922:  DEC     A
         LD      (LINWRK+13),A           ; set file open flag
 J3926:  JP      C3A6A                   ; write directory entry
+
+;         open for sequential output
 
 J3929:  POP     AF
         JR      NZ,J3932                ; file not found, skip delete
@@ -11169,6 +11179,8 @@ J3957:  LD      (HL),A
         DEC     A
         LD      (LINWRK+13),A           ; set file open flag
         JP      J38F5                   ; copy filename to directory entry, write directory entry and quit
+
+;         open for sequential append
 
 J3962:  POP     AF
 J3963:  JP      NZ,J2762                ; file not found, file not found error
@@ -11373,7 +11385,7 @@ C3A7D:  SCF
         EX      DE,HL
         LD      (HL),A
 J3A90:  LD      BC,1
-J3A93:  CALL    C3AFB                   ; copy to/from ramdisk
+J3A93:  CALL    C3AFB                   ; transfer from/to memory disk
         POP     BC
         POP     DE
         POP     HL
@@ -11394,8 +11406,8 @@ J3AA5:  LD      A,(DE)
         JR      C,J3AB1
         CP      "z"+1
         JR      NC,J3AB1
-        AND     0DFH
-        LD      (DE),A                  ; upcase
+        AND     0DFH                  	; upcase
+        LD      (DE),A
 J3AB1:  INC     DE
         DJNZ    J3AA5
         LD      IX,0100H
@@ -11413,7 +11425,7 @@ J3AC4:  LD      DE,16
         JR      J3ADC
 
 J3ACF:  LD      DE,FILNAM
-        LD      B,11
+        LD      B,8+3
 J3AD4:  LD      A,(DE)
         CP      (HL)
         JR      NZ,J3AC4                ; filename not equal, next entry
@@ -11441,9 +11453,9 @@ C3AE3:  SCF
         POP     HL
         LD      BC,9
         ADD     HL,BC                   ; i/o channel buffer
-        LD      E,0
+        LD      E,LOW 0300H
         LD      A,(IY+7)                ; current cluster
-        ADD     A,2
+        ADD     A,(HIGH 0300H)-1
         LD      D,A
         POP     AF
         JR      C,J3AF8
@@ -11563,6 +11575,7 @@ C3B82:  CALL    C3A9E                   ; find directory entry
         JP      NZ,J2762                ; not found, file not found error
         AND     A                       ; file open ?
         RET     Z                       ; nope, quit
+
 J3B8A:  LD      E,64
         JR      J3B96                   ; file still open error
 
@@ -11576,7 +11589,7 @@ C3B8E:  LD      A,(SLTWRK+0)
         LD      E,70                    ; ramdisk offline error
 
 J3B96:  XOR     A
-        LD      (NLONLY),A              ; not loading basic program, close i/o
+        LD      (NLONLY),A              ; not loading basic program, close i/o channels when requested
         PUSH    DE
         CALL    C27D6                   ; close i/o channel 0
         POP     DE

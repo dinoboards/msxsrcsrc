@@ -2,6 +2,8 @@
 ; BEGIN OF BRASILIAN KEYBOARD HANDLER
 ; ************************************* 
 
+	ORG	00DA5H
+
 I0DA5:	DEFB	30H,31H,32H,33H,34H,35H,36H,37H
         DEFB	38H,39H,2DH,3DH,7BH,0FFH,5BH,0FFH
         DEFB	2AH,87H,2CH,2EH,3BH,2FH,61H,62H
@@ -38,6 +40,11 @@ I0DA5:	DEFB	30H,31H,32H,33H,34H,35H,36H,37H
         DEFB	00H,00H,00H,99H,9AH,0B0H,00H,92H
         DEFB	0B2H,0B4H,00H,0A5H,00H,0E3H,00H,00H
         DEFB	00H,00H,90H,00H,00H,00H,00H,00H
+;	Subroutine	rest of the functionkey handler
+;	Inputs		C = code (035H-03EH)
+;	Outputs		________________________
+;	Remark		code identical among keyboard layout versions from this point
+
 
 J0EC5:	LD	E,C
         LD	D,00H
@@ -70,26 +77,32 @@ J0EE3:	LD	HL,(CURLIN)
         ADD	HL,DE
         ADD	HL,DE
         ADD	HL,DE
-        LD	A,(HL)
-        AND	01H
-        RET	Z
-        LD	A,(HL)
-        OR	04H
-        CP	(HL)
-        RET	Z
-        LD	(HL),A
-        XOR	05H
-        RET	NZ
-        LD	A,(ONGSBF)
-        INC	A
-        LD	(ONGSBF),A
-        RET
+					; fall trough to raise trap
+
+	IF	($ NE 00EF1H)
+	.PRINTX	"ERROR: Keyboard code not aligned to raise trap (00EF1H)"
+	ENDIF
+
+
+	ORG	00F06H
+
+;	Subroutine	handler HOME key
+;	Inputs		-
+;	Outputs		________________________
+;	Remark		code identical among keyboard layout versions
+
 
 C0F06:	LD	A,(NEWKEY+6)
         RRCA
         LD	A,0CH
         SBC	A,00H
         JR	C0F55
+
+;	Subroutine	handler easily converted keys
+;	Inputs		A = scancode (030H-057H)
+;	Outputs		________________________
+;	Remark		code identical among keyboard layout versions
+
 
 C0F10:	CALL	H.KEYA
         LD	E,A
@@ -100,6 +113,10 @@ C0F10:	CALL	H.KEYA
         AND	A
         RET	Z
         JR	C0F55
+
+;	Subroutine	handler DEAD key
+;	Inputs		-
+;	Outputs		________________________
 
 J0F1F:	LD	HL,NEWKEY+6
         LD	A,C
@@ -119,18 +136,30 @@ J0F30:	LD	C,A
 
         DEFS	00F36H-$,0
 
+;	Subroutine	handler CAPS key
+;	Inputs		-
+;	Outputs		________________________
+
 C0F36:	LD	HL,CAPST
         LD	A,(HL)
         CPL
         LD	(HL),A
         CPL
+					; fall trough to CHGCAP
 
-K.BCAP:	AND	A
-        LD	A,0CH
-        JR	Z,J0F43
-        INC	A
-J0F43:	OUT	(0ABH),A
-        RET
+
+	IF	($ NE 00F3DH)
+	.PRINTX	"ERROR: Keyboard code not aligned to CHGCAP (00F3DH)"
+	ENDIF
+
+
+	ORG	00F46H
+
+;	Subroutine	handler STOP key
+;	Inputs		-
+;	Outputs		________________________
+;	Remark		code identical among keyboard layout versions
+
 
 C0F46:	LD	A,(NEWKEY+6)
         RRCA
@@ -141,9 +170,11 @@ C0F46:	LD	A,(NEWKEY+6)
 J0F50:	LD	(INTFLG),A
         JR	C,J0F64
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	Subroutine	put keycode in keyboardbuffer
+;	Inputs		A = keycode
+;	Outputs		________________________
+;	Remark		entrypoint compatible among keyboard layout versions
+
 
 C0F55:	LD	HL,(PUTPNT)
         LD	(HL),A
@@ -152,25 +183,20 @@ C0F55:	LD	HL,(PUTPNT)
         CP	L
         RET	Z
         LD	(PUTPNT),HL
-J0F64:	LD	A,(CLIKSW)
-        AND	A
-        RET	Z
-        LD	A,(CLIKFL)
-        AND	A
-        RET	NZ
-        LD	A,0FH
-        LD	(CLIKFL),A
-        OUT	(0ABH),A
-        LD	A,10
-J0F77:	DEC	A
-        JR	NZ,J0F77
+					; fall trough to make keyclick
 
-K.BSND:	AND	A
-        LD	A,0EH
-        JR	Z,J0F80
-        INC	A
-J0F80:	OUT	(0ABH),A
-        RET
+
+	IF	($ NE 00F64H)
+	.PRINTX	"ERROR: Keyboard code not aligned to make keyclick (00F64H)"
+	ENDIF
+
+
+	ORG	00F83H
+
+;	Subroutine	handler scancodes 000H-02FH
+;	Inputs		C = scancode (000H-02FH)
+;	Outputs		________________________
+
 
 C0F83:	LD	A,(NEWKEY+6)
         LD	E,A
@@ -217,6 +243,10 @@ J0FA0:	LD	E,A
         RET	NC
 J0FC1:	JR	C0F55
 
+;	Subroutine	handler functionkeys
+;	Inputs		C = scancode (035H-039H)
+;	Outputs		________________________
+
 C0FC3:	LD	A,(NEWKEY+6)
         RRCA
         JR	C,J0FCD
@@ -224,6 +254,10 @@ C0FC3:	LD	A,(NEWKEY+6)
         ADD	A,05H
         LD	C,A
 J0FCD:	JP	J0EC5
+
+;	Subroutine	handler keycodes scancodes 000H-02FH
+;	Inputs		A = keycode
+;	Outputs		________________________
 
 J0FD0:	CP	20H
         JR	NC,J0FDF
@@ -272,6 +306,10 @@ J1011:	LD	C,20
         LD	A,(HL)
         JR	J0FC1
 
+;	Subroutine	K.HAND (not offical name)
+;	Inputs		C = scancode
+;	Outputs		________________________
+
 K.HAND:	LD	A,C
         LD	HL,I1B96
         CALL	H.KEYC
@@ -291,9 +329,9 @@ I1033:	DEFB	00H,00H,00H,00H,00H,00H,00H,00H
         DEFB	2BH,2DH,2AH,2FH,00H,00H,00H,00H
         DEFB	00H,00H,00H,00H,00H,00H,00H,00H
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	Subroutine	reset DEAD status, next postition in keyboardbuffer with roundtrip
+;	Inputs		-
+;	Outputs		________________________
 
 C105B:	XOR	A
         LD	(KANAST),A
@@ -311,9 +349,7 @@ I107F:	DEFB	085H,065H,069H,06FH,097H,0A0H,082H,0A1H,0A2H,0A3H,083H,088H,093H,096
 
         DEFS	010C2H-$,0
 
-        ORG	01B94H
-
-        JR	J1BAC
+        ORG	01B96H
 
 I1B96:	DEFB	030H,LOW C0F83
         DEFB	033H,LOW C0F10

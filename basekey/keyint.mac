@@ -2,6 +2,8 @@
 ; BEGIN OF INTERNATIONAL KEYBOARD HANDLER
 ; *************************************
 
+	ORG	00DA5H
+
 D0DA5:	
 
 ;	Table	keycodes for scancode 000H-02FH Normal layout
@@ -96,26 +98,14 @@ J0EE3:	LD	HL,(CURLIN)
         ADD	HL,DE
         ADD	HL,DE
         ADD	HL,DE
+					; fall trough to raise trap
 
-;	Subroutine	raise trap
-;	Inputs		________________________
-;	Outputs		________________________
-;	Remark		code identical among keyboard layout versions
+	IF	($ NE 00EF1H)
+	.PRINTX	"ERROR: Keyboard code not aligned to raise trap (00EF1H)"
+	ENDIF
 
-C0EF1:	LD	A,(HL)
-        AND	01H			; trap enabled ?
-        RET	Z			; nope, quit
-        LD	A,(HL)
-        OR	04H
-        CP	(HL)			; trap occured flag set ?
-        RET	Z			; yep, quit
-        LD	(HL),A			; flag trap occured
-        XOR	05H			; trap paused ?
-        RET	NZ			; yep, quit
-        LD	A,(ONGSBF)
-        INC	A
-        LD	(ONGSBF),A		; increase trap counter
-        RET
+
+	ORG	00F06H
 
 ;	Subroutine	handler HOME key
 ;	Inputs		-
@@ -167,25 +157,21 @@ J0F2B:	CPL
 ;	Subroutine	handler CAPS key
 ;	Inputs		-
 ;	Outputs		________________________
-;	Remark		code identical among keyboard layout versions
 
 C0F36:	LD	HL,CAPST
         LD	A,(HL)
         CPL	
         LD	(HL),A			; toggle CAPS status
         CPL				; adjust for CHGCAP and change CAPS led
+					; fall trough to CHGCAP
 
-;	Subroutine	CHGCAP
-;	Inputs		________________________
-;	Outputs		________________________
-;	Remark		code identical among keyboard layout versions
 
-K.BCAP:	AND	A
-        LD	A,0CH
-        JR	Z,J0F43
-        INC	A
-J0F43:	OUT	(0ABH),A
-        RET	
+	IF	($ NE 00F3DH)
+	.PRINTX	"ERROR: Keyboard code not aligned to CHGCAP (00F3DH)"
+	ENDIF
+
+
+	ORG	00F46H
 
 ;	Subroutine	handler STOP key
 ;	Inputs		-
@@ -213,37 +199,15 @@ C0F55:	LD	HL,(PUTPNT)
         CP	L			; keyboard buffer full ?
         RET	Z			; yep, quit
         LD	(PUTPNT),HL		; update put pointer
+					; fall trough to make keyclick
 
-;	Subroutine	make keyclick
-;	Inputs		-
-;	Outputs		________________________
-;	Remark		code identical among keyboard layout versions
 
-J0F64:	LD	A,(CLIKSW)
-        AND	A			; keyclicks enabled ?
-        RET	Z			; nope, quit
-        LD	A,(CLIKFL)
-        AND	A			; keyclick already done (only one click for multiple keys) ?
-        RET	NZ			; yep, quit
-        LD	A,0FH
-        LD	(CLIKFL),A		; no keyclick until the next scan
-        OUT	(0ABH),A		; set click bit
-        LD	A,10
-J0F77:	DEC	A
-        JR	NZ,J0F77		; wait
-                                        ; reset click bit
+	IF	($ NE 00F64H)
+	.PRINTX	"ERROR: Keyboard code not aligned to make keyclick (00F64H)"
+	ENDIF
 
-;	Subroutine	change click bit
-;	Inputs		A = 0, A <> 0
-;	Outputs		________________________
-;	Remark		code identical among keyboard layout versions
 
-K.BSND:	AND	A
-        LD	A,0EH
-        JR	Z,J0F80
-        INC	A
-J0F80:	OUT	(0ABH),A
-        RET	
+	ORG	00F83H
 
 ;	Subroutine	handler scancodes 000H-02FH
 ;	Inputs		C = scancode (000H-02FH)
@@ -429,9 +393,7 @@ D109E:	DEFB	"A" ,"E" ,"I" ,"O" ,"U" ,08EH,"E" ,"I"
         DEFS	010C2H-$,0
 
 
-        ORG	01B94H
-
-        JR	J1BAC
+        ORG	01B96H
 
 ;	Table		scancode table
 ;	Remark		last scancode+1,low byte execution address

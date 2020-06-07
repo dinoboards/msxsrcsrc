@@ -4961,7 +4961,7 @@ A5C16:  ld      hl,T72AE
         ld      de,37
         call    A4916                   ; * 37
         call    A5EB8                   ; allocate memory (adjust HIMEM, halt when error)
-        ld      (YF353),hl
+        ld      (YF353),hl		; Disk BASIC i/o channel FCBs
         ld      bc,25                   ; size of the BLOAD/BSAVE code
         call    A5EB8                   ; allocate memory (adjust HIMEM, halt when error)
         ld      (XF377+1),hl            ; setup BLOAD jumpentry
@@ -5387,7 +5387,7 @@ A5F3B:  ld      (STKTOP),hl
         inc     hl
         inc     hl
         inc     hl
-        ld      a,2                     ; 2 i/o channels
+        ld      a,2                     ; 2 i/o channels (1 user, 1 system)
 A5F4B:  ex      de,hl
         ld      (hl),e
         inc     hl
@@ -6605,7 +6605,7 @@ A6645:  ld      hl,BUF+84
         ld      de,BUF+10
         xor     a
         ld      (BUF+10+12),a           ; clear EX byte of FCB
-D6652:  call    A4FB8                   ; search for first
+        call    A4FB8                   ; search for first
         inc     a
         ret
 
@@ -6685,7 +6685,7 @@ A66A4:  ld      ix,RETRTN
         call    A6663                   ; take control from caller (move parameters on stack)
         pop     hl
         ld      a,(hl)
-        and     a
+        and     a			; Zx set if i/o channel is not open
         ret
 
 ;       Subroutine      OPEN statement expander (H.NOFO)
@@ -6708,11 +6708,11 @@ A66B3:  ei
 A66CD:  add     hl,sp
         ld      a,(hl)
         cp      4                       ; random mode ?
-        jp      nz,A7318                ; nope,
+        jp      nz,A7318                ; nope, syntax error
         inc     hl
         ld      a,(hl)
         cp      9                       ; disk device ?
-        jp      nc,A7318                ; nope,
+        jp      nc,A7318                ; nope, syntax error
         pop     hl
         call    A72D0
         defb    0FFH
@@ -6732,7 +6732,7 @@ A66CD:  add     hl,sp
         ret
 
 ;       Subroutine      open i/o channel (H.NULO)
-;       Inputs          
+;       Inputs          HL = i/o channel pointer
 ;       Outputs         ________________________
 
 A66FC:  ei
@@ -6742,11 +6742,11 @@ A66FC:  ei
         call    A6663                   ; take control from caller (move parameters on stack)
         call    A6FA9                   ; validate filename
         call    A65EA                   ; is file already open in one of the I/O channels ?
-        jp      z,A7309                 ; yep, error
-        ld      (PTRFIL),hl
+        jp      z,A7309                 ; yep, file already open error
+        ld      (PTRFIL),hl             ; interpreter input/output device = i/o channel pointer
         ld      a,e
-        cp      4
-        jr      z,A6721                 ; random mode, recordsize already set
+        cp      4			; file mode = random i/o ?
+        jr      z,A6721                 ; yep, recordsize already set
         ld      bc,1
         ld      (YF33D),bc              ; all others use recordsize 1
 A6721:  pop     af
@@ -6754,12 +6754,12 @@ A6721:  pop     af
         push    hl
         push    de
         ld      hl,YF345
-        cp      (hl)                    ; do I have a FCB for this channel ?
-        jp      nc,A730C                ; nope,
+        cp      (hl)                    ; do I have a FCB for this i/o channel ?
+        jp      nc,A730C                ; nope, bad file number error
         ld      bc,37
         ld      e,a
         ld      d,b
-        ld      hl,(YF353)              ; base of the FCB's
+        ld      hl,(YF353)              ; base of the Disk BASIC i/o channel FCBs
         call    A491C                   ; base + 37 * channelnumber
         xor     a
         ld      hl,12
@@ -6792,7 +6792,7 @@ A6721:  pop     af
         ld      a,e
         jr      nz,A6778                ; file exists,
         and     086H                    ; file not exists and not binsav, random or output mode ?
-        jp      z,A7312                 ; yep, error
+        jp      z,A7312                 ; yep, file not found error
 A6761:  push    de
         push    bc
         ld      e,c
@@ -6803,7 +6803,7 @@ A6761:  push    de
         pop     hl
         call    A67FE                   ; setup FCB fields
         pop     de
-        ld      hl,(PTRFIL)
+        ld      hl,(PTRFIL)		; i/o channel pointer
         ld      (hl),e                  ; filemode, I/O channel open
 A6775:  pop     af
         pop     hl
@@ -6823,7 +6823,7 @@ A6778:  cp      8
         pop     hl
         call    A67FE                   ; setup FCB fields
         pop     de
-        ld      hl,(PTRFIL)
+        ld      hl,(PTRFIL)		; i/o channel pointer
         ld      (hl),e                  ; filemode, I/O channel open
         ld      a,e
         cp      4                       ; random mode ?
@@ -6839,7 +6839,7 @@ A6778:  cp      8
         add     hl,bc
         push    hl
         ld      (hl),0FFH               ; position 255, so next get char fills buffer
-        ld      hl,(PTRFIL)
+        ld      hl,(PTRFIL)		; i/o channel pointer
         call    A682A                   ; get char from I/O channel
         pop     hl
         dec     hl
@@ -6862,17 +6862,17 @@ A67C1:  push    bc
         pop     hl
         push    hl
         call    A67FE                   ; setup FCB fields
-        ld      hl,(PTRFIL)
-        ld      (hl),1                  ; first in input mode
+        ld      hl,(PTRFIL)		; i/o channel pointer
+        ld      (hl),1                  ; first in sequential input mode
         ld      bc,6
         add     hl,bc
         ld      (hl),0FFH               ; position 255, so next get char fills buffer
-        ld      hl,(PTRFIL)
+        ld      hl,(PTRFIL)		; i/o channel pointer
 A67DA:  push    hl
         call    A682A                   ; get char from I/O channel
         pop     hl
         jr      nc,A67DA                ; not at the end of file, continue
-        ld      (hl),2                  ; continue in output mode
+        ld      (hl),2                  ; continue in sequential output mode
         pop     hl
         ld      bc,00021H
         add     hl,bc                   ; to the Rx field
@@ -6892,7 +6892,7 @@ A67EC:  ld      a,(hl)
 A67F9:  call    A6813
         jr      A67BF                   ; quit
 
-A67FE:  ld      bc,0000CH
+A67FE:  ld      bc,12
         add     hl,bc
         ld      (hl),b                  ; clear EX byte
         inc     hl
@@ -6902,9 +6902,9 @@ A67FE:  ld      bc,0000CH
         ld      (hl),c
         inc     hl
         ld      (hl),b                  ; user recordsize = recordsize
-        ld      bc,00011H
+        ld      bc,17
         add     hl,bc
-        ld      c,005H
+        ld      c,5
 A6813:  ld      (hl),b
         inc     hl
         dec     c
@@ -6924,7 +6924,7 @@ A6819:  ld      ix,RETRTN
 A682A:  push    hl
         ld      a,(hl)
         cp      1                       ; input mode ?
-        jp      nz,A7199                ; nope, error
+        jp      nz,A7199                ; nope, bad file mode error
         ld      e,l
         ld      d,h
         inc     hl
@@ -7011,7 +7011,7 @@ A688E:  ld      ix,RETRTN
         call    A6663                   ; take control from caller (move parameters on stack)
         ld      a,(hl)
         cp      2                       ; output mode ?
-        jp      nz,A7199                ; nope, error
+        jp      nz,A7199                ; nope, bad file mode error
         pop     af
         push    af
         call    A68A7                   ; write char to I/O channel
@@ -7081,10 +7081,10 @@ A68F4:  push    hl
         push    hl
         ld      de,7
         add     hl,de
-        ld      (hl),d
+        ld      (hl),d                  ; clear i/o channel flags
         ld      l,d
         ld      h,d
-        ld      (PTRFIL),hl
+        ld      (PTRFIL),hl             ; interpreter input/output device = keyboard/screen
         pop     hl
         inc     (hl)
         dec     (hl)
@@ -7107,8 +7107,8 @@ A690E:  call    A7380                   ; take control from caller
         ex      de,hl
         ld      hl,(VARTAB)
         and     a
-        sbc     hl,de
-        call    A718B
+        sbc     hl,de			; size of BASIC program
+        call    A718B			; random block write to FCB 0
         ld      (NLONLY),a              ; not loading basic program, close i/o channels when requested
         pop     hl
         ld      ix,M6B24
@@ -7121,52 +7121,52 @@ A690E:  call    A7380                   ; take control from caller
 A6939:  ld      ix,M739A                ; quit loading & start (headloop/executing)
         ld      iy,00200H
         call    A6663                   ; take control from caller (move parameters on stack)
-        pop     af
-        jp      z,A7199
+        pop     af			; MERGE statement ?
+        jp      z,A7199			; yep, bad file mode error
         ld      ix,M6C1C
         call    A731E                   ; close all i/o channels
-        ld      hl,(YF353)
+        ld      hl,(YF353)		; FCB for i/o channel 0
         push    hl
-        call    A67FE
+        call    A67FE                   ; setup FCB fields
         pop     hl
         push    hl
-        ld      bc,00013H
+        ld      bc,16+3
         add     hl,bc
         ld      a,(hl)
-        and     a
-        jp      nz,A72FD
+        and     a			; file size >= 167772156 bytes ?
+        jp      nz,A72FD		; yep, out of memory error
         dec     hl
-        or      (hl)
-        jp      nz,A72FD
+        or      (hl)			; file size >= 65536 bytes ?
+        jp      nz,A72FD		; yep, out of memory error
         dec     hl
         ld      d,(hl)
         dec     hl
-        ld      e,(hl)
+        ld      e,(hl)			; file size
         ld      hl,(TXTTAB)
-        add     hl,de
-        jp      c,A72FD
+        add     hl,de			; does in fit in BASIC program area ?
+        jp      c,A72FD			; nope, out of memory error
         ld      bc,00093H
-        add     hl,bc
-        jp      c,A72FD
-        sbc     hl,sp
-        jp      nc,A72FD
+        add     hl,bc			; does it leave room for stack space ?
+        jp      c,A72FD			; nope, out of memory error
+        sbc     hl,sp			; does it fit in memory ?
+        jp      nc,A72FD		; nope, out of memory error
         ex      de,hl
         ex      (sp),hl
-        ex      de,hl
+        ex      de,hl			; save file size, get FCB for i/o channel 0
         call    A69D0                   ; read byte from FCB
         ld      hl,(TXTTAB)
         ld      (YF23D),hl              ; transferaddresss
         pop     hl
-        dec     hl
+        dec     hl			; file size -1
         call    A47B2                   ; random block read
         ld      de,(TXTTAB)
         add     hl,de
-        ld      (VARTAB),hl
+        ld      (VARTAB),hl		; setup start of BASIC variable area
         ld      ix,M4253
         call    A731E                   ; recalculate linepointers
         ld      a,(FILNAM+0)
-        and     a
-        ret     nz
+        and     a			; RUN after LOAD ?
+        ret     nz			; nope, quit
         ld      (NLONLY),a              ; not loading basic program, close i/o channels when requested
         ld      hl,T69B9
         ld      de,BUF+10
@@ -7186,7 +7186,7 @@ A69BE:  push    hl
         ld      a,h
         jr      A69CB                   ; write byte to FCB
 
-A69C7:  ld      de,(YF353)
+A69C7:  ld      de,(YF353)		; FCB for i/o channel 0
 A69CB:  ld      bc,A47BE                ; random block write
         jr      A69D3
 
@@ -7269,7 +7269,7 @@ A6A23:  pop     de
         inc     hl
         pop     af
         jr      nc,A6A6D
-        call    A718B
+        call    A718B			; random block write to FCB 0
 A6A5D:  ld      a,0FFH
         ld      (FLBMEM),a              ; raw mode
         xor     a
@@ -7295,7 +7295,7 @@ A6A70:  push    hl
         jr      nc,A6A9E
         pop     hl
         push    hl
-        call    A718B
+        call    A718B			; random block write to FCB 0
         ld      hl,(SAVENT)
         pop     de
         and     a
@@ -7306,7 +7306,7 @@ A6A70:  push    hl
 
 A6A9E:  pop     hl
         ld      hl,(SAVENT)
-        call    A718B
+        call    A718B			; random block write to FCB 0
         jr      A6A5D
 
 ;       Subroutine      BLOAD for diskdevices
@@ -7343,10 +7343,10 @@ A6AD0:  pop     de
         ld      e,1                     ; input mode
         ld      ix,M6AFA
         call    A731E                   ; open i/o channel
-        ld      de,(YF353)
+        ld      de,(YF353)		; FCB for i/o channel 0
         call    A69D0                   ; read byte from FCB
         cp      0FEH
-        jp      nz,A7199
+        jp      nz,A7199		; nope, bad file mode error
         pop     bc
         call    A6B5C                   ; read word from FCB and add offset
         push    hl
@@ -7374,7 +7374,7 @@ A6B1D:  push    hl
         ld      de,(SAVENT)
         rst     020H
         push    af
-        ld      de,(YF353)
+        ld      de,(YF353)		; FCB for i/o channel 0
         call    A47B2                   ; random block read
         pop     af
         pop     bc
@@ -7489,13 +7489,13 @@ A6BDA:  ld      ix,RETRTN
         call    A6663                   ; take control from caller (move parameters on stack)
         ld      a,(hl)
         cp      4                       ; random mode ?
-        jp      nz,A7199                ; nope,
+        jp      nz,A7199                ; nope, bad file mode error
         inc     hl
         ld      e,(hl)
         inc     hl
         ld      d,(hl)                  ; pointer to FCB
-        ld      bc,7
-        add     hl,bc
+        ld      bc,9-2
+        add     hl,bc			; i/o channel buffer
         ex      (sp),hl
         call    A72DA                   ; at end of statement ?
         jr      z,A6C29                 ; yep,
@@ -7560,7 +7560,7 @@ A6C49:  call    A7380                   ; take control from caller
         call    z,A72DB                 ; get basic character
         ld      ix,M521C
         call    A731E                   ; evaluate byte operand
-        jp      z,A7318
+        jp      z,A7318			; zero, syntax error
         push    hl
         ld      ix,M6A6D
         call    A731E                   ; get i/o channel pointer
@@ -7569,8 +7569,8 @@ A6C49:  call    A7380                   ; take control from caller
         jp      z,A7300
         jp      c,A7315
         ld      a,(hl)
-        cp      004H
-        jp      nz,A7199
+        cp      4			; random i/o mode ?
+        jp      nz,A7199		; nope, bad file mode error
         inc     hl
         ld      a,(hl)
         inc     hl
@@ -7932,8 +7932,8 @@ A6E99:  call    A6F63
         ld      a,(PRTFLG)
         and     a                       ; output to printer ?
         push    af
-        call    A6645
-        jp      z,A7312
+        call    A6645                   ; search file
+        jp      z,A7312			; not found, file not found error
         ld      ix,M7323
         call    A731E                   ; newline to OUTDO if not at start of line
 A6EAE:  ld      hl,BUF+85
@@ -7993,8 +7993,8 @@ A6F00:  call    A7380                   ; take control from caller
         push    hl
         ld      de,BUF+10
         call    A436C                   ; delete file
-        and     a
-        jp      nz,A7312
+        and     a			; error ?
+        jp      nz,A7312		; yep, file not found error
         pop     hl
         ret
 
@@ -8008,8 +8008,8 @@ A6F20:  call    A7380                   ; take control from caller
         jp      z,A71A2
         call    A6F63
         push    hl
-        call    A6645
-        jp      z,A7312
+        call    A6645                   ; search file
+        jp      z,A7312			; not found, file not found error
         pop     hl
         call    A72D0
         defb    "A"
@@ -8229,8 +8229,8 @@ A707B:  call    A7380                   ; take control from caller
         call    A72DA                   ; at end of statement ?
         ret     nz                      ; nope, quit
 A70C3:  push    hl
-        call    A6645
-        jp      z,A7312
+        call    A6645                   ; search file
+        jp      z,A7312			; not found, file not found error
 A70CA:  call    CKCNTC
         ld      bc,BUF+47
         ld      de,BUF+121
@@ -8325,7 +8325,7 @@ A717F:  ld      de,(NULBUF)
 A7186:  ld      (YF23D),de              ; transferaddress
         ret
 
-A718B:  ld      de,(YF353)
+A718B:  ld      de,(YF353)		; FCB for i/o channel 0
 A718F:  call    A47BE                   ; random block write
         and     a
         ret     z
@@ -8439,7 +8439,7 @@ T72C2:  defw    A71AE                   ; Write Protect error, disk write protec
 A72D0:  call    A72DA
         ex      (sp),hl
         cp      (hl)
-        jr      nz,A7318
+        jr      nz,A7318		; syntax error
         inc     hl
         ex      (sp),hl
         inc     hl

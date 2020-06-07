@@ -22,6 +22,13 @@ NDEVFIX EQU     1
 
 SLOTFIX EQU     1
 
+;       KEYBFIX
+;               0 = Use keyboard speed fix
+;               1 = Use keyboard speed fix
+
+KEYBFIX EQU     1
+
+
 ;       CNTRY   Country
 ;               0 = Japan
 ;               1 = USA

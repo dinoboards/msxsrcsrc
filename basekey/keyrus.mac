@@ -2,6 +2,8 @@
 ; BEGIN OF RUSSIAN KEYBOARD HANDLER
 ; *************************************
 ;
+	ORG	00DA5H
+
 I0DA5:	DEFB	29H,2BH,21H,22H,23H,0BFH,25H,26H
         DEFB	27H,28H,24H,3DH,2DH,68H,2AH,76H
         DEFB	5CH,3EH,62H,40H,3CH,3FH,66H,69H
@@ -76,26 +78,14 @@ J0EE3:	LD	HL,(CURLIN)
         ADD	HL,DE
         ADD	HL,DE
         ADD	HL,DE
+					; fall trough to raise trap
 
-;	Subroutine	raise trap
-;	Inputs		________________________
-;	Outputs		________________________
-;	Remark		code identical among keyboard layout versions
+	IF	($ NE 00EF1H)
+	.PRINTX	"ERROR: Keyboard code not aligned to raise trap (00EF1H)"
+	ENDIF
 
-C0EF1:	LD	A,(HL)
-        AND	01H
-        RET	Z
-        LD	A,(HL)
-        OR	04H
-        CP	(HL)
-        RET	Z
-        LD	(HL),A
-        XOR	05H
-        RET	NZ
-        LD	A,(ONGSBF)
-        INC	A
-        LD	(ONGSBF),A
-        RET	
+
+	ORG	00F06H
 
 J0F06:	LD	A,(NEWKEY+6)
         RRCA	
@@ -146,13 +136,15 @@ J0F36:	LD	HL,CAPST
         CPL	
         LD	(HL),A
         CPL	
+					; fall trough to CHGCAP
 
-K.BCAP:	AND	A
-        LD	A,0CH
-        JR	Z,J0F43
-        INC	A
-J0F43:	OUT	(0ABH),A
-        RET	
+
+	IF	($ NE 00F3DH)
+	.PRINTX	"ERROR: Keyboard code not aligned to CHGCAP (00F3DH)"
+	ENDIF
+
+
+	ORG	00F46H
 
 J0F46:	LD	A,(NEWKEY+6)
         RRCA	
@@ -174,25 +166,15 @@ C0F55:	LD	HL,(PUTPNT)
         CP	L
         RET	Z
         LD	(PUTPNT),HL
-J0F64:	LD	A,(CLIKSW)
-        AND	A
-        RET	Z
-        LD	A,(CLIKFL)
-        AND	A
-        RET	NZ
-        LD	A,0FH
-        LD	(CLIKFL),A
-        OUT	(0ABH),A
-        LD	A,0AH
-J0F77:	DEC	A
-        JR	NZ,J0F77
+					; fall trough to make keyclick
 
-K.BSND:	AND	A
-        LD	A,0EH
-        JR	Z,J0F80
-        INC	A
-J0F80:	OUT	(0ABH),A
-        RET	
+
+	IF	($ NE 00F64H)
+	.PRINTX	"ERROR: Keyboard code not aligned to make keyclick (00F64H)"
+	ENDIF
+
+
+	ORG	00F83H
 
 ;	  Subroutine ordinary key handler
 ;	     Inputs  ________________________
@@ -333,9 +315,7 @@ J1073:	LD	HL,CAPST
 
         DEFS	010C2H-$,0		; unused space
 
-        ORG	01B94H
-
-        JR	J1BAC
+        ORG	01B96H
 
 I1B96:	DEFB	030H,J0F83 AND 255
         DEFB	033H,J0F10 AND 255

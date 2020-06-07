@@ -365,8 +365,8 @@ GTASPC: JP      J1901
 PNTINI: JP      J1909
 SCANR:  JP      J191E
 SCANL:  JP      J1994
-CHGCAP: JP      K.BCAP
-CHGSND: JP      K.BSND
+CHGCAP: JP      J0F3D
+CHGSND: JP      J0F7A
 RSLREG: JP      J140E
 WSLREG: JP      J1411
 RDVDP:  JP      J140B
@@ -1129,7 +1129,7 @@ J0521:  PUSH    HL
         JR      NC,J0534                ; nope, stop basic program
         LD      HL,TRPTBL+10*3
         DI
-        CALL    C0EF1                   ; flag STOP condition
+        CALL    C0EF1                   ; raise CTRL-STOP trap
         EI
         POP     HL
         RET
@@ -2555,13 +2555,14 @@ C0B54:  PUSH    HL
 ;       Inputs          L=linenumber
 ;       Outputs         ________________________
 ;       Remark          Unused code, code is in subrom
-;                       This code will not even work if screen is in 80 kol mode because LINWRK is only 40 bytes!
+;                       This code will not even work if screen is in 80 col mode because LINWRK is only 40 bytes!
 
 ?0B59:  PUSH    HL
         CALL    C0B96                   ; convert linenumber to VRAM adres
         LD      A,(LINLEN)              ; screenwidth
         LD      C,A
-J0B61:  LD      B,00H
+
+J0B61:  LD      B,0
         LD      DE,LINWRK
         CALL    C073D                   ; LDIRMV (copy to LINWRK)
         POP     HL
@@ -2580,13 +2581,14 @@ C0B6B:  PUSH    HL
 ;       Inputs          L=linenumber
 ;       Outputs         ________________________
 ;       Remark          Unused code, code is in subrom
-;                       This code will not even work if screen is in 80 kol mode because LINWRK is only 40 bytes!
+;                       This code will not even work if screen is in 80 col mode because LINWRK is only 40 bytes!
 
 ?0B70:  PUSH    HL
         CALL    C0B96                   ; convert linenumber to VRAM adres
         LD      A,(LINLEN)
         LD      C,A
-J0B78:  LD      B,00H
+
+J0B78:  LD      B,0
         EX      DE,HL
         LD      HL,LINWRK
         CALL    C0780                   ; LDIRVM
@@ -2855,14 +2857,14 @@ J0C50:  JP      P,J0D02
         LD      (STATFL),A
         AND     20H
         LD      HL,TRPTBL+11*3
-        CALL    NZ,C0EF1                ; Sprite coincidence, flag SPRITE condition
+        CALL    NZ,C0EF1                ; yep, raise SPRITE trap
         LD      HL,(INTCNT)
         DEC     HL                      ; decrease interval counter
         LD      A,H
         OR      L
         JR      NZ,J0C73                ; not time for interval yet, skip
         LD      HL,TRPTBL+17*3
-        CALL    C0EF1                   ; flag INTERVAL condition
+        CALL    C0EF1                   ; raise INTERVAL trap
         LD      HL,(INTVAL)
 J0C73:  LD      (INTCNT),HL
         LD      HL,(JIFFY)
@@ -2914,19 +2916,19 @@ J0C82:  RR      C
         LD      C,A
         RRCA
         LD      HL,TRPTBL+12*3
-        CALL    C,C0EF1                 ; space key pressed, flag TRIG(0) condition
+        CALL    C,C0EF1                 ; space key pressed, raise STRIG(0) trap
         RL      C
         LD      HL,TRPTBL+16*3
-        CALL    C,C0EF1                 ; trigger B joystick 1 pressed, flag TRIG(4) condition
+        CALL    C,C0EF1                 ; trigger B joystick 1 pressed, raise STRIG(4) trap
         RL      C
         LD      HL,TRPTBL+14*3
-        CALL    C,C0EF1                 ; trigger A joystick 1 pressed, flag TRIG(2) condition
+        CALL    C,C0EF1                 ; trigger A joystick 1 pressed, raise STRIG(2) trap
         RL      C
         LD      HL,TRPTBL+15*3
-        CALL    C,C0EF1                 ; trigger B joystick 0 pressed, flag TRIG(3) condition
+        CALL    C,C0EF1                 ; trigger B joystick 0 pressed, raise STRIG(3) trap
         RL      C
         LD      HL,TRPTBL+13*3
-        CALL    C,C0EF1                 ; trigger A joystick 0 pressed, flag TRIG(1) condition
+        CALL    C,C0EF1                 ; trigger A joystick 0 pressed, raise STRIG(1) trap
         XOR     A
         LD      (CLIKFL),A
         CALL    C0D12                   ; scan keyboard and translate to keycodes
@@ -3128,6 +3130,78 @@ J0D97:  RRA
         INCLUDE KEYSPA.MAC
 
         ENDIF
+
+
+        ORG     00EF1H
+
+;       Subroutine      raise trap
+;       Inputs          ________________________
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+C0EF1:  LD      A,(HL)
+        AND     01H                     ; trap enabled ?
+        RET     Z                       ; nope, quit
+        LD      A,(HL)
+        OR      04H
+        CP      (HL)                    ; trap already raised ?
+        RET     Z                       ; yep, quit
+        LD      (HL),A                  ; raise trap
+        XOR     05H                     ; trap paused ?
+        RET     NZ                      ; yep, quit
+        LD      A,(ONGSBF)
+        INC     A
+        LD      (ONGSBF),A              ; increase trap counter
+        RET
+
+
+        ORG     00F3DH
+
+;       Subroutine      CHGCAP
+;       Inputs          ________________________
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+J0F3D:  AND     A
+        LD      A,0CH
+        JR      Z,J0F43
+        INC     A
+J0F43:  OUT     (0ABH),A
+        RET     
+
+
+        ORG     00F64H
+
+;       Subroutine      make keyclick
+;       Inputs          -
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+J0F64:  LD      A,(CLIKSW)
+        AND     A                       ; keyclicks enabled ?
+        RET     Z                       ; nope, quit
+        LD      A,(CLIKFL)
+        AND     A                       ; keyclick already done (only one click for multiple keys) ?
+        RET     NZ                      ; yep, quit
+        LD      A,0FH
+        LD      (CLIKFL),A              ; no keyclick until the next scan
+        OUT     (0ABH),A                ; set click bit
+        LD      A,10
+J0F77:  DEC     A
+        JR      NZ,J0F77                ; wait
+                                        ; reset click bit
+
+;       Subroutine      change click bit
+;       Inputs          A = 0, A <> 0
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+J0F7A:  AND     A
+        LD      A,0EH
+        JR      Z,J0F80
+        INC     A
+J0F80:  OUT     (0ABH),A
+        RET     
 
 
         ORG     010C2H
@@ -5113,12 +5187,10 @@ J1B87:  LD      A,(NTMSXP)
         RET     NC
         JR      NZ,J1BB7
 
+; *************************************
+; *************************************
 
         IF      KEYTYP EQ 0
-
-; *************************************
-; *************************************
-
 
         AND     A
         JP      P,J1BAC                 ; plain ascii, print
@@ -5134,11 +5206,14 @@ J1BA4:  CP      0E0H                    ; E0H-FFH ?
         SUB     20H                     ; adjust to C0H-DFH
         DEFB    038H                    ; JR C,xxxx (skip next instruction)
 
+        ELSE
 
-; *************************************
-; *************************************
+        JR      J1BAC
 
         ENDIF
+
+; *************************************
+; *************************************
 
         ORG     01BABH
 

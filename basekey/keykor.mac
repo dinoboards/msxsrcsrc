@@ -1,9 +1,12 @@
 ; *************************************
 ; BEGIN OF KOREAN KEYBOARD HANDLER
 ; *************************************
+
+	ORG	00DA5H
+
 ;
 J01A4	EQU	01A4H		; call hangul rom
-C141F	EQU	141FH		; path
+C141F	EQU	141FH		; patch
 J63E6	EQU	63E6H		; execute STOP statement
 C7B3E	EQU	7B3EH		; patch routine for extra pad numbers
 
@@ -231,24 +234,14 @@ J0EE3:	LD	HL,(CURLIN)
         ADD	HL,DE
         ADD	HL,DE
 
-;	  Subroutine raise trap
-;	     Inputs  ________________________
-;	     Outputs ________________________
+					; fall trough to raise trap
 
-C0EF1:	LD	A,(HL)
-        AND	01H			; trap enabled ?
-        RET	Z			; nope, quit
-        LD	A,(HL)
-        OR	04H
-        CP	(HL)			; trap occured flag set ?
-        RET	Z			; yep, quit
-        LD	(HL),A			; flag trap occured
-        XOR	05H			; trap paused ?
-        RET	NZ			; yep, quit
-        LD	A,(ONGSBF)
-        INC	A
-        LD	(ONGSBF),A		; increase trap counter
-        RET
+	IF	($ NE 00EF1H)
+	.PRINTX	"ERROR: Keyboard code not aligned to raise trap (00EF1H)"
+	ENDIF
+
+
+	ORG	00F06H
         
 ;	Subroutine	handler HOME key
 ;	Inputs		-
@@ -304,18 +297,15 @@ C0F36:	LD	HL,CAPST
         CPL
         LD	(HL),A			; toggle CAPS status
         CPL				; adjust for CHGCAP and change CAPS led
+					; fall trough to CHGCAP
 
-;	Subroutine	CHGCAP
-;	Inputs		________________________
-;	Outputs		________________________
-;	Remark		entrypoint compatible with MSX1
 
-K.BCAP:	AND	A
-        LD	A,0CH
-        JR	Z,J0F43
-        INC	A
-J0F43:	OUT	(0ABH),A
-        RET	
+	IF	($ NE 00F3DH)
+	.PRINTX	"ERROR: Keyboard code not aligned to CHGCAP (00F3DH)"
+	ENDIF
+
+
+	ORG	00F46H
 
 ;	Subroutine	handler STOP key
 ;	Inputs		-
@@ -343,37 +333,15 @@ C0F55:	LD	HL,(PUTPNT)
         CP	L
         RET	Z
         LD	(PUTPNT),HL
+					; fall trough to make keyclick
 
-;	Subroutine	make keyclick
-;	Inputs		-
-;	Outputs		________________________
-;	Remark		entrypoint compatible with MSX1
 
-J0F64:	LD	A,(CLIKSW)
-        AND	A			; keyclicks enabled ?
-        RET	Z			; nope, quit
-        LD	A,(CLIKFL)
-        AND	A			; keyclick already done (only one click for multiple keys) ?
-        RET	NZ			; yep, quit
-        LD	A,0FH
-        LD	(CLIKFL),A		; no keyclick until the next scan
-        OUT	(0ABH),A		; set click bit
-        LD	A,10
-J0F77:	DEC	A
-        JR	NZ,J0F77		; wait
-                                        ; reset click bit
+	IF	($ NE 00F64H)
+	.PRINTX	"ERROR: Keyboard code not aligned to make keyclick (00F64H)"
+	ENDIF
 
-;	Subroutine	change click bit
-;	Inputs		A = 0, A <> 0
-;	Outputs		________________________
-;	Remark		entrypoint compatible with MSX1
 
-K.BSND:	AND	A
-        LD	A,0EH
-        JR	Z,J0F80
-        INC	A
-J0F80:	OUT	(0ABH),A
-        RET
+	ORG	00F83H
 
 ;	Subroutine	handle scancodes when KANA is on (and GRAPH and CTRL are not pressed)
 ;	Inputs		C = scancode (000H-02FH)

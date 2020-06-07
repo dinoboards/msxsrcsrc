@@ -212,9 +212,9 @@ D.FFFF  EQU     0FFFFH  ; secundairy slotregister
 CHKRAM: DI
         JP      J0416
 
-        DEFW    D1BBF                   ; address character pattern
-        DEFB    098H                    ; vdp dataregister i/o address for read
-        DEFB    098H                    ; vdp dataregister i/o address for write
+CGTABL: DEFW    D1BBF                   ; address character pattern
+VDP.DR: DEFB    098H                    ; vdp dataregister i/o address for read
+VDP.DW: DEFB    098H                    ; vdp dataregister i/o address for write
 
         
 SYNCHR: JP      J2683
@@ -360,8 +360,8 @@ GTASPC: JP      J1901
 PNTINI: JP      J1909
 SCANR:  JP      J191E
 SCANL:  JP      J1994
-CHGCAP: JP      K.BCAP
-CHGSND: JP      K.BSND
+CHGCAP: JP      J0F3D
+CHGSND: JP      J0F7A
 RSLREG: JP      J140E
 WSLREG: JP      J1411
 RDVDP:  JP      J140B
@@ -440,7 +440,6 @@ J01B6:  POP     AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C01F5:  CALL    C0353
         JP      M,J0205
         IN      A,(0A8H)
@@ -454,7 +453,6 @@ C01F5:  CALL    C0353
 ;       Subroutine      RDSLT for expanded slot
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0205:  CALL    C028C
         JR      NZ,J021A
@@ -1056,12 +1054,10 @@ J04E7:  IN      A,(0A8H)
         ADD     A,40H                   ; next primairy slot page 3
         JR      NC,J04A2                ; all primary slots done ? nope, next
         JP      M7B61                   ; continue rest init code (moved elsewhere)
-
         
 ;       Subroutine      ISCNTC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C04F0:  LD      A,(BASROM)
         AND     A
@@ -1102,7 +1098,7 @@ J0521:  PUSH    HL
         JR      NC,J0534
         LD      HL,TRPTBL+10*3
         DI
-        CALL    C0EF1
+        CALL    C0EF1                   ; raise CTRL-STOP trap
         EI
         POP     HL
         RET
@@ -2521,19 +2517,20 @@ C0B4E:  LD      A,(SCRMOD)
 
 
 C0B54:  PUSH    HL
-        LD      C,08H   ; 8 
+        LD      C,8
         JR      J0B61
 
 ;       Subroutine      copy screenline to LINWRK
 ;       Inputs          L=linenumber
 ;       Outputs         ________________________
 ;       Remark          Unused code, code is in subrom
-;                       This code will not even work if screen is in 80 kol mode because LINWRK is only 40 bytes!
+;                       This code will not even work if screen is in 80 col mode because LINWRK is only 40 bytes!
 
 ?0B59:  PUSH    HL
         CALL    C0B96
         LD      A,(LINLEN)
         LD      C,A
+
 J0B61:  LD      B,00H
         LD      DE,LINWRK
         CALL    C073D
@@ -2546,19 +2543,20 @@ J0B61:  LD      B,00H
 
 
 C0B6B:  PUSH    HL
-        LD      C,08H   ; 8 
+        LD      C,8
         JR      J0B78
 
 ;       Subroutine      copy LINWRK to screenline
 ;       Inputs          L=linenumber
 ;       Outputs         ________________________
 ;       Remark          Unused code, code is in subrom
-;                       This code will not even work if screen is in 80 kol mode because LINWRK is only 40 bytes!
+;                       This code will not even work if screen is in 80 col mode because LINWRK is only 40 bytes!
 
 ?0B70:  PUSH    HL
         CALL    C0B96
         LD      A,(LINLEN)
         LD      C,A
+
 J0B78:  LD      B,00H
         EX      DE,HL
         LD      HL,LINWRK
@@ -2802,14 +2800,14 @@ J0C3C:  PUSH    HL
         LD      (STATFL),A
         AND     20H     ; " "
         LD      HL,TRPTBL+11*3
-        CALL    NZ,C0EF1
+        CALL    NZ,C0EF1                ; raise SPRITE trap
         LD      HL,(INTCNT)
         DEC     HL
         LD      A,H
         OR      L
         JR      NZ,J0C73
         LD      HL,TRPTBL+17*3
-        CALL    C0EF1
+        CALL    C0EF1                   ; raise INTERVAL trap
         LD      HL,(INTVAL)
 J0C73:  LD      (INTCNT),HL
         LD      HL,(JIFFY)
@@ -2861,19 +2859,19 @@ J0C82:  RR      C
         LD      C,A
         RRCA
         LD      HL,TRPTBL+12*3
-        CALL    C,C0EF1
+        CALL    C,C0EF1                 ; yep, raise STRIG(0) trap
         RL      C
         LD      HL,TRPTBL+16*3
-        CALL    C,C0EF1
+        CALL    C,C0EF1                 ; yep, raise STRIG(4) trap
         RL      C
         LD      HL,TRPTBL+14*3
-        CALL    C,C0EF1
+        CALL    C,C0EF1                 ; yep, raise STRIG(2) trap
         RL      C
         LD      HL,TRPTBL+15*3
-        CALL    C,C0EF1
+        CALL    C,C0EF1                 ; yep, raise STRIG(3) trap
         RL      C
         LD      HL,TRPTBL+13*3
-        CALL    C,C0EF1
+        CALL    C,C0EF1                 ; yep, raise STRIG(1) trap
         XOR     A
         LD      (CLIKFL),A
         CALL    C0D12
@@ -3009,13 +3007,13 @@ C0D89:  PUSH    HL
         PUSH    DE
         PUSH    BC
         PUSH    AF
-        LD      A,0BH   ; 11 
+        LD      A,11
         SUB     B
         ADD     A,A
         ADD     A,A
         ADD     A,A
         LD      C,A
-        LD      B,08H   ; 8 
+        LD      B,8
         POP     AF
 J0D97:  RRA
         PUSH    BC
@@ -3077,6 +3075,78 @@ J0D97:  RRA
         ENDIF
 
 
+        ORG     00EF1H
+
+;       Subroutine      raise trap
+;       Inputs          ________________________
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+C0EF1:  LD      A,(HL)
+        AND     01H                     ; trap enabled ?
+        RET     Z                       ; nope, quit
+        LD      A,(HL)
+        OR      04H
+        CP      (HL)                    ; trap already raised ?
+        RET     Z                       ; yep, quit
+        LD      (HL),A                  ; raise trap
+        XOR     05H                     ; trap paused ?
+        RET     NZ                      ; yep, quit
+        LD      A,(ONGSBF)
+        INC     A
+        LD      (ONGSBF),A              ; increase trap counter
+        RET
+
+
+        ORG     00F3DH
+
+;       Subroutine      CHGCAP
+;       Inputs          ________________________
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+J0F3D:  AND     A
+        LD      A,0CH
+        JR      Z,J0F43
+        INC     A
+J0F43:  OUT     (0ABH),A
+        RET     
+
+
+        ORG     00F64H
+
+;       Subroutine      make keyclick
+;       Inputs          -
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+J0F64:  LD      A,(CLIKSW)
+        AND     A                       ; keyclicks enabled ?
+        RET     Z                       ; nope, quit
+        LD      A,(CLIKFL)
+        AND     A                       ; keyclick already done (only one click for multiple keys) ?
+        RET     NZ                      ; yep, quit
+        LD      A,0FH
+        LD      (CLIKFL),A              ; no keyclick until the next scan
+        OUT     (0ABH),A                ; set click bit
+        LD      A,10
+J0F77:  DEC     A
+        JR      NZ,J0F77                ; wait
+                                        ; reset click bit
+
+;       Subroutine      change click bit
+;       Inputs          A = 0, A <> 0
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+J0F7A:  AND     A
+        LD      A,0EH
+        JR      Z,J0F80
+        INC     A
+J0F80:  OUT     (0ABH),A
+        RET     
+
+
         ORG     010C2H
 
 ;       Subroutine      increase keyboardbuffer pointer
@@ -3086,7 +3156,7 @@ J0D97:  RRA
 
 C10C2:  INC     HL
         LD      A,L
-        CP      18H
+        CP      LOW (KEYBUF+40)
         RET     NZ
         LD      HL,KEYBUF
         RET
@@ -3641,14 +3711,12 @@ J1395:  IN      A,(0AAH)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J139B:  CALL    H.NMI
         RETN
 
 ;       Subroutine      INIFNK
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J13A0:  LD      HL,FNKSTR
         LD      B,9FH
@@ -5054,12 +5122,10 @@ J1B87:  LD      A,(NTMSXP)
         RET     NC
         JR      NZ,J1BB7
 
+; *************************************
+; *************************************
 
         IF      KEYTYP EQ 0
-
-; *************************************
-; *************************************
-
 
         AND     A
         JP      P,J1BAC                 ; plain ascii, print
@@ -5075,11 +5141,14 @@ J1BA4:  CP      0E0H                    ; E0H-FFH ?
         SUB     20H                     ; adjust to C0H-DFH
         DEFB    038H                    ; JR C,xxxx (skip next instruction)
 
+        ELSE
 
-; *************************************
-; *************************************
+        JR      J1BAC
 
         ENDIF
+
+; *************************************
+; *************************************
 
         ORG     01BABH
 

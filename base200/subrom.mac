@@ -3057,7 +3057,7 @@ J0EA9:  LD      H,1                     ; column 1
 ;            Inputs  L = line
 ;            Outputs ________________________
 
-C0EAE:  DEFB    0F6H
+C0EAE:  DEFB    0F6H                    ; OR xx, skip next instruction
 
 ;         Subroutine read line from VRAM to LINWRK, first part
 ;            Inputs  ________________________
@@ -3096,7 +3096,7 @@ C0EC8:  PUSH    HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C0ED7:  DEFB    0F6H
+C0ED7:  DEFB    0F6H                    ; OR xx, skip next instruction
 
 ;         Subroutine write line from LINWRK to VRAM, first part
 ;            Inputs  ________________________
@@ -5616,7 +5616,7 @@ I1C6C:  DEFB    "Kbytes"
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C1C73:  DEFB    0F6H
+C1C73:  DEFB    0F6H                    ; OR xx, skip next instruction
 
 C1C74:  SCF
         PUSH    AF
@@ -10061,16 +10061,16 @@ J36E8:  LD      A,(HL)
         EX      (SP),HL
         RET
 
-I36EE:  DEFW    C3973                   ; open
-        DEFW    C39FA                   ; close
-        DEFW    C38B9                   ; random i/o, bad file mode
-        DEFW    C3A1E                   ; sequential output
-        DEFW    C3A7C                   ; sequential input
-        DEFW    C3898                   ; loc
-        DEFW    C38A3                   ; lof
-        DEFW    C38B6                   ; eof
-        DEFW    C38D7                   ; fpos
-        DEFW    C3AC8                   ; putback
+I36EE:  DEFW    C3973                   ; open (mem device)
+        DEFW    C39FA                   ; close (mem device)
+        DEFW    C38B9                   ; random i/o (mem device), bad file mode error
+        DEFW    C3A1E                   ; sequential output (mem device)
+        DEFW    C3A7C                   ; sequential input (mem device)
+        DEFW    C3898                   ; loc (mem device)
+        DEFW    C38A3                   ; lof (mem device)
+        DEFW    C38B6                   ; eof (mem device)
+        DEFW    C38D7                   ; fpos (mem device)
+        DEFW    C3AC8                   ; putback (mem device)
 
 ;         Subroutine CALL MEMINI statement
 ;            Inputs  ________________________
@@ -10097,27 +10097,27 @@ J3714:  PUSH    HL
         JR      J377A                   ; skip search RAM
 
 J3722:  LD      HL,EXPTBL
-        LD      BC,4*256+0
-        XOR     A
+        LD      BC,4*256+0              ; four primairy slots, start at 00XXH
+        XOR     A                       ; begin at primairy slot 0
 J3729:  AND     03H
-        OR      (HL)
+        OR      (HL)                    ; if slot expanded, start at secundairy slot 0
 J372C:  PUSH    BC
         PUSH    HL
-        LD      H,C                     ; 00XXH
-J372F:  LD      L,10H
+        LD      H,C                     ; high byte of memory to check
+J372F:  LD      L,10H			; low byte memory to check
 J3731:  PUSH    AF
-        CALL    C057D                   ; call RDSLT mainrom
+        CALL    C057D                   ; read from slot
         CPL
         LD      E,A                     ; inverted value
         POP     AF
         PUSH    DE
         PUSH    AF
-        CALL    C0583                   ; call WRSLT mainrom
+        CALL    C0583                   ; write to slot
         POP     AF
         POP     DE
         PUSH    AF
         PUSH    DE
-        CALL    C057D                   ; call RDSLT mainrom
+        CALL    C057D                   ; read from slot
         POP     BC
         LD      B,A
         LD      A,C
@@ -10126,10 +10126,10 @@ J3731:  PUSH    AF
         POP     AF
         PUSH    AF
         PUSH    BC
-        CALL    C0583                   ; call WRSLT mainrom
+        CALL    C0583                   ; write to slot
         POP     BC
         LD      A,C
-        CP      B                       ; location writeable ?
+        CP      B                       ; is memory location writeable ?
         JR      NZ,J3766                ; nope, try next slot
         POP     AF
         DEC     L                       ; checked XX01H-XX10H ?
@@ -10138,9 +10138,9 @@ J3731:  PUSH    AF
         INC     H
         INC     H
         INC     H                       ; next Kbyte
-        JP      P,J372F                 ; continue
+        JP      P,J372F			; not checked all lower 32KB RAM, continue
         POP     HL
-        POP     HL                      ; clean stack
+        POP     HL                      ; cleanup stack
         LD      (SLTWRK+0),A            ; slotid RAM, ramdisk not initialized, ramdisk enabled
         JR      J377A
 
@@ -10149,12 +10149,12 @@ J3766:  POP     AF
         POP     BC
         AND     A                       ; slot expanded ?
         JP      P,J3773                 ; nope, next primairy slot
-        ADD     A,4
-        CP      90H
-        JR      C,J372C
+        ADD     A,4			; next secundairy slot
+        CP      90H                     ; all secundairy slots checked ?
+        JR      C,J372C                 ; nope, next secundairy slot
 J3773:  INC     HL
         INC     A
-        DJNZ    J3729
+        DJNZ    J3729                   ; next primairy slot
                                         ; no RAM found
 
 J3777:  JP      J0546                   ; illegal function call error
@@ -10206,7 +10206,7 @@ J37C4:  CALL    C3AD9                   ; write directory entry
         LD      L,B
         PUSH    HL
         CALL    C05CC                   ; print number
-        CALL    C388F                   ; print text
+        CALL    C388F                   ; string to interpreter output (string direct after call)
         DEFB    " bytes allocated",13,10
         DEFB    0
         POP     HL
@@ -10223,7 +10223,7 @@ J37C4:  CALL    C3AD9                   ; write directory entry
 
 J3804:  XOR     A
         LD      (SLTWRK+0),A            ; memory disk not initialized, enabled, search RAM
-        CALL    C388F
+        CALL    C388F                   ; string to interpreter output (string direct after call)
         DEFB    "No RAM disk",13,10
         DEFB    0
         POP     HL
@@ -10277,7 +10277,7 @@ J3861:  LD      DE,16
         CALL    C05AE                   ; fresh line to interpreter output
         CALL    C38D7                   ; fpos (mem device)
         CALL    C05CC                   ; print number
-        CALL    C388F                   ; print text
+        CALL    C388F                   ; string to interpreter output (string direct after call)
         DEFB    " bytes free",13,10
         DEFB    0
         POP     HL
@@ -10356,10 +10356,10 @@ C38B9:  LD      E,3DH
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C38D7:  LD      BC,125*256+1
+C38D7:  LD      BC,125*256+1            ; 125 FAT entries, start at 1
         LD      HL,0
 J38DD:  CALL    C3AEB                   ; get FAT entry content
-        JR      NZ,J38E3                ; entry used,
+        JR      NZ,J38E3                ; entry used, next
         INC     H                       ; entry unused, +256
 J38E3:  INC     C
         DJNZ    J38DD                   ; next entry
@@ -10367,7 +10367,7 @@ J38E3:  INC     C
 
 J38E6:  LD      (DAC+2),HL
         LD      A,2
-        LD      (VALTYP),A
+        LD      (VALTYP),A              ; integer type
         RET
 
 ;         Subroutine CALL MKILL statement
@@ -10415,9 +10415,9 @@ C3916:  CALL    C05BA                   ; evaluate filespecification
         RET     Z
         LD      A,D
         CP      0FCH                    ; internal device ?
-        JR      NC,J3929                ; yep,
+        JR      NC,J3929                ; yep, bad filename error
         CP      8+1                     ; diskdrive device ?
-        JR      C,J3929                 ; yep,
+        JR      C,J3929                 ; yep, bad filename error
         PUSH    HL
         CALL    C392C                   ; check if MEM or MEM0 devicename
         POP     HL
@@ -10486,9 +10486,12 @@ C3973:  CALL    C3BFD                   ; check if memory disk initialized
         CP      4                       ; random i/o ?
         JP      Z,J0534                 ; yep, sequential i/o only error
         CP      2                       ; sequential output ?
-        JR      Z,J3998                 ; yep,
+        JR      Z,J3998                 ; yep, handle
         CP      8                       ; sequential append ?
-        JR      Z,J39D1                 ; yep,
+        JR      Z,J39D1                 ; yep, handle
+
+;         open for sequential input
+
         POP     AF
         JR      NZ,J39D2                ; sequential input and file not found, file not found error
         OR      A                       ; file open ?
@@ -10502,6 +10505,8 @@ C3973:  CALL    C3BFD                   ; check if memory disk initialized
 C3991:  DEC     A
         LD      (LINWRK+13),A           ; set file open flag
 J3995:  JP      C3AD9                   ; write directory entry
+
+;         open for sequential output
 
 J3998:  POP     AF
         JR      NZ,J39A1                ; file not found, skip delete
@@ -10530,6 +10535,8 @@ J39C6:  LD      (HL),A
         DEC     A
         LD      (LINWRK+13),A           ; set file open flag
         JP      J3964                   ; copy filename to directory entry, write directory entry and quit
+
+;         open for sequential append
 
 J39D1:  POP     AF
 J39D2:  JP      NZ,J055E                ; file not found, file not found error
@@ -10693,7 +10700,7 @@ C3ACF:  INC     HL
 ;            Inputs  IX = directory entry
 ;            Outputs LINWRK
 
-C3AD8:  DEFB    0F6H
+C3AD8:  DEFB    0F6H                    ; OR xx, skip next instruction
 
 ;         Subroutine write directory entry
 ;            Inputs  IX = directory entry, LINWRK
@@ -10715,7 +10722,7 @@ J3AE6:  LD      BC,16
 ;            Inputs  C = FAT entry number (1 based)
 ;            Outputs A = content
 
-C3AEB:  DEFB    0F6H
+C3AEB:  DEFB    0F6H                    ; OR xx, skip next instruction
 
 ;         Subroutine update FAT entry content
 ;            Inputs  C = FAT entry, A = content
@@ -10726,8 +10733,8 @@ C3AEC:  SCF
         PUSH    DE
         PUSH    BC
         PUSH    AF
-        LD      HL,128-1
-        LD      B,00H
+        LD      HL,0080H-1
+        LD      B,0
         ADD     HL,BC
         LD      DE,LINWRK+16
         POP     AF
@@ -10791,7 +10798,7 @@ J3B4B:  POP     DE
 ;            Inputs  IY = i/o channel pointer, (IY+7) = cluster
 ;            Outputs ________________________
 
-C3B51:  DEFB    0F6H
+C3B51:  DEFB    0F6H                    ; OR xx, skip next instruction
 
 ;         Subroutine write cluster to memory disk
 ;            Inputs  IY = i/o channel pointer, (IY+7) = cluster
@@ -10936,10 +10943,10 @@ J3BF9:  LD      E,40H
 C3BFD:  LD      A,(SLTWRK+0)
         BIT     6,A                     ; memory disk initialized ?
         RET     NZ                      ; yep, quit
-        LD      E,46H                   ; disk offline error
+        LD      E,46H                   ; ramdisk offline error
 
 J3C05:  XOR     A
-        LD      (NLONLY),A              ; not loading basic program, close i/o
+        LD      (NLONLY),A              ; not loading basic program, close i/o channels when requested
         PUSH    DE
         CALL    C05C0                   ; close i/o channel 0
         POP     DE
