@@ -172,9 +172,9 @@ D.FFFF  equ     0FFFFH
 CHKRAM: di
         jp      A02D7
 
-CGTABL: dw      T1BBF
-VDP.DR: db      098H
-VDP.DW: db      098H
+CGTABL: defw    T1BBF
+VDP.DR: defb    098H
+VDP.DW: defb    098H
 
 SYNCHR: jp      A2683
 
@@ -230,8 +230,8 @@ CALLF:  jp      A0205
 ;       table (0F30FH). I have not seen a MSX with anything other than four zero's, meaning
 ;       no double byte chars.
 
-D0034:  db      0,0
-        db      0,0
+D0034:  defb    0,0
+        defb    0,0
 
 KEYINT: jp      A0C3C
 INITIO: jp      A049D
@@ -394,7 +394,7 @@ C01AD:  INC     D
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-A01B6:  call    A027E                   ; make masks
+A01B6:  call    A027E                   ; calculate masks
 
         IFDEF   SLOTFIX
         jp      m,C016F
@@ -422,7 +422,7 @@ A01C6:  push    hl
 ;       Outputs         ________________________
 
 A01D1:  push    de
-        call    A027E                   ; make masks
+        call    A027E                   ; calculate masks
 
         IFDEF   SLOTFIX
         jp      m,C017E
@@ -497,7 +497,7 @@ A0217:  exx
         pop     af
         push    ix
         pop     hl
-        call    A027E                   ; make masks
+        call    A027E                   ; calculate masks
         jp      m,A022E                 ; expanded slot, handle
         in      a,(0A8H)
         push    af
@@ -546,7 +546,7 @@ A022E:  call    A02A3
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-A025E:  call    A027E                   ; get masks
+A025E:  call    A027E                   ; calculate masks
         jp      m,A026B                 ; expanded slot, handle
         in      a,(0A8H)
         and     c
@@ -567,7 +567,12 @@ A026B:  push    hl
         pop     hl
         ld      a,c
         jr      A025E                   ; ENASLT for primairy slot
-;
+
+;       Subroutine      calculate masks
+;       Inputs          A=slotid, HL=adres
+;       Outputs         P set if expanded slot, A=slotid, D=PPPPPPPP, E=page select mask
+;                       B=primairy slot OR mask, C=page clear mask
+
 A027E:  di
         push    af
         ld      a,h
@@ -597,7 +602,11 @@ A0299:  add     a,01010101b
         pop     af
         and     a                       ; flag expanded slot
         ret
-;
+
+;       Subroutine      Adjust secundairy slotregister
+;       Inputs          A=slotid, D=, E=
+;       Outputs         A=slotid primairy slot
+
 A02A3:  push    af
         ld      a,d
         and     0C0H
@@ -987,11 +996,11 @@ A04D3:  push    hl
         call    A1102                   ; WRTPSG
         jp      A08DA
 ;
-T0508:  db      4
-        db      4
-        db      120
-        db      8+128
-        dw      255
+T0508:  defb    4
+        defb    4
+        defb    120
+        defb    8+128
+        defw    255
 
 ;       Subroutine      INITXT
 ;       Inputs          ________________________
@@ -1008,7 +1017,7 @@ A050E:  call    A0577                   ; DISSCR
         ld      hl,(TXTCGP)
         ld      (CGPBAS),hl
         call    A07F7                   ; CHGCLR
-        call    A077E
+        call    A077E                   ; clear text screen
         call    A071E
         call    A0594                   ; SETTXT
         jr      A0570                   ; ENASCR
@@ -1018,7 +1027,7 @@ A050E:  call    A0577                   ; DISSCR
 ;       Outputs         ________________________
 
 A0538:  call    A0577                   ; DISSCR
-        ld      a,001H
+        ld      a,1
         ld      (SCRMOD),a
         ld      (OLDSCR),a
         ld      a,(LINL32)
@@ -1032,7 +1041,7 @@ A0538:  call    A0577                   ; DISSCR
         ld      hl,(T32ATR)
         ld      (ATRBAS),hl
         call    A07F7                   ; CHGCLR
-        call    A077E
+        call    A077E                   ; clear text screen
         call    A071E
         call    A06BB
         call    A05B4                   ; SETT32
@@ -1116,7 +1125,7 @@ A05B4:  ld      a,(RG0SAV)
 ;       Outputs         ________________________
 
 A05D2:  call    A0577                   ; DISSCR
-        ld      a,002H
+        ld      a,2
         ld      (SCRMOD),a
         ld      hl,(GRPPAT)
         ld      (PATBAS),hl
@@ -1158,7 +1167,7 @@ A0602:  ld      a,(RG0SAV)
 ;       Outputs         ________________________
 
 A061F:  call    A0577                   ; DISSCR
-        ld      a,003H
+        ld      a,3
         ld      (SCRMOD),a
         ld      hl,(MLTPAT)
         ld      (PATBAS),hl
@@ -1167,7 +1176,7 @@ A061F:  call    A0577                   ; DISSCR
         ld      hl,(MLTNAM)
         call    A07DF                   ; SETWRT
         ld      de,6
-A063C:  ld      c,004H
+A063C:  ld      c,4
 A063E:  ld      a,d
         ld      b,32
 A0641:  out     (098H),a
@@ -1398,6 +1407,7 @@ A0765:  push    af
 A0777:  call    A0B9F                   ; grafic mode ?
         jr      z,A07A1                 ; yep, screen 2
         jr      nc,A07B9                ; yep, screen 3
+
 A077E:  ld      a,(SCRMOD)
         and     a
         ld      hl,(NAMBAS)
@@ -1406,7 +1416,7 @@ A077E:  ld      a,(SCRMOD)
         ld      bc,24*32
 A078D:  ld      a,020H
         call    A0815                   ; FILVRM
-        call    A0A7F
+        call    A0A7F                   ; cursor home
         ld      hl,LINTTB
         ld      b,018H
 A079A:  ld      (hl),b
@@ -1694,19 +1704,20 @@ A08F3:  ld      hl,(CSRY)               ; cursor position
         cp      07FH
         jp      z,A0AE3                 ; DEL, handle
         call    A0BE6                   ; 'print' char
-        call    A0A44                   ; increase col
+        call    A0A44                   ; cursor right if possible
         ret     nz                      ; not at end, quit
         xor     a
         call    A0C2B                   ; expand logical line
         ld      h,001H                  ; at begin of line
-A0908:  call    A0A61                   ; down
+
+A0908:  call    A0A61                   ; cursor down if possible
         ret     nz                      ; no scroll needed, quit
-        call    A0A69                   ; scroll up
+        call    A0A69                   ; update cursor position
         ld      l,001H
         jp      A0A88                   ; clear line
 ;
 A0914:  ld      hl,T092F-2
-        ld      c,00CH
+        ld      c,12
 A0919:  inc     hl
         inc     hl
         and     a
@@ -1726,77 +1737,90 @@ A0919:  inc     hl
 A092D:  push    bc
         ret
 ;
-T092F:  db      007H
-        dw      A1113                   ; BEEP
-        db      008H
-        dw      A0A4C
-        db      009H
-        dw      A0A71
-        db      00AH
-        dw      A0908
-        db      00BH
-        dw      A0A7F
-        db      00CH
-        dw      A077E
-        db      00DH
-        dw      A0A81
-        db      01BH
-        dw      A0989
-        db      01CH
-        dw      A0A5B
-        db      01DH
-        dw      A0A4C
-        db      01EH
-        dw      A0A57
-        db      01FH
-        dw      A0A61
+T092F:  defb    007H
+        defw    A1113                   ; BEEP
+        defb    008H
+        defw    A0A4C                   ; BS, cursor left with warp
+        defb    009H
+        defw    A0A71                   ; TAB,
+        defb    00AH
+        defw    A0908                   ; LF,
+        defb    00BH
+        defw    A0A7F                   ; HOME, cursor home
+        defb    00CH
+        defw    A077E                   ; CLS, clear text screen
+        defb    00DH
+        defw    A0A81                   ; CR, cursor to start of line
+        defb    01BH
+        defw    A0989                   ; ESC, start ESC sequence
+        defb    01CH
+        defw    A0A5B                   ; CURSOR RIGHT, cursor right
+        defb    01DH
+        defw    A0A4C                   ; CURSOR LEFT, cursor left with warp
+        defb    01EH
+        defw    A0A57                   ; CURSOR UP, cursor up if possible
+        defb    01FH
+        defw    A0A61                   ; CURSOR DOWN, cursor down if possible
 
-T0953:  db      'j'
-        dw      A077E
-        db      'E'
-        dw      A077E
-        db      'K'
-        dw      A0AEE
-        db      'J'
-        dw      A0B05
-        db      'l'
-        dw      A0AEC
-        db      'L'
-        dw      A0AB4
-        db      'M'
-        dw      A0A85
-        db      'Y'
-        dw      A0986
-        db      'A'
-        dw      A0A57
-        db      'B'
-        dw      A0A61
-        db      'C'
-        dw      A0A44
-        db      'D'
-        dw      A0A55
-        db      'H'
-        dw      A0A7F
-        db      'x'
-        dw      A0980
-        db      'y'
-        dw      A0983
+T0953:  defb    'j'
+        defw    A077E                   ; clear text screen
+        defb    'E'
+        defw    A077E                   ; clear text screen
+        defb    'K'
+        defw    A0AEE                   ; clear to end of line
+        defb    'J'
+        defw    A0B05                   ; clear to end of screen
+        defb    'l'
+        defw    A0AEC                   ; clear line
+        defb    'L'
+        defw    A0AB4                   ; insert line
+        defb    'M'
+        defw    A0A85                   ; delete line
+        defb    'Y'
+        defw    A0986                   ; locate cursor
+        defb    'A'
+        defw    A0A57                   ; cursor up if possible
+        defb    'B'
+        defw    A0A61                   ; cursor down if possible
+        defb    'C'
+        defw    A0A44                   ; cursor right if possible
+        defb    'D'
+        defw    A0A55                   ; cursor left if possible
+        defb    'H'
+        defw    A0A7F                   ; cursor home
+        defb    'x'
+        defw    A0980
+        defb    'y'
+        defw    A0983
 
-A0980:  ld      a,001H
-        db      001H
-A0983:  ld      a,002H
-        db      001H
-A0986:  ld      a,004H
-        db      001H
+; ESC x sequence
+
+A0980:  ld      a,1
+        defb    001H                    ; LD BC,xxxx (trick to skip the next instruction)
+
+; ESC y sequence
+
+A0983:  ld      a,2
+        defb    001H                    ; LD BC,xxxx (trick to skip the next instruction)
+
+; ESC Y sequence
+
+A0986:  ld      a,4
+        defb    001H                    ; LD BC,xxxx (trick to skip the next instruction)
+
+; start of ESC sequence
+
 A0989:  ld      a,0FFH
         ld      (ESCCNT),a
         ret
-;
+
+; in ESC sequence
+
 A098F:  jp      p,A099D                 ; handle long ESC sequences
         ld      (hl),0                  ; next is no ESC anymore
         ld      a,c
         ld      hl,T0953-2
-        ld      c,00FH
+        ld      c,15
         jp      A0919                   ; handle function
 ;
 A099D:  dec     a
@@ -1808,8 +1832,8 @@ A099D:  dec     a
         ld      a,(LINLEN)              ; max kol
         ld      de,CSRX
         jr      z,A09B3
-        ld      (hl),003H
-        call    A0C32                   ; max row
+        ld      (hl),3
+        call    A0C32                   ; get max. linenumber
         dec     de
 A09B3:  ld      b,a
         ld      a,c
@@ -1903,30 +1927,42 @@ A0A33:  call    H.ERAC
         ld      a,(CURSAV)
         ld      c,a
         jp      A0BE6                   ; put orginal char on screen
-;
+
+; cursor right if possible
+
 A0A44:  ld      a,(LINLEN)
         cp      h
         ret     z
         inc     h
-        jr      A0A69
-;
-A0A4C:  call    A0A55
+        jr      A0A69                   ; update cursor position and quit
+
+; cursor left with warp
+
+A0A4C:  call    A0A55                   ; cursor left if possible
         ret     nz
         ld      a,(LINLEN)
         ld      h,a
         defb    011H                    ; LD DE,xx: a trick to skip the next 2 lines
 A0A55:  dec     h
         defb    03EH                    ; LD A,xx: a trick to skip the next line
+
+; cursor up if possible
+
 A0A57:  dec     l
         ret     z
-        jr      A0A69
+        jr      A0A69                   ; update cursor position and quit
 
-A0A5B:  call    A0A44
+; cursor right
+
+A0A5B:  call    A0A44                   ; cursor right if possible
         ret     nz
         ld      h,001H
-A0A61:  call    A0C32
-        cp      l
-        ret     z
+
+; cursor down if possible
+
+A0A61:  call    A0C32                   ; get max. linenumber
+        cp      l                       ; at last linenumber ?
+        ret     z                       ; yep, quit
         jr      c,A0A6D
         inc     l
 A0A69:  ld      (CSRY),hl
@@ -1934,9 +1970,9 @@ A0A69:  ld      (CSRY),hl
 ;
 A0A6D:  dec     l
         xor     a
-        jr      A0A69
+        jr      A0A69                   ; update cursor position and quit
 ;
-A0A71:  ld      a,020H
+A0A71:  ld      a,' '
         call    A08DF
         ld      a,(CSRX)
         dec     a
@@ -1944,15 +1980,17 @@ A0A71:  ld      a,020H
         jr      nz,A0A71
         ret
 ;
-A0A7F:  ld      l,001H
-A0A81:  ld      h,001H
-        jr      A0A69
+A0A7F:  ld      l,1
+A0A81:  ld      h,1
+        jr      A0A69                   ; update cursor position and quit
 
-A0A85:  call    A0A81
-A0A88:  call    A0C32
+; delete line
+
+A0A85:  call    A0A81                   ; cursor to start of line
+A0A88:  call    A0C32                   ; get max. linenumber
         sub     l
         ret     c
-        jp      z,A0AEC
+        jp      z,A0AEC                 ; clear line
         push    hl
         push    af
         ld      c,a
@@ -1975,14 +2013,16 @@ A0AA3:  push    af
         pop     af
         dec     a
         jr      nz,A0AA3
-        jp      A0AEC
+        jp      A0AEC                   ; clear line
 
-A0AB4:  call    A0A81
-A0AB7:  call    A0C32
+; insert line
+
+A0AB4:  call    A0A81                   ; cursor to start of line
+A0AB7:  call    A0C32                   ; get max. linenumber
         ld      h,a
         sub     l
         ret     c
-        jp      z,A0AEC
+        jp      z,A0AEC                 ; clear line
         ld      l,h
         push    hl
         push    af
@@ -2007,14 +2047,19 @@ A0AD3:  push    af
         pop     af
         dec     a
         jr      nz,A0AD3
-        jr      A0AEC
+        jr      A0AEC                   ; clear line
 ;
-A0AE3:  call    A0A4C
+A0AE3:  call    A0A4C                   ; cursor left with warp
         ret     z
         ld      c,020H
         jp      A0BE6
-;
-A0AEC:  ld      h,001H
+
+; clear line
+
+A0AEC:  ld      h,1
+
+; clear to end of line
+
 A0AEE:  call    A0C29
         push    hl
         call    A0BF2
@@ -2027,15 +2072,17 @@ A0AF9:  ld      a,020H
         cp      h
         jr      nc,A0AF9
         ret
-;
+
+; clear to end of screen
+
 A0B05:  push    hl
-        call    A0AEE
+        call    A0AEE                   ; clear to end of line
         pop     hl
-        call    A0C32
+        call    A0C32                   ; get max. linenumber
         cp      l
         ret     c
         ret     z
-        ld      h,001H
+        ld      h,1
         inc     l
         jr      A0B05
 
@@ -2049,7 +2096,7 @@ A0B15:  call    H.ERAF
         ret     nc
         push    hl
         ld      hl,(CRTCNT)
-        call    A0AEC
+        call    A0AEC                   ; clear line
         pop     hl
         ret
 
@@ -2220,7 +2267,7 @@ A0C10:  cpl
 ;
 A0C1D:  push    hl
         ld      de,LINTTB-1
-        ld      h,000H
+        ld      h,0
         add     hl,de
         ld      a,(hl)
         ex      de,hl
@@ -2235,7 +2282,11 @@ A0C2B:  push    af
         pop     af
         ld      (de),a
         ret
-;
+
+;       Subroutine      get max. linenumber
+;       Inputs          ________________________
+;       Outputs         ________________________
+
 A0C32:  ld      a,(CNSDFG)
         push    hl
         ld      hl,CRTCNT
@@ -2474,7 +2525,7 @@ A0D97:  rra                             ; this key being pressed ?
         pop     bc
         inc     c
         djnz    A0D97                   ; next key in row
-        jp      A08DB                   ; quit
+        jp      A08defb                 ; quit
 
 
         IF      KEYTYP EQ 0
@@ -2858,9 +2909,9 @@ A1226:  di
         ei
         ret
 ;
-T1233:  db      0,5,1,0,3,4,2,3,7,6,8,7,0,5,1,0
+T1233:  defb    0,5,1,0,3,4,2,3,7,6,8,7,0,5,1,0
 
-T1243:  db      0,3,5,4,1,2,0,3,7,0,6,5,8,1,7,0
+T1243:  defb    0,3,5,4,1,2,0,3,7,0,6,5,8,1,7,0
 
 ;       Subroutine      GTTRIG
 ;       Inputs          ________________________
@@ -3097,32 +3148,32 @@ A139D:  ld      bc,10*16
         ldir
         ret
 ;
-T13A9:  db      "color ",0
-        ds      16-7,0
-        db      "auto ",0
-        ds      16-6,0
-        db      "goto ",0
-        ds      16-6,0
-        db      "list ",0
-        ds      16-6,0
-        db      "run",13,0
-        ds      16-5,0
+T13A9:  defb    "color ",0
+        defs    16-7,0
+        defb    "auto ",0
+        defs    16-6,0
+        defb    "goto ",0
+        defs    16-6,0
+        defb    "list ",0
+        defs    16-6,0
+        defb    "run",13,0
+        defs    16-5,0
 
         IF BASVER EQ 0
-        DEFM    'color 15,4,7',13,0
-        ds      16-14,0
+        defb    'color 15,4,7',13,0
+        defs    16-14,0
         ELSE
-        DEFM    'color 15,4,4',13,0
-        ds      16-14,0
+        defb    'color 15,4,4',13,0
+        defs    16-14,0
         ENDIF
-        db      'cload"',0
-        ds      16-7,0
-        db      "cont",13,0
-        ds      16-6,0
-        db      "list.",13,30,30,0
-        ds      16-9,0
-        db      12,"run",13,0
-        ds      16-6,0
+        defb    'cload"',0
+        defs    16-7,0
+        defb    "cont",13,0
+        defs    16-6,0
+        defb    "list.",13,30,30,0
+        defs    16-9,0
+        defb    12,"run",13,0
+        defs    16-6,0
 
 ;       Subroutine      RDVDP
 ;       Inputs          ________________________
@@ -3406,7 +3457,7 @@ A157E:  xor     a
         ld      a,(GRPACY)
         jr      z,A158D
         add     a,020H
-        db      001H
+        defb    001H
 A158D:  add     a,008H
         cp      0C0H
         jr      c,A1594
@@ -3499,14 +3550,14 @@ A15DF:  push    bc
         pop     bc
         ret
 ;
-T160B:  db      10000000b
-        db      01000000b
-        db      00100000b
-        db      00010000b
-        db      00001000b
-        db      00000100b
-        db      00000010b
-        db      00000001b
+T160B:  defb    10000000b
+        defb    01000000b
+        defb    00100000b
+        defb    00010000b
+        defb    00001000b
+        defb    00000100b
+        defb    00000010b
+        defb    00000001b
 
 A1613:  ld      a,c
         rrca
@@ -3923,13 +3974,13 @@ A1853:  dec     c
         ld      a,(hl)
         jr      A186B
 ;
-T185D:  db      10000000b
-        db      11000000b
-        db      11100000b
-        db      11110000b
-        db      11111000b
-        db      11111100b
-        db      11111110b
+T185D:  defb    10000000b
+        defb    11000000b
+        defb    11100000b
+        defb    11110000b
+        defb    11111000b
+        defb    11111100b
+        defb    11111110b
 
 A1864:  add     a,a
         dec     a
@@ -3977,7 +4028,7 @@ A186C:  ld      b,a
 A189E:  ld      a,b
         cpl
         and     c
-        db      011H
+        defb    011H
 A18A2:  ld      a,b
         or      c
 A18A4:  ld      de,02000H
@@ -4564,7 +4615,7 @@ A23BF:  call    H.PINL
         ld      a,(AUTFLG)
         and     a
         jr      nz,A23D5
-        ld      l,000H
+        ld      l,0
         jr      A23E0
 
 ;       Subroutine      QINLIN
@@ -4628,7 +4679,7 @@ A2413:  pop     af
 A2426:  rst     OUTDO
         ret
 ;
-A2428:  ld      (hl),000H
+A2428:  ld      (hl),0
         rst     OUTDO
         defb    03EH                    ; LD A,xx: a trick to skip the next line
 A242C:  defb    03EH                    ; LD A,xx: a trick to skip the next line
@@ -4639,39 +4690,39 @@ A242D:  xor     a
         ld      (CSTYLE),a
         jp      A09E1                   ; cursor on
 ;
-T2439:  db      008H
-        dw      A2561
-        db      012H
-        dw      A24E5
-        db      01BH
-        dw      A23FE
-        db      002H
-        dw      A260E
-        db      006H
-        dw      A25F8
-        db      00EH
-        dw      A25D7
-        db      005H
-        dw      A25B9
-        db      003H
-        dw      A24C5
-        db      00DH
-        dw      A245A
-        db      015H
-        dw      A25AE
-        db      07FH
-        dw      A2550
+T2439:  defb    008H
+        defw    A2561
+        defb    012H
+        defw    A24E5
+        defb    01BH
+        defw    A23FE
+        defb    002H
+        defw    A260E
+        defb    006H
+        defw    A25F8
+        defb    00EH
+        defw    A25D7
+        defb    005H
+        defw    A25B9
+        defb    003H
+        defw    A24C5
+        defb    00DH
+        defw    A245A
+        defb    015H
+        defw    A25AE
+        defb    07FH
+        defw    A2550
 
 A245A:  call    A266C
         ld      a,(AUTFLG)
         and     a
         jr      z,A2465
-        ld      h,001H
+        ld      h,1
 A2465:  push    hl
         call    A0A2E                   ; cursor off
         pop     hl
         ld      de,BUF
-        ld      b,0FEH
+        ld      b,254
         dec     l
 A2470:  inc     l
 A2471:  push    de
@@ -4787,7 +4838,7 @@ A2524:  call    A0C2A                   ; extend on next line
         inc     l
         push    bc
         push    hl
-        call    A0C32                   ; max linenumber
+        call    A0C32                   ; get max. linenumber
         cp      l
         jr      c,A2535
         call    A0AB7
@@ -4808,7 +4859,7 @@ A2544:  pop     hl
         jp      z,A09E1                 ; cursor on
         dec     l
 A254B:  inc     l
-        ld      h,001H
+        ld      h,1
         jr      A24FA
 
 A2550:  ld      a,(LINLEN)
@@ -4855,7 +4906,7 @@ A2595:  ld      c,020H
         jp      nz,A09E1                ; cursor on
         push    hl
         inc     l
-        ld      h,001H
+        ld      h,1
         call    A0BD8                   ; read char from VRAM
         ex      (sp),hl
         call    A0BE6                   ; calc VRAM adres
@@ -4923,14 +4974,14 @@ A2618:  call    A2634
 ;
 A2624:  ld      hl,(CSRY)
         call    A0A5B                   ; cursor right
-        call    A0C32                   ; max linenumber
+        call    A0C32                   ; get max. linenumber
         ld      e,a
         ld      a,(LINLEN)
         ld      d,a
         jr      A263D
 ;
 A2634:  ld      hl,(CSRY)
-        call    A0A4C                   ; cursor left
+        call    A0A4C                   ; cursor left with warp
         ld      de,00101H
 A263D:  ld      hl,(CSRY)
         rst     DCOMPR
@@ -4938,20 +4989,20 @@ A263D:  ld      hl,(CSRY)
         ld      de,A2668
         push    de
         call    A0BD8                   ; read char from VRAM
-        cp      030H
+        cp      "0"
         ccf
         ret     nc
-        cp      03AH
+        cp      "9"+1
         ret     c
-        cp      041H
+        cp      "A"
         ccf
         ret     nc
-        cp      05BH
+        cp      "Z"+1
         ret     c
-        cp      061H
+        cp      "a"
         ccf
         ret     nc
-        cp      07BH
+        cp      "z"+1
         ret     c
         cp      086H
         ccf
@@ -4960,10 +5011,14 @@ A263D:  ld      hl,(CSRY)
         ret     c
         cp      0A6H
         ccf
-A2668:  ld      a,000H
+A2668:  ld      a,0
         inc     a
         ret
-;
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
 A266C:  dec     l
         jr      z,A2674
         call    A0C1D                   ; extend on next line ?
@@ -4971,17 +5026,29 @@ A266C:  dec     l
 A2674:  inc     l
         ld      a,(FSTPOS)
         cp      l
-        ld      h,001H
+        ld      h,1
         ret     nz
         ld      hl,(FSTPOS)
         ret
-;
+
+
+; Some sort of jumptable for routines in basicrom
+
+
+; entrypoint for 2nd part of the init routine
+
 A2680:  jp      M7C76
-;
+
+; entrypoint for SYNCHR
+
 A2683:  jp      M558C
-;
+
+; entrypoint for CHRGTR
+
 A2686:  jp      M4666
-;
+
+; entrypoint for GETYPR
+
 A2689:  jp      M5597
 
         end

@@ -387,6 +387,13 @@ NWRVRM: JP      J0769
 
         DEFS    001B6H-$
 
+;       Subroutine      CALSLT for expanded slot 0 page 0
+;       Inputs          ________________________
+;       Outputs         ________________________
+;       Remark          this is done by this special routine, otherwise calslt crashes
+;                       code to handle a interslot call to the subrom in a secundairy
+;                       of slot 0.
+
 J01B6:  POP     AF
         LD      D,0FCH
         AND     0CH
@@ -468,26 +475,24 @@ J0205:  CALL    C028C
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 ;       Remark          Just a jump at this adres to have same entry point as MSX1
+;                       early RS232 ROM version uses this (illegal entry point)
 
 C0217:  JP      J02D8
-
 
 ;       Subroutine      RDSLT for expanded slot, not slot 0 page 0
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J021A:  PUSH    HL
         CALL    C0378
         EX      (SP),HL
         PUSH    BC
-        CALL    C01F5
+        CALL    C01F5                   ; RDSLT
         JR      J0279
 
 ;       Subroutine      WRSLT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C0225:  PUSH    DE
         CALL    C0353
@@ -502,7 +507,6 @@ C0225:  PUSH    DE
 ;       Subroutine      WRSLT for expanded slot
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0235:  CALL    C028C
         JP      NZ,J026E
@@ -528,7 +532,6 @@ J0244:  EX      (SP),HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0255:  PUSH    AF
         IN      A,(0A8H)
         LD      L,A
@@ -549,14 +552,13 @@ C0255:  PUSH    AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J026E:  EX      (SP),HL
         PUSH    HL
         CALL    C0378
         POP     DE
         EX      (SP),HL
         PUSH    BC
-        CALL    C0225
+        CALL    C0225                   ; WRSLT
 J0279:  POP     BC
         EX      (SP),HL
         PUSH    AF
@@ -589,7 +591,6 @@ C028C:  INC     D
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J0295:  CALL    C029B
         POP     IX
         RET
@@ -597,7 +598,6 @@ J0295:  CALL    C029B
 ;       Subroutine      EXTROM
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C029B:  EXX
         EX      AF,AF'
@@ -611,7 +611,7 @@ C029B:  EXX
         EX      AF,AF'
         PUSH    IY
         LD      IY,(EXBRSA-1)
-        CALL    C0217
+        CALL    C0217                   ; CALSLT
         POP     IY
         EX      AF,AF'
         EXX
@@ -630,14 +630,12 @@ J02B8:  POP     AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C02BF:  LD      IY,(EXPTBL+0-1)
-        JP      C0217
+        JP      C0217                   ; CALSLT
 
 ;       Subroutine      CALLF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J02C6:  EX      (SP),HL
         PUSH    AF
@@ -660,7 +658,6 @@ J02C6:  EX      (SP),HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J02D8:  EXX
         EX      AF,AF'
         PUSH    IY
@@ -680,13 +677,12 @@ J02D8:  EXX
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J02EF:  PUSH    AF
-        AND     03H     ; 3 
-        JR      NZ,J02FA
+        AND     03H                     ; primairy slot 0 ?
+        JR      NZ,J02FA                ; nope, use normal method
         LD      A,H
-        AND     0C0H
-        JP      Z,J01B6
+        AND     0C0H                    ; page 0 ?
+        JP      Z,J01B6                 ; yep, use special method
 J02FA:  POP     AF
         CALL    C0378
         PUSH    AF
@@ -694,7 +690,7 @@ J02FA:  POP     AF
         PUSH    HL
         PUSH    BC
         LD      C,A
-        LD      B,00H
+        LD      B,0
         LD      A,L
         AND     H
         OR      D
@@ -704,7 +700,7 @@ J02FA:  POP     AF
         PUSH    HL
         EX      AF,AF'
         EXX
-        CALL    C0217
+        CALL    C0217                   ; CALSLT
         EXX
         EX      AF,AF'
         POP     HL
@@ -713,7 +709,7 @@ J02FA:  POP     AF
         LD      A,I
         PUSH    AF
         LD      A,B
-        AND     3FH     ; "?"
+        AND     3FH
         OR      C
         DI
         OUT     (0A8H),A
@@ -733,7 +729,6 @@ J0330:  EX      AF,AF'
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0333:  CALL    C0353
         JP      M,J0340
         IN      A,(0A8H)
@@ -746,11 +741,10 @@ C0333:  CALL    C0353
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J0340:  PUSH    HL
         CALL    C0378
         LD      C,A
-        LD      B,00H
+        LD      B,0
         LD      A,L
         AND     H
         OR      D
@@ -783,7 +777,7 @@ J035D:  RLCA
         LD      C,A
         POP     AF
         PUSH    AF
-        AND     03H     ; 3 
+        AND     03H
         INC     A
         LD      B,A
         LD      A,0ABH
@@ -815,7 +809,7 @@ C0378:  PUSH    AF
         LD      A,D
         RRCA
         RRCA
-        AND     03H     ; 3 
+        AND     03H
         LD      D,A
         LD      A,0ABH
 J0390:  ADD     A,55H
@@ -843,7 +837,7 @@ J0390:  ADD     A,55H
 ;       Outputs         ________________________
 
 J03AC:  DI
-        LD      C,00H
+        LD      C,0
         LD      DE,EXPTBL
         LD      HL,SLTATR
 J03B5:  LD      A,(DE)
@@ -857,7 +851,7 @@ J03B9:  PUSH    HL
         LD      HL,4443H
         RST     20H                     ; SUBROM identifier ?
         POP     HL
-        LD      B,00H
+        LD      B,0
         JR      NZ,J03EF                ; nope,
         CALL    M7E1A                   ; read word from extension ROM (address 0002H, initialize)
         PUSH    HL
@@ -891,7 +885,7 @@ J03EF:  EX      (SP),HL
         AND     A                       ; slot expanded ?
         LD      DE,12
         JP      P,J040A                 ; nope, next primairy slot
-        ADD     A,04H
+        ADD     A,00000100B
         LD      C,A
         CP      90H
         JR      C,J03B9
@@ -966,7 +960,7 @@ J0454:  LD      A,(HL)
         JR      NZ,J0454
         DEC     H
         JP      M,J0454
-J0463:  LD      L,00H
+J0463:  LD      L,0
         INC     H                       ; round up 256 bytes boundary
         LD      A,L
         SUB     E
@@ -985,7 +979,7 @@ J0476:  LD      A,B
         JR      Z,J0484                 ; nope, next primary slot
         LD      A,(D.FFFF)
         CPL
-        ADD     A,10H                   ; next secundairy slot page 2
+        ADD     A,00000100B             ; next secundairy slot page 2
         CP      40H                     ; all secundairy slots done ?
         JR      C,J044E                 ; nope, next
 J0484:  IN      A,(0A8H)
@@ -1029,7 +1023,7 @@ J04B7:  LD      A,(HL)
         LD      A,H
         CP      0C0H
         JR      NC,J04B7
-J04C8:  LD      L,00H
+J04C8:  LD      L,0
         INC     H                       ; round up 256 bytes boundary
         LD      A,L
         SUB     E
@@ -1067,11 +1061,11 @@ C04F0:  LD      A,(BASROM)
         DI
         LD      A,(HL)
         EI
-        LD      (HL),00H
+        LD      (HL),0
         POP     HL
         AND     A
         RET     Z
-        CP      03H     ; 3 
+        CP      3
         JR      Z,J0521
         PUSH    HL
         PUSH    DE
@@ -1081,7 +1075,7 @@ C04F0:  LD      A,(BASROM)
 J050E:  DI
         LD      A,(HL)
         EI
-        LD      (HL),00H
+        LD      (HL),0
         AND     A
         JR      Z,J050E
         PUSH    AF
@@ -1090,7 +1084,7 @@ J050E:  DI
         POP     BC
         POP     DE
         POP     HL
-        CP      03H     ; 3 
+        CP      3
         RET     NZ
 J0521:  PUSH    HL
         CALL    C055D
@@ -1106,7 +1100,7 @@ J0521:  PUSH    HL
 J0534:  CALL    C089E
         LD      A,(EXPTBL+0)
         LD      H,40H   ; "@"
-        CALL    C0333
+        CALL    C0333                   ; ENASLT
         POP     HL
         XOR     A
         LD      SP,(SAVSTK)
@@ -1116,7 +1110,6 @@ J0534:  CALL    C089E
 ;       Subroutine      check if ON STOP valid
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C0549:  LD      A,(TRPTBL+10*3+0)
         RRCA
@@ -1137,7 +1130,6 @@ C0549:  LD      A,(TRPTBL+10*3+0)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C055D:  LD      HL,(PUTPNT)
         LD      (GETPNT),HL
         RET
@@ -1146,19 +1138,18 @@ C055D:  LD      HL,(PUTPNT)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0564:  IN      A,(0AAH)
         AND     0F0H
-        OR      07H     ; 7 
+        OR      7
         OUT     (0AAH),A
         IN      A,(0A9H)
-        AND     10H     ; 16 
+        AND     10H
         RET     NZ
         IN      A,(0AAH)
         DEC     A
         OUT     (0AAH),A
         IN      A,(0A9H)
-        AND     02H     ; 2 
+        AND     02H
         RET     NZ
         PUSH    HL
         LD      HL,(PUTPNT)
@@ -1169,9 +1160,9 @@ C0564:  IN      A,(0AAH)
         LD      (OLDKEY+7),A
 
         IF INTHZ EQ 60
-        LD      A,14H
+        LD      A,20
         ELSE
-        LD      A,20H
+        LD      A,32
         ENDIF
 
         LD      (REPCNT),A
@@ -1182,18 +1173,17 @@ C0564:  IN      A,(0AAH)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
-J0592:  LD      A,07H   ; 7 
+J0592:  LD      A,7
         LD      E,80H
         CALL    C1102
-        LD      A,0FH   ; 15 
+        LD      A,15
         LD      E,0CFH
         CALL    C1102
-        LD      A,0BH   ; 11 
+        LD      A,11
         LD      E,A
         CALL    C1102
         CALL    C110C
-        AND     40H     ; "@"
+        AND     40H
         LD      (KANAMD),A
         LD      A,0FFH
         OUT     (90H),A
@@ -1201,7 +1191,6 @@ J0592:  LD      A,07H   ; 7
 ;       Subroutine      GICINI
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C05B2:  PUSH    HL
         PUSH    DE
@@ -1222,12 +1211,12 @@ J05C8:  PUSH    HL
         PUSH    AF
         CALL    C14D8
         POP     AF
-        ADD     A,08H   ; 8 
-        LD      E,00H
+        ADD     A,8
+        LD      E,0
         CALL    C1102
-        SUB     08H     ; 8 
+        SUB     8
         PUSH    AF
-        LD      L,0FH   ; 15 
+        LD      L,15
         CALL    C0C11
         EX      DE,HL
         LD      HL,I05FD
@@ -1240,9 +1229,9 @@ J05C8:  PUSH    HL
         ADD     HL,DE
         EX      DE,HL
         INC     A
-        CP      03H     ; 3 
+        CP      3
         JR      C,J05C8
-        LD      A,07H   ; 7 
+        LD      A,7
         LD      E,0B8H
         CALL    C1102
         JP      J0937
@@ -1253,25 +1242,22 @@ I05FD:  DEFB    004H,004H,078H,088H,0FFH,000H
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J0603:  LD      A,(RG1SAV)
-        OR      40H     ; "@"
+        OR      40H
         JR      J060F
 
 ;       Subroutine      DISSCR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J060A:  LD      A,(RG1SAV)
         AND     0BFH
 J060F:  LD      B,A
-        LD      C,01H   ; 1 
+        LD      C,1
 
 ;       Subroutine      WRTVDP
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0612:  LD      A,C
         AND     A
@@ -1281,7 +1267,7 @@ J0612:  LD      A,C
         RRCA
         JR      NC,J0629                ; external vdp input bit unchanged, old way
                                         ; otherwise A>=080H and due next code handled by the subrom
-J061D:  CP      08H     ; 8 
+J061D:  CP      8
         JR      C,J0629
         PUSH    IX
         LD      IX,S.WRTVDP
@@ -1296,7 +1282,7 @@ J0629:  LD      A,B
         OUT     (99H),A
         PUSH    HL
         LD      A,B
-        LD      B,00H
+        LD      B,0
         LD      HL,RG0SAV
         ADD     HL,BC
         LD      (HL),A
@@ -1307,7 +1293,6 @@ J0629:  LD      A,B
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J063E:  PUSH    IX
         LD      IX,S.INITXT
 J0644:  JP      J0295
@@ -1315,7 +1300,6 @@ J0644:  JP      J0295
 ;       Subroutine      INIT32
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0647:  PUSH    IX
         LD      IX,S.INIT32
@@ -1325,7 +1309,6 @@ J0647:  PUSH    IX
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J064F:  PUSH    IX
         LD      IX,S.INIGRP
         JR      J0644
@@ -1333,7 +1316,6 @@ J064F:  PUSH    IX
 ;       Subroutine      INIMLT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0657:  PUSH    IX
         LD      IX,S.INIMLT
@@ -1343,7 +1325,6 @@ J0657:  PUSH    IX
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J065F:  PUSH    IX
         LD      IX,S.SETTXT
         JR      J0644
@@ -1351,7 +1332,6 @@ J065F:  PUSH    IX
 ;       Subroutine      SETT32
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0667:  PUSH    IX
         LD      IX,S.SETT32
@@ -1361,7 +1341,6 @@ J0667:  PUSH    IX
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J066F:  PUSH    IX
         LD      IX,S.SETGRP
         JR      J0644
@@ -1370,7 +1349,6 @@ J066F:  PUSH    IX
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J0677:  PUSH    IX
         LD      IX,S.SETMLT
         JR      J0644
@@ -1378,7 +1356,6 @@ J0677:  PUSH    IX
 ;       Subroutine      CLRSPR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J067F:  PUSH    IX
         LD      IX,S.CLRSPR
@@ -1403,33 +1380,32 @@ C0687:  EX      DE,HL
 
 C068F:  EX      DE,HL
         LD      A,(SCRMOD)
-        SUB     05H     ; 5 
+        SUB     5
         JR      C,J06A6
-        AND     02H     ; 2 
+        AND     02H
         LD      A,H
         JR      NZ,J069D
         RRA
 J069D:  RRA
         LD      H,A
-        LD      A,00H
+        LD      A,0
         LD      L,A
         ADC     A,A
         ADD     HL,DE
         LD      D,A
         RET
 
-J06A6:  LD      D,00H
+J06A6:  LD      D,0
         RET
 
 ;       Subroutine      CHKNEW (check if new style screenmode)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C06A9:  PUSH    BC
         LD      B,A
         LD      A,(SCRMOD)
-        CP      05H     ; 5 
+        CP      5
         LD      A,B
         POP     BC
         RET
@@ -1437,7 +1413,6 @@ C06A9:  PUSH    BC
 ;       Subroutine      NSTWRT
 ;       Inputs          HL=vram adres (range:0-0FFFFH)
 ;       Outputs         ________________________
-
 
 C06B3:  PUSH    BC
         PUSH    DE
@@ -1447,14 +1422,13 @@ C06B3:  PUSH    BC
         LD      D,A
         CALL    NZ,C068F
         LD      A,H
-        AND     3FH     ; "?"
-        OR      40H     ; "@"
+        AND     3FH
+        OR      40H
         JR      J06D3
 
 ;       Subroutine      NSETRD
 ;       Inputs          HL=vram adres (range:0-0FFFFH)
 ;       Outputs         ________________________
-
 
 C06C5:  PUSH    BC
         PUSH    DE
@@ -1464,7 +1438,7 @@ C06C5:  PUSH    BC
         LD      D,A
         CALL    NZ,C068F
         LD      A,H
-        AND     3FH     ; "?"
+        AND     3FH
 J06D3:  PUSH    AF
         LD      A,H
         AND     0C0H
@@ -1489,14 +1463,13 @@ J06D3:  PUSH    AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J06EC:  LD      L,A
-        LD      H,00H
+        LD      H,0
         ADD     HL,HL
         ADD     HL,HL
         ADD     HL,HL
         CALL    C070C
-        CP      08H     ; 8 
+        CP      08H
         JR      Z,J06FB
         ADD     HL,HL
         ADD     HL,HL
@@ -1509,9 +1482,8 @@ J06FB:  EX      DE,HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J0701:  LD      L,A
-        LD      H,00H
+        LD      H,0
         ADD     HL,HL
         ADD     HL,HL
         EX      DE,HL
@@ -1523,13 +1495,12 @@ J0701:  LD      L,A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C070C:  LD      A,(RG1SAV)
         RRCA
         RRCA
-        LD      A,08H
+        LD      A,8
         RET     NC
-        LD      A,20H
+        LD      A,32
         RET
 
 ;       Subroutine      Initialize character pattern table
@@ -1549,7 +1520,7 @@ J072A:  POP     AF
         PUSH    AF
         PUSH    BC
         DI
-        CALL    C01F5
+        CALL    C01F5                   ; RDSLT
         EI
         POP     BC
         OUT     (98H),A
@@ -1565,12 +1536,11 @@ J072A:  POP     AF
 ;       Inputs          HL = vram adres, DE = ram adres, BC = size
 ;       Outputs         ________________________
 
-
 C073D:  LD      A,(SCRMOD)
-        CP      04H     ; 4 
+        CP      4
         JR      NC,J075A
         LD      A,(MODE)
-        AND     08H     ; 8 
+        AND     08H
         JR      NZ,J075A
         CALL    C0808
         EX      (SP),HL
@@ -1597,7 +1567,6 @@ J0762:  INIR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J0769:  PUSH    AF
         CALL    C06B3
         EX      (SP),HL
@@ -1605,7 +1574,6 @@ J0769:  PUSH    AF
         POP     AF
         OUT     (98H),A
         RET
-
         
         DEFS    0777H-$
 
@@ -1615,7 +1583,6 @@ J0769:  PUSH    AF
 ;            Outputs ________________________
 ;       This routine has same entrypoint as MSX1
 
-
 C0777:  PUSH    IX
         LD      IX,S.CLS
         JP      J0295
@@ -1624,13 +1591,12 @@ C0777:  PUSH    IX
 ;       Inputs          HL = RAM adres, DE = VRAM adres, BC = size
 ;       Outputs         ________________________
 
-
 C0780:  EX      DE,HL
         LD      A,(SCRMOD)
-        CP      04H     ; 4 
+        CP      4
         JR      NC,J079C
         LD      A,(MODE)
-        AND     08H     ; 8 
+        AND     08H
         JR      NZ,J079C
         CALL    C07F4
 J0792:  LD      A,(DE)
@@ -1655,8 +1621,7 @@ J07A4:  OTIR
 ;       Inputs          A = charcode
 ;       Outputs         ________________________
 
-
-C07AB:  LD      H,00H
+C07AB:  LD      H,0
         LD      L,A
         ADD     HL,HL
         ADD     HL,HL
@@ -1665,12 +1630,12 @@ C07AB:  LD      H,00H
         LD      HL,(CGPNT+1)
         ADD     HL,DE
         LD      DE,PATWRK
-        LD      B,08H   ; 8 
+        LD      B,8
 J07BB:  PUSH    HL
         PUSH    DE
         PUSH    BC
         LD      A,(CGPNT+0)
-        CALL    C01F5
+        CALL    C01F5                   ; RDSLT
         EI
         POP     BC
         POP     DE
@@ -1685,7 +1650,6 @@ J07BB:  PUSH    HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C07CE:  PUSH    IX
         LD      IX,S.CLRTXT
         JP      J0295
@@ -1693,7 +1657,6 @@ C07CE:  PUSH    IX
 ;       Subroutine      WRTVRM
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C07D7:  PUSH    AF
         CALL    C07F4
@@ -1707,7 +1670,6 @@ C07D7:  PUSH    AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C07E1:  CALL    C0808
         EX      (SP),HL
         EX      (SP),HL
@@ -1717,7 +1679,6 @@ C07E1:  CALL    C0808
 ;       Subroutine      NRDVRM
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J07E9:  CALL    C06C5
         EX      (SP),HL
@@ -1729,13 +1690,11 @@ J07E9:  CALL    C06C5
 ;       Inputs          H=x pos, L=y pos
 ;       Outputs         ________________________
 
-
 C07F1:  CALL    C0B98
 
 ;       Subroutine      SETWRT
 ;       Inputs          HL=vram adres
 ;       Outputs         ________________________
-
 
 C07F4:  XOR     A
         DI
@@ -1745,8 +1704,8 @@ C07F4:  XOR     A
         LD      A,L
         OUT     (99H),A
         LD      A,H
-        AND     3FH     ; "?"
-        OR      40H     ; "@"
+        AND     3FH
+        OR      40H
         OUT     (99H),A
         EI
         RET
@@ -1754,7 +1713,6 @@ C07F4:  XOR     A
 ;       Subroutine      SETRD
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C0808:  XOR     A
         DI
@@ -1764,7 +1722,7 @@ C0808:  XOR     A
         LD      A,L
         OUT     (99H),A
         LD      A,H
-        AND     3FH     ; "?"
+        AND     3FH
         OUT     (99H),A
         EI
         RET
@@ -1772,7 +1730,6 @@ C0808:  XOR     A
 ;       Subroutine      CHGCLR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J081A:  LD      A,(SCRMOD)
         DEC     A
@@ -1795,14 +1752,12 @@ J081A:  LD      A,(SCRMOD)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0838:  PUSH    AF
         JR      J0841
 
 ;       Subroutine      FILVRM
 ;       Inputs          HL=vram adres,BC=size,A=data
 ;       Outputs         ________________________
-
 
 J083B:  PUSH    AF
         CALL    C06A9
@@ -1824,20 +1779,20 @@ J0853:  POP     AF
         PUSH    DE
         LD      E,A
         LD      A,H
-        AND     3FH     ; "?"
+        AND     3FH
         LD      H,A
         PUSH    HL
         ADD     HL,BC
         DEC     HL
         LD      A,H
-        CP      40H     ; "@"
+        CP      40H
         POP     HL
         JR      C,J087A
         PUSH    BC
         XOR     A
         SUB     L
         LD      C,A
-        LD      A,40H   ; "@"
+        LD      A,40H
         SBC     A,H
         LD      B,A
         LD      A,E
@@ -1846,7 +1801,7 @@ J0853:  POP     AF
         ADD     HL,BC
         LD      C,L
         LD      A,H
-        SUB     40H     ; "@"
+        SUB     40H
         LD      B,A
         LD      HL,0
 J087A:  LD      A,E
@@ -1854,7 +1809,6 @@ J087A:  LD      A,E
         POP     DE
         POP     HL
         RET
-
 
 J0881:  LD      A,(FORCLR)
         ADD     A,A
@@ -1864,22 +1818,19 @@ J0881:  LD      A,(FORCLR)
         LD      HL,BAKCLR
         OR      (HL)
         JR      J0891
-
         
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
 C088E:  LD      A,(BDRCLR)
 J0891:  LD      B,A
-        LD      C,07H   ; 7 
+        LD      C,7
         JP      J0612
 
 ;       Subroutine      CLS
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0897:  RET     NZ
         PUSH    HL
@@ -1890,7 +1841,6 @@ J0897:  RET     NZ
 ;       Subroutine      TOTEXT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C089E:  CALL    C0B4E
         RET     C
@@ -1904,7 +1854,6 @@ C089E:  CALL    C0B4E
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J08B1:  PUSH    IX
         LD      IX,S.CHGMOD
         JP      J0295
@@ -1912,7 +1861,6 @@ J08B1:  PUSH    IX
 ;       Subroutine      LPTOUT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C08BA:  CALL    H.LPTO
         PUSH    AF
@@ -1926,7 +1874,6 @@ J08BE:  CALL    C0564
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C08C9:  PUSH    AF
         OUT     (91H),A
         XOR     A
@@ -1939,7 +1886,7 @@ C08C9:  PUSH    AF
 
 J08D5:  XOR     A
         LD      (LPTPOS),A
-        LD      A,0DH   ; 13 
+        LD      A,13
         CALL    C08C9
         POP     AF
         SCF
@@ -1948,7 +1895,6 @@ J08D5:  XOR     A
 ;       Subroutine      LPTSTT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C08E1:  CALL    H.LPTS
         IN      A,(90H)
@@ -1961,7 +1907,6 @@ C08E1:  CALL    H.LPTS
 ;       Subroutine      POSIT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C08EB:  LD      A,1BH
         RST     18H
@@ -1979,7 +1924,6 @@ C08EB:  LD      A,1BH
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C08FA:  PUSH    HL
         PUSH    AF
         LD      HL,GRPHED
@@ -1988,17 +1932,17 @@ C08FA:  PUSH    HL
         LD      (HL),A
         JR      Z,J0911
         POP     AF
-        SUB     40H     ; "@"
-        CP      20H     ; " "
+        SUB     40H
+        CP      20H
         JR      C,J090F
-        ADD     A,40H   ; "@"
+        ADD     A,40H
 J090D:  CP      A
         SCF
 J090F:  POP     HL
         RET
 
 J0911:  POP     AF
-        CP      01H     ; 1 
+        CP      1
         JR      NZ,J090D
         LD      (HL),A
         POP     HL
@@ -2007,7 +1951,6 @@ J0911:  POP     AF
 ;       Subroutine      CHPUT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0919:  PUSH    HL
         PUSH    DE
@@ -2043,7 +1986,7 @@ C093C:  CALL    C08FA
         AND     A
         JP      NZ,J09EC
         LD      A,C
-        CP      20H     ; " "
+        CP      20H
         JR      C,J0971
 J0950:  LD      HL,(CSRY)
         CP      7FH
@@ -2053,27 +1996,25 @@ J0950:  LD      HL,(CSRY)
         RET     NZ
         XOR     A
         CALL    C0BDB
-        LD      H,01H
+        LD      H,1
 
 ;       Subroutine      screencode LF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0965:  CALL    C0ABE
         RET     NZ
         CALL    C0AC6
-        LD      L,01H   ; 1 
+        LD      L,1
         JP      C0AE5
 
 J0971:  LD      HL,I098C-2
-        LD      C,0CH   ; 12 
+        LD      C,12
 
         
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C0976:  INC     HL
         INC     HL
@@ -2094,7 +2035,6 @@ C0976:  INC     HL
 ;       Subroutine      call subroutine
 ;       Inputs          BC = adres of subroutine
 ;       Outputs         ________________________
-
 
 C098A:  PUSH    BC
         RET
@@ -2179,10 +2119,10 @@ C09E6:  LD      A,0FFH
         RET
 
 J09EC:  JP      P,J09FA
-        LD      (HL),00H
+        LD      (HL),0
         LD      A,C
         LD      HL,I09B0-2
-        LD      C,0FH   ; 15 
+        LD      C,15
         JP      C0976
 
 J09FA:  DEC     A
@@ -2194,12 +2134,12 @@ J09FA:  DEC     A
         LD      A,(LINLEN)
         LD      DE,CSRX
         JR      Z,J0A10
-        LD      (HL),03H        ; 3 
+        LD      (HL),3
         CALL    C0BE2
         DEC     DE
 J0A10:  LD      B,A
         LD      A,C
-        SUB     20H     ; " "
+        SUB     20H
         CP      B
         INC     A
         LD      (DE),A
@@ -2212,7 +2152,7 @@ J0A10:  LD      B,A
 
 J0A1B:  LD      (HL),A
         LD      A,C
-        SUB     34H     ; "4"
+        SUB     "4"
         JR      Z,J0A2C
         DEC     A
         JR      Z,J0A33
@@ -2222,7 +2162,7 @@ J0A1B:  LD      (HL),A
 
 J0A25:  LD      (HL),A
         LD      A,C
-        SUB     34H     ; "4"
+        SUB     "4"
         JR      NZ,J0A30
         INC     A
 J0A2C:  LD      (CSTYLE),A
@@ -2238,7 +2178,6 @@ J0A33:  LD      (CSRSW),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0A37:  LD      A,(CSRSW)
         AND     A
         RET     NZ
@@ -2247,7 +2186,6 @@ C0A37:  LD      A,(CSRSW)
 ;       Subroutine      display cursor when enabled
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C0A3E:  LD      A,(CSRSW)
         AND     A
@@ -2260,7 +2198,7 @@ J0A43:  CALL    H.DSPC
         CALL    C0B83
         LD      (CURSAV),A
         LD      L,A
-        LD      H,00H
+        LD      H,0
         ADD     HL,HL
         ADD     HL,HL
         ADD     HL,HL
@@ -2270,11 +2208,11 @@ J0A43:  CALL    H.DSPC
         ADD     HL,DE
         CALL    C0B54
         LD      HL,LINWRK+7
-        LD      B,08H   ; 8 
+        LD      B,8
         LD      A,(CSTYLE)
         AND     A
         JR      Z,J0A70
-        LD      B,03H   ; 3 
+        LD      B,3
 J0A70:  LD      A,(HL)
         CPL
         LD      (HL),A
@@ -2292,7 +2230,6 @@ J0A70:  LD      A,(HL)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0A84:  LD      A,(CSRSW)
         AND     A
         RET     NZ
@@ -2301,7 +2238,6 @@ C0A84:  LD      A,(CSRSW)
 ;       Subroutine      remove cursor when enabled
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C0A8B:  LD      A,(CSRSW)
         AND     A
@@ -2318,7 +2254,6 @@ J0A90:  CALL    H.ERAC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0AA1:  LD      A,(LINLEN)
         CP      H
         RET     Z
@@ -2328,7 +2263,6 @@ C0AA1:  LD      A,(LINLEN)
 ;       Subroutine      move cursor left with linewarp
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C0AA9:  CALL    C0AB2
         RET     NZ
@@ -2340,14 +2274,12 @@ C0AA9:  CALL    C0AB2
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0AB2:  DEC     H
         DEFB    03EH                    ; LD A,xx (skip next instruction)
 
 ;       Subroutine      move cursor up if possible
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C0AB4:  DEC     L
         RET     Z                       ; already at top of screen, quit
@@ -2357,7 +2289,6 @@ C0AB4:  DEC     L
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0AB8:  CALL    C0AA1                   ; cursor right if possible
         RET     NZ                      ; was possible, quit
         LD      H,1                     ; start of line and linedown
@@ -2366,18 +2297,15 @@ C0AB8:  CALL    C0AA1                   ; cursor right if possible
 ;       Inputs          
 ;       Outputs         ________________________
 
-
 C0ABE:  CALL    C0BE2
         CP      L
         RET     Z
         JR      C,J0ACA
         INC     L
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C0AC6:  LD      (CSRY),HL
         RET
@@ -2386,22 +2314,21 @@ J0ACA:  DEC     L
         XOR     A
         JR      C0AC6
 
-C0ACE:  LD      A,20H   ; " "
+C0ACE:  LD      A," "
         CALL    C093C
         LD      A,(CSRX)
         DEC     A
-        AND     07H     ; 7 
+        AND     07H
         JR      NZ,C0ACE
         RET
 
-C0ADC:  LD      L,01H   ; 1 
+C0ADC:  LD      L,1
 
 ;       Subroutine      screencode CR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
-C0ADE:  LD      H,01H   ; 1 
+C0ADE:  LD      H,1
         JR      C0AC6
 
 C0AE2:  CALL    C0ADE
@@ -2426,25 +2353,24 @@ C0AF1:  PUSH    IX
 
 J0AFA:  CALL    C0AA9
         RET     Z
-        LD      C,20H   ; " "
+        LD      C,20H
         JP      C0B8D
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C0B03:  LD      H,01H   ; 1 
+C0B03:  LD      H,1
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
 C0B05:  CALL    C0BD9
         PUSH    HL
         CALL    C07F1
         POP     HL
-J0B0D:  LD      A,20H   ; " "
+J0B0D:  LD      A,20H
         OUT     (98H),A
         INC     H
         LD      A,(LINLEN)
@@ -2459,14 +2385,13 @@ C0B19:  PUSH    HL
         CP      L
         RET     C
         RET     Z
-        LD      H,01H   ; 1 
+        LD      H,1
         INC     L
         JR      C0B19
 
 ;       Subroutine      ERAFNK
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0B29:  CALL    H.ERAF
         XOR     A
@@ -2482,7 +2407,6 @@ J0B29:  CALL    H.ERAF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J0B3A:  LD      A,(CNSDFG)
         AND     A
         RET     Z
@@ -2490,7 +2414,6 @@ J0B3A:  LD      A,(CNSDFG)
 ;       Subroutine      DSPFNK
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C0B3F:  CALL    H.DSPF
         PUSH    IX
@@ -2508,13 +2431,12 @@ C0B4B:  LD      (CNSDFG),A
 ;       Outputs         Cx set if in textmode
 
 C0B4E:  LD      A,(SCRMOD)
-        CP      02H     ; 2 
+        CP      2
         RET
 
 ;       Subroutine      copy 8 bytes of vram to LINWRK
 ;       Inputs          HL=vram adres
 ;       Outputs         ________________________
-
 
 C0B54:  PUSH    HL
         LD      C,8
@@ -2531,7 +2453,7 @@ C0B54:  PUSH    HL
         LD      A,(LINLEN)
         LD      C,A
 
-J0B61:  LD      B,00H
+J0B61:  LD      B,0
         LD      DE,LINWRK
         CALL    C073D
         POP     HL
@@ -2540,7 +2462,6 @@ J0B61:  LD      B,00H
 ;       Subroutine      copy 8 bytes from LINWRK to vram
 ;       Inputs          HL=vram adres
 ;       Outputs         ________________________
-
 
 C0B6B:  PUSH    HL
         LD      C,8
@@ -2557,7 +2478,7 @@ C0B6B:  PUSH    HL
         LD      A,(LINLEN)
         LD      C,A
 
-J0B78:  LD      B,00H
+J0B78:  LD      B,0
         EX      DE,HL
         LD      HL,LINWRK
         CALL    C0780
@@ -2579,7 +2500,6 @@ C0B83:  PUSH    HL
 ;       Inputs          H=x pos, L=y pos, C=char
 ;       Outputs         ________________________
 
-
 C0B8D:  PUSH    HL
         CALL    C07F1
         LD      A,C
@@ -2591,7 +2511,7 @@ C0B8D:  PUSH    HL
 ;       Inputs          L=y pos
 ;       Outputs         HL=vram adres in nametable
 
-C0B96:  LD      H,01H   ; 1 
+C0B96:  LD      H,1
 
 ;       Subroutine      convert screenlocation to VRAM adres
 ;       Inputs          H=x pos, L=y pos
@@ -2601,7 +2521,7 @@ C0B98:  PUSH    BC
         DEC     H
         DEC     L
         LD      E,H
-        LD      H,00H
+        LD      H,0
         LD      D,H
         ADD     HL,HL
         ADD     HL,HL
@@ -2614,18 +2534,18 @@ C0B98:  PUSH    BC
         AND     A
         LD      A,(LINLEN)
         JR      Z,J0BB3
-        SBC     A,22H   ; """
+        SBC     A,22H
         JR      J0BC0
 
-J0BB3:  CP      29H     ; ")"
+J0BB3:  CP      29H
         JR      C,J0BBD
         ADD     HL,BC
         ADD     HL,HL
-        SBC     A,52H   ; "R"
+        SBC     A,52H
         JR      J0BC0
 
 J0BBD:  ADD     HL,BC
-        SBC     A,2AH   ; "*"
+        SBC     A,2AH
 J0BC0:  ADD     HL,DE
         CPL
         AND     A
@@ -2644,7 +2564,7 @@ J0BC0:  ADD     HL,DE
 
 C0BCD:  PUSH    HL
         LD      DE,LINTTB-1
-        LD      H,00H
+        LD      H,0
         ADD     HL,DE
         LD      A,(HL)
         EX      DE,HL
@@ -2655,7 +2575,6 @@ C0BCD:  PUSH    HL
 ;       Subroutine      unmark line as succession
 ;       Inputs          L = linenumber
 ;       Outputs         ________________________
-
 
 C0BD9:  DEFB    03EH                    ; LD A,xx (skip next instruction)
 C0BDA:  XOR     A
@@ -2674,7 +2593,6 @@ C0BDB:  PUSH    AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0BE2:  LD      A,(CNSDFG)
         PUSH    HL
         LD      HL,CRTCNT
@@ -2685,7 +2603,6 @@ C0BE2:  LD      A,(CNSDFG)
 ;       Subroutine      SNSMAT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J0BEC:  LD      C,A
         DI
@@ -2701,7 +2618,6 @@ J0BEC:  LD      C,A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C0BF9:  CALL    H.ISFL
         PUSH    HL
         LD      HL,(PTRFIL)
@@ -2714,7 +2630,6 @@ C0BF9:  CALL    H.ISFL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J0C04:  LD      A,H
         SUB     D
         RET     NZ
@@ -2726,26 +2641,22 @@ J0C04:  LD      A,H
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
-C0C0A:  LD      L,02H   ; 2 
+C0C0A:  LD      L,2
         JR      C0C11
 
 ;       Subroutine      GETVC2
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J0C0E:  LD      A,(VOICEN)
-
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
 C0C11:  PUSH    DE
         LD      DE,VCBA
-        LD      H,00H
+        LD      H,0
         ADD     HL,DE
         OR      A
         JR      Z,J0C22
@@ -2798,7 +2709,7 @@ J0C3C:  PUSH    HL
         CALL    H.TIMI
         EI
         LD      (STATFL),A
-        AND     20H     ; " "
+        AND     20H
         LD      HL,TRPTBL+11*3
         CALL    NZ,C0EF1                ; raise SPRITE trap
         LD      HL,(INTCNT)
@@ -2823,7 +2734,7 @@ J0C82:  RR      C
         POP     BC
         POP     AF
         INC     A
-        CP      03H     ; 3 
+        CP      3
         JR      C,J0C82
         LD      HL,SCNCNT
         DEC     (HL)
@@ -2837,18 +2748,18 @@ J0C82:  RR      C
 
         XOR     A
         CALL    C1202
-        AND     30H     ; "0"
+        AND     30H
         PUSH    AF
-        LD      A,01H   ; 1 
+        LD      A,1
         CALL    C1202
-        AND     30H     ; "0"
+        AND     30H
         RLCA
         RLCA
         POP     BC
         OR      B
         PUSH    AF
         CALL    C121C
-        AND     01H     ; 1 
+        AND     01H
         POP     BC
         OR      B
         LD      C,A
@@ -2909,7 +2820,7 @@ J0D02:  POP     IX
 C0D12:  IN      A,(0AAH)
         AND     0F0H
         LD      C,A
-        LD      B,0BH   ; 11 
+        LD      B,11
         LD      HL,NEWKEY
 J0D1C:  LD      A,C
         OUT     (0AAH),A
@@ -2928,7 +2839,7 @@ J0D1C:  LD      A,C
         JP      C02BF
 
 J0D3A:  LD      DE,NEWKEY
-        LD      B,0BH   ; 11 
+        LD      B,11
 J0D3F:  DEC     DE
         DEC     HL
         LD      A,(DE)
@@ -2939,9 +2850,9 @@ J0D3F:  DEC     DE
 
 J0D49:
         IF INTHZ EQ 60
-        LD      A,14H                   ; autorepeat at 20 keyboardscans (= 666 ms)
+        LD      A,20                    ; autorepeat at 20 keyboardscans (= 666 ms)
         ELSE
-        LD      A,20H                   ; autorepeat at 32 keyboardscans (= 640 ms)
+        LD      A,32                    ; autorepeat at 32 keyboardscans (= 640 ms)
         ENDIF
 
         LD      (REPCNT),A
@@ -2950,8 +2861,7 @@ J0D49:
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
-C0D4E:  LD      B,0BH   ; 11 
+C0D4E:  LD      B,11
         LD      HL,OLDKEY
         LD      DE,NEWKEY
 J0D56:  LD      A,(DE)
@@ -2967,7 +2877,6 @@ J0D56:  LD      A,(DE)
 ;       Subroutine      check if keyboardbuffer is empty
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C0D62:  LD      HL,(GETPNT)
         LD      A,(PUTPNT)
@@ -3153,7 +3062,6 @@ J0F80:  OUT     (0ABH),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C10C2:  INC     HL
         LD      A,L
         CP      LOW (KEYBUF+40)
@@ -3177,9 +3085,9 @@ J10D9:  CALL    C0D6A
         CALL    C0A84
 J10E1:  LD      HL,INTFLG
         LD      A,(HL)
-        CP      04H     ; 4 
+        CP      4
         JR      NZ,J10EB
-        LD      (HL),00H
+        LD      (HL),0
 J10EB:  LD      HL,(GETPNT)
         LD      C,(HL)
         CALL    C10C2
@@ -3191,7 +3099,6 @@ J10EB:  LD      HL,(GETPNT)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J10F9:  PUSH    HL
         LD      HL,0
         CALL    C04F0
@@ -3202,7 +3109,6 @@ J10F9:  PUSH    HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C1102:  DI
         OUT     (0A0H),A
         PUSH    AF
@@ -3212,18 +3118,15 @@ C1102:  DI
         POP     AF
         RET
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
-C110C:  LD      A,0EH   ; 14 
+C110C:  LD      A,14
 
 ;       Subroutine      RDPSG
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C110E:  OUT     (0A0H),A
         IN      A,(0A2H)
@@ -3233,13 +3136,12 @@ C110E:  OUT     (0A0H),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C1113:  PUSH    IX
         LD      IX,S.BEEP
         JP      J0295
 
 J111C:  PUSH    AF
-        LD      A,0FH   ; 15 
+        LD      A,15
         OUT     (0A0H),A
         IN      A,(0A2H)
         AND     7FH
@@ -3253,11 +3155,9 @@ J112D:  OR      B
         OUT     (0A1H),A
         RET
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C1131:  LD      B,A
         CALL    C0C0A
@@ -3312,20 +3212,20 @@ J1177:  LD      H,A
         JR      Z,J118B
         LD      E,D
         LD      A,B
-        ADD     A,08H   ; 8 
+        ADD     A,8
         CALL    C1102
         LD      A,E
-        AND     10H     ; 16 
-        LD      A,0DH   ; 13 
+        AND     10H
+        LD      A,13
         CALL    NZ,C1102
 J118B:  LD      A,H
-        AND     40H     ; "@"
+        AND     40H
         JR      Z,J115C
         CALL    C11D8
         LD      D,A
         CALL    C11D8
         LD      E,A
-        LD      A,0BH   ; 11 
+        LD      A,11
         CALL    C1102
         INC     A
         LD      E,D
@@ -3335,8 +3235,8 @@ J118B:  LD      A,H
         JR      J115C
 
 J11A6:  LD      A,B
-        ADD     A,08H   ; 8 
-        LD      E,00H
+        ADD     A,8
+        LD      E,0
         CALL    C1102
         INC     B
         LD      HL,MUSICF
@@ -3352,7 +3252,6 @@ J11B4:  RLA
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J11BA:  LD      A,(MUSICF)
         OR      A
         RET     NZ
@@ -3365,7 +3264,7 @@ J11BA:  LD      A,(MUSICF)
         LD      (VCBA),HL
         LD      (VCBB),HL
         LD      (VCBC),HL
-        LD      A,07H   ; 7 
+        LD      A,00000111B
         LD      (MUSICF),A
         RET
 
@@ -3384,14 +3283,13 @@ C11D8:  LD      A,(QUEUEN)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J11E4:  DEC     A
         JP      M,J11F6
         CALL    C1202
         LD      HL,I1229
-J11EE:  AND     0FH     ; 15 
+J11EE:  AND     0FH
         LD      E,A
-        LD      D,00H
+        LD      D,0
         ADD     HL,DE
         LD      A,(HL)
         RET
@@ -3404,23 +3302,21 @@ J11F6:  CALL    C121C
         LD      HL,I1239
         JR      J11EE
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
 C1202:  LD      B,A
-        LD      A,0FH   ; 15 
+        LD      A,15
         DI
-        CALL    C110E
+        CALL    C110E                   ; RDPSG
         DJNZ    J1211
         AND     0DFH
-        OR      4CH     ; "L"
+        OR      4CH
         JR      J1215
 
 J1211:  AND     0AFH
-        OR      03H     ; 3 
+        OR      03H
 J1215:  OUT     (0A1H),A
         CALL    C110C
         EI
@@ -3430,11 +3326,10 @@ J1215:  OUT     (0A1H),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C121C:  DI
         IN      A,(0AAH)
         AND     0F0H
-        ADD     A,08H   ; 8 
+        ADD     A,8
         OUT     (0AAH),A
         IN      A,(0A9H)
         EI
@@ -3454,31 +3349,29 @@ I1239:  DEFB    000H,003H,005H,004H
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J1249:  DEC     A
         JP      M,J1262
         PUSH    AF
-        AND     01H     ; 1 
+        AND     01H
         CALL    C1202
         POP     BC
         DEC     B
         DEC     B
-        LD      B,10H   ; 16 
+        LD      B,00010000B
         JP      M,J125D
-        LD      B,20H   ; " "
+        LD      B,00100000B
 J125D:  AND     B
-J125E:  SUB     01H     ; 1 
+J125E:  SUB     01H
         SBC     A,A
         RET
 
 J1262:  CALL    C121C
-        AND     01H     ; 1 
+        AND     01H
         JR      J125E
 
 ;       Subroutine      GTPDL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J1269:  INC     A
         AND     A
@@ -3491,23 +3384,23 @@ J1270:  RLA
         DJNZ    J1270
         LD      B,A
         POP     AF
-        LD      C,10H   ; 16 
+        LD      C,00010000B
         LD      DE,03AFH
         JR      NC,J1281
-        LD      C,20H   ; " "
+        LD      C,00100000B
         LD      DE,4C9FH
-J1281:  LD      A,0FH   ; 15 
+J1281:  LD      A,15
         DI
-        CALL    C110E
+        CALL    C110E                   ; RDPSG
         AND     E
         OR      D
         OR      C
         OUT     (0A1H),A
         XOR     C
         OUT     (0A1H),A
-        LD      A,0EH   ; 14 
+        LD      A,0EH
         OUT     (0A0H),A
-        LD      C,00H
+        LD      C,0
 J1295:  IN      A,(0A2H)
         AND     B
         JR      Z,J129F
@@ -3518,19 +3411,17 @@ J129F:  EI
         LD      A,C
         RET
 
-
 ;       Subroutine      GTPAD
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
-J12A2:  CP      08H     ; 8 
+J12A2:  CP      8
         JR      C,J12AF
         PUSH    IX
         LD      IX,S.NEWPAD
         JP      J0295
 
-J12AF:  CP      04H     ; 4 
+J12AF:  CP      4
         LD      DE,0CECH
 
 ;       Subroutine      __________________________
@@ -3539,7 +3430,7 @@ J12AF:  CP      04H     ; 4
 
         JR      C,J12BB
         LD      DE,03D3H
-        SUB     04H     ; 4 
+        SUB     04H
 J12BB:  DEC     A
         JP      M,J12C8
         DEC     A
@@ -3552,11 +3443,11 @@ J12C8:  PUSH    AF
         LD      (FILNAM+0),HL
         SBC     A,A
         CPL
-        AND     40H     ; "@"
+        AND     40H
         LD      C,A
-        LD      A,0FH   ; 15 
+        LD      A,15
         DI
-        CALL    C110E
+        CALL    C110E                   ; RDPSG
         AND     0BFH
         OR      C
         OUT     (0A1H),A
@@ -3564,12 +3455,12 @@ J12C8:  PUSH    AF
         JP      M,J12EB
         CALL    C110C
         EI
-        AND     08H     ; 8 
-        SUB     01H     ; 1 
+        AND     08H
+        SUB     01H
         SBC     A,A
         RET
 
-J12EB:  LD      C,00H
+J12EB:  LD      C,0
         CALL    C1335
         CALL    C1335
         JR      C,J131D
@@ -3584,14 +3475,14 @@ J12EB:  LD      C,00H
         JR      NC,J1307
         CPL
         INC     A
-J1307:  CP      05H     ; 5 
+J1307:  CP      05H
         JR      NC,J12EB
         LD      A,C
         SUB     E
         JR      NC,J1311
         CPL
         INC     A
-J1311:  CP      05H     ; 5 
+J1311:  CP      05H
         JR      NC,J12EB
         LD      A,D
         LD      (PADX),A
@@ -3599,22 +3490,20 @@ J1311:  CP      05H     ; 5
         LD      (PADY),A
 J131D:  EI
         LD      A,H
-        SUB     01H     ; 1 
+        SUB     1
         SBC     A,A
         RET
-
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
-C1323:  LD      C,0AH   ; 10 
+C1323:  LD      C,10
         CALL    C1335
         RET     C
         LD      D,L
         PUSH    DE
-        LD      C,00H
+        LD      C,0
         CALL    C1335
         POP     DE
         LD      E,L
@@ -3622,14 +3511,12 @@ C1323:  LD      C,0AH   ; 10
         LD      H,A
         RET
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
 C1335:  CALL    C135E
-        LD      B,08H   ; 8 
+        LD      B,8
         LD      D,C
 J133B:  RES     0,D
         RES     2,D
@@ -3651,27 +3538,23 @@ J133B:  RES     0,D
         RRA
         RET
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
-C135E:  LD      A,35H   ; "5"
+C135E:  LD      A,35H
         OR      C
         LD      D,A
         CALL    C1370
 J1365:  CALL    C110C
-        AND     02H     ; 2 
+        AND     02H
         JR      Z,J1365
         RES     4,D
         RES     5,D
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C1370:  PUSH    HL
         PUSH    DE
@@ -3680,7 +3563,7 @@ C1370:  PUSH    HL
         CPL
         AND     D
         LD      D,A
-        LD      A,0FH   ; 15 
+        LD      A,15
         OUT     (0A0H),A
         IN      A,(0A2H)
         AND     L
@@ -3698,13 +3581,13 @@ C1370:  PUSH    HL
 J1387:  AND     A
         JP      M,J1395
 J138B:  JR      NZ,J1390
-        LD      A,09H   ; 9 
+        LD      A,09H
         DEFB    0C2H
 J1390:  LD      A,08H
         OUT     (0ABH),A
         RET
 J1395:  IN      A,(0AAH)
-        AND     10H     ; 16 
+        AND     10H
         JR      J138B
 
 ;       Subroutine      NMI (NonMaskable Interrupt routine Z80)
@@ -3726,9 +3609,9 @@ J13A7:  LD      (HL),A
         INC     HL
         DJNZ    J13A7
         POP     HL
-        LD      B,0AH   ; 10 
+        LD      B,10
         LD      DE,I13C3
-J13B1:  LD      C,10H   ; 16 
+J13B1:  LD      C,16
 J13B3:  LD      A,(DE)
         INC     DE
         LD      (HL),A
@@ -3737,7 +3620,7 @@ J13B3:  LD      A,(DE)
         OR      A
         JR      NZ,J13B3
         PUSH    BC
-        LD      B,00H
+        LD      B,0
         ADD     HL,BC
         POP     BC
         DJNZ    J13B1
@@ -3764,14 +3647,12 @@ I13C3:  DEFM    'color ',0
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J140B:  IN      A,(99H)
         RET
 
 ;       Subroutine      RSLREG
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J140E:  IN      A,(0A8H)
         RET
@@ -3780,7 +3661,6 @@ J140E:  IN      A,(0A8H)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J1411:  OUT     (0A8H),A
         RET
 
@@ -3788,14 +3668,12 @@ J1411:  OUT     (0A8H),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J1414:  CALL    H.PHYD
         RET
 
 ;       Subroutine      FORMAT
 ;       Inputs          ________________________
 ;       Outputs         ________________________;
-
 
 J1418:  CALL    H.FORM
         RET
@@ -3807,23 +3685,21 @@ J1418:  CALL    H.FORM
 ;            Outputs ________________________
 
 C1479:  IN      A,(0BAH)
-        AND     10H     ; 16 
+        AND     10H
         JR      NZ,J148C
         LD      HL,XSAVE+1
         SET     7,(HL)
-        LD      A,20H   ; " "
+        LD      A,20H
         OUT     (0BBH),A
-        OR      08H     ; 8 
+        OR      08H
         OUT     (0BBH),A
 J148C:  IN      A,(99H)
         AND     A
         RET
 
-
 ;       Subroutine      PUTQ
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J1490:  CALL    C14F8
         LD      A,B
@@ -3843,7 +3719,7 @@ J1490:  CALL    C14F8
         INC     HL
         LD      H,(HL)
         LD      L,A
-        LD      B,00H
+        LD      B,0
         ADD     HL,BC
         LD      (HL),E
         POP     HL
@@ -3855,7 +3731,7 @@ J1490:  CALL    C14F8
 ;            Outputs ________________________
 
 C14AB:  CALL    C14F8
-        LD      (HL),00H
+        LD      (HL),0
         JR      NZ,J14CF
         LD      A,C
         CP      B
@@ -3874,7 +3750,7 @@ C14AB:  CALL    C14F8
         INC     HL
         LD      H,(HL)
         LD      L,A
-        LD      B,00H
+        LD      B,0
         ADD     HL,BC
         LD      A,(HL)
         POP     HL
@@ -3882,11 +3758,11 @@ C14AB:  CALL    C14F8
         OR      A
         RET     NZ
         INC     A
-        LD      A,00H
+        LD      A,0
         RET
 
 J14CF:  LD      C,A
-        LD      B,00H
+        LD      B,0
         LD      HL,QUEBAK-1
         ADD     HL,BC
         LD      A,(HL)
@@ -3916,7 +3792,6 @@ C14D8:  PUSH    BC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J14E9:  CALL    C14F8
         LD      A,B
         INC     A
@@ -3927,7 +3802,7 @@ J14E9:  CALL    C14F8
         SUB     B
         AND     (HL)
         LD      L,A
-        LD      H,00H
+        LD      H,0
         RET
 
 ;         Subroutine __________________________
@@ -3952,7 +3827,7 @@ C1502:  RLCA
         RLCA
         ADD     A,B
         LD      C,A
-        LD      B,00H
+        LD      B,0
         LD      HL,(QUEUES)
         ADD     HL,BC
         RET
@@ -3960,7 +3835,6 @@ C1502:  RLCA
 ;       Subroutine      GRPPRT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J150E:  CALL    C06A9
         JR      C,J151C
@@ -3975,9 +3849,9 @@ J151C:  PUSH    HL
         CALL    C08FA
         JR      NC,J1587
         JR      NZ,J152F
-        CP      0DH     ; 13 
+        CP      13
         JR      Z,J158A
-        CP      20H     ; " "
+        CP      20H
         JR      C,J1587
 J152F:  CALL    C07AB
         LD      A,(FORCLR)
@@ -3989,8 +3863,8 @@ J152F:  CALL    C07AB
         JR      NC,J1587
         CALL    C1604
         LD      DE,PATWRK
-        LD      C,08H   ; 8 
-J154D:  LD      B,08H   ; 8 
+        LD      C,8
+J154D:  LD      B,8
         CALL    C1651
         PUSH    HL
         PUSH    AF
@@ -4015,11 +3889,11 @@ J1564:  POP     AF
 J1572:  CALL    C15FB
         LD      A,(GRPACX)
         JR      Z,J1580
-        ADD     A,20H   ; " "
+        ADD     A,20H
         JR      C,J158A
         JR      J1584
 
-J1580:  ADD     A,08H   ; 8 
+J1580:  ADD     A,8
         JR      C,J158A
 J1584:  LD      (GRPACX),A
 J1587:  JP      J0937
@@ -4029,9 +3903,9 @@ J158A:  XOR     A
         CALL    C15FB
         LD      A,(GRPACY)
         JR      Z,J1599
-        ADD     A,20H   ; " "
+        ADD     A,32
         DEFB    001H                    ; skip next instruction
-J1599:  ADD     A,08H
+J1599:  ADD     A,8
         CP      0C0H
         JR      C,J15A0
         XOR     A
@@ -4042,10 +3916,9 @@ J15A0:  LD      (GRPACY),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C15A5:  PUSH    HL
         PUSH    BC
-        LD      B,01H   ; 1 
+        LD      B,1
         EX      DE,HL
         LD      A,H
         ADD     A,A
@@ -4055,14 +3928,14 @@ C15A5:  PUSH    HL
 
 J15B3:  LD      DE,192
         LD      A,(SCRMOD)
-        CP      05H     ; 5 
+        CP      5
         JR      C,J15BF
         LD      E,0D4H
 J15BF:  RST     20H
         JR      C,J15C6
         EX      DE,HL
         DEC     HL
-J15C4:  LD      B,00H
+J15C4:  LD      B,0
 J15C6:  EX      (SP),HL
         LD      A,H
         ADD     A,A
@@ -4072,18 +3945,18 @@ J15C6:  EX      (SP),HL
 
 J15D0:  LD      DE,256
         LD      A,(SCRMOD)
-        AND     07H     ; 7 
-        CP      06H     ; 6 
+        AND     07H
+        CP      6
         JR      C,J15DE
-        LD      D,02H   ; 2 
+        LD      D,HIGH 512
 J15DE:  RST     20H
         JR      C,J15E5
         EX      DE,HL
         DEC     HL
-J15E3:  LD      B,00H
+J15E3:  LD      B,0
 J15E5:  POP     DE
         LD      A,(SCRMOD)
-        CP      03H     ; 3 
+        CP      3
         JR      NZ,J15F5
         SRL     L
         SRL     L
@@ -4100,27 +3973,25 @@ J15F5:  LD      A,B
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C15FB:  LD      A,(SCRMOD)
-        CP      04H     ; 4 
+        CP      4
         RET     Z
-        CP      02H     ; 2 
+        CP      2
         RET
 
 ;       Subroutine      MAPXYC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C1604:  LD      A,(SCRMOD)
-        CP      05H     ; 5 
+        CP      5
         JR      NC,J163E
-        CP      03H     ; 3 
+        CP      3
         JR      Z,J1648
         PUSH    BC
         LD      D,C
         LD      A,C
-        AND     07H     ; 7 
+        AND     07H
         LD      C,A
         LD      HL,I1636
         ADD     HL,BC
@@ -4136,7 +4007,7 @@ C1604:  LD      A,(SCRMOD)
         AND     0F8H
         LD      C,A
         LD      A,E
-        AND     07H     ; 7 
+        AND     07H
         OR      C
         LD      C,A
         LD      HL,(GRPCGP)
@@ -4162,7 +4033,6 @@ J164A:  LD      IX,S.MAPXYC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C1651:  LD      A,(CMASK)
         LD      HL,(CLOC)
         RET
@@ -4171,7 +4041,6 @@ C1651:  LD      A,(CMASK)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C1658:  LD      (CMASK),A
         LD      (CLOC),HL
         RET
@@ -4179,7 +4048,6 @@ C1658:  LD      (CMASK),A
 ;       Subroutine      READC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C165F:  CALL    C06A9
         JR      C,J166D
@@ -4207,7 +4075,7 @@ J166D:  CALL    C15FB
         RRCA
         RRCA
         RRCA
-J168D:  AND     0FH     ; 15 
+J168D:  AND     0FH
         POP     HL
         POP     BC
         RET
@@ -4215,7 +4083,6 @@ J168D:  AND     0FH     ; 15
 ;       Subroutine      SETATR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J1692:  CALL    C169A
         RET     C
@@ -4228,12 +4095,12 @@ J1692:  CALL    C169A
 
 C169A:  PUSH    AF
         LD      A,(SCRMOD)
-        CP      06H     ; 6 
+        CP      6
         JR      Z,J16AE
-        CP      08H     ; 8 
+        CP      8
         JR      Z,J16AB
         POP     AF
-        CP      10H     ; 16 
+        CP      10H
         CCF
         RET
 
@@ -4242,15 +4109,15 @@ J16AB:  POP     AF
         RET
 
 J16AE:  POP     AF
-        CP      20H     ; " "
+        CP      20H
         CCF
         RET     C
-        CP      10H     ; 16 
+        CP      10H
         JR      C,J16BA
-        AND     0FH     ; 15 
+        AND     0FH
         RET
 
-J16BA:  AND     03H     ; 3 
+J16BA:  AND     03H
         PUSH    BC
         LD      B,A
         ADD     A,A
@@ -4263,11 +4130,10 @@ J16BA:  AND     03H     ; 3
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C16C3:  LD      A,(SCRMOD)
-        CP      05H     ; 5 
+        CP      5
         JR      NC,J16E7
-        CP      03H     ; 3 
+        CP      3
         JR      Z,J16DE
         PUSH    HL
         PUSH    BC
@@ -4288,7 +4154,7 @@ J16E7:  LD      HL,(CLOC)
         LD      A,(CMASK)
         PUSH    AF
 J16EE:  DI
-        LD      A,02H   ; 2 
+        LD      A,2
         OUT     (99H),A
         LD      A,8FH
         OUT     (99H),A
@@ -4334,7 +4200,6 @@ J16EE:  DI
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C1735:  CALL    C15FB
         JR      Z,J1743
         PUSH    IX
@@ -4356,7 +4221,6 @@ J1743:  PUSH    HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C1756:  CALL    C15FB
         JR      Z,J1764
         PUSH    IX
@@ -4375,7 +4239,6 @@ J176B:  PUSH    DE
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C1771:  CALL    C15FB
         JR      Z,J177F
         PUSH    IX
@@ -4388,14 +4251,13 @@ J177F:  PUSH    HL
         JR      NC,J17AE
         LD      A,L
         AND     0F8H
-        LD      A,01H   ; 1 
+        LD      A,1
         JR      NZ,J17A5
         JP      J181C
 
 ;       Subroutine      LEFTC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J1790:  CALL    C15FB
         JR      Z,J179E
@@ -4421,7 +4283,6 @@ J17AE:  LD      (CMASK),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C17B4:  CALL    C15FB
         JR      Z,J17C2
         PUSH    IX
@@ -4441,14 +4302,13 @@ J17C2:  PUSH    HL
         JR      C,J17EF
         LD      A,L
         INC     A
-        AND     07H     ; 7 
+        AND     07H
         JR      NZ,J17EF
         JR      J181B
 
 ;       Subroutine      DOWNC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J17DC:  CALL    C15FB
         JR      Z,J17EA
@@ -4468,7 +4328,6 @@ J17EF:  INC     HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J17F6:  CALL    C15FB
         JR      Z,J1804
         PUSH    IX
@@ -4487,7 +4346,7 @@ J1804:  PUSH    HL
         RST     20H
         JR      NC,J1832
         LD      A,L
-        AND     07H     ; 7 
+        AND     07H
         JR      NZ,J1832
 J181B:  POP     DE
 J181C:  SCF
@@ -4497,7 +4356,6 @@ J181C:  SCF
 ;       Subroutine      UPC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J181F:  CALL    C15FB
         JR      Z,J182D
@@ -4511,7 +4369,7 @@ J182D:  PUSH    HL
 J1832:  LD      A,L
         DEC     HL
         LD      DE,0FF08H
-J1837:  AND     07H     ; 7 
+J1837:  AND     07H
         JR      NZ,J183C
         ADD     HL,DE
 J183C:  LD      (CLOC),HL
@@ -4523,7 +4381,6 @@ J183C:  LD      (CLOC),HL
 ;       Subroutine      NSETCX
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C1843:  CALL    C15FB
         JP      NZ,J18F5
@@ -4549,7 +4406,7 @@ J1856:  ADD     HL,BC
         ADD     HL,DE
         EX      (SP),HL
 J1869:  LD      A,L
-        AND     07H     ; 7 
+        AND     07H
         LD      C,A
         LD      A,H
         RRCA
@@ -4557,7 +4414,7 @@ J1869:  LD      A,L
         RRA
         RRCA
         RRCA
-        AND     3FH     ; "?"
+        AND     3FH
         POP     HL
         LD      B,A
         JR      Z,J188D
@@ -4589,11 +4446,9 @@ J189E:  ADD     A,A
         AND     B
 J18A5:  POP     HL
 
-
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C18A6:  LD      B,A
         CALL    C07E1
@@ -4602,7 +4457,7 @@ C18A6:  LD      B,A
         ADD     HL,DE
         CALL    C07E1
         PUSH    AF
-        AND     0FH     ; 15 
+        AND     0FH
         LD      E,A
         POP     AF
         SUB     E
@@ -4637,11 +4492,9 @@ J18D8:  LD      A,B
 C18DC:  LD      A,B
         OR      C
 
-
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C18DE:  LD      DE,2000H
         ADD     HL,DE
@@ -4671,7 +4524,6 @@ J18F5:  PUSH    HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J1901:  LD      HL,(ASPCT1)
         EX      DE,HL
         LD      HL,(ASPCT2)
@@ -4681,12 +4533,11 @@ J1901:  LD      HL,(ASPCT1)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J1909:  PUSH    AF
         CALL    C15FB
         JR      Z,J1915
         POP     AF
-        CP      10H     ; 16 
+        CP      10H
         CCF
         JR      J191A
 
@@ -4699,7 +4550,6 @@ J191A:  LD      (BDRATR),A
 ;       Subroutine      SCANR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J191E:  LD      HL,0
         LD      C,L
@@ -4765,7 +4615,6 @@ J1970:  PUSH    DE
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J1994:  LD      HL,0
         LD      C,L
         CALL    C15FB
@@ -4797,11 +4646,9 @@ J19CC:  LD      A,(FILNAM+3)
         LD      C,A
         RET
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C19D1:  PUSH    HL
         LD      HL,ATRBYT
@@ -4822,7 +4669,7 @@ J19E2:  DEC     BC
         POP     AF
         POP     BC
 J19E9:  PUSH    AF
-        LD      A,09H   ; 9 
+        LD      A,09H
         OUT     (0ABH),A
         POP     AF
         EI
@@ -4830,7 +4677,7 @@ J19E9:  PUSH    AF
 
 J19F1:  OR      A
         PUSH    AF
-        LD      A,08H   ; 8 
+        LD      A,08H
         OUT     (0ABH),A
         LD      HL,0
 J19FA:  DEC     HL
@@ -4843,7 +4690,7 @@ J19FA:  DEC     HL
         ADD     A,A
         ADD     A,A
 J1A07:  LD      B,A
-        LD      C,00H
+        LD      C,0
         DI
 J1A0B:  CALL    C1A4D
         CALL    C1A3F
@@ -4855,11 +4702,11 @@ J1A0B:  CALL    C1A4D
 J1A19:  LD      HL,(LOW.)
         PUSH    AF
         LD      A,L
-        SUB     0EH     ; 14 
+        SUB     0EH
         LD      L,A
         CALL    C1A50
         POP     AF
-        LD      B,08H   ; 8 
+        LD      B,8
 J1A27:  RRCA
         CALL    C,C1A40
         CALL    NC,C1A39
@@ -4905,19 +4752,19 @@ C1A4D:  LD      HL,(HIGH.)
 C1A50:  PUSH    AF
 J1A51:  DEC     L
         JP      NZ,J1A51
-        LD      A,0BH   ; 11 
+        LD      A,0BH
         OUT     (0ABH),A
 J1A59:  DEC     H
         JP      NZ,J1A59
-        LD      A,0AH   ; 10 
+        LD      A,0AH
         OUT     (0ABH),A
         POP     AF
         RET
 
-J1A63:  LD      A,08H   ; 8 
+J1A63:  LD      A,08H
         OUT     (0ABH),A
         DI
-        LD      A,0EH   ; 14 
+        LD      A,0EH
         OUT     (0A0H),A
 J1A6C:  LD      HL,0457H
 J1A6F:  LD      D,C
@@ -4926,13 +4773,13 @@ J1A6F:  LD      D,C
         LD      A,C
         CP      0DEH
         JR      NC,J1A6C
-        CP      05H     ; 5 
+        CP      05H
         JR      C,J1A6C
         SUB     D
         JR      NC,J1A82
         CPL
         INC     A
-J1A82:  CP      04H     ; 4 
+J1A82:  CP      04H
         JR      NC,J1A6C
         DEC     HL
         LD      A,H
@@ -4956,16 +4803,16 @@ J1A90:  CALL    C1B34
         LD      A,H
         SUB     D
         LD      D,A
-        SUB     06H     ; 6 
+        SUB     06H
         LD      (LOWLIM),A
         LD      A,D
         ADD     A,A
-        LD      B,00H
-J1AAF:  SUB     03H     ; 3 
+        LD      B,0
+J1AAF:  SUB     03H
         INC     B
         JR      NC,J1AAF
         LD      A,B
-        SUB     03H     ; 3 
+        SUB     03H
         LD      (WINWID),A
         OR      A
         RET
@@ -4982,7 +4829,7 @@ J1AC9:  CALL    C0564
         IN      A,(0A2H)
         RLCA
         JR      C,J1AC9
-        LD      E,00H
+        LD      E,0
         CALL    C1B1F
 J1AD7:  LD      B,C
         CALL    C1B1F
@@ -4992,12 +4839,12 @@ J1AD7:  LD      B,C
         JP      C,J1AD7
         CP      D
         JR      C,J1AD7
-        LD      L,08H   ; 8 
+        LD      L,8
 J1AE6:  CALL    C1B03
-        CP      04H     ; 4 
+        CP      04H
         CCF
         RET     C
-        CP      02H     ; 2 
+        CP      02H
         CCF
         RR      D
         LD      A,C
@@ -5016,7 +4863,7 @@ J1AE6:  CALL    C1B03
 
 C1B03:  LD      A,(WINWID)
         LD      B,A
-        LD      C,00H
+        LD      C,0
 J1B09:  IN      A,(0A2H)
         XOR     E
         JP      P,J1B17
@@ -5043,7 +4890,7 @@ C1B1F:  CALL    C0564
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C1B23:  LD      C,00H
+C1B23:  LD      C,0
 J1B25:  INC     C
         JR      Z,J1B32
         IN      A,(0A2H)
@@ -5065,14 +4912,13 @@ C1B34:  CALL    C0564
         IN      A,(0A2H)
         RLCA
         JR      C,C1B34
-        LD      E,00H
+        LD      E,0
         CALL    C1B23
         JP      J1B25
 
 ;       Subroutine      OUTDO
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J1B45:  PUSH    AF
         CALL    H.OUTD
@@ -5094,22 +4940,21 @@ J1B56:  LD      A,(PRTFLG)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C1B63:  PUSH    AF
-        CP      09H     ; 9 
+        CP      9
         JR      NZ,J1B76
-J1B68:  LD      A,20H   ; " "
+J1B68:  LD      A," "
         CALL    C1B63
         LD      A,(LPTPOS)
-        AND     07H     ; 7 
+        AND     07H
         JR      NZ,J1B68
         POP     AF
         RET
 
-J1B76:  SUB     0DH     ; 13 
+J1B76:  SUB     13
         JR      Z,J1B84
         JR      C,J1B87
-        CP      13H     ; 19 
+        CP      13H
         JR      C,J1B87
         LD      A,(LPTPOS)
         INC     A
@@ -5158,7 +5003,7 @@ J1BAC:  CALL    C08BA
         LD      IX,M73B2
         JP      C02BF
 
-J1BB7:  LD      A,20H   ; " "
+J1BB7:  LD      A,20H
         JR      J1BAC
 
 J1BBB:  POP     AF
@@ -5214,29 +5059,26 @@ D1BBF:
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J23BF:  CALL    H.PINL
         LD      A,(AUTFLG)
         AND     A
         JR      NZ,J23D5
-        LD      L,00H
+        LD      L,0
         JR      J23E0
 
 ;       Subroutine      QINLIN
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J23CC:  CALL    H.QINL
-        LD      A,3FH   ; "?"
+        LD      A,"?"
         RST     18H
-        LD      A,20H   ; " "
+        LD      A," "
         RST     18H
 
 ;       Subroutine      INLIN
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 J23D5:  CALL    H.INLI
         LD      HL,(CSRY)
@@ -5248,7 +5090,7 @@ J23E0:  LD      (FSTPOS),HL
         LD      (INTFLG),A
 J23E7:  CALL    C10CB
         LD      HL,I2439-2
-        LD      C,0BH   ; 11 
+        LD      C,11
         CALL    C0976
         PUSH    AF
         CALL    NZ,C23FF
@@ -5262,29 +5104,27 @@ J23E7:  CALL    C10CB
 
 C23FE:  RET
 
-
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 C23FF:  PUSH    AF
-        CP      09H     ; 9 
+        CP      9
         JR      NZ,J2413
         POP     AF
-J2405:  LD      A,20H   ; " "
+J2405:  LD      A," "
         CALL    C23FF
         LD      A,(CSRX)
         DEC     A
-        AND     07H     ; 7 
+        AND     07H
         JR      NZ,J2405
         RET
 
 J2413:  POP     AF
         LD      HL,INSFLG
-        CP      01H     ; 1 
+        CP      1
         JR      Z,J2426
-        CP      20H     ; " "
+        CP      20H
         JR      C,J2428
         PUSH    AF
         LD      A,(HL)
@@ -5294,7 +5134,7 @@ J2413:  POP     AF
 J2426:  RST     18H
         RET
 
-J2428:  LD      (HL),00H
+J2428:  LD      (HL),0
         RST     18H
         DEFB    03EH                    ; LD A,xx (skip next instruction)
 
@@ -5302,13 +5142,11 @@ J2428:  LD      (HL),00H
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-
 J242C:  DEFB    03EH                    ; LD A,xx (skip next instruction)
 
 ;       Subroutine      change to "block" cursor
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C242D:  XOR     A
         PUSH    AF
@@ -5316,7 +5154,6 @@ C242D:  XOR     A
         POP     AF
         LD      (CSTYLE),A
         JP      C0A3E
-
 
 I2439:  DEFB    8
         DEFW    C2561                   ; backspace
@@ -5347,7 +5184,7 @@ C245A:  CALL    C266C
         LD      A,(AUTFLG)
         AND     A
         JR      Z,J2465
-        LD      H,01H   ; 1 
+        LD      H,1
 J2465:  PUSH    HL
         CALL    C0A8B
         POP     HL
@@ -5367,7 +5204,7 @@ J2471:  PUSH    DE
         DEC     B
         JR      Z,J249F
         LD      C,A
-        LD      A,01H   ; 1 
+        LD      A,1
         LD      (DE),A
         INC     DE
         LD      A,C
@@ -5383,7 +5220,7 @@ J248F:  INC     H
         PUSH    DE
         CALL    C0BCD
         POP     DE
-        LD      H,01H   ; 1 
+        LD      H,1
         JR      Z,J2470
 J249F:  DEC     DE
         LD      A,(DE)
@@ -5397,12 +5234,12 @@ J249F:  DEC     DE
         INC     DE
         XOR     A
         LD      (DE),A
-J24AF:  LD      A,0DH   ; 13 
+J24AF:  LD      A,13
         AND     A
 J24B2:  PUSH    AF
         CALL    C0BD9
         CALL    C08EB
-        LD      A,0AH   ; 10 
+        LD      A,10
         RST     18H
         XOR     A
         LD      (INSFLG),A
@@ -5420,7 +5257,7 @@ C24C5:  CALL    C0BCD
         CALL    C242D
         XOR     A
         LD      (BUF+0),A
-        LD      H,01H   ; 1 
+        LD      H,1
         PUSH    HL
         CALL    C05B2
         CALL    C0549
@@ -5440,15 +5277,13 @@ C24E5:  LD      HL,INSFLG
         JP      Z,C242D
         JP      J242C
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
 C24F2:  CALL    C0A8B
         LD      HL,(CSRY)
-        LD      C,20H   ; " "
+        LD      C,20H
 J24FA:  PUSH    HL
 J24FB:  PUSH    BC
         CALL    C0B83
@@ -5466,7 +5301,7 @@ J24FB:  PUSH    BC
         CALL    C0BCD
         JR      Z,J254B
         LD      A,C
-        CP      20H     ; " "
+        CP      20H
         PUSH    AF
         JR      NZ,J2524
         LD      A,(LINLEN)
@@ -5489,7 +5324,7 @@ J2535:  LD      HL,CSRY
         DEC     (HL)
         JR      NZ,J253C
         INC     (HL)
-J253C:  LD      L,01H   ; 1 
+J253C:  LD      L,1
         CALL    C0AE5
         POP     HL
         DEC     L
@@ -5500,7 +5335,7 @@ J2544:  POP     HL
         JP      Z,C0A3E
         DEC     L
 J254B:  INC     L
-        LD      H,01H   ; 1 
+        LD      H,1
         JR      J24FA
 
 ; delete
@@ -5546,13 +5381,13 @@ J2584:  CALL    C0B83
         CP      H
         JR      NZ,J2584
         DEC     H
-J2595:  LD      C,20H   ; " "
+J2595:  LD      C,20H
         CALL    C0B8D
         CALL    C0BCD
         JP      NZ,C0A3E
         PUSH    HL
         INC     L
-        LD      H,01H   ; 1 
+        LD      H,1
         CALL    C0B83
         EX      (SP),HL
         CALL    C0B8D
@@ -5576,7 +5411,7 @@ J25BE:  CALL    C0BCD
         CALL    C0B05
         POP     AF
         JR      NZ,J25CD
-        LD      H,01H   ; 1 
+        LD      H,1
         INC     L
         JR      J25BE
 
@@ -5599,7 +5434,7 @@ J25DE:  INC     L
 J25E9:  DEC     H
         JR      Z,J25F3
         CALL    C0B83
-        CP      20H     ; " "
+        CP      20H
         JR      Z,J25E9
 J25F3:  CALL    C0AB8
         JR      J25CD
@@ -5653,20 +5488,20 @@ J263D:  LD      HL,(CSRY)
         LD      DE,I2668
         PUSH    DE
         CALL    C0B83
-        CP      30H     ; "0"
+        CP      "0"
         CCF
         RET     NC
-        CP      3AH     ; ":"
+        CP      "9"+1
         RET     C
-        CP      41H     ; "A"
+        CP      "A"
         CCF
         RET     NC
-        CP      5BH     ; "["
+        CP      "Z"+1
         RET     C
-        CP      61H     ; "a"
+        CP      "a"
         CCF
         RET     NC
-        CP      7BH     ; "{"
+        CP      "z"+1
         RET     C
         CP      86H
         CCF
@@ -5675,15 +5510,13 @@ J263D:  LD      HL,(CSRY)
         RET     C
         CP      0A6H
         CCF
-I2668:  LD      A,00H
+I2668:  LD      A,0
         INC     A
         RET
-
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C266C:  DEC     L
         JR      Z,J2674
@@ -5692,7 +5525,7 @@ C266C:  DEC     L
 J2674:  INC     L
         LD      A,(FSTPOS)
         CP      L
-        LD      H,01H   ; 1 
+        LD      H,1
         RET     NZ
         LD      HL,(FSTPOS)
         RET
