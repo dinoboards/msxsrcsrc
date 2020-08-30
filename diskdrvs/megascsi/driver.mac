@@ -4,7 +4,6 @@
 ;
                 .Z80
 
-
 ; Used externals from system kernel (permited)
 ;
 ;		EXTRN	GETSLT
@@ -30,33 +29,37 @@
 ;
 ;		PUBLIC	MYSIZE
 ;		PUBLIC	SECLEN
-;		PUBLIC	DEFDPB		; UltraSoft DRIVER routine
+;		PUBLIC	DEFDPB
 
 MYSIZE		equ	4		; Size of environment
-SECLEN		equ	512		; Size of biggest sector
+; +0	driver bank lock
+; +1,3	transfer routine (normally LDIR)
+SECLEN		equ	512		; Size of biggest sector supported
 
-SCSIIC		equ	0
-SCSIADR		equ	05FF0H
-SCSIDAT		equ	04000H
+SCSIIC		equ	0		; SCSI controller installed
+SCSIADR		equ	05FF0H		; SCSI controller address
+SCSIDAT		equ	04000H		; SCSI controller data port address
 
-SEL4000		equ	06000H
-SEL6000		equ	06800H
-SEL8000		equ	07000H
-SELA000		equ	07800H
+SEL4000		equ	06000H		; ASCII Megarom bank select 04000-05FFFH
+SEL6000		equ	06800H		; ASCII Megarom bank select 06000-07FFFH
+SEL8000		equ	07000H		; ASCII Megarom bank select 08000-09FFFH
+SELA000		equ	07800H		; ASCII Megarom bank select 0A000-0BFFFH
 
-BNKSRAM		equ	32
-BNK4000		equ	0
-BNKNDRV		equ	1
+BNKSRAM		equ	32		; bank number SRAM
+BNK4000		equ	0		; bank number DOS kernel
+BNKNDRV		equ	1		; bank number disk driver
 
                 IF	DOS2 EQ 1
 
-BNKADRV		equ	7
+BNKADRV		equ	7		; bank number DOS1 disk driver (DOS2 segment 3)
 
                 ELSE
 
-BNKADRV		equ	1
+BNKADRV		equ	1		; bank number DOS1 disk drive = 
 
                 ENDIF
+
+BNKSCSI		equ	07FH		; bank number SCSI controller
 
 
 YF33F		equ	0F33FH
@@ -65,14 +68,6 @@ DRVINF		equ	0FB21H
 DRVINT		equ	0FB29H
 D$F2FD		equ	0F2FDH
 H.RUNC		equ	0FECBH
-
-;RAWFLG		equ	0F30Dh
-;$SECBUF		equ	0F34Dh
-;XFER		equ	0F36Eh
-;DISINT		equ	0FFCFh
-;ENAINT		equ	0FFD4h
-
-;PROCNM		equ	0FD89H
 
 I$7405:	DEFB	0F9H
         DEFW	512
@@ -88,17 +83,17 @@ I$7405:	DEFB	0F9H
         defb	3
         defw	7
 
-DEFDPB		equ	I$7405-1
+DEFDPB	equ	I$7405-1
 
-;	  Subroutine get partitioninfo
-;	     Inputs  ________________________
+;	  Subroutine get partitioninfo (with FD emulation)
+;	     Inputs  A = driveid (0-3)
 ;	     Outputs ________________________
 
-C.7417:	CALL	C$7460
+C.7417:	CALL	C$7460			; FD emulation handler
 
 ;	  Subroutine get partitioninfo
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Inputs  A = driveid (b6 set if extended partition)
+;	     Outputs Cx reset if ramdisk, Zx reset if SCSI
 
 C.741A:	EXX	
         LD	L,A			; driveid
@@ -107,18 +102,22 @@ C.741A:	EXX
         ADD	HL,HL
         ADD	HL,HL
         ADD	HL,HL			; * 16
-        BIT	2,H			; DOS driveid (0-7) ?
+        BIT	2,H			; dos driveid (0-3) ?
         LD	H,HIGH I$7F00
-        JR	Z,J$7428		; yep, use DOS partitions
-        DEC	H			; driveid b6 set, use extended partitions
-J$7428:	LD	A,(HL)
+        JR	Z,J$7428		; yep, use real driveinfo
+        DEC	H			; driveid b6 set, use extended partition
+J$7428:	LD	A,(HL)			; deviceid
         PUSH	HL
         POP	IX			; pointer to partitionentry
         EXX	
         SUB	0FFH
-        RET	NC			; deviceid 0FFH, Cx reset, Zx set
-        DEC	A			; deviceid 000H, Cx set, Zx set
+        RET	NC			; deviceid 0FFH (ramdisk), Cx reset, Zx set
+        DEC	A			; deviceid 000H (unassigned), Cx set, Zx set, SCSI deviceid, Cx set, Zx reset
         RET	
+
+;	  Subroutine FD emulation handler
+;	     Inputs  A = driveid (0-3)
+;	     Outputs A = updated driveid
 
 C$7432:	EXX	
         LD	C,A			; driveid
@@ -129,55 +128,55 @@ C$7432:	EXX
         LD	A,8FH
         OUT	(99H),A			; select status register 2
 J$743E:	IN	A,(99H)			; read vdp status register 2
-        AND	81H
+        AND	81H			; TR + CE
         DEC	A
-        JR	Z,J$743E
+        JR	Z,J$743E		; wait for the VDP to finish the command
         XOR	A
         OUT	(99H),A
         LD	A,8FH
         OUT	(99H),A			; select status register 0
         LD	A,C
-        ADD	A,LOW 07F8CH
+        ADD	A,LOW D$7F8C
         LD	C,A
-J$7450:	LD	HL,(D$7FAA)
+J$7450:	LD	HL,(D$7FAA)		; fd emulation change disk key combination
         CALL	C.74DD			; check if key combination pressed
         JR	Z,J$7461		; key pressed,
         EX	AF,AF'
-        LD	B,HIGH 07F8CH
+        LD	B,HIGH D$7F8C
         LD	A,(BC)
-        SET	6,A			; b6 set
+        SET	6,A			; b6 set (extended partition)
         EXX	
         EI	
 C$7460:	RET	
 
 J$7461:	IN	A,(0AAH)
-        LD	L,A
+        LD	L,A			; save current selected keyboard row
 J$7464:	CALL	C.7473
         JR	Z,J$7464
 J$7469:	CALL	C.7473
         JR	NZ,J$7469
         LD	A,L
-        OUT	(0AAH),A
+        OUT	(0AAH),A		; restore selected keyboard row
         JR	J$7450
 
 ;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	     Inputs  H = key2, L = saved selected keyboard row, C = driveoffset (8C-8FH)
 ;	     Outputs ________________________
 
 C.7473:	PUSH	HL
-        LD	H,16			; 16 extended partitions
-        LD	DE,I$7FB0
-J$7479:	DJNZ	J$7479
+        LD	H,16			; 16 fd emulated drives
+        LD	DE,I$7FB0		; fd emulated key
+J$7479:	DJNZ	J$7479			; wait
 J$747B:	PUSH	HL
         LD	A,(DE)
         LD	L,A
         CALL	C.74FE			; check if key pressed, wait until released
         JR	NZ,J$7499		; not pressed, next
         CALL	C.757E			; driver bank on 4000-5FFF
-        LD	A,50H
+        LD	A,50H			; b6 set
         SUB	H
-        LD	B,HIGH (I$7F00-2000H)
-        LD	(BC),A
+        LD	B,HIGH (D$7F8C-2000H)
+        LD	(BC),A			; connect extended partition as virtual FD
         ADD	A,A
         ADD	A,A
         ADD	A,A
@@ -198,10 +197,10 @@ J$7499:	POP	HL
         POP	HL
         INC	H
         LD	A,H
-        AND	40H
+        AND	40H			; CAPS led
         XOR	L
         OUT	(0AAH),A
-        BIT	6,B
+        BIT	6,B			; CPU mode changed ?
         RET	
 
 ;	  Subroutine __________________________
@@ -247,7 +246,7 @@ J$74D5:	SRA	(HL)
         RET	
 
 ;	  Subroutine check if key combination pressed
-;	     Inputs  ________________________
+;	     Inputs  H = key2, L = key1
 ;	     Outputs ________________________
 
 C.74DD:	CALL	C.74E2			; check if key1 pressed
@@ -352,7 +351,7 @@ C.7568:	SCF
 ;	     Outputs ________________________
 
 C.756D:	PUSH	AF
-        LD	A,7FH
+        LD	A,BNKSCSI
         LD	(SEL4000),A
         POP	AF
         LD	IY,SCSIADR
@@ -522,7 +521,7 @@ J$7630:	EX	AF,AF'
 C.764C:	EX	AF,AF'
         LD	A,B
         LD	B,HIGH 512		; 512 bytes
-I$7650:	CALL	C.7DC0			; copy
+I$7650:	CALL	C.7DC0			; transfer
         LD	B,A
         EX	AF,AF'
         BIT	5,H			; end of bank reached ?
@@ -575,7 +574,7 @@ J$7679:	EX	AF,AF'
 C.7696:	EX	AF,AF'
         LD	A,B
         LD	B,HIGH 512		; 512 bytes
-I$769A:	CALL	C.7DC0			; copy
+I$769A:	CALL	C.7DC0			; transfer
         LD	B,A
         EX	AF,AF'
         BIT	5,D			; end of bank reached ?
@@ -760,7 +759,7 @@ C.7798:	BIT	0,(IY+6)
 
 J$77A9:	LD	A,L
         PUSH	BC
-I$77AB:	CALL	C.7DC0			; copy
+I$77AB:	CALL	C.7DC0			; transfer
         POP	BC
         DEC	A
         LD	L,A
@@ -876,7 +875,7 @@ J$783C:	BIT	1,(IY+6)
         SCF	
         RET	
 
-J$784F:	CALL	C.7DC0
+J$784F:	CALL	C.7DC0			; transfer
         POP	BC
         DEC	A
         LD	E,A
@@ -887,20 +886,19 @@ J$784F:	CALL	C.7DC0
 
 
 ;	  Subroutine MEGASCSI DSKIO
-;	     Inputs  ________________________
+;	     Inputs  A = driveid, B = number of sectors, C = mediadescriptor, DE = sector number, HL = transferaddress
 ;	     Outputs ________________________
 
 DSKIO:
         EI	
-        CALL	C.7417			; get partitioninfo
+        CALL	C.7417			; get partitioninfo (with FD emulation)
 
-;
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$785F:	JR	NZ,J$78B7		; deviceid not 0 or 255, SCSI
-        JR	NC,J.7886		; deviceid 255, ramdisk
+
+C$785F:	JR	NZ,J$78B7		; SCSI partition,
+        JR	NC,J.7886		; ramdisk,
         EX	AF,AF'
         LD	IX,4010H		; DSKIO of real FD
 J$7868:	EX	AF,AF'
@@ -916,9 +914,9 @@ J$7868:	EX	AF,AF'
         RET	
 
 J$7878:	EX	AF,AF'
-        LD	A,0
+        LD	A,0			; driveid 0
         LD	IY,(D$7F88-1)
-        CALL	001CH
+        CALL	CALSLT
         EX	AF,AF'
         POP	AF
         EX	AF,AF'
@@ -965,9 +963,9 @@ J$78B3:	XOR	A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J$78B7:	BIT	7,C			; mediadescriptor ?
-        JR	Z,J$78BD
-        LD	C,0			; yep, b23-b16 sectornumber=0
+J$78B7:	BIT	7,C			; mediadescriptor in C ?
+        JR	Z,J$78BD		; nope, C has b22-b16 sector number
+        LD	C,0			; yep, b23-b16 sector number=0
 J$78BD:	CALL	C.7586			; adjust for sectorsize
         RET	C			; invalid sectorsize, quit
 J$78C1:	CALL	C$75B5			; validate sectornumber
@@ -975,7 +973,7 @@ J$78C1:	CALL	C$75B5			; validate sectornumber
         CALL	C.7568			; scsi bank on 4000-5FFF with lock
         RET	C			; locking error, quit
         EX	AF,AF'
-        LD	A,(D$7F91)		; target scsi-id
+        LD	A,(D$7F91)		; number of retries
         EXX	
         LD	D,1			; phase DATA IN
         JR	NC,J.78DF		; read
@@ -990,7 +988,7 @@ J.78DF:	EXX
 J$78E0:	EX	AF,AF'
         CALL	C.7509			; select scsi device
         JR	C,J$78DC		; error, quit
-        XOR	A
+        XOR	A			; ??
         XOR	A
         LD	(IY+12),A
         LD	(IY+13),A
@@ -1133,9 +1131,9 @@ C.79CB:	PUSH	AF
 
 DSKCHG:
 ?.79E5:	EI	
-        CALL	C.7417			; get partitioninfo
+        CALL	C.7417			; get partitioninfo (with FD emulation)
 J$79E9:	PUSH	HL
-        CALL	C,C$7A28		; SCSI or FD emulation, update diskchange flag
+        CALL	C,C$7A28		; SCSI or unassigned, update diskchange flag
         POP	DE
         LD	B,0
         RET	C			; error, quit (diskchange unknown)
@@ -1218,7 +1216,7 @@ J$7A56:	BIT	4,(IY+4)
         LD	B,16+8
         LD	DE,16-1
         LD	HL,I$7E00-2000H
-        LD	A,(IX)
+        LD	A,(IX+0)
 J$7A85:	CP	(HL)			; partition on this scsi device ?
         INC	HL
         JR	NZ,J$7A8B		; nope, skip
@@ -1235,7 +1233,7 @@ J$7A8B:	ADD	HL,DE
 GETDPB:
 ?.7A92:	EI	
         OR	A
-        CALL	C.7417			; get partitioninfo
+        CALL	C.7417			; get partitioninfo (with FD emulation)
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1353,7 +1351,7 @@ J$7B2D:	INC	DE			; number of clusters+1
 ;	     Outputs ________________________
 
 CHOICE:
-?.7B3C:	CALL	C.7417			; get partitioninfo
+?.7B3C:	CALL	C.7417			; get partitioninfo (with FD emulation)
         LD	HL,0
         RET	NC			; ramdisk, no choice string
         LD	HL,I$7B48		; empty choice string (format invalid)
@@ -1361,6 +1359,7 @@ CHOICE:
         RET	
 
 I$7B48:	DEFB	0
+
         DEFB	"SCSI5FF0"
         DEFB	0
 
@@ -1378,7 +1377,7 @@ J$7B52:	LD	A,10H			; write fault error
 ;	     Outputs ________________________
 
 INIHRD:
-?.7B56:	LD	HL,(D$7FA2)
+?.7B56:	LD	HL,(D$7FA2)		; skip megascsi key combination
         CALL	C.74DD			; check if key combination pressed
         JR	NZ,J$7B60		; no, continue
         POP	AF			; abort MEGASCSI interface
@@ -1389,7 +1388,7 @@ J$7B60:
         
         CALL	C.756D			; scsi bank on 4000-5FFF
         CALL	C$75F1			; reset scsi controller
-        LD	HL,(D$7FA4)
+        LD	HL,(D$7FA4)		; reset scsibus key combination
         CALL	C.74DD			; check if key combination pressed
         CALL	Z,C.75DD		; yep, reset scsi bus
         CALL	C.79BE			; normal kernel bank on 4000-5FFF
@@ -1397,20 +1396,21 @@ J$7B60:
         ENDIF
 
         CALL	C.757E			; driver bank on 4000-5FFF
-        LD	HL,(D$7FA0)
-        CALL	C.74DD
+        LD	HL,(D$7FA0)		; reset megascsi config key combination
+        CALL	C.74DD			; check if key combination pressed
         JR	NZ,J$7B99		; not pressed,
         LD	HL,I$7E00-2000H
         LD	DE,I$7E00-2000H+1
-        LD	BC,0197H
+        LD	BC,0198H-1
         LD	(HL),L
-        LDIR				; clear
+        LDIR				; clear extend partition info, clear dos partition info, ...
         LD	A,0FFH
         LD	(I$7F00-2000H),A	; only 1 partition (on the ramdisk)
         LD	A,1
         LD	(D$7F80-2000H),A	; 1 drive
-        LD	HL,0307H
-        LD	(D$7F90-2000H),HL	; host controller scsi id 7, default device scsi id 3
+        LD	HL,256*3+7
+        LD	(D$7F90-2000H),HL	; host controller scsi id 7, 3 retries
+
 J$7B99:	LD	B,16+8
         LD	DE,16-1
         LD	HL,I$7E00-2000H
@@ -1421,7 +1421,8 @@ J$7BA1:	LD	A,(HL)
         SET	7,(HL)			; ramdisk or SCSI partition, clear disk changed flag
 J$7BA8:	ADD	HL,DE
         DJNZ	J$7BA1			; next partition
-        LD	HL,(D$7FA8)
+
+        LD	HL,(D$7FA8)		; disable FD emulation key combination
         CALL	C.74DD			; check if key combination pressed
         JR	NZ,J$7BB6		; not pressed
         LD	(D$7F88-2000H),A	; disable FD emulation
@@ -1439,7 +1440,7 @@ DRIVES:
 ?.7BC1:	PUSH	AF
         PUSH	BC
         PUSH	DE
-        CALL	ADJRUN
+        CALL	ADJRUN			; adjust H.RUN if this is the master diskrom
         CALL	GETWRK			; GETWRK
 ?.7BC7:	LD	A,128+BNKNDRV
         CALL	C.7C05			; update driver bank 4000-5FFF (write)
@@ -1457,9 +1458,9 @@ DRIVES:
         INC	A			; +1
         LD	(SELA000),A		; select bank A000-BFFF
         LD	A,(D$7F88)
-        OR	A
-        JR	NZ,J$7BF9		; FD emulation, do not initialize further
-        LD	HL,(D$7FA6)
+        OR	A			; FD emulation enabled ?
+        JR	NZ,J$7BF9		; yep, do not initialize further
+        LD	HL,(D$7FA6)		; disable phantom drive key combination
         CALL	C.74DD			; check if key combination pressed
         AND	02H
         LD	(YF33F),A		; set phantom drive flag
@@ -1468,14 +1469,14 @@ DRIVES:
 J$7BF9:	LD	HL,DEVICE
         INC	(HL)			; interface count+1
         POP	DE			; but abort the initialization of drivervars
-J$7BFE:	LD	HL,(D$7F80)
+J$7BFE:	LD	HL,(D$7F80)		; number of drives
         POP	DE
         POP	BC
         POP	AF
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine update driver bank
+;	     Inputs  A = bank number, HL = driver workarea
 ;	     Outputs ________________________
 
 C.7C05:	LD	(SEL4000),A		; select bank 4000-5FFF
@@ -1487,14 +1488,14 @@ C.7C05:	LD	(SEL4000),A		; select bank 4000-5FFF
         LD	(I$77AB+1-02000H),HL
         LD	(J$784F+1-02000H),HL	; ldir routine in workarea
         LD	A,(D$7F88)
-        OR	A
+        OR	A			; FD emulation enabled ?
         LD	HL,C$7432		; FD emulation handler
-        JR	NZ,J$7C30		; FD emulation
+        JR	NZ,J$7C30		; yep,
         LD	C,16*16-1
         LD	DE,I$7E00-02000H+1
         LD	HL,I$7E00-02000H
         LD	(HL),L
-        LDIR				; clear extended partition entries
+        LDIR				; clear fd emulated driveinfo entries
         LD	HL,C$7460		; disable FD emulation handler
 J$7C30:	LD	(C.7417-02000H+1),HL
         POP	HL
@@ -1531,14 +1532,14 @@ ADJRUN:
 ;	     Outputs ________________________
 
 C$7C37:	LD	A,(D$7F88)
-        OR	A
-        JR	Z,J$7C5A		; no FD emulation,
+        OR	A			; FD emulation enabled ?
+        JR	Z,J$7C5A		; nope,
         CALL	C.757E			; driver bank on 4000-5FFF
-        LD	A,(DRVTBL+0*2+1)
+        LD	A,(DRVINF+0*2+1)
         LD	(D$7F88-2000H),A	; slotid first diskinterface
         CALL	C.79CB			; synch driver banks
         CALL	GETSLT			; get my slotid
-        LD	(DRVTBL+0*2+1),A	; MEGASCSI the first diskinterface
+        LD	(DRVINF+0*2+1),A	; MEGASCSI the first diskinterface
         LD	(DRVINT+1*3+0),A
         LD	HL,I$7FDA
         LD	(DRVINT+1*3+1),HL	; MEGASCSI interrupt handler in second entry
@@ -1658,21 +1659,21 @@ I.7CE1:	SCF
 ;	     Outputs ________________________
 
 ?.7CF0:	CALL	C.741A			; get partitioninfo
-        JP	J$79E9
+        JP	J$79E9			; rest of disk change routine
 
 ;	  Subroutine MEGASCSI create/free partition
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Inputs  A = (xxxxxx00 = create DOS partition, xxxxxx01 = free DOS partition, xxxxxx10 = create extended partition, xxxxxx11 = free extended partition), C = partition (when free)
+;	     Outputs C = partition number
 
 ?.7CF6:	RRA	
         JR	C,J$7D1F		; free partition, 
         PUSH	HL
         RRA	
-        LD	BC,00800H		; 8 dos partitions
+        LD	BC,8*256+0		; 8 dos partitions
         LD	DE,16
         LD	HL,I$7F00
         JR	NC,J.7D09		; DOS partition,
-        SLA	B			; 16 extended partitions
+        SLA	B			; 16 fd emulated drives
         DEC	H			; 07E00H
 J.7D09:	LD	A,(HL)
         OR	A			; entry free ?
@@ -1696,13 +1697,13 @@ J$7D1F:	LD	HL,I$7FC0		; empty partition entry
         RLA				; write
 
 ;	  Subroutine MEGASCSI read/write partition
-;	     Inputs  ________________________
+;	     Inputs  A = (xxxxxx00 = read DOS partition, xxxxxx01 = write DOS partition, xxxxxx10 = read extended partition, xxxxxx11 = write extended partition) , C = partition number
 ;	     Outputs ________________________
 
-?.7D23:	LD	D,HIGH 05F00H		; 05F00H
+?.7D23:	LD	D,HIGH (I$7F00-2000H)	; DOS partition info
         BIT	1,A
         JR	Z,J$7D2A		; DOS partition,
-        DEC	D			; 05E00H
+        DEC	D			; extended partition info
 J$7D2A:	LD	B,A
         LD	A,C			; partitionnumber
         ADD	A,A
@@ -1712,7 +1713,7 @@ J$7D2A:	LD	B,A
         LD	E,A			; 16 bytes entries
         LD	A,B
 
-;	  Subroutine write partition entry
+;	  Subroutine read/write partition entry
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1732,7 +1733,7 @@ J$7D3A:	CALL	C.7579			; driver bank on 4000-5FFF with lock
 ;	     Outputs ________________________
 
 I$7D44:	XOR	A
-        LD	A,0+2*SCSIIC		; ESE type
+        LD	A,0+2*SCSIIC		; ESE type (0 for ESE RAM, 2 for MEGASCSI)
         LD	BC,0215H		; BIOS version
         RET	
 
@@ -1828,6 +1829,7 @@ C.7DC0:	LDIR
 
         defs	07E00H-$,0
 
+; extended drive info table (0-15)
 
 I$7E00:	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
         DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
@@ -1846,6 +1848,8 @@ I$7E00:	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
         DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
         DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
+; DOS drive info table (0-7)
+
 I$7F00:	DEFB	255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
         DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
         DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
@@ -1855,19 +1859,30 @@ I$7F00:	DEFB	255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
         DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
         DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
-D$7F80:	DEFB	1
-D$7F81:	DEFB	0
-        DEFB	0,0,0,0,0,0
-D$7F88:	DEFB	0,0,0,0,0,0,0,0
-D$7F90:	DEFB	7
-D$7F91:	DEFB	3
-        DEFB	0,0,0,0,0,0
-D$7F98:	DEFB	BNKSRAM
-D$7F99:	DEFB	BNKADRV+1
-D$7F9A:	DEFB	BNKADRV+1
-        DEFB	0
+D$7F80:	DEFB	1			; number of drives
+D$7F81:	DEFB	0			; bootdrive (0 = default bootdrive)
 
-        DEFB	0,0,0,0
+        DEFS	2,0
+
+D$7F84:	DEFB	0,0,0,0			; drive sorting data
+
+D$7F88:	DEFB	0			; virtual FD mode enabled
+
+	DEFS	3,0
+
+D$7F8C:	DEFB	0,0,0,0			; virtual FD mode translation (extended partition)
+
+D$7F90:	DEFB	7			; host controller scsi id
+D$7F91:	DEFB	3			; number of retries
+
+        DEFS	6,0
+
+D$7F98:	DEFB	BNKSRAM			; number of banks
+D$7F99:	DEFB	BNKADRV+1		; number of system banks
+D$7F9A:	DEFB	BNKADRV+1		; first data bank
+        DEFB	BNKSRAM-(BNKADRV+1)	; number of data banks
+
+        DEFS	4,0
 
 D$7FA0:	DEFB	026H,027H		; reset config  = GRAPH+ESC
 D$7FA2:	DEFB	026H,038H		; skip megascsi = GRAPH+DEL
@@ -1876,44 +1891,60 @@ D$7FA6:	DEFB	016H,016H		; phantom drive = CTRL
 D$7FA8:	DEFB	026H,028H		; emul fd dis   = GRAPH+INS
 D$7FAA:	DEFB	046H,046H		; emul fd chg   = CODE
 
-                DEFB	0,0,0,0
+        DEFB	0,0,0,0
 
-I$7FB0:		DEFB	039H
-                DEFB	049H
-                DEFB	059H
-                DEFB	069H
-                DEFB	079H
-                DEFB	00AH
-                DEFB	01AH
-                DEFB	02AH
-                DEFB	03AH
-                DEFB	04AH
-                DEFB	07AH
-                DEFB	06AH
-                DEFB	019H
-                DEFB	05AH
-                DEFB	009H
-                DEFB	029H
+I$7FB0:	DEFB	039H			; bit 3, row 9  = numeric pad 0, select virtual disk file 0
+        DEFB	049H			; bit 4, row 9  = numeric pad 1, select virtual disk file 1
+        DEFB	059H			; bit 5, row 9  = numeric pad 2, select virtual disk file 2
+        DEFB	069H			; bit 6, row 9  = numeric pad 3, select virtual disk file 3
+        DEFB	079H			; bit 7, row 9  = numeric pad 4, select virtual disk file 4
+        DEFB	00AH			; bit 0, row 10 = numeric pad 5, select virtual disk file 5
+        DEFB	01AH			; bit 1, row 10 = numeric pad 6, select virtual disk file 6
+        DEFB	02AH			; bit 2, row 10 = numeric pad 7, select virtual disk file 7
+        DEFB	03AH			; bit 3, row 10 = numeric pad 8, select virtual disk file 8
+        DEFB	04AH			; bit 4, row 10 = numeric pad 9, select virtual disk file 9
+        DEFB	07AH			; bit 7, row 10 = numeric pad ., select virtual disk file 10
+        DEFB	06AH			; bit 6, row 10 = numeric pad ,, select virtual disk file 11
+        DEFB	019H			; bit 1, row 9  = numeric pad +, select virtual disk file 12
+        DEFB	05AH			; bit 5, row 10 = numeric pad -, select virtual disk file 13
+        DEFB	009H			; bit 0, row 9  = numeric pad *, select virtual disk file 14
+        DEFB	029H			; bit 2, row 9  = numeric pad /, select virtual disk file 15
 
-                defs	07FC0H-$,0
+        DEFS	07FC0H-$,0
 
-I$7FC0:		defb	0,0,0,0,0,0,0,0,0,0,0,0
+; empty partition entry
 
-?.7FCC:		EI
-                JP	J$7C66
+I$7FC0:	DEFB	0,0,0,0,0,0,0,0
 
-?.7FD0:		PUSH	AF
-                ADD	A,A
-                LD	(SEL4000),A
-                INC	A
-                LD	(SEL6000),A
-                POP	AF
-I$7FDA:		RET	
+	DEFS	07FCCH-$,0
 
-?.7FDB:		RET	
-                RET	
-                RET	
-                RET	
-                RET	
+;	  Subroutine MEGASCSI BIOS entrypoint
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-?.7FE0:		DEFB	"MEGASCSI ver2.15 by K.Tsujikawa."
+?.7FCC:	EI
+        JP	J$7C66
+
+;	  Subroutine MSXDOS2 bank selector
+;	     Inputs  A = MSXDOS2 bank number (0-3)
+;	     Outputs ________________________
+
+?.7FD0:	PUSH	AF
+        ADD	A,A
+        LD	(SEL4000),A
+        INC	A
+        LD	(SEL6000),A
+        POP	AF
+I$7FDA:	RET	
+
+;	  Subroutine reserved entry
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.7FDB:	RET	
+        RET	
+        RET	
+        RET	
+        RET	
+
+?.7FE0:	DEFB	"MEGASCSI ver2.15 by K.Tsujikawa."

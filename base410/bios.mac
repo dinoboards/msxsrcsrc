@@ -1004,8 +1004,8 @@ J0489:  AND     83H
         LD      A,(HL)
         SLA     C
         RES     1,A
-        JR      NZ,J049A                ; R800, b1=0
-        SET     1,A                     ; Z80, b1=1
+        JR      NZ,J049A                ; R800, disable hardware pause
+        SET     1,A                     ; Z80, enable hardware pause
 J049A:  JR      NC,J04A2                ; flag update turboled not set, turboled unchanged
         RES     7,A
         JR      Z,J04A2                 ; Z80, turboled off
@@ -1015,7 +1015,7 @@ J04A2:  LD      (HL),A
         LD      HL,I04E3
         ADD     HL,BC
         LD      A,6
-        OUT     (0E4H),A                ; S1990 register 6
+        OUT     (0E4H),A                ; select S1990 register 6
         IN      A,(0E5H)
         INC     B
         BIT     5,A                     ; R800 active ?
@@ -1048,7 +1048,7 @@ J04B5:  LD      C,0E5H
 ;       Outputs         ________________________
 
 C04D2:  LD      A,6
-        OUT     (0E4H),A                ; S1990 register 6
+        OUT     (0E4H),A                ; select S1990 register 6
         IN      A,(0E5H)
         AND     60H
         ADD     A,A
@@ -3431,7 +3431,12 @@ J1269:  XOR     A
 
 
 ;       extra init routine for Z80/R800, used before original init routine
-
+;
+;       on a cold start (b7 and b5 of register 0F4H are cleared), the Z80 is bus master and starts init (PC = 0)
+;       b5 of register 0F4H is set to flag the R800 is next
+;       then control is passed to the R800 (Z80 waits at J1291) and start init for the second time (PC = 0)
+;       because b5 of register is set, the R800 does the init code at J1295, and switch control to the Z80
+;       the R800 waits in the CHGCPU routine. The Z80 resumes from J1291 and runs the original init routine
 
 J126B:  NOP
         IN      A,(0F4H)
@@ -3442,7 +3447,7 @@ J126B:  NOP
         DI
         JR      J1292                   ; start init
 
-J127A:  BIT     5,A                     ; R800 initialized ?
+J127A:  BIT     5,A                     ; running this code the second time (on the R800) ?
         JR      NZ,J1295                ; yep, cont
         OR      20H
         OUT     (0F4H),A
@@ -3456,25 +3461,26 @@ J127A:  BIT     5,A                     ; R800 initialized ?
         LD      A,3
         OUT     (0A5H),A                ; initialize PCM sampler
         DEC     A
-        OUT     (0A7H),A
+        OUT     (0A7H),A                ; pause led off, turbo led off, enable hardware pause
 
         ELSE
 
 ; Panasonic FS-A1GT has PCM hardware init in subrom
 
-        LD      A,02H
-        OUT     (0A7H),A                ; pause led off, turbo led off, b1=1
+        LD      A,2
+        OUT     (0A7H),A                ; pause led off, turbo led off, enable hardware pause
 
         ENDIF
 
         LD      A,6
-        OUT     (0E4H),A                ; S1990 register 6
+        OUT     (0E4H),A                ; select S1990 register 6
         LD      HL,I04E5
         LD      BC,02E5H
         OTIR                            ; R800 ROM mode, Z80 waits here for the R800 to complete
 J1292:  JP      J0416                   ; orginal init
 
-J1295:  IM      1
+J1295:  IM      1			; make sure the R800 is also in interrupt mode 1
+                                        ; Z80 runs the reste of init code which will put the Z80 in interrupt mode 1
         XOR     A                       ; Z80 mode, led unchanged
         JP      J0489                   ; jump in CHGCPU to halt R800 and resume the Z80
 
