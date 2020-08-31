@@ -1,0 +1,1772 @@
+; Diskdriver MAK SCSI controller
+
+; HDC	WD33C93A
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ? and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+	.Z80
+	ORG	4000H
+
+I$0000	EQU	0000H	; ----I
+ENASLT	EQU	0024H
+C$006C	EQU	006CH	; -C---
+I$0100	EQU	0100H	; ----I
+I$0102	EQU	0102H	; ----I
+SNSMAT	EQU	0141H
+C$015F	EQU	015FH	; -C---
+I$0185	EQU	0185H	; ----I
+I$01C0	EQU	01C0H	; ----I
+I.0200	EQU	0200H	; ----I
+I$0206	EQU	0206H	; ----I
+I.0400	EQU	0400H	; ----I
+I$1266	EQU	1266H	; ----I
+D$2030	EQU	2030H	; --S--
+I$2820	EQU	2820H	; ----I
+D.2D20	EQU	2D20H	; --S-I
+J$DF45	EQU	0DF45H	; J----
+D$F33F	EQU	0F33FH	; ---L-
+D$F342	EQU	0F342H	; ---L-
+D.F34D	EQU	0F34DH	; --SL-
+I$F355	EQU	0F355H	; ----I
+C$F365	EQU	0F365H	; -C---
+C$F368	EQU	0F368H	; -C---
+C$F398	EQU	0F398H	; -C---
+D.F672	EQU	0F672H	; --SL-
+D.F674	EQU	0F674H	; --SL-
+D.F6AB	EQU	0F6ABH	; ---L-
+D$F6B1	EQU	0F6B1H	; --S--
+D$F860	EQU	0F860H	; --S--
+D.F862	EQU	0F862H	; --SL-
+D$FAF8	EQU	0FAF8H	; ---L-
+I.FB21	EQU	0FB21H	; ----I
+D$FC48	EQU	0FC48H	; --S--
+D.FC4A	EQU	0FC4AH	; --SL-
+I$FCC1	EQU	0FCC1H	; ----I
+I$FD09	EQU	0FD09H	; ----I
+D$FD99	EQU	0FD99H	; ---L-
+I$FDEA	EQU	0FDEAH	; ----I
+I.FE00	EQU	0FE00H	; ----I
+
+I.4000:	DEFB    "AB"
+        DEFW    C.40EA
+        DEFW    0
+        DEFW    0
+        DEFW    0
+        DEFS    6,0
+
+	JP	J$4387			; DSKIO
+?.4013:	JP	J$4464			; DSKCHG
+?.4016:	JP	C.4484			; GETDPB
+?.4019:	JP	J$455B			; CHOICE
+?.401C:	JP	J$45AA			; DSKFMT
+?.401F:	JP	J$45E6			; MTOFF
+?.4022:	JP	J.41AF
+?.4025:	NOP
+	JP	J.41AF
+?.4029:	JP	J.41AF
+?.402C:	NOP
+	JP	C.4030			; GETSLT
+
+;	  Subroutine GETSLT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4030:	CALL	C.4064
+	OR	(HL)
+	RET	P
+	LD	C,A
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,(HL)
+	AND	0CH	; 12 
+	OR	C
+	RET
+
+;	  Subroutine get driver workarea pointer
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.403F:	CALL	C.404A
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	PUSH	HL
+	POP	IX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.404A:	CALL	C.4064
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	SCF
+	ADC	A,A
+	LD	C,A
+	LD	A,(HL)
+	ADD	A,A
+	SBC	A,A
+	AND	0CH	; 12 
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	AND	(HL)
+	OR	C
+	ADD	A,A
+	LD	HL,I$FD09
+	JR	J$4070
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4064:	CALL	C$F365
+	RRCA
+	RRCA
+	AND	03H	; 3 
+	LD	HL,I$FCC1
+	LD	B,00H
+J$4070:	LD	C,A
+	ADD	HL,BC
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4073:	LD	A,L
+	OR	H
+	RET	Z
+	XOR	A
+	SUB	L
+	LD	L,A
+	LD	A,00H
+	SBC	A,H
+	LD	H,A
+	LD	C,L
+	LD	B,H
+	ADD	HL,SP
+	CCF
+	RET	C
+	LD	DE,(D$FC48)
+	SBC	HL,DE
+	RET	C
+	LD	A,H
+	CP	03H	; 3 
+	RET	C
+	PUSH	BC
+	LD	HL,I$0000
+	ADD	HL,SP
+	LD	E,L
+	LD	D,H
+	ADD	HL,BC
+	PUSH	HL
+	LD	HL,(D.F674)
+	AND	A
+	SBC	HL,DE
+	LD	C,L
+	LD	B,H
+	INC	BC
+	POP	HL
+	LD	SP,HL
+	EX	DE,HL
+	LDIR
+	POP	BC
+	LD	HL,(D.FC4A)
+	ADD	HL,BC
+	LD	(D.FC4A),HL
+	LD	DE,I$FDEA
+	ADD	HL,DE
+	LD	(D$F860),HL
+	EX	DE,HL
+	LD	HL,(D.F672)
+	ADD	HL,BC
+	LD	(D.F672),HL
+	LD	HL,(D.F862)
+	ADD	HL,BC
+	LD	(D.F862),HL
+	LD	HL,(D.F674)
+	ADD	HL,BC
+	LD	(D.F674),HL
+	DEC	HL
+	DEC	HL
+	LD	(D$F6B1),HL
+	LD	L,E
+	LD	H,D
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,02H	; 2 
+J$40D6:	EX	DE,HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	EX	DE,HL
+	LD	BC,7
+	LD	(HL),B
+	ADD	HL,BC
+	LD	(HL),B
+	LD	BC,I$0102
+	ADD	HL,BC
+	DEC	A
+	JR	NZ,J$40D6
+
+	RET
+
+?.40EA:	LD	A,(D$FD99)
+	OR	A
+	RET	M
+	RET	Z
+	CALL	C$41C3
+	LD	HL,I.FB21
+	LD	B,4
+	XOR	A
+J$40F9:	ADD	A,(HL)
+	RET	C
+	INC	HL
+	INC	HL
+	DJNZ	J$40F9
+	CP	08H	; 8 
+	RET	NC
+	LD	HL,(D.F6AB)
+	LD	DE,I.0200
+	RST	20H
+	JR	NC,J$410F
+	LD	(D.F6AB),DE
+J$410F:	LD	DE,I.FB21
+	LD	BC,I.0400
+J$4115:	LD	A,(DE)
+	AND	A
+	JR	Z,J$4120
+	ADD	A,C
+	LD	C,A
+	INC	DE
+	INC	DE
+	DJNZ	J$4115
+	RET
+
+J$4120:	EXX
+	LD	HL,32
+	CALL	C.4073
+	RET	C
+	EX	DE,HL
+	CALL	C.404A
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	EXX
+	LD	A,(D$F33F)
+	AND	A
+	LD	A,C
+	CALL	C.42C8			; initialize workarea
+	ADD	A,L
+	CP	09H	; 9 
+	LD	A,L
+	JR	C,J$4141
+	LD	A,08H	; 8 
+	SUB	C
+J$4141:	PUSH	BC
+	LD	(DE),A
+	INC	DE
+	CALL	C.4030			; GETSLT
+	LD	(DE),A
+	POP	BC
+	LD	B,00H
+	LD	HL,I$F355
+	ADD	HL,BC
+	ADD	HL,BC
+	PUSH	HL
+	DEC	DE
+	LD	A,(DE)
+	PUSH	AF
+	LD	L,A
+	LD	H,00H
+	PUSH	DE
+	LD	D,H
+	LD	E,L
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,DE
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,DE
+	CALL	C.4073
+	POP	DE
+	JR	C,J$41A8
+	PUSH	HL
+	CALL	C.436B			; clear to end of line
+	POP	DE
+	POP	BC
+	POP	HL
+	LD	C,0
+
+J$416F:	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	HL,I.FE00
+	ADD	HL,SP
+	LD	SP,HL
+	LD	(D.F34D),HL
+	LD	A,C
+	LD	BC,(D$41B1)
+	LD	B,00H
+	EX	DE,HL
+	CALL	C.4484			; GETDPB
+	LD	HL,I.0200
+	EX	AF,AF'
+	ADD	HL,SP
+	EX	AF,AF'
+	LD	SP,HL
+	POP	HL
+	POP	DE
+	LD	BC,21
+	JR	C,J$419C
+	EX	DE,HL
+	ADD	HL,BC
+	EX	DE,HL
+	JR	J$41A3
+
+J$419C:	PUSH	HL
+	LD	HL,DEFDPB
+	LDIR
+	POP	HL
+J$41A3:	POP	BC
+	INC	C
+	DJNZ	J$416F
+	RET
+
+J$41A8:	POP	AF
+	POP	AF
+	XOR	A
+	LD	(DE),A
+	INC	DE
+	LD	(DE),A
+	RET
+
+J.41AF:	DI
+	HALT
+
+DEFDPB	EQU	$-1
+
+D$41B1:	RET	P
+
+	NOP
+	LD	(BC),A
+	RRCA
+	INC	B
+	RRA
+	LD	B,01H	; 1 
+	NOP
+	LD	(BC),A
+	CP	29H	; ")"
+	NOP
+	INC	D
+	DEC	B
+	INC	C
+	ADD	HL,DE
+	NOP
+
+;	  Subroutine INIHRD
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$41C3:	EI
+	LD	A,(D$FAF8)
+	OR	A
+	PUSH	AF
+	CALL	Z,C$006C
+	POP	AF
+	LD	IX,I$0185
+	CALL	NZ,C$015F
+
+;	  Subroutine initialize
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$41D4:	LD	HL,I$41DF
+J$41D7:	LD	A,(HL)
+	OR	A
+	JR	Z,J$4200
+	RST	18H
+	INC	HL
+	JR	J$41D7
+
+I$41DF:	DEFB	"HD-20 Version 2.01 (usch) 1989",13,10
+	DEFB	0
+
+J$4200:	OUT	(36H),A
+	LD	HL,I$4000
+	LD	(HL),A			; if the interface code is in RAM, make sure the self test fails
+J$4206:	ADD	A,(HL)
+	INC	HL
+	BIT	7,H
+	JR	Z,J$4206
+	OR	A			; ROM checksum ok ?
+	JP	NZ,J.4281		; nope, self test failed
+	LD	BC,I$6420
+J$4213:	IN	A,(34H)
+	AND	C
+	JR	Z,J.4220
+	CALL	C$42B8			; wait ?? ms
+	DJNZ	J$4213
+	JP	J.4281			; , self test failed
+
+J.4220:	LD	D,2
+	LD	BC,256*0+34H
+J.4225:	OUT	(C),D
+	LD	A,B
+	OUT	(35H),A
+	OUT	(C),D
+	IN	A,(35H)
+	CP	B
+	JP	NZ,J.4281		; , self test failed
+	DJNZ	J.4225
+	INC	D
+	LD	A,D
+J$4236:	CP	0FH	; 15 
+	JR	NZ,J.4225
+	LD	HL,I$4245
+J$423D:	LD	A,(HL)
+	OR	A
+	JR	Z,J$424D
+	RST	18H
+	INC	HL
+	JR	J$423D
+
+I$4245:	DEFB	"wait..."
+	DEFB	0
+
+J$424D:	LD	B,30
+J$424F:	XOR	A
+	PUSH	BC
+	CALL	C.471B			; test unit ready
+	POP	BC
+	INC	D
+	DEC	D
+	RET	Z			; ready, quit
+	CP	42H
+	CALL	NZ,C.42BD		; , wait ?? ms
+	DJNZ	J$424F
+	LD	HL,I$426A
+J$4262:	LD	A,(HL)
+	OR	A
+	JR	Z,J$427F
+	RST	18H
+	INC	HL
+	JR	J$4262
+
+I$426A:	DEFB	13
+	DEFB	"Hard disk offline",13,10
+	DEFB	0
+
+J$427F:	POP	AF
+	RET
+
+J.4281:	LD	HL,I$428C
+J$4284:	LD	A,(HL)
+	OR	A
+	JR	Z,J$42AF
+	RST	18H
+	INC	HL
+	JR	J$4284
+
+I$428C:	DEFB	7
+	DEFB	"Host interface self test failed",13,10
+	DEFB	0
+
+J$42AF:	LD	B,5
+J$42B1:	CALL	C.42BD			; wait ?? ms
+	DJNZ	J$42B1
+	POP	AF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$42B8:	LD	HL,I$1266
+	JR	J.42C0
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.42BD:	LD	HL,0B7FBH
+J.42C0:	LD	A,H
+	OR	L
+	RET	Z
+	EX	(SP),HL
+	EX	(SP),HL
+	DEC	HL
+	JR	J.42C0
+
+;	  Subroutine initialize workarea
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.42C8:	PUSH	BC
+	PUSH	DE
+	LD	HL,-512
+	ADD	HL,SP
+	LD	SP,HL
+	PUSH	AF
+	XOR	A			; TARGET SCSI ID 0, LUN 0
+	LD	BC,1*256+0		; 1 block
+	LD	D,A
+	LD	E,A			; logical block 0
+	CALL	C.4776			; read logical block
+	CALL	C.403F			; get driver workarea pointer
+	LD	(HL),0FFH
+	LD	D,H
+	LD	E,L
+	INC	DE
+	LD	BC,32-1
+	LDIR
+	XOR	A
+	LD	HL,512
+	ADD	HL,SP
+	LD	A,(HL)
+	CP	55H
+	JR	NZ,J.4359
+	INC	HL
+	LD	A,(HL)
+	CP	0AAH
+	JR	NZ,J.4359
+	LD	BC,4*256+0
+	LD	DE,8
+J$42FC:	LD	IY,I$01C0
+	ADD	IY,SP
+
+J$4302:	DEC	(IY+4)			; FAT12 type ?
+	JR	NZ,J.4353		; nope, try next entry
+	LD	A,(IY+0)
+	CPL
+	LD	(IX+6),A
+	LD	A,(IY+8)
+	LD	(IX+1),A
+	LD	A,(IY+9)
+	LD	(IX+2),A
+	LD	A,(IY+10)
+	LD	(IX+3),A
+	AND	0E0H
+	OR	(IY+11)			; start of partition must be <
+	JR	NZ,J.4353		; nope, try next entry
+	LD	A,(IY+12)
+	SUB	01H
+	LD	(IX+4),A
+	LD	A,(IY+13)
+	SBC	A,D
+	LD	(IX+5),A
+	LD	A,(IY+14)
+	SBC	A,D
+	OR	(IY+15)			; size of partition must be <
+	JR	NZ,J.4353		; nope, try next entry
+	INC	C
+	LD	A,6
+	PUSH	BC
+	CALL	SNSMAT
+	POP	BC
+	CPL
+	AND	10H			; CODE key
+	LD	(IX+0),A
+	ADD	IX,DE
+	POP	AF
+	PUSH	AF
+	JR	Z,J.4359		; CTRL pressed, ignore other partitions
+J.4353:	ADD	IY,DE
+	ADD	IY,DE
+	DJNZ	J$4302
+J.4359:	LD	A,C
+	OR	A			; valid partitions found ?
+	JR	NZ,J$435E		; yep, return as number of drives
+	INC	A			; nope, return 1 drive
+J$435E:	LD	L,A
+	POP	AF
+	LD	IX,512
+	ADD	IX,SP
+	LD	SP,IX
+	POP	DE
+	POP	BC
+	RET
+
+;	  Subroutine clear to end of line
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.436B:	LD	HL,I$4376
+J$436E:	LD	A,(HL)
+	OR	A
+	JR	Z,J$437A
+	RST	18H
+	INC	HL
+	JR	J$436E
+
+I$4376:	DFFB	13
+	DEFB	27,'K'
+	DEFB	0
+
+J$437A:	RET
+
+;	  Subroutine get partition info pointer
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.437B:	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	LD	E,A
+	LD	D,0
+	CALL	C.403F			; get driver workarea pointer
+	ADD	IX,DE
+	RET
+
+;	  Subroutine DSKIO
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4387:	EI
+	PUSH	AF
+	CP	4
+	JP	NC,J.445F
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	CALL	C.437B			; get partition info pointer
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4398:	LD	A,(IX+0)
+	BIT	4,A
+	JP	NZ,J$4496
+	PUSH	AF
+	LD	A,C
+	SUB	0F0H
+	JP	NZ,J.445F
+	LD	C,A
+	PUSH	DE
+	LD	A,B
+	DEC	A
+	ADD	A,E
+	LD	E,A
+	LD	A,C
+	ADC	A,D
+	LD	D,A
+	LD	A,C
+	ADC	A,C
+	LD	C,A
+	LD	A,(IX+4)
+	SUB	E
+	LD	A,(IX+5)
+	SBC	A,D
+	LD	A,00H
+	SBC	A,C
+	POP	DE
+	JP	C,J$4438
+	LD	A,E
+	ADD	A,(IX+1)
+	LD	E,A
+	LD	A,D
+	ADC	A,(IX+2)
+	LD	D,A
+	LD	A,00H
+	ADC	A,(IX+3)
+	LD	C,A
+	POP	AF
+	PUSH	DE
+	PUSH	BC
+	PUSH	IX
+	JR	C,J$43DE
+	CALL	C.4776			; read logical block
+	JR	J$43E7
+
+J$43DE:	BIT	0,(IX+6)
+	JR	Z,J$4432
+	CALL	C.4864			; write logical block
+J$43E7:	POP	IX
+	POP	BC
+	LD	A,D
+	POP	DE
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$43EC:	OR	A
+	RET	Z
+	PUSH	DE
+	PUSH	BC
+	LD	A,(IX+0)
+	PUSH	IX
+	CALL	C.4925			; request sense
+	POP	HL
+	PUSH	AF
+	INC	D
+	DEC	D
+	JR	NZ,J$441D
+	LD	A,(IX+2)
+	CP	06H	; 6 
+	JR	NZ,J$4421
+	PUSH	HL
+	CALL	C.403F			; get driver workarea pointer
+	POP	IX
+	LD	A,(IX+0)
+	OR	08H	; 8 
+	LD	DE,8
+	LD	B,4
+J$4415:	CP	(HL)
+	JR	NZ,J$441A
+	RES	3,(HL)
+J$441A:	ADD	HL,DE
+	DJNZ	J$4415
+
+J$441D:	POP	AF
+	POP	BC
+	POP	DE
+	RET
+
+J$4421:	POP	AF
+	POP	BC
+	POP	DE
+	BIT	7,(IX+0)
+	RET	Z
+
+	PUSH	AF
+	LD	A,B
+	SUB	(IX+6)
+	ADD	A,E
+	LD	B,A
+	POP	AF
+	RET
+
+J$4432:	POP	AF
+	POP	BC
+	POP	AF
+	XOR	A
+	SCF
+	RET
+
+J$4438:	LD	A,(IX+4)
+	SUB	E
+	LD	C,A
+	INC	C
+	LD	A,(IX+5)
+	SBC	A,D
+	JR	C,J$4453
+
+	LD	A,B
+	SUB	C
+	LD	B,A
+	POP	AF
+	PUSH	BC
+	LD	B,C
+	LD	C,0F0H
+	CALL	C$4398
+
+	JR	C,J$4458
+
+	POP	BC
+	LD	A,0F1H
+J$4453	EQU	$-1
+	LD	A,08H	; 8 
+	SCF
+	RET
+
+J$4458:	POP	DE
+	PUSH	AF
+	LD	A,B
+	ADD	A,D
+	LD	B,A
+	POP	AF
+	RET
+
+J.445F:	POP	AF
+J.4460:	LD	A,0CH	; 12 
+	SCF
+	RET
+
+;	  Subroutine DSKCHG
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4464:	EI
+	CP	4
+	JR	NC,J.4460
+	OR	A
+	PUSH	AF
+	PUSH	HL
+	CALL	C.437B			; get partition info pointer
+	POP	HL
+	POP	AF
+	LD	B,01H	; 1 
+	BIT	3,(IX+0)
+	RET	NZ
+	LD	B,0FFH
+	SET	3,(IX+0)
+	PUSH	BC
+	CALL	C.4484			; GETDPB
+	POP	BC
+	RET
+
+;	  Subroutine GETDPB
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4484:	EI
+	CP	4
+	JR	NC,J.4460
+	PUSH	AF
+	PUSH	HL
+	CALL	C.437B			; get partition info pointer
+	POP	HL
+	POP	AF
+	BIT	4,(IX+0)
+	JR	Z,J$449A
+J$4496:	LD	A,16H
+	SCF
+	RET
+
+J$449A:	PUSH	HL
+	LD	HL,(D.F34D)
+	PUSH	HL
+	LD	A,(IX+0)
+	LD	B,01H	; 1 
+	LD	C,(IX+3)
+	LD	D,(IX+2)
+	LD	E,(IX+1)
+	CALL	C.4776			; read logical block
+	POP	IY
+	POP	IX
+	LD	A,D
+	CALL	C$43EC
+	RET	C
+	LD	A,(IY+21)
+	LD	(IX+1),A
+	CP	0F0H
+	LD	A,12H	; 18 
+	SCF
+	RET	NZ
+	LD	L,(IY+14)
+	LD	H,(IY+15)
+	LD	(IX+8),L
+	LD	(IX+9),H
+	LD	A,(IY+16)
+	LD	(IX+10),A
+	LD	E,(IY+22)
+	LD	D,(IY+23)
+	LD	(IX+16),E
+	LD	B,A
+J$44E1:	ADD	HL,DE
+	DJNZ	J$44E1
+	LD	(IX+17),L
+	LD	(IX+18),H
+	LD	E,(IY+17)
+	LD	D,(IY+18)
+	LD	(IX+11),E
+	LD	C,(IY+11)
+	LD	B,(IY+12)
+	LD	(IX+2),C
+	LD	(IX+3),B
+	SRL	B
+	RR	C
+	SRL	B
+	RR	C
+	SRL	B
+	RR	C
+	SRL	B
+	RR	C
+	SRL	B
+	RR	C
+	DEC	C
+	LD	(IX+4),C
+	ADD	A,E
+	LD	E,A
+	RL	D
+J$451B:	INC	B
+	RR	C
+	JR	C,J$451B
+	DEC	B
+	LD	(IX+5),B
+J$4524:	SRL	D
+	RR	E
+	DJNZ	J$4524
+
+	ADD	HL,DE
+	LD	(IX+12),L
+	LD	(IX+13),H
+	EX	DE,HL
+	LD	L,(IY+19)
+	LD	H,(IY+20)
+	OR	A
+	SBC	HL,DE
+	LD	A,(IY+13)
+	DEC	A
+	LD	(IX+6),A
+J$4542:	INC	B
+	RRCA
+	JR	C,J$4542
+
+	LD	(IX+7),B
+	DEC	B
+	JR	Z,J$4552
+
+J$454C:	SRL	H
+	RR	L
+	DJNZ	J$454C
+
+J$4552:	INC	HL
+	LD	(IX+14),L
+	LD	(IX+15),H
+	OR	A
+	RET
+
+;	  Subroutine CHOICE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$455B:	LD	HL,I$455F
+	RET
+
+I$455F:	DEFB	"1 - Enable partition",13,10
+	DEFB	"2 - Disable partition",13,10
+	DEFB	"3 - Write protect partition",13,10
+	DEFB	0
+
+;	  Subroutine DSKFMT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$45AA:	LD	E,A
+	CP	04H	; 4 
+	JR	NC,J$45B2
+	LD	A,D
+	CP	4
+J$45B2:	CCF
+	LD	A,0CH	; 12 
+	RET	C
+	SCF
+	DEC	E
+	RET	M
+	PUSH	DE
+	LD	A,D
+	CALL	C.437B			; get partition info pointer
+J$45BC	EQU	$-2
+
+J$45BE:	POP	DE
+	LD	D,00H
+	LD	HL,I$45CB
+	ADD	HL,DE
+	ADD	HL,DE
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	JP	(HL)
+
+I$45CB:	POP	DE
+	LD	B,L
+	JP	C,J$DF45
+	LD	B,L
+	RES	4,(IX+0)
+	SET	0,(IX+6)
+	RET
+
+?.45DA:	SET	4,(IX+0)
+J$45DB	EQU	$-3
+	RET
+
+?.45DF:	RES	0,(IX+6)
+	RET
+
+?.45E4:	SCF
+	RET
+
+;	  Subroutine MTOFF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$45E6:	RET
+
+J.45E7:	LD	DE,8
+J$45E8	EQU	$-2
+	LD	C,35H	; "5"
+J.45EC:	IN	A,(34H)
+	BIT	0,A
+	JP	NZ,J$4715
+J$45F2	EQU	$-1
+
+	BIT	5,A
+	JR	NZ,J.45EC
+
+	LD	A,17H
+	OUT	(34H),A
+	DEFB	0,0
+	IN	A,(35H)
+	BIT	3,A
+	JR	NZ,J$4636
+
+	CP	16H
+	JP	Z,J$470C
+J$4607	EQU	$-1
+
+	BIT	4,A
+	RET	NZ
+
+	OR	A
+	JP	Z,C.46A4		; reset hdc and quit
+
+J$460F:	CP	21H	; "!"
+	JR	NZ,J$4617
+
+	PUSH	HL
+	POP	IY
+	DEC	A
+J$4617:	CP	20H	; " "
+	JP	Z,J$46F4
+
+	CP	85H
+	JR	NZ,J$4625
+
+	BIT	7,D
+	RET	Z
+
+	JR	J.45EC
+
+J$4625:	CP	80H
+	JR	NZ,J$462D
+
+	RES	7,D
+	JR	J.45EC
+
+J$462D:	BIT	6,A
+	JR	NZ,J.4633
+
+	OUT	(36H),A
+J.4633:	LD	D,02H	; 2 
+	RET
+
+J$4636:	AND	07H	; 7 
+	LD	B,A
+	LD	A,18H
+	OUT	(34H),A
+	LD	A,0A0H
+	OUT	(35H),A
+J$4641:	IN	A,(34H)
+	RRCA
+	JR	NC,J$4641
+
+	LD	A,19H
+	OUT	(34H),A
+	INC	B
+	DJNZ	J$4651
+
+I$464D:	OUTI
+	JR	J.45EC
+
+J$4651:	DJNZ	J$4657
+
+I$4653:	INI
+	JR	J.4697
+
+J$4657:	DJNZ	J$465E
+
+J$4659:	XOR	A
+	OUT	(35H),A
+	JR	J.4697
+
+J$465E:	DJNZ	J$4664
+
+	IN	D,(C)
+	JR	J.4697
+
+J$4664:	DJNZ	J$4668
+
+	JR	J$4659
+
+J$4668:	DJNZ	J$466E
+
+	IN	A,(35H)
+	JR	J.4697
+
+J$466E:	DJNZ	J$4676
+
+	OUT	(C),E
+	LD	E,08H	; 8 
+	JR	J.4697
+
+J$4676:	IN	A,(C)
+	JR	Z,J.4697
+
+	JP	M,J.4697
+
+	CP	02H	; 2 
+	JR	Z,J$46E8
+
+	CP	03H	; 3 
+	JR	Z,J$46EE
+
+	CP	04H	; 4 
+	JR	Z,J$469A
+
+	CP	07H	; 7 
+	JR	Z,J.469E
+
+	CP	08H	; 8 
+	JR	Z,J.4697
+
+	CP	09H	; 9 
+	JR	Z,J.469E
+
+	LD	E,07H	; 7 
+J.4697:	JP	J.45EC
+
+J$469A:	SET	7,D
+	JR	J.4697
+
+J.469E:	LD	DE,I$0206
+	JP	J.45EC
+
+;	  Subroutine reset hdc
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.46A4:	LD	A,00H
+	OUT	(34H),A
+	DEFB	0,0
+	IN	A,(35H)
+	OR	A
+	JR	NZ,J$46CC
+
+	OUT	(34H),A
+	LD	A,07H	; 7 
+	OUT	(35H),A
+	LD	A,18H
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+J$46BC:	EX	(SP),HL
+	EX	(SP),HL
+	IN	A,(34H)
+	AND	20H	; " "
+	JR	NZ,J$46BC
+
+	LD	A,17H
+	OUT	(34H),A
+	DEFB	0,0
+	IN	A,(35H)
+J$46CC:	LD	A,01H	; 1 
+	OUT	(34H),A
+	OUT	(35H),A
+	LD	A,7DH	; "}"
+	OUT	(35H),A
+	LD	A,11H	; 17 
+	OUT	(34H),A
+	LD	A,30H	; "0"
+	OUT	(35H),A
+	LD	A,16H
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+	JP	J.4633
+
+J$46E8:	PUSH	HL
+	POP	IY
+	JP	J.45EC
+
+J$46EE:	PUSH	IY
+	POP	HL
+	JP	J.45EC
+
+J$46F4:	LD	A,E
+	CP	08H	; 8 
+	JR	Z,J$4701
+
+	LD	A,18H
+	OUT	(34H),A
+	LD	A,02H	; 2 
+	OUT	(35H),A
+J$4701:	LD	A,18H
+	OUT	(34H),A
+	LD	A,03H	; 3 
+	OUT	(35H),A
+	JP	J.45EC
+
+J$470C:	LD	A,0FH	; 15 
+	OUT	(34H),A
+	IN	D,(C)
+	JP	J.45EC
+
+J$4715:	CALL	C$F398
+
+	JP	J.45EC
+
+;	  Subroutine test unit ready
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.471B:	PUSH	AF
+	LD	A,03H	; 3 
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+	POP	AF
+	PUSH	AF
+	AND	0E0H
+	PUSH	AF
+	OUT	(35H),A
+	LD	C,35H	; "5"
+	XOR	A
+	OUT	(35H),A
+	OUT	(35H),A
+	OUT	(35H),A
+	OUT	(35H),A
+	LD	A,0FH	; 15 
+	OUT	(34H),A
+	POP	AF
+	RLCA
+	RLCA
+	RLCA
+	OUT	(35H),A
+	LD	A,12H	; 18 
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+	OUT	(35H),A
+	OUT	(35H),A
+	POP	AF
+	AND	07H	; 7 
+	OUT	(35H),A
+J.474F:	IN	A,(34H)
+	OR	A
+	JP	P,J$4763
+
+	LD	A,17H
+	OUT	(34H),A
+	DEFB	0,0
+	IN	A,(35H)
+	OR	A
+	CALL	Z,C.46A4		; reset hdc
+
+	JR	J.474F
+
+J$4763:	AND	30H	; "0"
+	JR	NZ,J.474F
+
+	LD	A,18H
+	OUT	(34H),A
+	LD	A,08H	; 8 
+	OUT	(35H),A
+	LD	A,19H
+	OUT	(34H),A
+	JP	J.45E7			; terminate action and quit
+
+;	  Subroutine read logical block
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4776:	PUSH	AF
+	LD	A,03H	; 3 
+	OUT	(34H),A
+	LD	A,08H	; 8 
+	OUT	(35H),A
+	POP	AF
+	PUSH	AF
+	AND	0E0H
+	PUSH	AF
+	OR	C
+	OUT	(35H),A
+	LD	C,35H	; "5"
+	OUT	(C),D
+	OUT	(C),E
+	OUT	(C),B
+	XOR	A
+	OUT	(35H),A
+	LD	A,0FH	; 15 
+	OUT	(34H),A
+	POP	AF
+	RLCA
+	RLCA
+	RLCA
+	OUT	(35H),A
+	LD	A,12H	; 18 
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+	SLA	B
+	OUT	(C),B
+	OUT	(35H),A
+J$47A9:	POP	AF
+	AND	07H	; 7 
+	OUT	(35H),A
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.47AE:	IN	A,(34H)
+	OR	A
+	JP	P,J$47C2
+
+	LD	A,17H
+	OUT	(34H),A
+	DEFB	0,0
+	IN	A,(35H)
+	OR	A
+	CALL	Z,C.46A4		; reset hdc
+
+	JR	C.47AE
+
+J$47C2:	AND	30H	; "0"
+	JR	NZ,C.47AE
+
+	LD	IX,I$4653
+	LD	A,18H
+	OUT	(34H),A
+	LD	A,08H	; 8 
+	OUT	(35H),A
+	LD	A,19H
+	OUT	(34H),A
+	CALL	C.48D9
+
+J.47D9:	IN	A,(34H)
+	RRCA
+	JR	NC,J$47E2
+
+	INI
+	JR	J.47D9
+
+J$47E2:	AND	40H	; "@"
+	JR	NZ,J$47E8
+
+	JR	J.47D9
+
+J$47E8:	JP	J.45E7			; terminate action and quit
+
+;	  Subroutine mode select
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$47EB:	EI
+	PUSH	AF
+	LD	A,03H	; 3 
+	OUT	(34H),A
+	LD	A,15H
+	OUT	(35H),A
+	POP	AF
+	PUSH	AF
+	AND	0E0H
+	PUSH	AF
+	OUT	(35H),A
+	LD	C,35H	; "5"
+	XOR	A
+	OUT	(35H),A
+	OUT	(35H),A
+	OUT	(C),B
+	OUT	(35H),A
+	LD	A,0FH	; 15 
+	OUT	(34H),A
+	POP	AF
+	RLCA
+	RLCA
+	RLCA
+	OUT	(35H),A
+	LD	A,12H	; 18 
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+	OUT	(35H),A
+	OUT	(C),B
+	JP	J.4897
+
+;	  Subroutine format unit
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$481F:	EI
+	PUSH	AF
+	LD	A,03H	; 3 
+	OUT	(34H),A
+	LD	A,04H	; 4 
+	OUT	(35H),A
+	POP	AF
+	PUSH	AF
+	AND	0E0H
+	PUSH	AF
+	OR	B
+	OUT	(35H),A
+	LD	C,35H	; "5"
+	XOR	A
+	OUT	(35H),A
+	OUT	(C),D
+	OUT	(C),E
+	OUT	(35H),A
+	LD	A,0FH	; 15 
+	OUT	(34H),A
+	POP	AF
+	RLCA
+	RLCA
+	RLCA
+	OUT	(35H),A
+	LD	A,12H	; 18 
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+	LD	D,A
+	LD	E,A
+	BIT	4,B
+	JR	Z,J$485E
+
+	PUSH	HL
+	INC	HL
+	INC	HL
+	LD	D,(HL)
+	INC	HL
+	LD	E,(HL)
+	POP	HL
+	INC	DE
+	INC	DE
+	INC	DE
+	INC	DE
+J$485E:	OUT	(C),D
+	OUT	(C),E
+	JR	J.4897
+
+;	  Subroutine write logical block
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4864:	PUSH	AF
+	LD	A,03H	; 3 
+	OUT	(34H),A
+	LD	A,0AH	; 10 
+	OUT	(35H),A
+	POP	AF
+	PUSH	AF
+	AND	0E0H
+	PUSH	AF
+	OR	C
+	OUT	(35H),A
+	LD	C,35H	; "5"
+	OUT	(C),D
+	OUT	(C),E
+	OUT	(C),B
+	XOR	A
+	OUT	(35H),A
+	LD	A,0FH	; 15 
+	OUT	(34H),A
+	POP	AF
+	RLCA
+	RLCA
+	RLCA
+	OUT	(35H),A
+	LD	A,12H	; 18 
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+	SLA	B
+	OUT	(C),B
+	OUT	(35H),A
+J.4897:	POP	AF
+	AND	07H	; 7 
+	OUT	(35H),A
+J.489C:	IN	A,(34H)
+	OR	A
+	JP	P,J$48B0
+
+	LD	A,17H
+	OUT	(34H),A
+	DEFB	0,0
+	IN	A,(35H)
+	OR	A
+	CALL	Z,C.46A4		; reset hdc
+
+	JR	J.489C
+
+J$48B0:	AND	30H	; "0"
+	JR	NZ,J.489C
+
+	LD	IX,I$464D
+	LD	A,18H
+	OUT	(34H),A
+	LD	A,08H	; 8 
+	OUT	(35H),A
+	LD	A,19H
+	OUT	(34H),A
+	CALL	C.48D9
+
+J.48C7:	IN	A,(34H)
+	RRCA
+	JR	NC,J$48D0
+
+	OUTI
+	JR	J.48C7
+
+J$48D0:	AND	40H	; "@"
+	JR	NZ,J$48D6
+
+	JR	J.48C7
+
+J$48D6:	JP	J.45E7			; terminate action and quit
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.48D9:	BIT	7,H
+	RET	NZ
+	EX	(SP),HL
+	PUSH	BC
+	PUSH	HL
+	LD	BC,6
+	LD	DE,(D.F34D)
+	LD	HL,I$490F
+	LDIR
+	EX	(SP),HL
+	LD	BC,15
+	LDIR
+	EX	(SP),HL
+	LD	BC,16
+	LDIR
+	CALL	C.4030			; GETSLT
+	POP	HL
+	POP	BC
+	EX	(SP),HL
+	LD	IY,(D.F34D)
+	LD	(IY+23),A
+	LD	A,(D$F342)
+	PUSH	IX
+	PUSH	BC
+	PUSH	HL
+	LD	H,40H	; "@"
+	JP	(IY)
+
+I$490F:	CALL	ENASLT
+
+	POP	HL
+	POP	BC
+	EI
+	PUSH	HL
+	LD	A,00H
+	LD	H,40H	; "@"
+	CALL	C$F368
+
+	CALL	ENASLT
+
+	POP	HL
+	POP	IX
+	EI
+	RET
+
+;	  Subroutine request sense
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4925:	PUSH	AF
+	LD	A,03H	; 3 
+	OUT	(34H),A
+	OUT	(35H),A
+	POP	AF
+	PUSH	AF
+	AND	0E0H
+	PUSH	AF
+	OUT	(35H),A
+	LD	C,35H	; "5"
+	XOR	A
+	OUT	(35H),A
+	OUT	(35H),A
+	LD	B,12H	; 18 
+	OUT	(C),B
+	OUT	(35H),A
+	LD	A,0FH	; 15 
+	OUT	(34H),A
+	POP	AF
+	RLCA
+	RLCA
+	RLCA
+	OUT	(35H),A
+	LD	A,12H	; 18 
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+	OUT	(35H),A
+	OUT	(C),B
+	POP	AF
+	AND	07H	; 7 
+	OUT	(35H),A
+	LD	HL,(D.F34D)
+	CALL	C.47AE
+
+	BIT	3,D
+	LD	A,18H
+	SCF
+	RET	NZ
+
+	INC	D
+	DEC	D
+	LD	A,02H	; 2 
+	SCF
+	RET	NZ
+
+	LD	IX,(D.F34D)
+	LD	A,(IX+0)
+	AND	7FH
+	CP	70H	; "p"
+	LD	A,0CH	; 12 
+	SCF
+	RET	NZ
+
+	LD	A,(IX+2)
+	OR	A
+	RET	Z
+
+	CP	07H	; 7 
+	CCF
+	LD	E,A
+	LD	A,0CH	; 12 
+	RET	C
+
+	LD	HL,I$498E
+	ADD	HL,DE
+J$498B:	LD	A,(HL)
+	SCF
+	RET
+
+I$498E:	DEFB	018H
+	DEFB	004H
+	DEFB	002H
+	DEFB	004H
+	DEFB	008H
+	DEFB	00CH
+	DEFB	018H
+
+;	  Subroutine inquiry
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4995:	PUSH	AF
+?.4996:	LD	A,03H	; 3 
+	OUT	(34H),A
+	LD	A,12H	; 18 
+	OUT	(35H),A
+	POP	AF
+	PUSH	AF
+	AND	0E0H
+	PUSH	AF
+	OUT	(35H),A
+	LD	C,35H	; "5"
+	XOR	A
+	OUT	(35H),A
+	OUT	(35H),A
+	LD	B,24H	; "$"
+	OUT	(C),B
+	OUT	(35H),A
+	JR	J.49EE
+
+;	  Subroutine mode sense
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$49B4:	PUSH	AF
+	LD	A,03H	; 3 
+	OUT	(34H),A
+	LD	A,1AH
+	OUT	(35H),A
+	POP	AF
+	PUSH	AF
+	AND	0E0H
+	PUSH	AF
+	OUT	(35H),A
+	LD	C,35H	; "5"
+	OUT	(C),B
+	XOR	A
+	OUT	(35H),A
+	LD	B,80H
+	OUT	(C),B
+	OUT	(35H),A
+	JR	J.49EE
+
+;	  Subroutine read capacity
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$49D3:	PUSH	AF
+	LD	A,03H	; 3 
+	OUT	(34H),A
+	LD	A,25H	; "%"
+	OUT	(35H),A
+	POP	AF
+	PUSH	AF
+	AND	0E0H
+	PUSH	AF
+	OUT	(35H),A
+	LD	C,35H	; "5"
+	XOR	A
+	LD	B,08H	; 8 
+J$49E8:	OUT	(35H),A
+	DJNZ	J$49E8
+
+	LD	B,08H	; 8 
+J.49EE:	LD	A,0FH	; 15 
+	OUT	(34H),A
+	POP	AF
+	RLCA
+	RLCA
+	RLCA
+	OUT	(35H),A
+	LD	A,12H	; 18 
+	OUT	(34H),A
+	XOR	A
+	OUT	(35H),A
+	OUT	(35H),A
+	OUT	(C),B
+	JP	J$47A9
+
+	DEFS	07F80H-$,0FFH
+
+	DEFB	"HD"
+	DEFB	021H
+	JP	C.46A4			; SetWD3393
+	JP	J.45E7			; TermAct
+?.7F89:	JP	C.4776			; RdLogBlk
+?.7F8C:	JP	C.4864			; WrLogBlk
+?.7F8F:	JP	C.4925			; ReqSense
+?.7F92:	JP	J$4995			; Inquiry
+?.7F95:	JP	J$49D3			; ReadCap
+?.7F98:	JP	J$49B4			; ModeSense
+?.7F9B:	JP	J$47EB			; ModeSel
+?.7F9E:	JP	J$481F			; FmtUnit
+?.7FA1:	JP	C.471B			; TstUnitRdy
+?.7FA4:	JP	J$41D4			; Initialise
+?.7FA7:	JP	C.42C8			; InsWork
+?.7FAA:	JP	C.436B			; ClrEndLn
+
+	DEFS	07FFFH-$,0FFH
+
+	DEFB	072H			; make checksum 0
+
+	END
+
