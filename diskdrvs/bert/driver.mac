@@ -11,91 +11,72 @@
 ; Recreation NOT permitted without authorisation of the copyrightholders
 
 	.Z80
-C.0000	EQU	0000H	; -C--I
-I$0001	EQU	0001H	; ----I
-I$0002	EQU	0002H	; ----I
-I.0004	EQU	0004H	; ----I
-CPMADR	EQU	0006H	; ----I
-I.0008	EQU	0008H	; ----I
-I$0009	EQU	0009H	; ----I
-I$0010	EQU	0010H	; ----I
-I$0011	EQU	0011H	; ----I
-I$0015	EQU	0015H	; ----I
-I$001E	EQU	001EH	; ----I
-C.0020	EQU	0020H	; -C--I
-I$002F	EQU	002FH	; ----I
-I.0030	EQU	0030H	; ----I
-D$0075	EQU	0075H	; --S--
-I$008D	EQU	008DH	; ----I
-I$00C8	EQU	00C8H	; ----I
-I$00D0	EQU	00D0H	; ----I
-J.0100	EQU	0100H	; J---I
-C.0141	EQU	0141H	; -C---
-I$01B6	EQU	01B6H	; ----I
-I$01BE	EQU	01BEH	; ----I
-I$01FF	EQU	01FFH	; ----I
-I.0200	EQU	0200H	; ----I
-I$2000	EQU	2000H	; ----I
-D.2D20	EQU	2D20H	; --S-I
-D$372E	EQU	372EH	; --S--
-I$3F00	EQU	3F00H	; ----I
-J$4022	EQU	4022H	; J----
-I$41F2	EQU	41F2H	; ----I
-D$4B30	EQU	4B30H	; --S--
-C.4D7D	EQU	4D7DH	; -C---
-C.4DB0	EQU	4DB0H	; -C---
-C.4DBB	EQU	4DBBH	; -C---
-C$4E05	EQU	4E05H	; -C---
-C.5604	EQU	5604H	; -C---
-J.63AB	EQU	63ABH	; J----
-I$C000	EQU	0C000H	; ----I
-D$C059	EQU	0C059H	; ---L-
-J$C063	EQU	0C063H	; J----
-J$C06A	EQU	0C06AH	; J----
-I$C079	EQU	0C079H	; ----I
-I.C09F	EQU	0C09FH	; ----I
-D$C0AD	EQU	0C0ADH	; --S--
-D.C0C4	EQU	0C0C4H	; --SL-
-I$C350	EQU	0C350H	; ----I
-I$DAC3	EQU	0DAC3H	; ----I
-D.F33D	EQU	0F33DH	; ---LI
-D$F33F	EQU	0F33FH	; ---L-
-D.F34D	EQU	0F34DH	; --SL-
-I$F355	EQU	0F355H	; ----I
-C.F37D	EQU	0F37DH	; -C---
-I$F51F	EQU	0F51FH	; ----I
-D.F6AB	EQU	0F6ABH	; ---L-
-I.FB21	EQU	0FB21H	; ----I
-I$FD89	EQU	0FD89H	; ----I
-D.FD99	EQU	0FD99H	; ---LI
-I.FE00	EQU	0FE00H	; ----I
+SNSMAT	EQU	0141H
+
+C.4D7D	EQU	4D7DH	; print string
+C.4DBB	EQU	4DBBH	; get SLTWRK pointer
+C$4E05	EQU	4E05H	; GETSLT
+C.5604	EQU	5604H	; allocate memory
+J.63AB	EQU	63ABH	; finish seek
+
+I$C000	EQU	0C000H
+
+RECSIZ	EQU	0F33DH
+TARGET	EQU	0F33FH
+$SECBUF	EQU	0F34DH
+$DPBLI	EQU	0F355H
+BDOS	EQU	0F37DH
+AUTLIN	EQU	0F6ABH
+DRVINF	EQU	0FB21H
+PROCNM	EQU	0FD89H
+DEVICE	EQU	0FD99H
 
 
+MYSIZ	EQU	0
+SECLEN	EQU	512
 
+
+DEFDPB	EQU	$-1
 ?.6EC5:	RET
 
-?.6EC6:	LD	L,00H
+DRIVES:
+?.6EC6:	LD	L,0
 	RET
 
-?.6EC9:	LD	A,0CH	; 12 
+;	  Subroutine general error (DSKIO/DSKCHG/GETDPB in segment 1,2,3)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.6EC9:	LD	A,12
 	SCF
 
+INIENV:
 MTOFF:
 J.6ECC:	RET
+
+;	  Subroutine not formatable (CHOICE in segment 1,2,3)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 ?.6ECD:	LD	HL,I$6ED1
 	RET
 
-I$6ED1:	NOP
-	LD	A,10H	; 16 
+I$6ED1:	DEFB	0
+
+;	  Subroutine general error (DSKFMT in segment 1,2,3)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.6ED2:	LD	A,16
 	SCF
 	RET
 
+OEMSTA:
 ?.6ED6:	EI
 	PUSH	HL
 	PUSH	DE
 	LD	DE,I$6F48
-	LD	HL,I$FD89
+	LD	HL,PROCNM
 J$6EDF:	LD	A,(DE)
 	AND	A
 	JR	Z,J.6EEE
@@ -112,49 +93,49 @@ J.6EEA:	POP	DE
 
 J.6EEE:	LD	A,(HL)
 	INC	HL
-	CP	20H	; " "
+	CP	" "
 	JR	Z,J.6EEE
-	CP	3DH	; "="
+	CP	"="
 	JR	NZ,J.6EEA
 J$6EF8:	LD	A,(HL)
 	INC	HL
-	CP	20H	; " "
+	CP	" "
 	JR	Z,J$6EF8
-	SUB	30H	; "0"
+	SUB	"0"
 	JR	C,J.6EEA
-	CP	08H	; 8 
+	CP	7+1
 	JR	NC,J.6EEA
 	LD	B,A
 	LD	A,(HL)
 	OR	A
 	JR	NZ,J.6EEA
 	LD	A,B
-	AND	07H	; 7 
-	LD	A,01H	; 1 
+	AND	07H			; ?? is already verified 0-7
+	LD	A,1
 	JR	Z,J$6F15
 J$6F12:	RLA
 	DJNZ	J$6F12
 J$6F15:	PUSH	AF
 	CALL	C.7A6A
 	POP	AF
-	LD	(IX),A
+	LD	(IX+0),A
 	LD	C,0B5H
 	DI
-	LD	A,0DH	; 13 
+	LD	A,0DH
 	OUT	(0B4H),A
 	IN	A,(C)
 	PUSH	AF
-	LD	A,09H	; 9 
+	LD	A,09H
 	OUT	(C),A
-	LD	A,07H	; 7 
+	LD	A,07H
 	OUT	(0B4H),A
 	CALL	C.7781
 	OUT	(C),A
-	LD	A,05H	; 5 
+	LD	A,05H
 	OUT	(0B4H),A
-	LD	A,03H	; 3 
+	LD	A,03H
 	OUT	(C),A
-	LD	A,0DH	; 13 
+	LD	A,0DH
 	OUT	(0B4H),A
 	POP	AF
 	OUT	(C),A
@@ -164,13 +145,8 @@ J$6F15:	PUSH	AF
 	XOR	A
 	RET
 
-I$6F48:	LD	D,E
-	LD	B,E
-	LD	D,E
-	LD	C,C
-	LD	C,C
-	LD	B,H
-	NOP
+I$6F48:	DEFB	"SCSIID"
+	DEFB	0
 
 ;	  Subroutine DSKIO
 ;	     Inputs  ________________________
@@ -179,7 +155,7 @@ I$6F48:	LD	D,E
 DSKIO:
 J.6F4F:	EI
 	PUSH	AF
-	CP	06H	; 6 
+	CP	5+1
 	JP	NC,J.7090
 	PUSH	BC
 	PUSH	DE
@@ -189,10 +165,12 @@ J.6F4F:	EI
 	POP	DE
 	POP	BC
 	POP	AF
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-C$6F60:	LD	A,(IX)
+
+C$6F60:	LD	A,(IX+0)
 	BIT	4,A
 	JP	NZ,J$70EF
 	PUSH	AF
@@ -241,12 +219,12 @@ J.6F79:	LD	C,00H
 	JR	C,J$6FB8
 	BIT	1,(IX+6)
 	JP	Z,J$705E
-	CALL	C.7AA8
+	CALL	C.7AA8			; read logical block
 	JR	J$6FC2
 
 J$6FB8:	BIT	0,(IX+6)
 	JP	Z,J$7058
-	CALL	C.7B0D
+	CALL	C.7B0D			; write logical block
 J$6FC2:	POP	IX
 	POP	BC
 	LD	A,D
@@ -256,20 +234,20 @@ J$6FC2:	POP	IX
 	RET	Z
 	PUSH	DE
 	PUSH	BC
-	LD	A,(IX)
+	LD	A,(IX+0)
 	PUSH	IX
 	LD	(IX+7),00H
-	CALL	C.7B2F
+	CALL	C.7B2F			; request sense
 	PUSH	AF
 	CP	18H
 	JR	NZ,J$701D
 	POP	AF
-J$6FDF:	LD	HL,(D.F34D)
+J$6FDF:	LD	HL,($SECBUF)
 	EX	(SP),IX
-	LD	A,(IX)
-	LD	BC,J.0100
-	LD	DE,C.0000
-	CALL	C.7AA8
+	LD	A,(IX+0)
+	LD	BC,1*256+0
+	LD	DE,0
+	CALL	C.7AA8			; read logical block
 	EX	(SP),IX
 	JR	C,J$6FFC
 	POP	IX
@@ -279,8 +257,8 @@ J$6FDF:	LD	HL,(D.F34D)
 	JR	J.7043
 
 J$6FFC:	EX	(SP),IX
-	LD	A,(IX)
-	CALL	C.7A87
+	LD	A,(IX+0)
+	CALL	C.7A87			; test unit ready
 	LD	A,(IX+7)
 	CALL	C.7429
 	INC	(IX+7)
@@ -303,11 +281,11 @@ J.701E:	POP	HL
 	CP	06H	; 6 
 	JR	NZ,J$7047
 	PUSH	HL
-	CALL	C.4DB0
+	CALL	GETWRK
 	POP	IX
-	LD	A,(IX)
+	LD	A,(IX+0)
 	OR	08H	; 8 
-	LD	DE,I.0008
+	LD	DE,8
 	LD	B,06H	; 6 
 J$703B:	CP	(HL)
 	JR	NZ,J$7040
@@ -322,7 +300,7 @@ J.7043:	POP	AF
 J$7047:	POP	AF
 	POP	BC
 	POP	DE
-	BIT	7,(IX)
+	BIT	7,(IX+0)
 	RET	Z
 	PUSH	AF
 	LD	A,B
@@ -367,8 +345,8 @@ J$7069:	LD	A,(IX+4)
 	CALL	C$6F60
 	JR	C,J$7089
 	POP	BC
-	LD	A,0F1H
-J.7084	EQU	$-1
+	DEFB	03EH
+J.7084:	POP	AF
 	LD	A,08H	; 8 
 	SCF
 	RET
@@ -391,7 +369,7 @@ J.7091:	LD	A,0CH	; 12
 ;	     Outputs ________________________
 
 J.7095:	EI
-	CP	06H	; 6 
+	CP	5+1
 	JR	NC,J.7091
 	OR	A
 	PUSH	AF
@@ -407,35 +385,32 @@ J.7095:	EI
 	JR	J$70B6
 
 ?.70AF:	LD	B,01H	; 1 
-	BIT	3,(IX)
+	BIT	3,(IX+0)
 	RET	NZ
 J$70B6:	LD	B,0FFH
-	SET	3,(IX)
-	RES	4,(IX)
+	SET	3,(IX+0)
+	RES	4,(IX+0)
 	PUSH	BC
-	CALL	C.70DC
+	CALL	C.70DC			; GETDPB
 	POP	BC
 	LD	A,18H
 	OR	A
 	RET
 
-I$70C9:	NOP
-D$70CA:	LD	SP,HL
-	NOP
-	LD	(BC),A
-	RRCA
-	INC	B
-	RRA
-	LD	B,01H	; 1 
-	NOP
-	LD	(BC),A
-	CP	29H	; ")"
-	NOP
-	INC	D
-	DEC	B
-	INC	C
-	ADD	HL,DE
-	NOP
+I$70C9:	DEFB	0
+D$70CA:	DEFB	0F9H
+	DEFW	512
+        DEFB	0FH
+        DEFB	04H
+        DEFB	1FH
+        DEFB	06H
+	DEFW	1
+        DEFB	2
+        DEFB	240
+        DEFW	41
+        DEFW	1300
+        DEFB	12
+        DEFW	25
 
 ;	  Subroutine GETDPB
 ;	     Inputs  ________________________
@@ -443,14 +418,14 @@ D$70CA:	LD	SP,HL
 
 GETDPB:
 C.70DC:	EI
-	CP	06H	; 6 
+	CP	5+1
 	JP	NC,J.7091
 	PUSH	AF
 	PUSH	HL
 	CALL	C.7A45
 	POP	HL
 	POP	AF
-	BIT	4,(IX)
+	BIT	4,(IX+0)
 	JR	Z,J$70F3
 J$70EF:	LD	A,16H
 	SCF
@@ -458,14 +433,14 @@ J$70EF:	LD	A,16H
 
 J$70F3:	LD	(IX+7),00H
 	PUSH	HL
-	LD	HL,(D.F34D)
+	LD	HL,($SECBUF)
 	PUSH	HL
-	LD	A,(IX)
+	LD	A,(IX+0)
 	LD	B,01H	; 1 
 	LD	C,(IX+3)
 	LD	D,(IX+2)
 	LD	E,(IX+1)
-	CALL	C.7AA8
+	CALL	C.7AA8			; read logical block
 	LD	A,D
 	CALL	C$71C9
 	POP	IY
@@ -560,14 +535,15 @@ J$71C0:	INC	HL
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$71C9:	OR	A
 	RET	Z
 	PUSH	DE
 	PUSH	BC
-	LD	A,(IX)
+	LD	A,(IX+0)
 	PUSH	IX
 	LD	(IX+7),00H
-	CALL	C.7B2F
+	CALL	C.7B2F			; request sense
 	PUSH	AF
 	CP	18H
 	JR	NZ,J$71FA
@@ -575,9 +551,9 @@ C$71C9:	OR	A
 	POP	IX
 	CALL	C.74A7
 	JP	NC,J$71F4
-	SET	4,(IX)
-	LD	A,(IX)
-	CALL	C.7B2F
+	SET	4,(IX+0)
+	LD	A,(IX+0)
+	CALL	C.7B2F			; request sense
 	JP	J.701E
 
 J$71F4:	LD	A,18H
@@ -598,8 +574,8 @@ CHOICE:
 J.71FE:	CALL	C.7A45
 	LD	A,(IX+1)
 	OR	(IX+2)
-	OR	(IX+3)
-	JR	Z,J$7210
+	OR	(IX+3)			; first sector of 'partition' 0 ?
+	JR	Z,J$7210		; yep, must be a floppy disk
 	LD	HL,I$7373
 	RET
 
@@ -612,16 +588,16 @@ J$7210:	LD	HL,I$73C0
 
 DSKFMT:
 J.7214:	LD	E,A
-	CP	05H	; 5 
-	JR	NC,J$721C
+	CP	5			; valid choice ?
+	JR	NC,J$721C		; nope, quit with error
 	LD	A,D
-	CP	06H	; 6 
+	CP	5+1			; valid drive ?
 J$721C:	CCF
-	LD	A,0CH	; 12 
-	RET	C
+	LD	A,12
+	RET	C			; quit with error
 	SCF
-	DEC	E
-	RET	M
+	DEC	E			; choice 0 ?
+	RET	M			; yep, quit with error
 	PUSH	DE
 	LD	A,D
 	PUSH	HL
@@ -632,9 +608,9 @@ J$721C:	CCF
 	POP	DE
 	LD	A,(IX+1)
 	OR	(IX+2)
-	OR	(IX+3)
-	JP	Z,J$7264
-	LD	D,00H
+	OR	(IX+3)			; first sector of 'partition' 0 ?
+	JP	Z,J$7264		; yep, format floppy disk
+	LD	D,0
 	LD	HL,I$7245
 	ADD	HL,DE
 	ADD	HL,DE
@@ -644,45 +620,42 @@ J$721C:	CCF
 	LD	L,A
 	JP	(HL)
 
-I$7245:	LD	C,L
-	LD	(HL),D
-	LD	D,(HL)
-	LD	(HL),D
-	LD	E,E
-	LD	(HL),D
-	LD	H,B
-	LD	(HL),D
-	RES	4,(IX)
+I$7245:	DEFW	J.724D			; choice 1, enable partition
+	DEFW	J.7256			; choice 2, disable partition
+	DEFW	J.725B			; choice 3, write protect partition
+	DEFW	J.7260			; choice 4, invalid choice
+
+J.724D:	RES	4,(IX+0)
 	SET	0,(IX+6)
 	RET
 
-?.7256:	SET	4,(IX)
+J.7256:	SET	4,(IX+0)
 	RET
 
-?.725B:	RES	0,(IX+6)
+J.725B:	RES	0,(IX+6)
 	RET
 
-?.7260:	SCF
-	LD	A,0CH	; 12 
+J.7260:	SCF
+	LD	A,12
 	RET
 
 J$7264:	LD	A,B
-	CP	02H	; 2 
-	JP	C,J$7325
+	CP	HIGH 512		; enough workspace ?
+	JP	C,J$7325		; nope, quit with error
 	LD	A,E
-	AND	0FH	; 15 
+	AND	0FH
 	CALL	C.7429
-	LD	A,(IX)
+	LD	A,(IX+0)
 	PUSH	HL
-	CALL	C.7362
+	CALL	C.7362			; clear sector buffer
 	LD	B,00H
 	PUSH	DE
-	LD	DE,C.0000
-	CALL	C.7AEB
-	JR	NC,J$7291
-	LD	A,(IX)
+	LD	DE,0
+	CALL	C.7AEB			; format unit
+	JR	NC,J$7291		; ok, continue
+	LD	A,(IX+0)
 	PUSH	IX
-	CALL	C.7B2F
+	CALL	C.7B2F			; request sense
 	POP	IX
 	POP	DE
 	POP	HL
@@ -692,31 +665,31 @@ J$7291:	POP	DE
 	LD	A,E
 	ADD	A,A
 	ADD	A,A
-	ADD	A,A
-	ADD	A,04H	; 4 
+	ADD	A,A			; *8
+	ADD	A,4
 	LD	E,A
-	LD	D,00H
+	LD	D,0
 	LD	HL,I.74D6
 	ADD	HL,DE
 	LD	A,(HL)
 	INC	HL
 	LD	H,(HL)
 	LD	L,A
-	LD	BC,I$001E
+	LD	BC,30
 	POP	DE
 	PUSH	DE
 	LDIR
 	LD	HL,I$756E
-	LD	BC,I$008D
+	LD	BC,L_BOOT
 	LDIR
 	POP	HL
-	CALL	C.732F
-	RET	C
+	CALL	C.732F			; write sector
+	RET	C			; error, quit
 	PUSH	HL
-	LD	DE,I$0011
+	LD	DE,17
 	ADD	HL,DE
 	LD	E,(HL)
-	LD	BC,I.0004
+	LD	BC,4
 	ADD	HL,BC
 	LD	C,(HL)
 	INC	HL
@@ -735,9 +708,9 @@ J$7291:	POP	DE
 J$72D6:	LD	A,E
 	ADD	A,B
 	LD	B,A
-	CALL	C.7362
-J$72DC:	CALL	C.732F
-	JR	NC,J$72E3
+	CALL	C.7362			; clear sector buffer
+J$72DC:	CALL	C.732F			; write sector
+	JR	NC,J$72E3		; ok, continue
 	POP	BC
 	RET
 
@@ -750,11 +723,11 @@ J$72E3:	DJNZ	J$72DC
 	LD	(HL),0FFH
 	DEC	HL
 	DEC	HL
-	LD	(IX+1),01H	; 1 
-	LD	(IX+2),00H
-	LD	(IX+3),00H
-	CALL	C.732F
-	RET	C
+	LD	(IX+1),1
+	LD	(IX+2),0
+	LD	(IX+3),0
+	CALL	C.732F			; write sector (first sector of FAT #1)
+	RET	C			; error, quit
 	LD	A,B
 	DEC	A
 	ADD	A,(IX+1)
@@ -763,42 +736,43 @@ J$72E3:	DJNZ	J$72DC
 	INC	(IX+2)
 	JR	NZ,J.7311
 	INC	(IX+3)
-J.7311:	CALL	C.732F
-	RET	C
-	LD	(IX+1),00H
-	LD	(IX+2),00H
-	LD	(IX+3),00H
-	XOR	A
-	LD	A,16H
+J.7311:	CALL	C.732F			; write sector (first sector of FAT #2)
+	RET	C			; error, quit
+	LD	(IX+1),0
+	LD	(IX+2),0
+	LD	(IX+3),0
+	XOR	A			; no error
+	LD	A,16H			; ?
 	RET
 
 J$7325:	CCF
-	LD	A,0EH	; 14 
+	LD	A,14
 	RET
 
 ?.7329:	XOR	A
 J$732A:	SCF
 	RET
 
-?.732C:	LD	A,04H	; 4 
+?.732C:	LD	A,4
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine write sector
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.732F:	PUSH	HL
 	PUSH	DE
 	PUSH	BC
-	LD	B,01H	; 1 
+	LD	B,1
 	LD	C,(IX+3)
 	LD	D,(IX+2)
 	LD	E,(IX+1)
-	LD	A,(IX)
-	CALL	C.7B0D
+	LD	A,(IX+0)
+	CALL	C.7B0D			; write logical block
 	JR	NC,J$734F
-	LD	A,(IX)
+	LD	A,(IX+0)
 	PUSH	IX
-	CALL	C.7B2F
+	CALL	C.7B2F			; request sense
 	POP	IX
 J$734F:	PUSH	AF
 	INC	(IX+1)
@@ -812,224 +786,84 @@ J.735D:	POP	AF
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine clear sector buffer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7362:	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	PUSH	HL
 	POP	DE
-	LD	(HL),00H
+	LD	(HL),0
 	INC	DE
-	LD	BC,I$01FF
+	LD	BC,512-1
 	LDIR
 	POP	BC
 	POP	DE
 	POP	HL
 	RET
 
-I$7373:	DEC	C
-	LD	A,(BC)
-	LD	SP,D.2D20
-	JR	NZ,J$73BF
-	LD	L,(HL)
-	LD	H,C
-	LD	H,D
-	LD	L,H
-	LD	H,L
-	JR	NZ,J$73F1
-	LD	H,C
-	LD	(HL),D
-	LD	(HL),H
-	LD	L,C
-	LD	(HL),H
-	LD	L,C
-	LD	L,A
-	LD	L,(HL)
-	DEC	C
-	LD	A,(BC)
-	LD	(D.2D20),A
-	JR	NZ,J$73D4
-	LD	L,C
-	LD	(HL),E
-	LD	H,C
-	LD	H,D
-	LD	L,H
-	LD	H,L
-	JR	NZ,J$7408
-	LD	H,C
-	LD	(HL),D
-	LD	(HL),H
-	LD	L,C
-	LD	(HL),H
-	LD	L,C
-	LD	L,A
-	LD	L,(HL)
-	DEC	C
-	LD	A,(BC)
-	INC	SP
-	JR	NZ,J$73D2
-	JR	NZ,J.73FE
-	LD	(HL),D
-	LD	L,C
-	LD	(HL),H
-	LD	H,L
-	JR	NZ,J$741D
-	LD	(HL),D
-	LD	L,A
-	LD	(HL),H
-	LD	H,L
-	LD	H,E
-	LD	(HL),H
-	JR	NZ,J.7425
-	LD	H,C
-	LD	(HL),D
-	LD	(HL),H
-	LD	L,C
-	LD	(HL),H
-	LD	L,C
-	LD	L,A
-	LD	L,(HL)
-	DEC	C
-	LD	A,(BC)
-J$73BF:	NOP
-I$73C0:	DEC	C
-	LD	A,(BC)
-	LD	SP,D.2D20
-	JR	NZ,J.73FE
-	LD	(D$4B30),A
-	LD	H,D
-	JR	NZ,J$73F5
-	LD	H,H
-	LD	L,A
-	LD	(HL),L
-	LD	H,D
-	LD	L,H
-J$73D2:	LD	H,L
-	JR	NZ,J$7448
-J$73D4	EQU	$-1
-	LD	L,C
-	LD	H,H
-	LD	H,L
-	ADD	HL,HL
-	DEC	C
-	LD	A,(BC)
-	LD	(D.2D20),A
-	JR	NZ,J$7411
-	LD	L,34H	; "4"
-	INC	(HL)
-	LD	C,L
-	LD	H,D
-	JR	NZ,J$740F
-	LD	H,H
-	LD	L,A
-	LD	(HL),L
-	LD	H,D
-	LD	L,H
-	LD	H,L
-	JR	NZ,J$7462
-	LD	L,C
-	LD	H,H
-J$73F1:	LD	H,L
-	ADD	HL,HL
-	DEC	C
-	LD	A,(BC)
-J$73F5:	INC	SP
-	JR	NZ,J.7425
-	JR	NZ,J$742C
-	LD	L,38H	; "8"
-	JR	C,J$744B
-J.73FE:	LD	H,D
-	JR	NZ,C.7429
-	LD	H,H
-	LD	L,A
-	LD	(HL),L
-	LD	H,D
-	LD	L,H
-	LD	H,L
-	JR	NZ,J$747C
-J$7408	EQU	$-1
-	LD	L,C
-	LD	H,H
-	LD	H,L
-	ADD	HL,HL
-	DEC	C
-	LD	A,(BC)
-J$740F:	INC	(HL)
-	JR	NZ,J$743F
-J$7411	EQU	$-1
-	JR	NZ,J$7447
-	LD	(HL),30H	; "0"
-	LD	C,E
-	LD	H,D
-	JR	NZ,J$7442
-	LD	(HL),E
-	LD	L,C
-	LD	L,(HL)
-J$741D:	LD	H,A
-	LD	H,L
-	LD	L,H
-	JR	NZ,J$7495
-	LD	L,C
-	LD	H,H
-	LD	H,L
-J.7425:	ADD	HL,HL
-	DEC	C
-	LD	A,(BC)
-	NOP
+I$7373:	DEFB	13,10
+	DEFB	"1 - Enable partition",13,10
+	DEFB	"2 - Disable partition",13,10
+	DEFB	"3 - Write protect partition",13,10
+	DEFB	0
+
+I$73C0:	DEFB	13,10
+	DEFB	"1 - 720Kb (double side)",13,10
+	DEFB	"2 - 1.44Mb (double side)",13,10
+	DEFB	"3 - 2.88Mb (double side)",13,10
+	DEFB	"4 - 360Kb (singel side)",13,10
+	DEFB	0
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7429:	PUSH	IY
 	PUSH	IX
-J$742C	EQU	$-1
 	PUSH	HL
 	PUSH	DE
 	PUSH	BC
 	PUSH	AF
 	PUSH	HL
 	LD	B,03H	; 3 
-J$7434:	LD	A,(IX)
-	CALL	C.7A87
+J$7434:	LD	A,(IX+0)
+	CALL	C.7A87			; test unit ready
 	JR	NC,J$7440
 	DJNZ	J$7434
 	JR	J.7498
-J$743F	EQU	$-1
 
-J$7440:	LD	A,(IX)
-J$7442	EQU	$-1
+J$7440:	LD	A,(IX+0)
 	LD	B,05H	; 5 
-	CALL	C.7BB2
-J$7447	EQU	$-1
+	CALL	C.7BB2			; mode sense
 J$7448:	JR	C,J.7498
 	POP	IY
-J$744B	EQU	$-1
 	LD	(IY+12),05H	; 5 
-	LD	(IY),00H
+	LD	(IY+0),00H
 	LD	(IY+2),00H
 	LD	(IY+3),00H
 	PUSH	IY
 	POP	HL
-	LD	DE,I.0004
+	LD	DE,4
 J$7462:	ADD	HL,DE
 	PUSH	HL
-	LD	DE,I.0008
+	LD	DE,8
 	ADD	HL,DE
 	POP	DE
-	LD	BC,C.0020
+	LD	BC,32
 	LDIR
 	POP	AF
 	LD	D,00H
 	ADD	A,A
 	ADD	A,A
-	ADD	A,A
+	ADD	A,A			; *8
 	LD	E,A
 	LD	HL,I.74D6
 	ADD	HL,DE
 	LD	A,(HL)
 	LD	(IY+1),A
-J$747C	EQU	$-1
 	INC	HL
 	LD	A,(HL)
 	LD	(IY+8),A
@@ -1038,13 +872,12 @@ J$747C	EQU	$-1
 	LD	(IY+9),A
 	INC	HL
 	INC	HL
-	LD	A,(IX)
+	LD	A,(IX+0)
 	LD	B,24H	; "$"
 	PUSH	IY
 	POP	HL
-	CALL	C.7ACA
+	CALL	C.7ACA			; mode select
 	JR	C,J$749A
-J$7495	EQU	$-1
 	JR	J$749E
 
 J.7498:	POP	HL
@@ -1064,233 +897,183 @@ J$749F:	POP	BC
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.74A7:	LD	(IX+7),00H
 	PUSH	HL
 	PUSH	DE
 	PUSH	BC
-J$74AE:	LD	HL,(D.F34D)
-	LD	A,(IX)
-	LD	BC,J.0100
-	LD	DE,C.0000
-	CALL	C.7AA8
+J$74AE:	LD	HL,($SECBUF)
+	LD	A,(IX+0)
+	LD	BC,1*256+0
+	LD	DE,0
+	CALL	C.7AA8			; read logical block
 	JR	NC,J$74D2
 	LD	A,(IX+7)
 	CALL	C.7429
 	INC	(IX+7)
 	LD	A,(IX+7)
-	CP	04H	; 4 
+	CP	4
 	JR	NZ,J$74AE
-	LD	A,16H
+	LD	A,16H			; quit with error
 	SCF
 J$74D2:	POP	BC
 	POP	DE
 	POP	HL
 	RET
 
-I.74D6:	ADD	A,B
-	LD	(BC),A
-	ADD	HL,BC
-	NOP
-	OR	74H	; "t"
-	DEFB	0,0
-	ADC	A,B
-	LD	(BC),A
-	LD	(DE),A
-	NOP
-	INC	D
-	LD	(HL),L
-	DEFB	0,0
-	ADC	A,H
-	LD	(BC),A
-	INC	H
-	NOP
-	LD	(D$0075),A
-	NOP
-	ADD	A,B
-	LD	BC,I$0009
-	LD	D,B
-	LD	(HL),L
-	DEFB	0,0
-	EX	DE,HL
-	CP	90H
-	LD	D,E
-	LD	B,E
-	LD	D,E
-	LD	C,C
-	JR	NZ,J$7545
-	LD	B,H
-	JR	NZ,J$7502
-J$7502:	LD	(BC),A
-	LD	(BC),A
-	LD	BC,I.0200
-	LD	(HL),B
-	NOP
-	AND	B
-	DEC	B
-	LD	SP,HL
-	INC	BC
-	NOP
-	ADD	HL,BC
-	NOP
-	LD	(BC),A
-	DEFB	0,0,0
-	EX	DE,HL
-	CP	90H
-	LD	D,E
-	LD	B,E
-	LD	D,E
-	LD	C,C
-	JR	NZ,J$7563
-	LD	B,H
-	JR	NZ,J$7520
-J$7520:	LD	(BC),A
-	LD	(BC),A
-	LD	BC,I.0200
-	RET	P
-	NOP
-	LD	B,B
-	DEC	BC
-	LD	SP,HL
-	DEC	B
-	NOP
-	LD	(DE),A
-	NOP
-	LD	(BC),A
-	DEFB	0,0,0
-	EX	DE,HL
-	CP	90H
-	LD	D,E
-	LD	B,E
-	LD	D,E
-	LD	C,C
-	JR	NZ,J$7581
-	LD	B,H
-	JR	NZ,J$753E
-J$753E:	LD	(BC),A
-	LD	(BC),A
-	LD	BC,I.0200
-	RET	P
-	NOP
-J$7545:	ADD	A,B
-	LD	D,0F9H
-	ADD	HL,BC
-	NOP
-	INC	H
-	NOP
-	LD	(BC),A
-	DEFB	0,0,0
-	EX	DE,HL
-	CP	90H
-	LD	D,E
-	LD	B,E
-	LD	D,E
-	LD	C,C
-	JR	NZ,J$759F
-	LD	B,H
-	JR	NZ,J$755C
-J$755C:	LD	(BC),A
-	LD	(BC),A
-	LD	BC,I.0200
-	LD	(HL),B
-	NOP
-J$7563:	RET	NC
-	LD	(BC),A
-	RET	M
-	INC	BC
-	NOP
-	ADD	HL,BC
-	NOP
-	LD	BC,C.0000
-	NOP
-I$756E:	RET	NC
-	LD	(D$C059),DE
-	LD	(D.C0C4),A
-	LD	(HL),56H	; "V"
-	INC	HL
-	LD	(HL),0C0H
-J$757B:	LD	SP,I$F51F
-	LD	DE,I.C09F
-J$7581:	LD	C,0FH	; 15 
-	CALL	C.F37D
-	INC	A
-	JP	Z,J$C063
-	LD	DE,J.0100
-	LD	C,1AH
-	CALL	C.F37D
-	LD	HL,I$0001
-	LD	(D$C0AD),HL
-	LD	HL,I$3F00
-	LD	DE,I.C09F
-	LD	C,27H	; "'"
-J$759F	EQU	$-1
-	CALL	C.F37D
-	JP	J.0100
+I.74D6:	DEFB	080H,002H,009H,000H
+	DEFW	I.74F6
+	DEFW	0
 
-?.75A6:	LD	E,B
-	RET	NZ
-	CALL	C.0000
-	LD	A,C
-	AND	0FEH
-	CP	02H	; 2 
-	JP	NZ,J$C06A
-	LD	A,(D.C0C4)
-	AND	A
-	JP	Z,J$4022
-	LD	DE,I$C079
-	LD	C,09H	; 9 
-	CALL	C.F37D
-	LD	C,07H	; 7 
-	CALL	C.F37D
-	JR	J$757B
+	DEFB	088H,002H,012H,000H
+	DEFW	I.7514
+	DEFW	0
 
-?.75C9:	LD	B,D
-	LD	L,A
-	LD	L,A
-	LD	(HL),H
-	JR	NZ,J$7634
-	LD	(HL),D
-	LD	(HL),D
-	LD	L,A
-	LD	(HL),D
-	DEC	C
-	LD	A,(BC)
-	LD	D,B
-	LD	(HL),D
-	LD	H,L
-	LD	(HL),E
-	LD	(HL),E
-	JR	NZ,J$763D
-	LD	L,(HL)
-	LD	A,C
-	JR	NZ,J$764B
-	LD	H,L
-	LD	A,C
-	JR	NZ,J$764A
-	LD	L,A
-	LD	(HL),D
-	JR	NZ,J.765A
-	LD	H,L
-	LD	(HL),H
-	LD	(HL),D
-	LD	A,C
-	DEC	C
-	LD	A,(BC)
-	INC	H
-	NOP
-	LD	C,L
-	LD	D,E
-	LD	E,B
-	LD	B,H
-	LD	C,A
-	LD	D,E
-	JR	NZ,J$7618
-	LD	D,E
-	LD	E,C
-	LD	D,E
-	LD	A,(D.F33D)
+	DEFB	08CH,002H,024H,000H
+	DEFW	I.7532
+	DEFW	0
+
+	DEFB	080H,001H,009H,000H
+	DEFW	I.7550
+	DEFW	0
+
+I.74F6:	DB	0EBh,0FEh,090h
+        DB	"SCSI FD "
+        DW	512
+        DB	2
+        DW	1
+        DB	2
+        DW	112
+        DW	1440
+        DB	0F9h
+        DW	3
+        DW	9
+        DW	2
+        DW	0
+
+I.7514:	DB	0EBh,0FEh,090h
+        DB	"SCSI FD "
+        DW	512
+        DB	2
+        DW	1
+        DB	2
+        DW	240
+        DW	2880
+        DB	0F9h
+        DW	5
+        DW	18
+        DW	2
+        DW	0
+
+I.7532:	DB	0EBh,0FEh,090h
+        DB	"SCSI FD "
+        DW	512
+        DB	2
+        DW	1
+        DB	2
+        DW	240
+        DW	5760
+        DB	0F9h
+        DW	9
+        DW	36
+        DW	2
+        DW	0
+
+I.7550:	DB	0EBh,0FEh,090h
+        DB	"SCSI FD "
+        DW	512
+        DB	2
+        DW	1
+        DB	2
+        DW	112
+        DW	720
+        DB	0F8h
+        DW	3
+        DW	9
+        DW	1
+        DW	0
+
+
+I$756E:
+        .PHASE	0C01EH
+
+LC01E:  RET	NC
+        LD	(LC058+1),DE
+        LD	(LC0C4),A
+        LD	(HL),LOW LC056
+        INC	HL
+        LD	(HL),HIGH LC056
+L7F3A:	LD	SP,KBUF+256
+        LD	DE,LC09F
+        LD	C,00FH
+        CALL	BDOS
+        INC	A
+        JP	Z,LC063
+        LD	DE,00100H
+        LD	C,01AH
+        CALL	BDOS
+        LD	HL,1
+        LD	(LC09F+14),HL
+        LD	HL,04000H-00100H
+        LD	DE,LC09F
+        LD	C,027H
+        CALL	BDOS
+        JP	00100H
+
+LC056:	DEFW	LC058
+
+LC058:	CALL	0
+        LD	A,C
+        AND	0FEH
+        CP	2
+        JP	NZ,LC06A
+LC063:	LD	A,(LC0C4)
+        AND	A
+        JP	Z,DSKBAS
+LC06A:	LD	DE,LC079
+        LD	C,009H
+        CALL	BDOS
+        LD	C,007H
+        CALL	BDOS
+        JR	L7F3A
+
+LC079:	DEFB	"Boot error",13,10
+        DEFB	"Press any key for retry",13,10
+        DEFB	"$"
+
+LC09F:	DEFB	0
+        DEFB	"MSXDOS  SYS"
+
+L_BOOT	EQU	$-LC01E
+
+	.DEPHASE
+
+;	  Subroutine LOC patch
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+; patch 0638DH
+;
+;       JR	NZ,L6399		; nop, LOF
+;       PUSH	HL
+;	PUSH	DE
+;	LD	A,2
+;	LD	DE,0
+;	LD	HL,0
+
+;	JP	Z,J.75FB
+;	PUSH	HL
+;	PUSH	DE
+;	LD	A,2
+;	LD	DE,0
+;	LD	H,D
+;	LD	L,E
+
+
+?.75FB:	LD	A,(RECSIZ+0)
 	OR	A
 	JP	Z,J.63AB
-	LD	BC,I$2000
+	LD	BC,32*256+0
 	AND	A
 J$7606:	ADC	HL,HL
 	RL	E
@@ -1298,12 +1081,11 @@ J$7606:	ADC	HL,HL
 	RL	C
 	LD	A,C
 	PUSH	HL
-	LD	HL,D.F33D
+	LD	HL,RECSIZ+0
 	SUB	(HL)
 	POP	HL
 	CCF
 	JP	NC,J$761A
-J$7618	EQU	$-1
 	LD	C,A
 J$761A:	DJNZ	J$7606
 	ADC	HL,HL
@@ -1311,57 +1093,73 @@ J$761A:	DJNZ	J$7606
 	RL	D
 	JP	J.63AB
 
-?.7625:	LD	HL,D.FD99
+; patched at 048F9H
+
+;       LD	HL,DEVICE
+;       INC	(HL)			; increase number of diskdrivers sofar
+;       RET
+
+;	JP	J.7625
+;       INC	(HL)			; increase number of diskdrivers sofar
+;       RET
+
+?.7625:	LD	HL,DEVICE
 	INC	(HL)
 	JR	J.762E
 
+; patched at 04903H
+
+;       RET	NZ			; no, quit
+;       INC	(HL)			; Set 1 diskROM
+;       RET
+
+;	JP	J.762B
+
 ?.762B:	JR	NZ,J.762E
 	INC	(HL)
-J.762E:	LD	A,(D.FD99)
+J.762E:	LD	A,(DEVICE)
 	OR	A
 	RET	M
 	RET	Z
-J$7634:	CALL	C$7DEA
-	RET	C
-	LD	HL,I$0010
-	CALL	C.5604
-J$763D	EQU	$-1
+J$7634:	CALL	C$7DEA			; test hdc
+	RET	C			; error, quit
+	LD	HL,16			; driver workarea controller
+	CALL	C.5604			; allocate memory
 	RET	C
 	EX	DE,HL
-	CALL	C.4DBB
+	CALL	C.4DBB			; get SLTWRK pointer
 	LD	(HL),E
 	INC	HL
-	LD	(HL),D
+	LD	(HL),D			; save driver workarea
 	EX	DE,HL
 	PUSH	HL
 	POP	IX
-J$764A:	CALL	C$7715
-J$764B	EQU	$-2
+J$764A:	CALL	C$7715			; get host id
 	JR	C,J$7654
 	LD	(HL),A
-	CALL	C.798E
+	CALL	C.798E			; initialize
 	RET	C
-J$7654:	LD	HL,I.FB21
-	LD	B,04H	; 4 
+J$7654:	LD	HL,DRVINF
+	LD	B,4
 	XOR	A
 J.765A:	ADD	A,(HL)
-	RET	C
+	RET	C			; DRVINF corrupted, quit
 	INC	HL
 	INC	HL
 	DJNZ	J.765A
-	CP	08H	; 8 
-	RET	NC
-	LD	HL,(D.F6AB)
-	LD	DE,I.0200
+	CP	8			; already 8 drives allocated ?
+	RET	NC			; yep, quit
+	LD	HL,(AUTLIN)
+	LD	DE,SECLEN
 	RST	20H
 	JR	NC,J$7670
-	LD	(D.F6AB),DE
-J$7670:	LD	DE,I.FB21
-	LD	B,04H	; 4 
-	LD	C,00H
+	LD	(AUTLIN),DE
+J$7670:	LD	DE,DRVINF
+	LD	B,4
+	LD	C,0
 J$7677:	LD	A,(DE)
-	AND	A
-	JR	Z,J$7682
+	AND	A			; free entry ?
+	JR	Z,J$7682		; yep, use it
 	ADD	A,C
 	LD	C,A
 	INC	DE
@@ -1370,85 +1168,85 @@ J$7677:	LD	A,(DE)
 	RET
 
 J$7682:	EXX
-	LD	HL,I.0030
-	CALL	C.5604
+	LD	HL,6*8			; driver workarea partition
+	CALL	C.5604			; allocate memory
 	RET	C
 	EX	DE,HL
-	CALL	C.4DBB
+	CALL	C.4DBB			; get SLTWRK pointer
 	LD	(HL),E
 	INC	HL
-	LD	(HL),D
+	LD	(HL),D			; save driver workarea
 	EX	DE,HL
 	EXX
-	LD	A,(D$F33F)
+	LD	A,(TARGET)
 	AND	A
 	LD	A,C
-	CALL	C.7799
+	CALL	C.7799			; initialize workarea (returns number of drives)
 	ADD	A,L
-	CP	09H	; 9 
+	CP	8+1			; 8 drives or less ?
 	LD	A,L
-	JR	C,J$76A4
-	LD	A,08H	; 8 
-	SUB	C
+	JR	C,J$76A4		; yep, allocate all drives
+	LD	A,8
+	SUB	C			; limit number of drives
 J$76A4:	PUSH	BC
-	LD	(DE),A
+	LD	(DE),A			; number of drives
 	INC	DE
-	CALL	C$4E05
-	LD	(DE),A
+	CALL	C$4E05			; GETSLT
+	LD	(DE),A			; slotid disk interface
 	POP	BC
-	LD	B,00H
-	LD	HL,I$F355
+	LD	B,0
+	LD	HL,$DPBLI
 	ADD	HL,BC
 	ADD	HL,BC
 	PUSH	HL
 	DEC	DE
-	LD	A,(DE)
+	LD	A,(DE)			; number of drives
 	PUSH	AF
 	LD	L,A
-	LD	H,00H
+	LD	H,0
 	PUSH	DE
 	LD	D,H
 	LD	E,L
 	ADD	HL,HL
-	ADD	HL,HL
-	ADD	HL,DE
-	ADD	HL,HL
-	ADD	HL,HL
-	ADD	HL,DE
-	CALL	C.5604
+	ADD	HL,HL			; *4
+	ADD	HL,DE			; *5
+	ADD	HL,HL			; *10
+	ADD	HL,HL			; *20
+	ADD	HL,DE			; *21
+	CALL	C.5604			; allocate memory (for DPB)
 	POP	DE
-	JR	C,J$770E
+	JR	C,J$770E		; out of memory, quit
 	PUSH	HL
-	CALL	C.7A3C
+	CALL	C.7A3C			; clear to end of line
 	POP	DE
 	POP	BC
 	POP	HL
-	LD	C,00H
+	LD	C,0
 J$76D2:	LD	(HL),E
 	INC	HL
-	LD	(HL),D
+	LD	(HL),D			; register DPB
 	INC	HL
 	PUSH	BC
 	PUSH	DE
 	PUSH	HL
-	LD	HL,I.FE00
+	LD	HL,-512
 	ADD	HL,SP
 	LD	SP,HL
-	LD	(D.F34D),HL
+	LD	($SECBUF),HL		; allocate temporary sector buffer on stack
 	LD	A,C
-	LD	BC,(D$70CA)
+	LD	BC,(D$70CA)		; default mediadescriptor
 	EX	DE,HL
-	LD	B,00H
-	CALL	C.70DC
-	LD	HL,I.0200
+	LD	B,0
+	CALL	C.70DC			; GETDPB
+	LD	HL,512
 	EX	AF,AF'
 	ADD	HL,SP
 	EX	AF,AF'
-	LD	SP,HL
+	LD	SP,HL			; deallocate temporary sector buffer on stack
 	POP	HL
 	POP	DE
-	LD	BC,I$0015
-	JR	C,J$76FF
+	LD	BC,21
+	JR	C,J$76FF		; error, use the default DPB
 	EX	DE,HL
 	ADD	HL,BC
 	EX	DE,HL
@@ -1461,7 +1259,9 @@ J$76FF:	PUSH	HL
 J$7706:	POP	BC
 	INC	C
 	DJNZ	J$76D2
-	DEFB	0,0,0
+	NOP
+	NOP
+	NOP
 	RET
 
 J$770E:	POP	AF
@@ -1472,19 +1272,20 @@ J$770E:	POP	AF
 	LD	(DE),A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine get host id
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$7715:	PUSH	BC
 	PUSH	DE
 	PUSH	HL
-	LD	A,00H
-	CALL	C.0141
+	LD	A,0
+	CALL	SNSMAT
 	CPL
 	OR	A
 	JR	Z,J$7734
 	PUSH	AF
-	LD	B,08H	; 8 
+	LD	B,8
 J$7724:	RRA
 	JR	C,J$7730
 J$7727:	DJNZ	J$7724
@@ -1500,36 +1301,36 @@ J$7730:	INC	C
 J$7733:	POP	AF
 J$7734:	LD	C,0B5H
 	DI
-	LD	A,0DH	; 13 
+	LD	A,0DH
 	OUT	(0B4H),A
-	LD	A,09H	; 9 
+	LD	A,09H
 	OUT	(C),A
 	LD	E,00H
-	LD	A,05H	; 5 
+	LD	A,05H
 	OUT	(0B4H),A
 	IN	A,(C)
-	AND	0FH	; 15 
-	CP	03H	; 3 
+	AND	0FH
+	CP	03H
 	JR	NZ,J.7764
-	LD	A,07H	; 7 
+	LD	A,07H
 	OUT	(0B4H),A
 	IN	A,(C)
-	AND	0FH	; 15 
+	AND	0FH
 	LD	B,A
-	LD	A,0DH	; 13 
+	LD	A,0DH
 	OUT	(0B4H),A
 	LD	A,B
 	JR	Z,J.7764
-	LD	A,01H	; 1 
+	LD	A,01H
 J$775F:	RLA
 	DJNZ	J$775F
 	JR	J.7767
 
 J.7764:	LD	A,(D$7FF0)
 J.7767:	PUSH	AF
-	LD	A,06H	; 6 
-	CALL	C.0141
-	AND	10H	; 16 
+	LD	A,6
+	CALL	SNSMAT
+	AND	10H
 	LD	(IX+15),A
 	LD	A,00H
 	JR	NZ,J$777B
@@ -1548,11 +1349,12 @@ J$777D:	POP	HL
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7781:	PUSH	IX
 	PUSH	HL
 	CALL	C.7A6A
 	PUSH	BC
-	LD	A,(IX)
+	LD	A,(IX+0)
 	LD	B,00H
 J$778D:	RRA
 	JR	C,J$7793
@@ -1565,21 +1367,22 @@ J$7793:	LD	A,B
 	POP	IX
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize workarea
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7799:	PUSH	BC
 	PUSH	DE
 	PUSH	AF
-	CALL	C.4DB0
+	CALL	GETWRK
 	LD	(HL),0FFH
 	LD	D,H
 	LD	E,L
 	INC	DE
-	LD	BC,I$002F
+	LD	BC,6*8-1
 	LDIR
 	POP	AF
-	LD	HL,I.FE00
+	LD	HL,-512
 	ADD	HL,SP
 	LD	SP,HL
 	LD	A,(IX+63)
@@ -1590,49 +1393,49 @@ C.7799:	PUSH	BC
 	PUSH	HL
 	XOR	A
 	LD	C,A
-	LD	(IX),A
+	LD	(IX+0),A
 	LD	(IX+1),A
 	LD	(IX+2),A
 	LD	(IX+3),A
 J.77C8:	POP	HL
 	PUSH	HL
 	PUSH	BC
-	LD	A,(IX)
+	LD	A,(IX+0)
 	PUSH	HL
-J$77CF:	CALL	C.7BD4
+J$77CF:	CALL	C.7BD4			; read capacity
 	JR	NC,J$7816
 	LD	A,D
 	CP	02H	; 2 
 	JR	NZ,J$7811
 	POP	HL
 	PUSH	HL
-	LD	HL,(D.F34D)
+	LD	HL,($SECBUF)
 	EX	(SP),HL
 	PUSH	HL
-	LD	(D.F34D),HL
-	LD	A,(IX)
+	LD	($SECBUF),HL
+	LD	A,(IX+0)
 	PUSH	IX
-	CALL	C.7B2F
+	CALL	C.7B2F			; request sense
 	POP	IX
 	POP	HL
 	EX	(SP),HL
-	LD	(D.F34D),HL
+	LD	($SECBUF),HL
 	POP	HL
 	PUSH	HL
 	JR	NC,J$77FB
 	LD	A,E
 	CP	02H	; 2 
 	JR	NZ,J$7804
-J$77FB:	LD	DE,I$0002
+J$77FB:	LD	DE,2
 	ADD	HL,DE
 	LD	A,(HL)
 	CP	05H	; 5 
 	JR	NZ,J$7824
 J$7804:	POP	HL
 	POP	BC
-	LD	A,(IX)
+	LD	A,(IX+0)
 	AND	07H	; 7 
-	LD	(IX),A
+	LD	(IX+0),A
 	JP	J.792D
 
 J$7811:	POP	HL
@@ -1661,21 +1464,21 @@ J$7824:	POP	HL
 	LD	(IX+1),A
 	LD	(IX+2),A
 	LD	(IX+3),A
-	LD	A,(IX)
+	LD	A,(IX+0)
 	PUSH	HL
-	LD	HL,(D.F34D)
+	LD	HL,($SECBUF)
 	PUSH	HL
 	LD	HL,I$C000
-	LD	(D.F34D),HL
+	LD	($SECBUF),HL
 	CALL	C.74A7
 	POP	HL
-	LD	(D.F34D),HL
+	LD	($SECBUF),HL
 	POP	HL
-	LD	DE,I.0008
+	LD	DE,8
 	LD	A,20H	; " "
-	ADD	A,(IX)
+	ADD	A,(IX+0)
 	ADD	IX,DE
-	LD	(IX),A
+	LD	(IX+0),A
 	PUSH	BC
 	PUSH	HL
 	JP	J$77CF
@@ -1684,17 +1487,17 @@ J$785F:	POP	HL
 	LD	C,(IX+3)
 	LD	D,(IX+2)
 	LD	E,(IX+1)
-	LD	A,(IX)
+	LD	A,(IX+0)
 	PUSH	HL
-	LD	B,01H	; 1 
-	CALL	C.7AA8
+	LD	B,1			; 1 block
+	CALL	C.7AA8			; read logical block
 	POP	IY
 	POP	BC
 	JP	C,J.7963
-	LD	DE,I$01BE
+	LD	DE,01BEH
 	ADD	IY,DE
 	LD	A,(IY+64)
-	CP	55H	; "U"
+	CP	55H
 	JP	NZ,J.792D
 	INC	HL
 	LD	A,(IY+65)
@@ -1702,14 +1505,14 @@ J$785F:	POP	HL
 	JP	NZ,J.792D
 	POP	HL
 	PUSH	HL
-	LD	DE,I$01B6
+	LD	DE,01B6H
 	ADD	HL,DE
 	CALL	C.7781
 	LD	E,A
 	LD	D,00H
 	ADD	HL,DE
 	LD	B,04H	; 4 
-	LD	DE,I.0008
+	LD	DE,8
 J$78A0:	LD	A,(HL)
 	CPL
 	AND	03H	; 3 
@@ -1719,7 +1522,7 @@ J$78A0:	LD	A,(HL)
 	LD	A,(IY+4)
 	DEC	A
 	JP	NZ,J$7945
-	LD	A,(IY)
+	LD	A,(IY+0)
 	CPL
 	AND	(IX+6)
 	LD	(IX+6),A
@@ -1741,7 +1544,7 @@ J$78A0:	LD	A,(HL)
 	LD	A,C
 	CP	06H	; 6 
 	JR	NC,J$78FC
-	LD	A,(IX)
+	LD	A,(IX+0)
 	LD	(IX+8),A
 	LD	A,(IX+1)
 	LD	(IX+9),A
@@ -1769,11 +1572,11 @@ J.7919:	ADD	IY,DE
 	LD	A,C
 	CP	06H	; 6 
 	JR	Z,J.7963
-J.792D:	LD	A,(IX)
+J.792D:	LD	A,(IX+0)
 	INC	A
 	CP	06H	; 6 
 	JR	NC,J.7963
-	LD	(IX),A
+	LD	(IX+0),A
 	XOR	A
 	LD	(IX+1),A
 	LD	(IX+2),A
@@ -1801,7 +1604,7 @@ J.7963:	POP	HL
 	LD	(IX+3),A
 	LD	(IX+2),A
 	LD	(IX+1),A
-	LD	(IX),A
+	LD	(IX+0),A
 J$7977:	POP	AF
 	PUSH	AF
 	LD	A,C
@@ -1811,25 +1614,26 @@ J$7977:	POP	AF
 	INC	A
 J.7981:	LD	L,A
 	POP	AF
-	LD	IX,I.0200
+	LD	IX,512
 	ADD	IX,SP
 	LD	SP,IX
 	POP	DE
 	POP	BC
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.798E:	XOR	A
 	LD	DE,I$7A27
-	CALL	C.4D7D
+	CALL	C.4D7D			; print string
 	LD	DE,I$7A0C
-	CALL	C.4D7D
+	CALL	C.4D7D			; print string
 J$799B:	CALL	C$7DCD
 	JR	NZ,J$799B
 	DI
-	CALL	C.4DB0
+	CALL	GETWRK
 	LD	A,(D$7FF1)
 	LD	(IX+1),A
 	XOR	A
@@ -1840,13 +1644,13 @@ J$799B:	CALL	C$7DCD
 	LD	(IX+10),A
 	LD	(IX+11),A
 	DEC	A
-	LD	DE,CPMADR
+	LD	DE,6
 	ADD	HL,DE
-	LD	B,0C8H
-J.79C4:	LD	DE,C.0000
+	LD	B,200
+J.79C4:	LD	DE,0
 	PUSH	BC
 	PUSH	HL
-	CALL	C.7C08
+	CALL	C.7C08			; scsi initiator
 	POP	HL
 	POP	BC
 	JR	NC,J$79D6
@@ -1862,94 +1666,67 @@ J$79D6:	LD	A,D
 	LD	A,(IX+1)
 	SLA	A
 	LD	(IX+1),A
-	LD	BC,I.0200
+	LD	BC,2*256+0
 	JR	NC,J.79C4
 J$79EB:	EI
 	OR	A
 	RET
 
 J$79EE:	PUSH	BC
-	LD	B,0AH	; 10 
-J$79F1:	CALL	C.7A51
+	LD	B,10
+J$79F1:	CALL	C.7A51			; wait ?? ms
 	DJNZ	J$79F1
 	POP	BC
-	LD	BC,I$00C8
+	LD	BC,200
 	JR	J.79C4
 
 J$79FC:	EI
 	LD	DE,I$7A15
-	CALL	C.4D7D
-	LD	B,04H	; 4 
-J$7A05:	CALL	C.7A51
+	CALL	C.4D7D			; print string
+	LD	B,4
+J$7A05:	CALL	C.7A51			; wait ?? ms
 	DJNZ	J$7A05
 	SCF
 	RET
 
-I$7A0C:	LD	D,A
-	LD	H,C
-	LD	L,C
-	LD	(HL),H
-	LD	L,2EH	; "."
-	LD	L,2EH	; "."
-	NOP
-I$7A15:	LD	D,H
-	LD	H,C
-	LD	(HL),D
-	LD	H,A
-	LD	H,L
-	LD	(HL),H
-	JR	NZ,J$7A8C
-	LD	H,(HL)
-	LD	H,(HL)
-	JR	NZ,J$7A8D
-	LD	L,C
-	LD	L,(HL)
-	LD	H,L
-	DEC	C
-	LD	A,(BC)
-	NOP
-I$7A27:	LD	D,E
-	LD	B,E
-	LD	D,E
-	LD	C,C
-	JR	NZ,J$7A83
-	LD	(D$372E),A
-	JR	NZ,J$7A5A
-	LD	B,E
-	ADD	HL,HL
-	JR	NZ,J$7A67
-	ADD	HL,SP
-	ADD	HL,SP
-	INC	(HL)
-	DEC	C
-	LD	A,(BC)
-	NOP
-;	  Subroutine __________________________
+I$7A0C:	DEFB	"Wait...."
+	DEFB	0
+
+I$7A15:	DEFB	"Target off line",13,10
+	DEFB	0
+
+I$7A27:	DEFB	"SCSI V2.7 (C) 1994",13,10
+	DEFB	0
+
+;	  Subroutine clear to end of line
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7A3C:	PUSH	DE
 	LD	DE,I$7A5C
-	CALL	C.4D7D
+	CALL	C.4D7D			; print string
 	POP	DE
 	RET
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7A45:	ADD	A,A
 	ADD	A,A
 	ADD	A,A
 	LD	E,A
-	LD	D,00H
-	CALL	C.4DB0
+	LD	D,0
+	CALL	GETWRK
 	ADD	IX,DE
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine wait ?? ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7A51:	PUSH	HL
-	LD	HL,I$C350
+	LD	HL,0C350H
 J$7A55:	DEC	HL
 	LD	A,H
 	OR	L
@@ -1957,12 +1734,13 @@ J$7A55:	DEC	HL
 J$7A5A:	POP	HL
 	RET
 
-I$7A5C:	DEC	C
-	DEC	DE
-	LD	C,E
-	NOP
-	LD	A,07H	; 7 
-	CALL	C.0141
+I$7A5C:	DEFB	13
+	DEFB	27,"K"
+	DEFB	0
+
+INIHRD:
+J.7A60:	LD	A,7
+	CALL	SNSMAT
 	BIT	6,A
 J$7A67:	RET	NZ
 	POP	HL
@@ -1971,10 +1749,11 @@ J$7A67:	RET	NZ
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7A6A:	PUSH	HL
 	PUSH	BC
-	CALL	C.4DB0
-	LD	BC,I.0030
+	CALL	GETWRK
+	LD	BC,6*8
 	ADD	IX,BC
 	POP	BC
 	POP	HL
@@ -1983,25 +1762,25 @@ C.7A6A:	PUSH	HL
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7A77:	PUSH	BC
-	AND	07H	; 7 
+	AND	07H
 	LD	B,A
-	LD	A,01H	; 1 
+	LD	A,1
 	JR	Z,J$7A82
 J$7A7F:	RLA
 	DJNZ	J$7A7F
 J$7A82:	LD	(IX+1),A
-J$7A83	EQU	$-2
 	POP	BC
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine test unit ready
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7A87:	PUSH	IX
 	PUSH	AF
 	CALL	C.7A6A
-J$7A8C	EQU	$-1
 J$7A8D:	LD	(IX+6),00H
 	POP	AF
 	PUSH	AF
@@ -2014,13 +1793,14 @@ J$7A8D:	LD	(IX+6),00H
 	LD	(IX+11),A
 	JP	J.7BFE
 
-;	  Subroutine __________________________
+;	  Subroutine read logical block
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7AA8:	PUSH	IX
 	PUSH	AF
 	CALL	C.7A6A
-	LD	(IX+6),08H	; 8 
+	LD	(IX+6),08H
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -2032,9 +1812,10 @@ C.7AA8:	PUSH	IX
 	LD	(IX+11),00H
 	JP	J.7BFE
 
-;	  Subroutine __________________________
+;	  Subroutine mode select
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7ACA:	PUSH	IX
 	PUSH	AF
 	CALL	C.7A6A
@@ -2050,9 +1831,10 @@ C.7ACA:	PUSH	IX
 	LD	(IX+11),A
 	JP	J.7BFE
 
-;	  Subroutine __________________________
+;	  Subroutine format unit
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7AEB:	PUSH	IX
 	PUSH	AF
 	CALL	C.7A6A
@@ -2069,13 +1851,14 @@ C.7AEB:	PUSH	IX
 	LD	(IX+11),A
 	JP	J.7BFE
 
-;	  Subroutine __________________________
+;	  Subroutine write logical block
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7B0D:	PUSH	IX
 	PUSH	AF
 	CALL	C.7A6A
-	LD	(IX+6),0AH	; 10 
+	LD	(IX+6),0AH
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -2088,13 +1871,14 @@ C.7B0D:	PUSH	IX
 	LD	(IX+11),A
 	JP	J.7BFE
 
-;	  Subroutine __________________________
+;	  Subroutine request sense
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7B2F:	PUSH	IX
 	PUSH	AF
 	CALL	C.7A6A
-	LD	(IX+6),03H	; 3 
+	LD	(IX+6),03H
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -2102,13 +1886,13 @@ C.7B2F:	PUSH	IX
 	XOR	A
 	LD	(IX+8),A
 	LD	(IX+9),A
-	LD	B,12H	; 18 
+	LD	B,12H
 	LD	(IX+10),B
 	LD	(IX+11),A
-	LD	HL,(D.F34D)
+	LD	HL,($SECBUF)
 	POP	AF
 	CALL	C.7A77
-	CALL	C.7C08
+	CALL	C.7C08			; scsi initiator
 	POP	IX
 	BIT	3,D
 	LD	A,18H
@@ -2119,8 +1903,8 @@ C.7B2F:	PUSH	IX
 	LD	A,02H	; 2 
 	SCF
 	RET	NZ
-	LD	IX,(D.F34D)
-	LD	A,(IX)
+	LD	IX,($SECBUF)
+	LD	A,(IX+0)
 J$7B6E:	AND	7FH
 	CP	70H	; "p"
 	LD	A,0CH	; 12 
@@ -2140,19 +1924,22 @@ J$7B6E:	AND	7FH
 	SCF
 	RET
 
-I$7B89:	JR	J$7B8F
+I$7B89:	DEFB	018H
+	DEFB	004H
+	DEFB	002H
+	DEFB	004H
+	DEFB	008H
+	DEFB	00CH
+	DEFB	018H
 
-?.7B8B:	LD	(BC),A
-	INC	B
-	EX	AF,AF'
-	INC	C
-J$7B8F:	JR	J$7B6E
-J$7B90	EQU	$-1
+;	  Subroutine inquiry
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-?.7B91:	PUSH	HL
+J$7B90:	PUSH	IX
 	PUSH	AF
 	CALL	C.7A6A
-	LD	(IX+6),12H	; 18 
+	LD	(IX+6),12H
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -2160,14 +1947,15 @@ J$7B90	EQU	$-1
 	XOR	A
 	LD	(IX+8),A
 	LD	(IX+9),A
-	LD	B,24H	; "$"
+	LD	B,24H
 	LD	(IX+10),B
 	LD	(IX+11),A
 	JR	J.7BFE
 
-;	  Subroutine __________________________
+;	  Subroutine mode sense
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7BB2:	PUSH	IX
 	PUSH	AF
 	CALL	C.7A6A
@@ -2184,13 +1972,14 @@ C.7BB2:	PUSH	IX
 	LD	(IX+11),A
 	JR	J.7BFE
 
-;	  Subroutine __________________________
+;	  Subroutine read capacity
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7BD4:	PUSH	IX
 	PUSH	AF
 	CALL	C.7A6A
-	LD	(IX+6),25H	; "%"
+	LD	(IX+6),25H
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -2206,40 +1995,41 @@ C.7BD4:	PUSH	IX
 	LD	(IX+15),A
 J.7BFE:	POP	AF
 	CALL	C.7A77
-	CALL	C.7C08
+	CALL	C.7C08			; scsi initiator
 	POP	IX
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine scsi initiator
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7C08:	CALL	C$7C3D
 	RET	C
 	LD	A,E
 	OR	A
 	JR	Z,J$7C38
-	CP	04H	; 4 
+	CP	04H
 	JR	Z,J$7C18
-	LD	D,12H	; 18 
+	LD	D,12H
 	SCF
 	RET
 
 J$7C18:	PUSH	BC
 J.7C19:	IN	A,(0D4H)
-	CP	46H	; "F"
+	CP	46H
 	JR	NZ,J.7C19
-	LD	A,(IX)
+	LD	A,(IX+0)
 	OR	(IX+1)
 	LD	B,A
 	IN	A,(0D0H)
 	CP	B
 	JR	NZ,J.7C19
-	LD	A,08H	; 8 
+	LD	A,08H
 	OUT	(0D1H),A
 J$7C2F:	IN	A,(0D4H)
 	BIT	1,A
 	JR	NZ,J$7C2F
-	JP	J.7CE1
+	JP	J.7CE1			; terminate actions
 
 J$7C38:	LD	A,D
 	OR	A
@@ -2250,8 +2040,9 @@ J$7C38:	LD	A,D
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$7C3D:	PUSH	BC
-	LD	A,(IX)
+	LD	A,(IX+0)
 	SLA	A
 J$7C43:	LD	C,A
 	JR	C,J.7C4D
@@ -2269,7 +2060,7 @@ J.7C4D:	IN	A,(0D4H)
 	IN	A,(0D4H)
 	OR	A
 	JR	NZ,J.7C4D
-	LD	A,(IX)
+	LD	A,(IX+0)
 	OUT	(0D0H),A
 	LD	A,01H	; 1 
 	OUT	(0D2H),A
@@ -2303,7 +2094,7 @@ J$7C8F:	DEC	A
 J$7C94:	LD	A,0CH	; 12 
 	OUT	(0D1H),A
 	NOP
-	LD	A,(IX)
+	LD	A,(IX+0)
 	OR	(IX+1)
 	OUT	(0D0H),A
 	LD	A,0DH	; 13 
@@ -2313,10 +2104,10 @@ J$7C94:	LD	A,0CH	; 12
 	OUT	(0D4H),A
 	LD	A,05H	; 5 
 	OUT	(0D1H),A
-	LD	BC,I$41F2
+	LD	BC,041F2H
 J$7CB1:	IN	A,(0D4H)
 	BIT	6,A
-	JR	NZ,J.7CE1
+	JR	NZ,J.7CE1		; terminate actions
 	DEC	BC
 	LD	A,C
 	OR	B
@@ -2326,7 +2117,7 @@ J$7CB1:	IN	A,(0D4H)
 	OUT	(0D1H),A
 	OUT	(0D2H),A
 	OUT	(0D3H),A
-	LD	DE,I.0008
+	LD	DE,8
 	SCF
 	JR	J.7CDF
 
@@ -2344,6 +2135,10 @@ J$7CDA:	XOR	A
 J.7CDF:	POP	BC
 	RET
 
+;	  Subroutine terminate actions
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J.7CE1:	LD	A,00H
 	OUT	(0D1H),A
 	LD	A,22H	; """
@@ -2353,7 +2148,7 @@ J.7CE1:	LD	A,00H
 	LD	C,0D0H
 	PUSH	IX
 	EX	(SP),HL
-	LD	DE,CPMADR
+	LD	DE,6
 	ADD	HL,DE
 	EX	DE,HL
 	POP	HL
@@ -2389,7 +2184,7 @@ J.7D1C:	IN	A,(0D5H)
 
 J$7D2A:	IN	A,(0D4H)
 	AND	0DEH
-	CP	40H	; "@"
+	CP	40H
 	JR	Z,J.7D1C
 	JR	J.7CF6
 
@@ -2411,7 +2206,7 @@ J.7D41:	IN	A,(0D5H)
 
 J$7D50:	IN	A,(0D4H)
 	AND	0DEH
-	CP	44H	; "D"
+	CP	44H
 	JR	Z,J.7D41
 	LD	C,0D0H
 	JR	J.7CF6
@@ -2475,7 +2270,7 @@ J$7DB1:	OUT	(0D3H),A
 	LD	(IX+3),E
 	JP	J.7CF6
 
-J$7DC4:	LD	A,50H	; "P"
+J$7DC4:	LD	A,50H
 	OUT	(0D1H),A
 	XOR	A
 	OUT	(0D1H),A
@@ -2484,13 +2279,19 @@ J$7DC4:	LD	A,50H	; "P"
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$7DCD:	IN	A,(0D4H)
 	BIT	6,A
 	RET	Z
-	LD	A,07H	; 7 
-	CALL	C.0141
-	CP	0BFH
-	RET	NZ
+	LD	A,7
+	CALL	SNSMAT
+	CP	0BFH			; SELECT pressed ?
+	RET	NZ			; nope, quit
+
+;	  Subroutine reset hdc
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J.7DDA:	LD	A,80H
 	OUT	(0D1H),A
 	XOR	A
@@ -2502,13 +2303,14 @@ J.7DDA:	LD	A,80H
 	OUT	(0D3H),A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine test hdc
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$7DEA:	IN	A,(0D4H)
 	INC	A
 	JR	Z,J.7DFC
-	LD	A,40H	; "@"
+	LD	A,40H
 	OUT	(0D1H),A
 	IN	A,(0D4H)
 	INC	A
@@ -2520,44 +2322,15 @@ C$7DEA:	IN	A,(0D4H)
 J.7DFC:	XOR	A
 	OUT	(0D1H),A
 	LD	DE,I$7E0E
-	CALL	C.4D7D
-	LD	B,04H	; 4 
-J$7E07:	CALL	C.7A51
+	CALL	C.4D7D			; print string
+	LD	B,4
+J$7E07:	CALL	C.7A51			; wait ?? ms
 	DJNZ	J$7E07
 	SCF
 	RET
 
-I$7E0E:	LD	D,E
-	LD	B,E
-	LD	D,E
-	LD	C,C
-	JR	NZ,J$7E7D
-	LD	L,(HL)
-	LD	(HL),H
-	LD	H,L
-	LD	(HL),D
-	LD	H,(HL)
-	LD	H,C
-	LD	H,E
-	LD	H,L
-	DEC	C
-	LD	A,(BC)
-	LD	(HL),E
-	LD	H,L
-	LD	L,H
-	LD	H,(HL)
-	LD	(HL),H
-	LD	H,L
-	LD	(HL),E
-	LD	(HL),H
-	JR	NZ,J$7E8E
-	LD	H,C
-	LD	L,C
-	LD	L,H
-	LD	H,L
-	LD	H,H
-	DEC	C
-	LD	A,(BC)
+I$7E0E:	DEFB	"SCSI interface",13,10
+	DEFB	"selftest failed",13,10
 	DEFB	0
 
 	DEFS	07F80H-$,0
@@ -2570,7 +2343,7 @@ I$7E0E:	LD	D,E
 ?.7F8C:	JP	C.7B0D			; WrLogBlk
 ?.7F8F:	JP	C.7B2F			; ReqSense
 ?.7F92:	JP	J$7B90			; Inquiry
-?.7F95:	JP	C.7BD43			; ReadCap
+?.7F95:	JP	C.7BD4			; ReadCap
 ?.7F98:	JP	C.7BB2			; ModeSense
 ?.7F9B:	JP	C.7ACA			; ModeSel
 ?.7F9E:	JP	C.7AEB			; FmtUnit
@@ -2578,13 +2351,13 @@ I$7E0E:	LD	D,E
 ?.7FA4:	JP	C.798E			; Initialise
 ?.7FA7:	JP	C.7799			; InsWork
 ?.7FAA:	JP	C.7A3C			; ClrEndLn
-?.7FAD:	JP	C.7C08			; Verify ??
+?.7FAD:	JP	C.7C08			; scsi initiator (BERT ONLY CALL)
 
 	DEFS	07FF0H-$,0
 
-D$7FF0:	DEFB	080H
-D$7FF1:	DEFB	001H
-	DEFB	0D0H
+D$7FF0:	DEFB	080H			; host id 7
+D$7FF1:	DEFB	001H			; target id 0
+	DEFB	0D0H			; I/O port
 
 	DEFS	08000H-$,0
 
