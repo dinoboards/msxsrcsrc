@@ -13,11 +13,11 @@
 	.Z80
 SNSMAT	EQU	0141H
 
-C.4D7D	EQU	4D7DH	; print string
-C.4DBB	EQU	4DBBH	; get SLTWRK pointer
-C$4E05	EQU	4E05H	; GETSLT
-C.5604	EQU	5604H	; allocate memory
-J.63AB	EQU	63ABH	; finish seek
+C.4D7D	EQU	4D7DH			; print string
+C.4DBB	EQU	4DBBH			; get SLTWRK pointer
+C$4E05	EQU	4E05H			; GETSLT
+C.5604	EQU	5604H			; allocate memory
+J.63AB	EQU	63ABH			; finish seek
 
 I$C000	EQU	0C000H
 
@@ -107,39 +107,48 @@ J$6EF8:	LD	A,(HL)
 	JR	NC,J.6EEA
 	LD	B,A
 	LD	A,(HL)
-	OR	A
-	JR	NZ,J.6EEA
+	OR	A			; end of statement ?
+	JR	NZ,J.6EEA		; nope, quit
 	LD	A,B
 	AND	07H			; ?? is already verified 0-7
 	LD	A,1
 	JR	Z,J$6F15
 J$6F12:	RLA
-	DJNZ	J$6F12
+	DJNZ	J$6F12			; create bit mask
 J$6F15:	PUSH	AF
-	CALL	C.7A6A
+	CALL	C.7A6A			; get pointer to driver workarea
 	POP	AF
-	LD	(IX+0),A
+	LD	(IX+0),A		; save host SCSI ID bit mask
+
+; illegal code
+; the following code is against the MSX coding rules, why not use the RTC BIOS calls ?
+; also the alarm feature nibbles are used illegal
+
+
 	LD	C,0B5H
 	DI
 	LD	A,0DH
 	OUT	(0B4H),A
 	IN	A,(C)
-	PUSH	AF
+	PUSH	AF			; save current nibble 13
 	LD	A,09H
-	OUT	(C),A
+	OUT	(C),A                	; alarm off, clock running, bank 1
 	LD	A,07H
 	OUT	(0B4H),A
-	CALL	C.7781
-	OUT	(C),A
+	CALL	C.7781			; get host SCSI ID
+	OUT	(C),A			; write nibble 7 (normally day of month alarm)
 	LD	A,05H
 	OUT	(0B4H),A
 	LD	A,03H
-	OUT	(C),A
+	OUT	(C),A			; write nibble 5 = 3 (normally hour of alarm)
 	LD	A,0DH
 	OUT	(0B4H),A
 	POP	AF
-	OUT	(C),A
+	OUT	(C),A			; restore nibble 13
 	EI
+
+; end illegal code
+
 	POP	DE
 	POP	HL
 	XOR	A
@@ -155,38 +164,38 @@ I$6F48:	DEFB	"SCSIID"
 DSKIO:
 J.6F4F:	EI
 	PUSH	AF
-	CP	5+1
-	JP	NC,J.7090
+	CP	5+1			; valid driveid ?
+	JP	NC,J.7090		; nope, quit with OTHER ERROR
 	PUSH	BC
 	PUSH	DE
 	PUSH	HL
-	CALL	C.7A45
+	CALL	C.7A45			; get pointer to partition info
 	POP	HL
 	POP	DE
 	POP	BC
 	POP	AF
 
-;	  Subroutine __________________________
+;	  Subroutine read/write sector from partition
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$6F60:	LD	A,(IX+0)
-	BIT	4,A
-	JP	NZ,J$70EF
+	BIT	4,A			; partition enabled ?
+	JP	NZ,J$70EF		; nope, quit with UNFORMATED DISK ERROR
 	PUSH	AF
 	LD	A,C
-	SUB	0F0H
-	JR	Z,J.6F79
-	CP	08H	; 8 
-	JR	Z,J.6F79
-	CP	09H	; 9 
-	JR	Z,J.6F79
-	JP	J.7090
+	SUB	0F0H			; mediadescriptor 0F0H (PC: 1.44 MB floppy, MSX: harddisk) ?
+	JR	Z,J.6F79		; yep, continue
+	CP	0F8H-0F0H		; mediadescriptor 0F8H (PC: hardisk, MSX: 360KB disk) ?
+	JR	Z,J.6F79		; yep, continue
+	CP	0F9H-0F0H		; mediadescriptor 0F9H (PC and MSX: 720KB disk) ?
+	JR	Z,J.6F79		; yep, continue
+	JP	J.7090			; quit with OTHER ERROR
 
-J.6F79:	LD	C,00H
+J.6F79:	LD	C,0
 	PUSH	DE
 	LD	A,B
-	DEC	A
+	DEC	A			; number of sectors - 1
 	ADD	A,E
 	LD	E,A
 	LD	A,C
@@ -194,12 +203,12 @@ J.6F79:	LD	C,00H
 	LD	D,A
 	LD	A,C
 	ADC	A,C
-	LD	C,A
+	LD	C,A			; CDE = end sector
 	LD	A,(IX+4)
 	SUB	E
 	LD	A,(IX+5)
 	SBC	A,D
-	LD	A,00H
+	LD	A,0
 	SBC	A,C
 	POP	DE
 	JP	C,J$7069
@@ -234,7 +243,7 @@ J$6FC2:	POP	IX
 	RET	Z
 	PUSH	DE
 	PUSH	BC
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID
 	PUSH	IX
 	LD	(IX+7),00H
 	CALL	C.7B2F			; request sense
@@ -244,7 +253,7 @@ J$6FC2:	POP	IX
 	POP	AF
 J$6FDF:	LD	HL,($SECBUF)
 	EX	(SP),IX
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID
 	LD	BC,1*256+0
 	LD	DE,0
 	CALL	C.7AA8			; read logical block
@@ -257,7 +266,7 @@ J$6FDF:	LD	HL,($SECBUF)
 	JR	J.7043
 
 J$6FFC:	EX	(SP),IX
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID
 	CALL	C.7A87			; test unit ready
 	LD	A,(IX+7)
 	CALL	C.7429
@@ -267,7 +276,7 @@ J$6FFC:	EX	(SP),IX
 	CP	04H	; 4 
 	JR	NZ,J$6FDF
 	POP	IX
-	LD	A,0CH	; 12 
+	LD	A,12
 	SCF
 	JR	J.701E
 
@@ -278,15 +287,15 @@ J.701E:	POP	HL
 	DEC	D
 	JR	NZ,J.7043
 	LD	A,(IX+2)
-	CP	06H	; 6 
+	CP	06H
 	JR	NZ,J$7047
 	PUSH	HL
 	CALL	GETWRK
 	POP	IX
 	LD	A,(IX+0)
-	OR	08H	; 8 
+	OR	08H			; ? bit
 	LD	DE,8
-	LD	B,06H	; 6 
+	LD	B,6
 J$703B:	CP	(HL)
 	JR	NZ,J$7040
 	RES	3,(HL)
@@ -324,7 +333,7 @@ J$705E:	POP	AF
 ?.7062:	POP	AF
 	POP	BC
 	POP	AF
-	LD	A,0AH	; 10 
+	LD	A,10
 	SCF
 	RET
 
@@ -341,13 +350,13 @@ J$7069:	LD	A,(IX+4)
 	POP	AF
 	PUSH	BC
 	LD	B,C
-	LD	C,0F0H
-	CALL	C$6F60
+	LD	C,0F0H			; mediadescriptor harddisk
+	CALL	C$6F60			; read/write sector from partition
 	JR	C,J$7089
 	POP	BC
 	DEFB	03EH
 J.7084:	POP	AF
-	LD	A,08H	; 8 
+	LD	A,8
 	SCF
 	RET
 
@@ -360,7 +369,7 @@ J$7089:	POP	DE
 	RET
 
 J.7090:	POP	AF
-J.7091:	LD	A,0CH	; 12 
+J.7091:	LD	A,12
 	SCF
 	RET
 
@@ -369,32 +378,32 @@ J.7091:	LD	A,0CH	; 12
 ;	     Outputs ________________________
 
 J.7095:	EI
-	CP	5+1
-	JR	NC,J.7091
+	CP	5+1			; valid driveid ?
+	JR	NC,J.7091		; nope, quit with OTHER ERROR
 	OR	A
 	PUSH	AF
 	PUSH	HL
-	CALL	C.7A45
+	CALL	C.7A45			; get pointer to partition info
 	POP	HL
 	POP	AF
 	LD	B,A
 	LD	A,(IX+1)
 	OR	(IX+2)
-	OR	(IX+3)
+	OR	(IX+3)			; first sector of partition 0 (floppy) ?
 	LD	A,B
 	JR	J$70B6
 
-?.70AF:	LD	B,01H	; 1 
+?.70AF:	LD	B,1
 	BIT	3,(IX+0)
 	RET	NZ
 J$70B6:	LD	B,0FFH
 	SET	3,(IX+0)
-	RES	4,(IX+0)
+	RES	4,(IX+0)		; enable partition
 	PUSH	BC
 	CALL	C.70DC			; GETDPB
 	POP	BC
-	LD	A,18H
-	OR	A
+	LD	A,18H			; ??
+	OR	A			; quit with OK
 	RET
 
 I$70C9:	DEFB	0
@@ -418,16 +427,16 @@ D$70CA:	DEFB	0F9H
 
 GETDPB:
 C.70DC:	EI
-	CP	5+1
-	JP	NC,J.7091
+	CP	5+1			; valid driveid ?
+	JP	NC,J.7091		; nope, quit with OTHER ERROR
 	PUSH	AF
 	PUSH	HL
-	CALL	C.7A45
+	CALL	C.7A45			; get pointer to partition info
 	POP	HL
 	POP	AF
-	BIT	4,(IX+0)
-	JR	Z,J$70F3
-J$70EF:	LD	A,16H
+	BIT	4,(IX+0)		; partition enabled ?
+	JR	Z,J$70F3		; yep, continue
+J$70EF:	LD	A,22			; quit with UNFORMATED DISK ERROR
 	SCF
 	RET
 
@@ -435,8 +444,8 @@ J$70F3:	LD	(IX+7),00H
 	PUSH	HL
 	LD	HL,($SECBUF)
 	PUSH	HL
-	LD	A,(IX+0)
-	LD	B,01H	; 1 
+	LD	A,(IX+0)		; target SCSI ID
+	LD	B,1
 	LD	C,(IX+3)
 	LD	D,(IX+2)
 	LD	E,(IX+1)
@@ -453,13 +462,13 @@ J$70F3:	LD	(IX+7),00H
 
 J.711D:	LD	A,(IY+21)
 	LD	(IX+1),A
-	CP	0F0H
-	JR	Z,J.7133
-	CP	0F9H
-	JR	Z,J.7133
-	CP	0F8H
-	JR	Z,J.7133
-	LD	A,12H	; 18 
+	CP	0F0H			; mediadescriptor 0F0H (PC: 1.44 MB floppy, MSX: harddisk) ?
+	JR	Z,J.7133		; yep, continue
+	CP	0F9H			; mediadescriptor 0F9H (PC and MSX: 720KB disk) ?
+	JR	Z,J.7133		; yep, continue
+	CP	0F8H			; mediadescriptor 0F8H (PC: hardisk, MSX: 360KB disk) ?
+	JR	Z,J.7133		; yep, continue
+	LD	A,18
 	SCF
 	RET	NZ
 J.7133:	LD	L,(IY+14)
@@ -540,7 +549,7 @@ C$71C9:	OR	A
 	RET	Z
 	PUSH	DE
 	PUSH	BC
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID
 	PUSH	IX
 	LD	(IX+7),00H
 	CALL	C.7B2F			; request sense
@@ -551,7 +560,7 @@ C$71C9:	OR	A
 	POP	IX
 	CALL	C.74A7
 	JP	NC,J$71F4
-	SET	4,(IX+0)
+	SET	4,(IX+0)		; disable partition
 	LD	A,(IX+0)
 	CALL	C.7B2F			; request sense
 	JP	J.701E
@@ -571,10 +580,10 @@ J$71FA:	POP	AF
 ;	     Outputs ________________________
 
 CHOICE:
-J.71FE:	CALL	C.7A45
+J.71FE:	CALL	C.7A45			; get pointer to partition info
 	LD	A,(IX+1)
 	OR	(IX+2)
-	OR	(IX+3)			; first sector of 'partition' 0 ?
+	OR	(IX+3)			; first sector of partition 0 (floppy) ?
 	JR	Z,J$7210		; yep, must be a floppy disk
 	LD	HL,I$7373
 	RET
@@ -591,10 +600,10 @@ J.7214:	LD	E,A
 	CP	5			; valid choice ?
 	JR	NC,J$721C		; nope, quit with error
 	LD	A,D
-	CP	5+1			; valid drive ?
+	CP	5+1			; valid driveid ?
 J$721C:	CCF
 	LD	A,12
-	RET	C			; quit with error
+	RET	C			; nope, quit with error
 	SCF
 	DEC	E			; choice 0 ?
 	RET	M			; yep, quit with error
@@ -602,13 +611,13 @@ J$721C:	CCF
 	LD	A,D
 	PUSH	HL
 	PUSH	BC
-	CALL	C.7A45
+	CALL	C.7A45			; get pointer to partition info
 	POP	BC
 	POP	HL
 	POP	DE
 	LD	A,(IX+1)
 	OR	(IX+2)
-	OR	(IX+3)			; first sector of 'partition' 0 ?
+	OR	(IX+3)			; first sector of partition 0 (floppy) ?
 	JP	Z,J$7264		; yep, format floppy disk
 	LD	D,0
 	LD	HL,I$7245
@@ -625,11 +634,11 @@ I$7245:	DEFW	J.724D			; choice 1, enable partition
 	DEFW	J.725B			; choice 3, write protect partition
 	DEFW	J.7260			; choice 4, invalid choice
 
-J.724D:	RES	4,(IX+0)
-	SET	0,(IX+6)
+J.724D:	RES	4,(IX+0)		; enable partition
+	SET	0,(IX+6)		; write enable
 	RET
 
-J.7256:	SET	4,(IX+0)
+J.7256:	SET	4,(IX+0)		; disable partition
 	RET
 
 J.725B:	RES	0,(IX+6)
@@ -653,7 +662,7 @@ J$7264:	LD	A,B
 	LD	DE,0
 	CALL	C.7AEB			; format unit
 	JR	NC,J$7291		; ok, continue
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID
 	PUSH	IX
 	CALL	C.7B2F			; request sense
 	POP	IX
@@ -742,7 +751,7 @@ J.7311:	CALL	C.732F			; write sector (first sector of FAT #2)
 	LD	(IX+2),0
 	LD	(IX+3),0
 	XOR	A			; no error
-	LD	A,16H			; ?
+	LD	A,22			; ??
 	RET
 
 J$7325:	CCF
@@ -766,11 +775,11 @@ C.732F:	PUSH	HL
 	LD	B,1
 	LD	C,(IX+3)
 	LD	D,(IX+2)
-	LD	E,(IX+1)
-	LD	A,(IX+0)
+	LD	E,(IX+1)		; starting sector
+	LD	A,(IX+0)		; target SCSI ID
 	CALL	C.7B0D			; write logical block
-	JR	NC,J$734F
-	LD	A,(IX+0)
+	JR	NC,J$734F		; no error,
+	LD	A,(IX+0)		; target SCSI ID
 	PUSH	IX
 	CALL	C.7B2F			; request sense
 	POP	IX
@@ -828,17 +837,17 @@ C.7429:	PUSH	IY
 	PUSH	BC
 	PUSH	AF
 	PUSH	HL
-	LD	B,03H	; 3 
-J$7434:	LD	A,(IX+0)
+	LD	B,3
+J$7434:	LD	A,(IX+0)		; target SCSI ID
 	CALL	C.7A87			; test unit ready
-	JR	NC,J$7440
+	JR	NC,J$7440		; no error,
 	DJNZ	J$7434
 	JR	J.7498
 
-J$7440:	LD	A,(IX+0)
-	LD	B,05H	; 5 
+J$7440:	LD	A,(IX+0)		; target SCSI ID
+	LD	B,5
 	CALL	C.7BB2			; mode sense
-J$7448:	JR	C,J.7498
+J$7448:	JR	C,J.7498		; error,
 	POP	IY
 	LD	(IY+12),05H	; 5 
 	LD	(IY+0),00H
@@ -872,12 +881,12 @@ J$7462:	ADD	HL,DE
 	LD	(IY+9),A
 	INC	HL
 	INC	HL
-	LD	A,(IX+0)
-	LD	B,24H	; "$"
+	LD	A,(IX+0)		; target SCSI ID
+	LD	B,24H
 	PUSH	IY
 	POP	HL
 	CALL	C.7ACA			; mode select
-	JR	C,J$749A
+	JR	C,J$749A		; error,
 	JR	J$749E
 
 J.7498:	POP	HL
@@ -903,18 +912,18 @@ C.74A7:	LD	(IX+7),00H
 	PUSH	DE
 	PUSH	BC
 J$74AE:	LD	HL,($SECBUF)
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID
 	LD	BC,1*256+0
-	LD	DE,0
+	LD	DE,0			; 1 block, block 0
 	CALL	C.7AA8			; read logical block
-	JR	NC,J$74D2
+	JR	NC,J$74D2		; no error, quit
 	LD	A,(IX+7)
 	CALL	C.7429
 	INC	(IX+7)
 	LD	A,(IX+7)
 	CP	4
 	JR	NZ,J$74AE
-	LD	A,16H			; quit with error
+	LD	A,22			; quit with UNFORMATED DISK ERROR
 	SCF
 J$74D2:	POP	BC
 	POP	DE
@@ -1134,8 +1143,8 @@ J$7634:	CALL	C$7DEA			; test hdc
 	EX	DE,HL
 	PUSH	HL
 	POP	IX
-J$764A:	CALL	C$7715			; get host id
-	JR	C,J$7654
+	CALL	C$7715			; get host SCSI ID
+	JR	C,J$7654		; CODE key pressed, skip initialisation
 	LD	(HL),A
 	CALL	C.798E			; initialize
 	RET	C
@@ -1179,7 +1188,7 @@ J$7682:	EXX
 	EX	DE,HL
 	EXX
 	LD	A,(TARGET)
-	AND	A
+	AND	A			; do not use phantom drive flag (CTRL key)
 	LD	A,C
 	CALL	C.7799			; initialize workarea (returns number of drives)
 	ADD	A,L
@@ -1272,7 +1281,7 @@ J$770E:	POP	AF
 	LD	(DE),A
 	RET
 
-;	  Subroutine get host id
+;	  Subroutine get host SCSI ID
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1282,8 +1291,8 @@ C$7715:	PUSH	BC
 	LD	A,0
 	CALL	SNSMAT
 	CPL
-	OR	A
-	JR	Z,J$7734
+	OR	A			; digit key pressed ?
+	JR	Z,J$7734		; nope,
 	PUSH	AF
 	LD	B,8
 J$7724:	RRA
@@ -1299,67 +1308,76 @@ J$7730:	INC	C
 	JR	J$7727
 
 J$7733:	POP	AF
+
+; illegal code
+; the following code is against the MSX coding rule, why not use the RTC BIOS calls ?
+; also the alarm feature nibbles are used illegal
+
 J$7734:	LD	C,0B5H
 	DI
 	LD	A,0DH
 	OUT	(0B4H),A
 	LD	A,09H
-	OUT	(C),A
-	LD	E,00H
+	OUT	(C),A                	; alarm off, clock running, bank 1
+	LD	E,0
 	LD	A,05H
 	OUT	(0B4H),A
 	IN	A,(C)
-	AND	0FH
-	CP	03H
+	AND	0FH			; read nibble 5 (normally hour of alarm)
+	CP	03H			; special value written by BERT (?? not very relieable ??)
 	JR	NZ,J.7764
 	LD	A,07H
 	OUT	(0B4H),A
 	IN	A,(C)
-	AND	0FH
+	AND	0FH			; read nibble 7 (normally day of month alarm)
 	LD	B,A
 	LD	A,0DH
 	OUT	(0B4H),A
 	LD	A,B
+
+; end illegal code
+
 	JR	Z,J.7764
-	LD	A,01H
+	LD	A,1
 J$775F:	RLA
 	DJNZ	J$775F
-	JR	J.7767
+	JR	J.7767			; convert SCSI ID to SCSI ID bit mask
 
-J.7764:	LD	A,(D$7FF0)
+J.7764:	LD	A,(D$7FF0)		; get default SCSI ID bit mask
+
 J.7767:	PUSH	AF
 	LD	A,6
 	CALL	SNSMAT
-	AND	10H
-	LD	(IX+15),A
-	LD	A,00H
-	JR	NZ,J$777B
+	AND	10H			; CODE key pressed ?
+	LD	(IX+15),A		; save status of the CODE key
+	LD	A,0
+	JR	NZ,J$777B		; nope, quit with Cx reset
 	POP	AF
 	OR	A
-	CCF
+	CCF				; set Cx
 	JR	J$777D
 
 J$777B:	POP	AF
-	OR	A
+	OR	A			; reset Cx
 J$777D:	POP	HL
 	POP	DE
 	POP	BC
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine get host SCSI ID
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.7781:	PUSH	IX
 	PUSH	HL
-	CALL	C.7A6A
+	CALL	C.7A6A			; get pointer to driver workarea
 	PUSH	BC
-	LD	A,(IX+0)
-	LD	B,00H
+	LD	A,(IX+0)		; host SCSI ID bit mask
+	LD	B,0
 J$778D:	RRA
 	JR	C,J$7793
 	INC	B
-	JR	J$778D
+	JR	J$778D			; convert to SCSI ID
 
 J$7793:	LD	A,B
 	POP	BC
@@ -1380,32 +1398,33 @@ C.7799:	PUSH	BC
 	LD	E,L
 	INC	DE
 	LD	BC,6*8-1
-	LDIR
+	LDIR				; initialize driver workarea
 	POP	AF
 	LD	HL,-512
 	ADD	HL,SP
-	LD	SP,HL
-	LD	A,(IX+63)
-	OR	A
-	LD	A,00H
-	JP	Z,J.7981
+	LD	SP,HL			; allocate temporary sector buffer on stack
+	LD	A,(IX+6*8+15)
+	OR	A			; CODE key pressed ?
+	LD	A,0
+	JP	Z,J.7981		; yep, return 0 drives
 	PUSH	AF
 	PUSH	HL
 	XOR	A
-	LD	C,A
-	LD	(IX+0),A
+	LD	C,A			; number of 'drives' sofar = 0
+	LD	(IX+0),A		; target SCSI ID = 0
 	LD	(IX+1),A
 	LD	(IX+2),A
-	LD	(IX+3),A
+	LD	(IX+3),A		; starting sector = 0
+
 J.77C8:	POP	HL
 	PUSH	HL
 	PUSH	BC
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID
 	PUSH	HL
 J$77CF:	CALL	C.7BD4			; read capacity
-	JR	NC,J$7816
+	JR	NC,J$7816		; no error, continue
 	LD	A,D
-	CP	02H	; 2 
+	CP	02H
 	JR	NZ,J$7811
 	POP	HL
 	PUSH	HL
@@ -1413,7 +1432,7 @@ J$77CF:	CALL	C.7BD4			; read capacity
 	EX	(SP),HL
 	PUSH	HL
 	LD	($SECBUF),HL
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID
 	PUSH	IX
 	CALL	C.7B2F			; request sense
 	POP	IX
@@ -1422,19 +1441,19 @@ J$77CF:	CALL	C.7BD4			; read capacity
 	LD	($SECBUF),HL
 	POP	HL
 	PUSH	HL
-	JR	NC,J$77FB
+	JR	NC,J$77FB		; no error,
 	LD	A,E
-	CP	02H	; 2 
+	CP	02H
 	JR	NZ,J$7804
 J$77FB:	LD	DE,2
 	ADD	HL,DE
 	LD	A,(HL)
-	CP	05H	; 5 
+	CP	05H
 	JR	NZ,J$7824
 J$7804:	POP	HL
 	POP	BC
 	LD	A,(IX+0)
-	AND	07H	; 7 
+	AND	07H
 	LD	(IX+0),A
 	JP	J.792D
 
@@ -1452,19 +1471,19 @@ J$7816:	POP	HL
 	LD	A,(HL)
 	AND	0E0H
 	DEC	HL
-	OR	(HL)
-	JR	NZ,J$785F
+	OR	(HL)			; max block 0 ?
+	JR	NZ,J$785F		; nope,
 J$7824:	POP	HL
 	POP	BC
 	INC	C
 	LD	A,C
-	CP	06H	; 6 
-	JP	NC,J.7963
+	CP	6			; maximium number of drives reached ?
+	JP	NC,J.7963		; yep,
 	XOR	A
 	LD	(IX+1),A
 	LD	(IX+2),A
-	LD	(IX+3),A
-	LD	A,(IX+0)
+	LD	(IX+3),A		; starting sector = 0
+	LD	A,(IX+0)		; target SCSI ID
 	PUSH	HL
 	LD	HL,($SECBUF)
 	PUSH	HL
@@ -1475,7 +1494,7 @@ J$7824:	POP	HL
 	LD	($SECBUF),HL
 	POP	HL
 	LD	DE,8
-	LD	A,20H	; " "
+	LD	A,20H
 	ADD	A,(IX+0)
 	ADD	IX,DE
 	LD	(IX+0),A
@@ -1486,14 +1505,14 @@ J$7824:	POP	HL
 J$785F:	POP	HL
 	LD	C,(IX+3)
 	LD	D,(IX+2)
-	LD	E,(IX+1)
-	LD	A,(IX+0)
+	LD	E,(IX+1)		; starting sector
+	LD	A,(IX+0)		; target SCSI ID
 	PUSH	HL
 	LD	B,1			; 1 block
 	CALL	C.7AA8			; read logical block
 	POP	IY
 	POP	BC
-	JP	C,J.7963
+	JP	C,J.7963		; error,
 	LD	DE,01BEH
 	ADD	IY,DE
 	LD	A,(IY+64)
@@ -1501,49 +1520,50 @@ J$785F:	POP	HL
 	JP	NZ,J.792D
 	INC	HL
 	LD	A,(IY+65)
-	CP	0AAH
-	JP	NZ,J.792D
+	CP	0AAH			; MBR has valid bootsignature ?
+	JP	NZ,J.792D		; nope,
 	POP	HL
 	PUSH	HL
 	LD	DE,01B6H
 	ADD	HL,DE
-	CALL	C.7781
+	CALL	C.7781			; get host SCSI ID
 	LD	E,A
-	LD	D,00H
+	LD	D,0
 	ADD	HL,DE
-	LD	B,04H	; 4 
+	LD	B,4			; 4 partitions
 	LD	DE,8
+
 J$78A0:	LD	A,(HL)
 	CPL
-	AND	03H	; 3 
-	JR	Z,J.7919
+	AND	03H
+	JR	Z,J.7919		; nope, skip partition
 	OR	0FCH
 	LD	(IX+6),A
 	LD	A,(IY+4)
-	DEC	A
-	JP	NZ,J$7945
+	DEC	A			; FAT12 partition ?
+	JP	NZ,J$7945		; nope,
 	LD	A,(IY+0)
-	CPL
+	CPL				; active flag inverted
 	AND	(IX+6)
-	LD	(IX+6),A
+	LD	(IX+6),A		; b7 = inactive flag
 	LD	A,(IY+10)
 	AND	0E0H
-	OR	(IY+11)
-	JR	NZ,J.7919
+	OR	(IY+11)			; b31-b17 first sector of partition must be zero
+	JR	NZ,J.7919		; nope, skip partition
 	LD	A,(IY+12)
-	SUB	01H	; 1 
+	SUB	1
 	LD	(IX+4),A
 	LD	A,(IY+13)
 	SBC	A,D
-	LD	(IX+5),A
+	LD	(IX+5),A		; size of partition in sectors -1 (b15-b0)
 	LD	A,(IY+14)
 	SBC	A,D
-	OR	(IY+15)
-	JR	NZ,J.7919
+	OR	(IY+15)			; size of partition in sectors -1 (b31-b16) must be zero
+	JR	NZ,J.7919		; nope, skip partition
 	INC	C
 	LD	A,C
-	CP	06H	; 6 
-	JR	NC,J$78FC
+	CP	6			; maximium number of drives reached ?
+	JR	NC,J$78FC		; yep,
 	LD	A,(IX+0)
 	LD	(IX+8),A
 	LD	A,(IX+1)
@@ -1560,63 +1580,63 @@ J$78FC:	LD	A,(IY+8)
 	LD	(IX+2),A
 	LD	A,(IY+10)
 	ADC	A,(IX+3)
-	LD	(IX+3),A
+	LD	(IX+3),A		; ? + starting sector of partition
 	ADD	IX,DE
 J.7919:	ADD	IY,DE
 	ADD	IY,DE
 	LD	A,(IY+4)
-	CP	05H	; 5 
-	JR	Z,J$7949
+	CP	5			; extended partition ?
+	JR	Z,J$7949		; yep, handle
 	DEC	B
-	JP	NZ,J$78A0
+	JP	NZ,J$78A0		; next partition entry
 	LD	A,C
-	CP	06H	; 6 
-	JR	Z,J.7963
+	CP	6			; maximium number of drives reached ?
+	JR	Z,J.7963		; yep,
 J.792D:	LD	A,(IX+0)
 	INC	A
-	CP	06H	; 6 
-	JR	NC,J.7963
+	CP	6			; maximium number of drives reached ?
+	JR	NC,J.7963		; yep,
 	LD	(IX+0),A
 	XOR	A
 	LD	(IX+1),A
 	LD	(IX+2),A
-	LD	(IX+3),A
+	LD	(IX+3),A		; starting sector = 0
 	JP	J.77C8
 
-J$7945:	CP	04H	; 4 
-	JR	NZ,J.7919
+J$7945:	CP	5-1			; extended partition ?
+	JR	NZ,J.7919		; nope, skip partition
 J$7949:	LD	A,C
-	CP	06H	; 6 
-	JR	Z,J.7963
+	CP	6			; maximium number of drives reached ?
+	JR	Z,J.7963		; yep,
 	LD	A,(IY+8)
 	LD	(IX+1),A
 	LD	A,(IY+9)
 	LD	(IX+2),A
 	LD	A,(IY+10)
-	LD	(IX+3),A
+	LD	(IX+3),A		; starting sector = first sector of the extended partition
 	JP	J.77C8
 
 J.7963:	POP	HL
 	LD	A,C
-	CP	06H	; 6 
-	JR	Z,J$7977
+	CP	6			; maximium number of drives reached ?
+	JR	Z,J$7977		; yep,
 	LD	A,0FFH
 	LD	(IX+3),A
 	LD	(IX+2),A
 	LD	(IX+1),A
 	LD	(IX+0),A
-J$7977:	POP	AF
+J$7977:	POP	AF			; use minimal drives (CTRL pressed at startup) ?
 	PUSH	AF
 	LD	A,C
-	JR	NZ,J.7981
-	CP	01H	; 1 
-	JR	NZ,J.7981
-	INC	A
+	JR	NZ,J.7981		; nope, return number of partitions (drives)
+	CP	1			; 1 partition found ?
+	JR	NZ,J.7981		; nope, return number of partitions (drives)
+	INC	A			; yep, return 2 drives
 J.7981:	LD	L,A
 	POP	AF
 	LD	IX,512
 	ADD	IX,SP
-	LD	SP,IX
+	LD	SP,IX			; dispose sector buffer from stack
 	POP	DE
 	POP	BC
 	RET
@@ -1626,18 +1646,18 @@ J.7981:	LD	L,A
 ;	     Outputs ________________________
 
 C.798E:	XOR	A
-	LD	DE,I$7A27
+	LD	DE,I$7A27		; version string
 	CALL	C.4D7D			; print string
-	LD	DE,I$7A0C
+	LD	DE,I$7A0C		; wait string
 	CALL	C.4D7D			; print string
 J$799B:	CALL	C$7DCD
 	JR	NZ,J$799B
 	DI
 	CALL	GETWRK
 	LD	A,(D$7FF1)
-	LD	(IX+1),A
+	LD	(IX+1),A		; target SCSI ID bit mask
 	XOR	A
-	LD	(IX+6),A
+	LD	(IX+6),A		; TEST UNIT READY
 	LD	(IX+7),A
 	LD	(IX+8),A
 	LD	(IX+9),A
@@ -1645,29 +1665,29 @@ J$799B:	CALL	C$7DCD
 	LD	(IX+11),A
 	DEC	A
 	LD	DE,6
-	ADD	HL,DE
+	ADD	HL,DE			; to SCSI CDB
 	LD	B,200
 J.79C4:	LD	DE,0
 	PUSH	BC
 	PUSH	HL
-	CALL	C.7C08			; scsi initiator
+	CALL	C.7C08			; execute SCSI CDB
 	POP	HL
 	POP	BC
-	JR	NC,J$79D6
+	JR	NC,J$79D6		; no error,
 	DJNZ	J.79C4
 	LD	A,C
 	OR	A
 	JR	Z,J$79EB
 J$79D6:	LD	A,D
-	CP	02H	; 2 
+	CP	02H
 	JR	Z,J$79EE
 	OR	A
 	JR	NZ,J$79FC
 	LD	A,(IX+1)
 	SLA	A
-	LD	(IX+1),A
+	LD	(IX+1),A		; next target SCSI ID bit mask
 	LD	BC,2*256+0
-	JR	NC,J.79C4
+	JR	NC,J.79C4		; next target
 J$79EB:	EI
 	OR	A
 	RET
@@ -1708,7 +1728,7 @@ C.7A3C:	PUSH	DE
 	POP	DE
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine get pointer to partition info
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1741,12 +1761,12 @@ I$7A5C:	DEFB	13
 INIHRD:
 J.7A60:	LD	A,7
 	CALL	SNSMAT
-	BIT	6,A
-J$7A67:	RET	NZ
+	BIT	6,A			; SELECT pressed ?
+	RET	NZ			; nope, quit
 	POP	HL
-	RET
+	RET				; quit interface initialisation
 
-;	  Subroutine __________________________
+;	  Subroutine get pointer to driver workarea
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1759,8 +1779,8 @@ C.7A6A:	PUSH	HL
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine convert SCSI ID to SCSI ID bit mask
+;	     Inputs  A = SCSI ID
 ;	     Outputs ________________________
 
 C.7A77:	PUSH	BC
@@ -1780,8 +1800,8 @@ J$7A82:	LD	(IX+1),A
 
 C.7A87:	PUSH	IX
 	PUSH	AF
-	CALL	C.7A6A
-J$7A8D:	LD	(IX+6),00H
+	CALL	C.7A6A			; get pointer to driver workarea
+J$7A8D:	LD	(IX+6),0		; TEST UNIT READY
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -1799,8 +1819,8 @@ J$7A8D:	LD	(IX+6),00H
 
 C.7AA8:	PUSH	IX
 	PUSH	AF
-	CALL	C.7A6A
-	LD	(IX+6),08H
+	CALL	C.7A6A			; get pointer to driver workarea
+	LD	(IX+6),08H		; READ
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -1818,8 +1838,8 @@ C.7AA8:	PUSH	IX
 
 C.7ACA:	PUSH	IX
 	PUSH	AF
-	CALL	C.7A6A
-	LD	(IX+6),15H
+	CALL	C.7A6A			; get pointer to driver workarea
+	LD	(IX+6),15H		; MODE SELECT
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -1837,8 +1857,8 @@ C.7ACA:	PUSH	IX
 
 C.7AEB:	PUSH	IX
 	PUSH	AF
-	CALL	C.7A6A
-	LD	(IX+6),04H	; 4 
+	CALL	C.7A6A			; get pointer to driver workarea
+	LD	(IX+6),04H		; FORMAT UNIT
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -1857,8 +1877,8 @@ C.7AEB:	PUSH	IX
 
 C.7B0D:	PUSH	IX
 	PUSH	AF
-	CALL	C.7A6A
-	LD	(IX+6),0AH
+	CALL	C.7A6A			; get pointer to driver workarea
+	LD	(IX+6),0AH		; WRITE
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -1877,8 +1897,8 @@ C.7B0D:	PUSH	IX
 
 C.7B2F:	PUSH	IX
 	PUSH	AF
-	CALL	C.7A6A
-	LD	(IX+6),03H
+	CALL	C.7A6A			; get pointer to driver workarea
+	LD	(IX+6),03H		; REQUEST SENSE
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -1891,8 +1911,8 @@ C.7B2F:	PUSH	IX
 	LD	(IX+11),A
 	LD	HL,($SECBUF)
 	POP	AF
-	CALL	C.7A77
-	CALL	C.7C08			; scsi initiator
+	CALL	C.7A77			; convert SCSI ID to SCSI ID bit mask
+	CALL	C.7C08			; execute SCSI CDB
 	POP	IX
 	BIT	3,D
 	LD	A,18H
@@ -1938,8 +1958,8 @@ I$7B89:	DEFB	018H
 
 J$7B90:	PUSH	IX
 	PUSH	AF
-	CALL	C.7A6A
-	LD	(IX+6),12H
+	CALL	C.7A6A			; get pointer to driver workarea
+	LD	(IX+6),12H		; INQUIRY
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -1958,8 +1978,8 @@ J$7B90:	PUSH	IX
 
 C.7BB2:	PUSH	IX
 	PUSH	AF
-	CALL	C.7A6A
-	LD	(IX+6),1AH
+	CALL	C.7A6A			; get pointer to driver workarea
+	LD	(IX+6),1AH		; MODE SENSE
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -1978,8 +1998,8 @@ C.7BB2:	PUSH	IX
 
 C.7BD4:	PUSH	IX
 	PUSH	AF
-	CALL	C.7A6A
-	LD	(IX+6),25H
+	CALL	C.7A6A			; get pointer to driver workarea
+	LD	(IX+6),25H		; READ CAPACITY
 	POP	AF
 	PUSH	AF
 	AND	0E0H
@@ -1993,13 +2013,13 @@ C.7BD4:	PUSH	IX
 	LD	(IX+13),A
 	LD	(IX+14),A
 	LD	(IX+15),A
-J.7BFE:	POP	AF
-	CALL	C.7A77
-	CALL	C.7C08			; scsi initiator
+J.7BFE:	POP	AF			; target SCSI ID
+	CALL	C.7A77			; convert SCSI ID to SCSI ID bit mask
+	CALL	C.7C08			; execute SCSI CDB
 	POP	IX
 	RET
 
-;	  Subroutine scsi initiator
+;	  Subroutine execute SCSI CDB
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2015,20 +2035,20 @@ C.7C08:	CALL	C$7C3D
 	RET
 
 J$7C18:	PUSH	BC
-J.7C19:	IN	A,(0D4H)
-	CP	46H
-	JR	NZ,J.7C19
-	LD	A,(IX+0)
+J.7C19:	IN	A,(0D4H)		; read SCSI bus status
+	CP	46H			; BSY, I, SEL ?
+	JR	NZ,J.7C19		; nope, wait
+	LD	A,(IX+0)		; target SCSI ID bit mask
 	OR	(IX+1)
 	LD	B,A
-	IN	A,(0D0H)
+	IN	A,(0D0H)		; read SCSI data
 	CP	B
 	JR	NZ,J.7C19
-	LD	A,08H
+	LD	A,08H			; assert BSY
 	OUT	(0D1H),A
-J$7C2F:	IN	A,(0D4H)
-	BIT	1,A
-	JR	NZ,J$7C2F
+J$7C2F:	IN	A,(0D4H)		; read SCSI bus status
+	BIT	1,A			; SEL ?
+	JR	NZ,J$7C2F		; yep, wait
 	JP	J.7CE1			; terminate actions
 
 J$7C38:	LD	A,D
@@ -2042,7 +2062,7 @@ J$7C38:	LD	A,D
 ;	     Outputs ________________________
 
 C$7C3D:	PUSH	BC
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID bit mask
 	SLA	A
 J$7C43:	LD	C,A
 	JR	C,J.7C4D
@@ -2051,81 +2071,82 @@ J$7C43:	LD	C,A
 	OR	C
 	JR	J$7C43
 
-J.7C4D:	IN	A,(0D4H)
+J.7C4D:	IN	A,(0D4H)		; read SCSI bus status
 	OR	A
 	JR	NZ,J.7C4D
-	IN	A,(0D0H)
+	IN	A,(0D0H)		; read SCSI data
 	OR	A
 	JR	NZ,J.7C4D
-	IN	A,(0D4H)
+	IN	A,(0D4H)		; read SCSI bus status
 	OR	A
 	JR	NZ,J.7C4D
-	LD	A,(IX+0)
-	OUT	(0D0H),A
-	LD	A,01H	; 1 
-	OUT	(0D2H),A
+	LD	A,(IX+0)		; target SCSI ID bit mask
+	OUT	(0D0H),A		; write SCSI data
+	LD	A,01H
+	OUT	(0D2H),A		; start arbitrate
 J$7C65:	IN	A,(0D1H)
-	BIT	6,A
-	JR	NZ,J$7C73
-	IN	A,(0D4H)
-	AND	0FEH
+	BIT	6,A			; arbitrate in progress ?
+	JR	NZ,J$7C73		; yep,
+	IN	A,(0D4H)		; read SCSI bus status
+	AND	0FEH			; ignore DBP
 	JR	NZ,J.7C86
 	JR	J$7C65
 
-J$7C73:	DEFB	0,0
+J$7C73:	NOP
+	NOP
 	IN	A,(0D1H)
-	BIT	5,A
-	JR	NZ,J.7C86
-	IN	A,(0D0H)
+	BIT	5,A			; lost arbitrate ?
+	JR	NZ,J.7C86		; yep,
+	IN	A,(0D0H)		; read SCSI data
 	AND	C
 	JR	NZ,J.7C86
 	IN	A,(0D1H)
-	BIT	5,A
-	JR	Z,J$7C94
+	BIT	5,A			; lost arbitrate ?
+	JR	Z,J$7C94		; nope,
 J.7C86:	XOR	A
-	OUT	(0D2H),A
-	OUT	(0D1H),A
+	OUT	(0D2H),A		; stop arbitrate
+	OUT	(0D1H),A		; deassert
 	OUT	(0D2H),A
 	LD	A,R
 J$7C8F:	DEC	A
-	JR	NZ,J$7C8F
-	JR	J.7C4D
+	JR	NZ,J$7C8F		; wait random
+	JR	J.7C4D			; try again
 
-J$7C94:	LD	A,0CH	; 12 
-	OUT	(0D1H),A
+J$7C94:	LD	A,0CH
+	OUT	(0D1H),A		; assert BSY and SEL
 	NOP
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID bit mask
 	OR	(IX+1)
-	OUT	(0D0H),A
-	LD	A,0DH	; 13 
-	OUT	(0D1H),A
+	OUT	(0D0H),A		; write SCSI data
+	LD	A,0DH
+	OUT	(0D1H),A		; assert BSY, SEL and databus
 	XOR	A
-	OUT	(0D2H),A
-	OUT	(0D4H),A
-	LD	A,05H	; 5 
-	OUT	(0D1H),A
+	OUT	(0D2H),A		; stop arbitrate
+	OUT	(0D4H),A		; select enable
+	LD	A,05H
+	OUT	(0D1H),A		; assert SEL and databus
 	LD	BC,041F2H
-J$7CB1:	IN	A,(0D4H)
-	BIT	6,A
-	JR	NZ,J.7CE1		; terminate actions
+J$7CB1:	IN	A,(0D4H)		; read SCSI bus status
+	BIT	6,A			; BSY ?
+	JR	NZ,J.7CE1		; yep, terminate actions
 	DEC	BC
 	LD	A,C
 	OR	B
 	JR	NZ,J$7CB1
 	XOR	A
-	OUT	(0D0H),A
-	OUT	(0D1H),A
-	OUT	(0D2H),A
-	OUT	(0D3H),A
+	OUT	(0D0H),A		; write SCSI data
+	OUT	(0D1H),A		; deassert
+	OUT	(0D2H),A		; stop arbitrate
+	OUT	(0D3H),A		; data out
 	LD	DE,8
 	SCF
 	JR	J.7CDF
 
 J$7CCB:	XOR	A
-	OUT	(0D1H),A
-	OUT	(0D0H),A
-	OUT	(0D2H),A
-	OUT	(0D3H),A
+	OUT	(0D1H),A		; deassert
+	OUT	(0D0H),A		; write SCSI data
+	OUT	(0D2H),A		; stop arbitrate
+	OUT	(0D3H),A		; data out
 	LD	(IX+4),L
 	LD	(IX+5),H
 J$7CDA:	XOR	A
@@ -2140,12 +2161,12 @@ J.7CDF:	POP	BC
 ;	     Outputs ________________________
 
 J.7CE1:	LD	A,00H
-	OUT	(0D1H),A
-	LD	A,22H	; """
-	OUT	(0D2H),A
+	OUT	(0D1H),A		; deassert
+	LD	A,22H
+	OUT	(0D2H),A		; enable parity, dma
 	POP	BC
 	PUSH	BC
-	LD	C,0D0H
+	LD	C,0D0H			; SCSI data port
 	PUSH	IX
 	EX	(SP),HL
 	LD	DE,6
@@ -2153,94 +2174,94 @@ J.7CE1:	LD	A,00H
 	EX	DE,HL
 	POP	HL
 J.7CF6:	XOR	A
-	OUT	(0D2H),A
-	OUT	(0D1H),A
-J$7CFB:	IN	A,(0D4H)
-	RLCA
-	JR	C,J$7CDA
-	RLCA
-	JR	NC,J$7CCB
-	RLCA
-	JR	NC,J$7CFB
-	RLCA
-	JP	C,J$7D9A
-	RLCA
-	JR	C,J$7D5C
-	RLCA
-	JR	C,J$7D34
-	OUT	(0D3H),A
+	OUT	(0D2H),A		; stop dma
+	OUT	(0D1H),A		; deassert
+J$7CFB:	IN	A,(0D4H)		; read SCSI bus status
+	RLCA				; RST ?
+	JR	C,J$7CDA		; yep,
+	RLCA				; BSY ?
+	JR	NC,J$7CCB		; nope,
+	RLCA				; REQ ?
+	JR	NC,J$7CFB		; nope,
+	RLCA				; MSG ?
+	JP	C,J$7D9A		; yep,
+	RLCA				; C ?
+	JR	C,J$7D5C		; yep,
+	RLCA				; I ?
+	JR	C,J$7D34		; yep,
+	OUT	(0D3H),A		; target command
 	LD	A,82H
-	OUT	(0D2H),A
-	OUT	(0D5H),A
-	LD	A,01H	; 1 
-	OUT	(0D1H),A
+	OUT	(0D2H),A		; enable block mode dma, dma
+	OUT	(0D5H),A		; Start DMA Send
+	LD	A,01H
+	OUT	(0D1H),A		; assert databus
 J.7D1C:	IN	A,(0D5H)
-	BIT	6,A
-	JR	Z,J$7D2A
+	BIT	6,A			; DMA req ?
+	JR	Z,J$7D2A		; nope,
 	OUTI
-	LD	A,01H	; 1 
-	OUT	(0D1H),A
+	LD	A,01H
+	OUT	(0D1H),A		; assert databus
 	JR	J.7D1C
 
-J$7D2A:	IN	A,(0D4H)
-	AND	0DEH
+J$7D2A:	IN	A,(0D4H)		; read SCSI bus status
+	AND	0DEH			; ignore REQ and DBP
 	CP	40H
 	JR	Z,J.7D1C
 	JR	J.7CF6
 
-J$7D34:	LD	C,0D6H
-	OUT	(0D3H),A
+J$7D34:	LD	C,0D6H			; data input register
+	OUT	(0D3H),A		; status
 	LD	A,82H
-	OUT	(0D2H),A
-	OUT	(0D7H),A
+	OUT	(0D2H),A		; enable block mode dma, dma
+	OUT	(0D7H),A		; Start DMA Initiator Receive
 	XOR	A
-	OUT	(0D1H),A
+	OUT	(0D1H),A		; deassert
 J.7D41:	IN	A,(0D5H)
-	BIT	6,A
-	JR	Z,J$7D50
+	BIT	6,A			; DMA req ?
+	JR	Z,J$7D50		; nope,
 	INI
-	IN	A,(0D0H)
+	IN	A,(0D0H)		; read SCSI data
 	XOR	A
-	OUT	(0D1H),A
+	OUT	(0D1H),A		; deassert
 	JR	J.7D41
 
-J$7D50:	IN	A,(0D4H)
+J$7D50:	IN	A,(0D4H)		; read SCSI bus status
 	AND	0DEH
 	CP	44H
 	JR	Z,J.7D41
-	LD	C,0D0H
+	LD	C,0D0H			; SCSI data port
 	JR	J.7CF6
 
-J$7D5C:	RLCA
-	JR	C,J$7D88
-	OUT	(0D3H),A
+J$7D5C:	RLCA				; I ?
+	JR	C,J$7D88		; yep,
+	OUT	(0D3H),A		; target command
 	EX	DE,HL
-	LD	A,01H	; 1 
-	OUT	(0D1H),A
-J.7D66:	IN	A,(0D4H)
-	AND	0FEH
-	CP	68H	; "h"
+	LD	A,01H
+	OUT	(0D1H),A		; assert databus
+J.7D66:	IN	A,(0D4H)		; read SCSI bus status
+	AND	0FEH			; ignore DBP
+	CP	68H
 	JR	NZ,J$7D80
 	OUTI
-	LD	A,11H	; 17 
-	OUT	(0D1H),A
-J$7D74:	IN	A,(0D4H)
-	BIT	5,A
-	JR	NZ,J$7D74
-	LD	A,01H	; 1 
-	OUT	(0D1H),A
+	LD	A,11H
+	OUT	(0D1H),A		; assert ACK and databus
+J$7D74:	IN	A,(0D4H)		; read SCSI bus status
+	BIT	5,A			; REQ ?
+	JR	NZ,J$7D74		; yep, wait
+	LD	A,01H
+	OUT	(0D1H),A		; assert databus
 	JR	J.7D66
 
-J$7D80:	CP	48H	; "H"
+J$7D80:	CP	48H
 	JR	Z,J.7D66
 	EX	DE,HL
 J.7D85:	JP	J.7CF6
 
-J$7D88:	OUT	(0D3H),A
+J$7D88:	OUT	(0D3H),A		; target command
 	LD	A,82H
-	OUT	(0D2H),A
-	OUT	(0D7H),A
-	IN	A,(0D6H)
+	OUT	(0D2H),A		; enable block mode dma, dma
+	OUT	(0D7H),A		; Start DMA Initiator Receive
+	IN	A,(0D6H)		; read data from scsi bus
 	LD	D,A
 	IN	A,(C)
 	LD	(IX+2),D
@@ -2250,39 +2271,39 @@ J$7D9A:	RLCA
 	JR	NC,J$7DC4
 	RLCA
 	JR	C,J$7DB1
-	OUT	(0D3H),A
-	LD	A,01H	; 1 
-	OUT	(0D1H),A
+	OUT	(0D3H),A		; target command
+	LD	A,01H
+	OUT	(0D1H),A		; assert databus
 	LD	A,82H
-	OUT	(0D2H),A
-	OUT	(0D5H),A
+	OUT	(0D2H),A		; enable block mode dma, dma
+	OUT	(0D5H),A		; Start DMA Send
 	XOR	A
 	OUT	(C),A
 	JR	J.7D85
 
-J$7DB1:	OUT	(0D3H),A
+J$7DB1:	OUT	(0D3H),A		; target command
 	LD	A,82H
-	OUT	(0D2H),A
-	OUT	(0D7H),A
-	IN	A,(0D6H)
+	OUT	(0D2H),A		; enable block mode dma, dma
+	OUT	(0D7H),A		; Start DMA Initiator Receive
+	IN	A,(0D6H)		; read data from scsi bus
 	LD	E,A
 	IN	A,(C)
 	LD	(IX+3),E
 	JP	J.7CF6
 
 J$7DC4:	LD	A,50H
-	OUT	(0D1H),A
+	OUT	(0D1H),A		; assert testmode and ACK 
 	XOR	A
-	OUT	(0D1H),A
+	OUT	(0D1H),A		; deassert
 	JR	J.7D85
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$7DCD:	IN	A,(0D4H)
-	BIT	6,A
-	RET	Z
+C$7DCD:	IN	A,(0D4H)		; read SCSI bus status
+	BIT	6,A			; BSY ?
+	RET	Z			; yep, quit
 	LD	A,7
 	CALL	SNSMAT
 	CP	0BFH			; SELECT pressed ?
@@ -2293,34 +2314,34 @@ C$7DCD:	IN	A,(0D4H)
 ;	     Outputs ________________________
 
 J.7DDA:	LD	A,80H
-	OUT	(0D1H),A
+	OUT	(0D1H),A		; assert RST
 	XOR	A
 	NOP
 	NOP
-	OUT	(0D1H),A
-	OUT	(0D0H),A
-	OUT	(0D2H),A
-	OUT	(0D3H),A
+	OUT	(0D1H),A		; deassert
+	OUT	(0D0H),A		; scsi data = 0
+	OUT	(0D2H),A		; mode = 0 (PIO)
+	OUT	(0D3H),A		; target command = 0 (data out)
 	RET
 
 ;	  Subroutine test hdc
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$7DEA:	IN	A,(0D4H)
+C$7DEA:	IN	A,(0D4H)		; read SCSI bus status
 	INC	A
 	JR	Z,J.7DFC
 	LD	A,40H
-	OUT	(0D1H),A
-	IN	A,(0D4H)
-	INC	A
-	JR	NZ,J.7DFC
-	OUT	(0D1H),A
+	OUT	(0D1H),A		; test mode
+	IN	A,(0D4H)		; read SCSI bus status
+	INC	A			; because NCR5380 is disconnected, all bit should read 1
+	JR	NZ,J.7DFC		; nope, self test failed
+	OUT	(0D1H),A		; deassert
 	OR	A
 	RET
 
 J.7DFC:	XOR	A
-	OUT	(0D1H),A
+	OUT	(0D1H),A		; deassert
 	LD	DE,I$7E0E
 	CALL	C.4D7D			; print string
 	LD	B,4
@@ -2351,7 +2372,7 @@ I$7E0E:	DEFB	"SCSI interface",13,10
 ?.7FA4:	JP	C.798E			; Initialise
 ?.7FA7:	JP	C.7799			; InsWork
 ?.7FAA:	JP	C.7A3C			; ClrEndLn
-?.7FAD:	JP	C.7C08			; scsi initiator (BERT ONLY CALL)
+?.7FAD:	JP	C.7C08			; execute SCSI CDB (BERT ONLY CALL)
 
 	DEFS	07FF0H-$,0
 
