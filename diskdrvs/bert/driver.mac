@@ -1,5 +1,5 @@
 ; Diskdriver BERT SCSI controller
-; HDC	NCR 5380
+; HDC	NCR 5380 compatible
 
 ; Source re-created by Z80DIS 2.2
 ; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
@@ -31,32 +31,52 @@ DRVINF	EQU	0FB21H
 PROCNM	EQU	0FD89H
 DEVICE	EQU	0FD99H
 
+; workarea driver
+;
+; workarea partitions, 6 x partition info entry
+;
+; +0	partition info (b7-b5 = LUN, b4 = not formated, b3 = disk unchanged, b2-b0 target SCSI ID)
+; +1,3	starting sector of partition, absolute
+; +4,2	size of partition in sectors
+; +6	partition flags (b7 = active, b1 = read access, b0 = write access)
+; +7	media type FDD (0-3)
+;
+; workarea driver
+; 
+; +0	host SCSI ID bit mask
+; +1	target SCSI ID bit mask
+; +2	SCSI command status
+; +3	SCSI command sense status
+; +4,2	pointer
+; +6,10	SCSI CDB (supports only 6 and 10 bytes CDBs)
 
-MYSIZ	EQU	0
+MYSIZ	EQU	0			; does not use MYSIZ, because init routine is modified
 SECLEN	EQU	512
 
 
-DEFDPB	EQU	$-1
+DEFDPB	EQU	$-1			; does not use DEFDPB, because init routine is modified
 ?.6EC5:	RET
 
 DRIVES:
-?.6EC6:	LD	L,0
+?.6EC6:	LD	L,0			; does not use DRIVES, because init routine is modified
 	RET
 
 ;	  Subroutine general error (DSKIO/DSKCHG/GETDPB in segment 1,2,3)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;            Remark  Why this done this way is unknown, it is unneeded
 
 ?.6EC9:	LD	A,12
 	SCF
 
-INIENV:
+INIENV:					; does not use INIENV, because init routine is modified
 MTOFF:
 J.6ECC:	RET
 
 ;	  Subroutine not formatable (CHOICE in segment 1,2,3)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;            Remark  Why this done this way is unknown, it is unneeded
 
 ?.6ECD:	LD	HL,I$6ED1
 	RET
@@ -66,22 +86,27 @@ I$6ED1:	DEFB	0
 ;	  Subroutine general error (DSKFMT in segment 1,2,3)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;            Remark  Why this done this way is unknown, it is unneeded
 
 ?.6ED2:	LD	A,16
 	SCF
 	RET
 
+;	  Subroutine OEMSTA (extra disksystem statement handler)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 OEMSTA:
 ?.6ED6:	EI
 	PUSH	HL
 	PUSH	DE
-	LD	DE,I$6F48
+	LD	DE,I$6F48		; SCSIID
 	LD	HL,PROCNM
 J$6EDF:	LD	A,(DE)
 	AND	A
 	JR	Z,J.6EEE
 	CP	(HL)
-	JR	NZ,J.6EEA
+	JR	NZ,J.6EEA		; nope, quit with statement not handled flag
 	INC	DE
 	INC	HL
 	JR	J$6EDF
@@ -94,21 +119,21 @@ J.6EEA:	POP	DE
 J.6EEE:	LD	A,(HL)
 	INC	HL
 	CP	" "
-	JR	Z,J.6EEE
+	JR	Z,J.6EEE		; skip spaces
 	CP	"="
-	JR	NZ,J.6EEA
+	JR	NZ,J.6EEA		; quit with statement not handled flag
 J$6EF8:	LD	A,(HL)
 	INC	HL
 	CP	" "
-	JR	Z,J$6EF8
+	JR	Z,J$6EF8		; skip spaces
 	SUB	"0"
-	JR	C,J.6EEA
+	JR	C,J.6EEA		; invalid scsi id, quit with statement not handled flag
 	CP	7+1
-	JR	NC,J.6EEA
+	JR	NC,J.6EEA		; invalid scsi id, quit with statement not handled flag
 	LD	B,A
 	LD	A,(HL)
 	OR	A			; end of statement ?
-	JR	NZ,J.6EEA		; nope, quit
+	JR	NZ,J.6EEA		; nope, quit with statement not handled flag
 	LD	A,B
 	AND	07H			; ?? is already verified 0-7
 	LD	A,1
@@ -176,7 +201,7 @@ J.6F4F:	EI
 	POP	AF
 
 ;	  Subroutine read/write sector from partition
-;	     Inputs  ________________________
+;	     Inputs  IX = pointer to partition info, DE = sector number, B = number of sectors, C = mediadescriptor
 ;	     Outputs ________________________
 
 C$6F60:	LD	A,(IX+0)
@@ -209,96 +234,101 @@ J.6F79:	LD	C,0
 	LD	A,(IX+5)
 	SBC	A,D
 	LD	A,0
-	SBC	A,C
+	SBC	A,C			; is end sector past end of partition ?
 	POP	DE
-	JP	C,J$7069
+	JP	C,J$7069		; yep, check if a valid remaining range
 	LD	A,E
 	ADD	A,(IX+1)
 	LD	E,A
 	LD	A,D
 	ADC	A,(IX+2)
 	LD	D,A
-	LD	A,00H
+	LD	A,0
 	ADC	A,(IX+3)
-	LD	C,A
+	LD	C,A			; CDE = start physical sector
 	POP	AF
 	PUSH	DE
 	PUSH	BC
 	PUSH	IX
-	JR	C,J$6FB8
-	BIT	1,(IX+6)
-	JP	Z,J$705E
+	JR	C,J$6FB8		; write, handle
+	BIT	1,(IX+6)		; have partition read access ?
+	JP	Z,J$705E		; nope, quit with RECORD NOT FOUND error
 	CALL	C.7AA8			; read logical block
 	JR	J$6FC2
 
-J$6FB8:	BIT	0,(IX+6)
-	JP	Z,J$7058
+J$6FB8:	BIT	0,(IX+6)		; have partition write access ?
+	JP	Z,J$7058		; nope, quit with WRITE PROTECT error
 	CALL	C.7B0D			; write logical block
 J$6FC2:	POP	IX
 	POP	BC
 	LD	A,D
 	POP	DE
-	OR	A
-	LD	A,18H
-	RET	Z
+	OR	A			; any errors ?
+	LD	A,24			; ??
+	RET	Z			; nope, quit
 	PUSH	DE
 	PUSH	BC
 	LD	A,(IX+0)		; target SCSI ID
 	PUSH	IX
-	LD	(IX+7),00H
+	LD	(IX+7),0		; begin forced media type select with 720 KB 3.5"
 	CALL	C.7B2F			; request sense
 	PUSH	AF
-	CP	18H
-	JR	NZ,J$701D
+	CP	24			; UNFORMATED DISK error ?
+	JR	NZ,J$701D		; nope, update things and quit with error
 	POP	AF
+
+; handle UNFORMATED DISK error
+
 J$6FDF:	LD	HL,($SECBUF)
-	EX	(SP),IX
+	EX	(SP),IX			; pointer to partition
 	LD	A,(IX+0)		; target SCSI ID
 	LD	BC,1*256+0
-	LD	DE,0
+	LD	DE,0			; sector 0, 1 block
 	CALL	C.7AA8			; read logical block
-	EX	(SP),IX
-	JR	C,J$6FFC
-	POP	IX
-	LD	A,18H
+	EX	(SP),IX			;
+	JR	C,J$6FFC		; error,
+	POP	IX			; pointer to partition
+	LD	A,24
 	SCF
 	PUSH	AF
-	JR	J.7043
+	JR	J.7043			; quit with UNFORMATED DISK error
 
-J$6FFC:	EX	(SP),IX
+; UNFORMATED DISK, can not read boot sector
+
+J$6FFC:	EX	(SP),IX			; pointer to partition
 	LD	A,(IX+0)		; target SCSI ID
 	CALL	C.7A87			; test unit ready
+	LD	A,(IX+7)		; forced media type
+	CALL	C.7429			; select FDD media type
+	INC	(IX+7)			; next media type
 	LD	A,(IX+7)
-	CALL	C.7429
-	INC	(IX+7)
-	LD	A,(IX+7)
-	EX	(SP),IX
-	CP	04H	; 4 
-	JR	NZ,J$6FDF
-	POP	IX
+	EX	(SP),IX			;
+	CP	4			; all media bytes done ?
+	JR	NZ,J$6FDF		; nope, try next media type
+	POP	IX			; pointer to partition
 	LD	A,12
 	SCF
-	JR	J.701E
+	JR	J.701E			; update things and quit with OTHER error
 
 J$701D:	POP	AF
 J.701E:	POP	HL
 	PUSH	AF
 	INC	D
-	DEC	D
-	JR	NZ,J.7043
+	DEC	D			; SCSI status OK ?
+	JR	NZ,J.7043		; nope, quit with error
 	LD	A,(IX+2)
-	CP	06H
-	JR	NZ,J$7047
+	CP	6			; UNIT ATTENTION ?
+	JR	NZ,J$7047		; nope, update remaining sectors and quit (with error)
 	PUSH	HL
-	CALL	GETWRK
+	CALL	GETWRK			; get pointer to partition info
 	POP	IX
 	LD	A,(IX+0)
-	OR	08H			; ? bit
+	OR	08H			; partition unchanged
 	LD	DE,8
-	LD	B,6
-J$703B:	CP	(HL)
+	LD	B,6			; 6 drives/partitions
+J$703B:	CP	(HL)			; partition on same target unchanged ?
 	JR	NZ,J$7040
-	RES	3,(HL)
+	RES	3,(HL)			; partition changed
 J$7040:	ADD	HL,DE
 	DJNZ	J$703B
 J.7043:	POP	AF
@@ -309,10 +339,10 @@ J.7043:	POP	AF
 J$7047:	POP	AF
 	POP	BC
 	POP	DE
-	BIT	7,(IX+0)
-	RET	Z
+	BIT	7,(IX+0)		; valid bit set ?
+	RET	Z			; nope, quit
 	PUSH	AF
-	LD	A,B
+	LD	A,B			; number of sectors
 	SUB	(IX+6)
 	ADD	A,E
 	LD	B,A
@@ -337,22 +367,24 @@ J$705E:	POP	AF
 	SCF
 	RET
 
+; handle a request (partly) out of range
+
 J$7069:	LD	A,(IX+4)
 	SUB	E
 	LD	C,A
 	INC	C
 	LD	A,(IX+5)
 	SBC	A,D
-	JR	C,J.7084
+	JR	C,J.7084		; quit with SEEK error
 	LD	A,B
 	SUB	C
-	LD	B,A
+	LD	B,A			; number of sectors (valid range)
 	POP	AF
 	PUSH	BC
 	LD	B,C
 	LD	C,0F0H			; mediadescriptor harddisk
 	CALL	C$6F60			; read/write sector from partition
-	JR	C,J$7089
+	JR	C,J$7089		; error, update remaining sectors and quit
 	POP	BC
 	DEFB	03EH
 J.7084:	POP	AF
@@ -393,16 +425,17 @@ J.7095:	EI
 	LD	A,B
 	JR	J$70B6
 
-?.70AF:	LD	B,1
-	BIT	3,(IX+0)
-	RET	NZ
-J$70B6:	LD	B,0FFH
-	SET	3,(IX+0)
+?.70AF:	LD	B,1			; assume DISK UNCHANGED
+	BIT	3,(IX+0)		; disk unchanged ?
+	RET	NZ			; yep, quit
+
+J$70B6:	LD	B,0FFH			; assume DISK CHANGED
+	SET	3,(IX+0)		; set disk unchanged flag
 	RES	4,(IX+0)		; enable partition
 	PUSH	BC
 	CALL	C.70DC			; GETDPB
 	POP	BC
-	LD	A,18H			; ??
+	LD	A,24			; ??
 	OR	A			; quit with OK
 	RET
 
@@ -440,28 +473,30 @@ J$70EF:	LD	A,22			; quit with UNFORMATED DISK ERROR
 	SCF
 	RET
 
-J$70F3:	LD	(IX+7),00H
+J$70F3:	LD	(IX+7),0		; begin forced media type select with 720 KB 3.5"
 	PUSH	HL
 	LD	HL,($SECBUF)
 	PUSH	HL
 	LD	A,(IX+0)		; target SCSI ID
-	LD	B,1
+	LD	B,1			; 1 block
 	LD	C,(IX+3)
 	LD	D,(IX+2)
-	LD	E,(IX+1)
+	LD	E,(IX+1)		; first sector of partition
 	CALL	C.7AA8			; read logical block
-	LD	A,D
-	CALL	C$71C9
+	LD	A,D			; SCSI status code
+	CALL	C$71C9			; if error, try read sector 0 FDD (try with different media types)
 	POP	IY
 	POP	IX
-	JR	NC,J.711D
-	CP	18H
-	JR	Z,J.711D
+	JR	NC,J.711D		; no error, build DPB and quit
+	CP	24			; UNFORMATED DISK error ?
+	JR	Z,J.711D		; yep, build DPB and quit
 	SCF
 	RET
 
+; build DPB
+
 J.711D:	LD	A,(IY+21)
-	LD	(IX+1),A
+	LD	(IX+1),A		; DPB: mediadescriptor
 	CP	0F0H			; mediadescriptor 0F0H (PC: 1.44 MB floppy, MSX: harddisk) ?
 	JR	Z,J.7133		; yep, continue
 	CP	0F9H			; mediadescriptor 0F9H (PC and MSX: 720KB disk) ?
@@ -474,24 +509,24 @@ J.711D:	LD	A,(IY+21)
 J.7133:	LD	L,(IY+14)
 	LD	H,(IY+15)
 	LD	(IX+8),L
-	LD	(IX+9),H
+	LD	(IX+9),H		; first FAT sector (reserved sectors)
 	LD	A,(IY+16)
-	LD	(IX+10),A
+	LD	(IX+10),A		; number of FATs
 	LD	E,(IY+22)
 	LD	D,(IY+23)
-	LD	(IX+16),E
+	LD	(IX+16),E		; sectors per FAT
 	LD	B,A
 J$714F:	ADD	HL,DE
 	DJNZ	J$714F
 	LD	(IX+17),L
-	LD	(IX+18),H
+	LD	(IX+18),H		; first root directory sector
 	LD	E,(IY+17)
 	LD	D,(IY+18)
-	LD	(IX+11),E
+	LD	(IX+11),E		; number of root directory entries
 	LD	C,(IY+11)
 	LD	B,(IY+12)
 	LD	(IX+2),C
-	LD	(IX+3),B
+	LD	(IX+3),B		; bytes per sector
 	SRL	B
 	RR	C
 	SRL	B
@@ -503,7 +538,7 @@ J$714F:	ADD	HL,DE
 	SRL	B
 	RR	C
 	DEC	C
-	LD	(IX+4),C
+	LD	(IX+4),C		; directory mask
 	ADD	A,E
 	LD	E,A
 	RL	D
@@ -511,13 +546,13 @@ J$7189:	INC	B
 	RR	C
 	JR	C,J$7189
 	DEC	B
-	LD	(IX+5),B
+	LD	(IX+5),B		; directory shift
 J$7192:	SRL	D
 	RR	E
 	DJNZ	J$7192
 	ADD	HL,DE
 	LD	(IX+12),L
-	LD	(IX+13),H
+	LD	(IX+13),H		; first data sector
 	EX	DE,HL
 	LD	L,(IY+19)
 	LD	H,(IY+20)
@@ -525,11 +560,11 @@ J$7192:	SRL	D
 	SBC	HL,DE
 	LD	A,(IY+13)
 	DEC	A
-	LD	(IX+6),A
+	LD	(IX+6),A		; cluster mask
 J$71B0:	INC	B
 	RRCA
 	JR	C,J$71B0
-	LD	(IX+7),B
+	LD	(IX+7),B		; cluster shift
 	DEC	B
 	JR	Z,J$71C0
 J$71BA:	SRL	H
@@ -537,42 +572,42 @@ J$71BA:	SRL	H
 	DJNZ	J$71BA
 J$71C0:	INC	HL
 	LD	(IX+14),L
-	LD	(IX+15),H
+	LD	(IX+15),H		; maximium cluster number
 	OR	A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine if error, try read sector 0 FDD (try with different media types)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$71C9:	OR	A
-	RET	Z
+C$71C9:	OR	A			; SCSI status = OK ?
+	RET	Z			; yep, quit
 	PUSH	DE
 	PUSH	BC
 	LD	A,(IX+0)		; target SCSI ID
 	PUSH	IX
-	LD	(IX+7),00H
+	LD	(IX+7),0		; begin forced media type select with 720 KB 3.5"
 	CALL	C.7B2F			; request sense
 	PUSH	AF
-	CP	18H
-	JR	NZ,J$71FA
+	CP	24			; UNFORMATED DISK error ?
+	JR	NZ,J$71FA		; nope, update things and quit with error
 	POP	AF
 	POP	IX
-	CALL	C.74A7
-	JP	NC,J$71F4
+	CALL	C.74A7			; try reading sector 0 FDD (try with different media types)
+	JP	NC,J$71F4		; ok, quit with UNFORMATED DISK error
 	SET	4,(IX+0)		; disable partition
-	LD	A,(IX+0)
+	LD	A,(IX+0)		; target SCSI ID
 	CALL	C.7B2F			; request sense
-	JP	J.701E
+	JP	J.701E			; update things and quit
 
-J$71F4:	LD	A,18H
+J$71F4:	LD	A,24
 	SCF
 	POP	BC
 	POP	DE
 	RET
 
 J$71FA:	POP	AF
-	JP	J.701E
+	JP	J.701E			; update things and quit with error
 
 
 ;	  Subroutine CHOICE
@@ -635,31 +670,35 @@ I$7245:	DEFW	J.724D			; choice 1, enable partition
 	DEFW	J.7260			; choice 4, invalid choice
 
 J.724D:	RES	4,(IX+0)		; enable partition
-	SET	0,(IX+6)		; write enable
+	SET	0,(IX+6)		; enable partition write access
 	RET
 
 J.7256:	SET	4,(IX+0)		; disable partition
 	RET
 
-J.725B:	RES	0,(IX+6)
+J.725B:	RES	0,(IX+6)		; disable partition write access
 	RET
 
 J.7260:	SCF
 	LD	A,12
 	RET
 
+;	  Subroutine format floppy disk
+;	     Inputs  E = choice (0 based), BC = size of workspace
+;	     Outputs ________________________
+
 J$7264:	LD	A,B
 	CP	HIGH 512		; enough workspace ?
-	JP	C,J$7325		; nope, quit with error
+	JP	C,J$7325		; nope, quit with INSUFFICIENT MEMORY error
 	LD	A,E
-	AND	0FH
-	CALL	C.7429
-	LD	A,(IX+0)
+	AND	0FH			; ?? choice value is already in range
+	CALL	C.7429			; select FDD media type
+	LD	A,(IX+0)		; target SCSI ID
 	PUSH	HL
 	CALL	C.7362			; clear sector buffer
-	LD	B,00H
+	LD	B,0			; format bits
 	PUSH	DE
-	LD	DE,0
+	LD	DE,0			; interleave = 0
 	CALL	C.7AEB			; format unit
 	JR	NC,J$7291		; ok, continue
 	LD	A,(IX+0)		; target SCSI ID
@@ -668,14 +707,14 @@ J$7264:	LD	A,B
 	POP	IX
 	POP	DE
 	POP	HL
-	JP	J$732A
+	JP	J$732A			; quit with error
 
 J$7291:	POP	DE
-	LD	A,E
+	LD	A,E			; choice
 	ADD	A,A
 	ADD	A,A
 	ADD	A,A			; *8
-	ADD	A,4
+	ADD	A,4			; +4
 	LD	E,A
 	LD	D,0
 	LD	HL,I.74D6
@@ -683,29 +722,29 @@ J$7291:	POP	DE
 	LD	A,(HL)
 	INC	HL
 	LD	H,(HL)
-	LD	L,A
+	LD	L,A			; BIOS parameter block for choice
 	LD	BC,30
 	POP	DE
 	PUSH	DE
-	LDIR
+	LDIR				; copy BIOS parameter block
 	LD	HL,I$756E
 	LD	BC,L_BOOT
-	LDIR
+	LDIR				; copy bootstrap code
 	POP	HL
 	CALL	C.732F			; write sector
 	RET	C			; error, quit
 	PUSH	HL
 	LD	DE,17
 	ADD	HL,DE
-	LD	E,(HL)
+	LD	E,(HL)			; number of rootentries
 	LD	BC,4
 	ADD	HL,BC
-	LD	C,(HL)
+	LD	C,(HL)			; mediadescriptor
 	INC	HL
-	LD	B,(HL)
+	LD	B,(HL)			; number of sectors per FAT
 	POP	HL
 	PUSH	BC
-	SLA	B
+	SLA	B			; 2 FATs
 	LD	A,E
 	SRL	E
 	SRL	E
@@ -713,10 +752,10 @@ J$7291:	POP	DE
 	SRL	E
 	AND	1FH
 	JR	Z,J$72D6
-	INC	E
+	INC	E			; number of sectors for root directory
 J$72D6:	LD	A,E
 	ADD	A,B
-	LD	B,A
+	LD	B,A			; + number of sectors for FAT
 	CALL	C.7362			; clear sector buffer
 J$72DC:	CALL	C.732F			; write sector
 	JR	NC,J$72E3		; ok, continue
@@ -731,25 +770,25 @@ J$72E3:	DJNZ	J$72DC
 	INC	HL
 	LD	(HL),0FFH
 	DEC	HL
-	DEC	HL
+	DEC	HL			; first 2 special FAT entries
 	LD	(IX+1),1
 	LD	(IX+2),0
-	LD	(IX+3),0
+	LD	(IX+3),0		; starting sector = 1
 	CALL	C.732F			; write sector (first sector of FAT #1)
 	RET	C			; error, quit
 	LD	A,B
-	DEC	A
+	DEC	A			; number of sectors per FAT - 1 (because starting sector is already updated by 1)
 	ADD	A,(IX+1)
 	LD	(IX+1),A
 	JR	NC,J.7311
 	INC	(IX+2)
 	JR	NZ,J.7311
-	INC	(IX+3)
+	INC	(IX+3)			; update starting sector
 J.7311:	CALL	C.732F			; write sector (first sector of FAT #2)
 	RET	C			; error, quit
 	LD	(IX+1),0
 	LD	(IX+2),0
-	LD	(IX+3),0
+	LD	(IX+3),0		; starting sector = 0
 	XOR	A			; no error
 	LD	A,22			; ??
 	RET
@@ -788,7 +827,7 @@ J$734F:	PUSH	AF
 	JR	NZ,J.735D
 	INC	(IX+2)
 	JR	NZ,J.735D
-	INC	(IX+3)
+	INC	(IX+3)			; starting sector + 1
 J.735D:	POP	AF
 	POP	BC
 	POP	DE
@@ -826,9 +865,9 @@ I$73C0:	DEFB	13,10
 	DEFB	"4 - 360Kb (singel side)",13,10
 	DEFB	0
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	  Subroutine select FDD media type
+;	     Inputs  A = media type (0-3)
+;	     Outputs Cx set if error
 
 C.7429:	PUSH	IY
 	PUSH	IX
@@ -840,31 +879,31 @@ C.7429:	PUSH	IY
 	LD	B,3
 J$7434:	LD	A,(IX+0)		; target SCSI ID
 	CALL	C.7A87			; test unit ready
-	JR	NC,J$7440		; no error,
+	JR	NC,J$7440		; no error, continue
 	DJNZ	J$7434
-	JR	J.7498
+	JR	J.7498			; quit with error
 
 J$7440:	LD	A,(IX+0)		; target SCSI ID
-	LD	B,5
+	LD	B,5			; PC = 0 (Current values), Page code = 5 (flexible disk)
 	CALL	C.7BB2			; mode sense
-J$7448:	JR	C,J.7498		; error,
+J$7448:	JR	C,J.7498		; error, quit with error
 	POP	IY
-	LD	(IY+12),05H	; 5 
-	LD	(IY+0),00H
-	LD	(IY+2),00H
-	LD	(IY+3),00H
+	LD	(IY+12),5		; flexible disk page
+	LD	(IY+0),0		; Mode data length = 0
+	LD	(IY+2),0		; Device-specific parameter = 0
+	LD	(IY+3),0		; Block descriptor length = 0
 	PUSH	IY
 	POP	HL
 	LD	DE,4
-J$7462:	ADD	HL,DE
+J$7462:	ADD	HL,DE			; +4
 	PUSH	HL
 	LD	DE,8
-	ADD	HL,DE
+	ADD	HL,DE			; +4+8 (header + block descriptor) -> flexible disk page
 	POP	DE
 	LD	BC,32
-	LDIR
+	LDIR				; copy +12 to +4, length 32
 	POP	AF
-	LD	D,00H
+	LD	D,0
 	ADD	A,A
 	ADD	A,A
 	ADD	A,A			; *8
@@ -872,30 +911,30 @@ J$7462:	ADD	HL,DE
 	LD	HL,I.74D6
 	ADD	HL,DE
 	LD	A,(HL)
-	LD	(IY+1),A
+	LD	(IY+1),A		; Mode parameter header, set medium type
 	INC	HL
 	LD	A,(HL)
-	LD	(IY+8),A
+	LD	(IY+8),A		; flexible disk, update number of heads
 	INC	HL
 	LD	A,(HL)
-	LD	(IY+9),A
+	LD	(IY+9),A		; flexible disk, update sectors per track
 	INC	HL
-	INC	HL
+	INC	HL			; ??
 	LD	A,(IX+0)		; target SCSI ID
-	LD	B,24H
+	LD	B,32+4			; parameter list length (header + flexible disk)
 	PUSH	IY
 	POP	HL
 	CALL	C.7ACA			; mode select
 	JR	C,J$749A		; error,
-	JR	J$749E
+	JR	J$749E			; quit without error
 
 J.7498:	POP	HL
 	POP	AF
 J$749A:	XOR	A
-	DEC	A
+	DEC	A			; set Cx
 	JR	J$749F
 
-J$749E:	XOR	A
+J$749E:	XOR	A			; clear Cx
 J$749F:	POP	BC
 	POP	DE
 	POP	HL
@@ -903,11 +942,11 @@ J$749F:	POP	BC
 	POP	IY
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine try reading sector 0 FDD (try with different media types)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.74A7:	LD	(IX+7),00H
+C.74A7:	LD	(IX+7),0		; begin forced media type select with 720 KB 3.5"
 	PUSH	HL
 	PUSH	DE
 	PUSH	BC
@@ -918,11 +957,11 @@ J$74AE:	LD	HL,($SECBUF)
 	CALL	C.7AA8			; read logical block
 	JR	NC,J$74D2		; no error, quit
 	LD	A,(IX+7)
-	CALL	C.7429
-	INC	(IX+7)
+	CALL	C.7429			; select FDD media type
+	INC	(IX+7)			; next media type
 	LD	A,(IX+7)
-	CP	4
-	JR	NZ,J$74AE
+	CP	4			; all media types done ?
+	JR	NZ,J$74AE		; nope, try again
 	LD	A,22			; quit with UNFORMATED DISK ERROR
 	SCF
 J$74D2:	POP	BC
@@ -930,19 +969,19 @@ J$74D2:	POP	BC
 	POP	HL
 	RET
 
-I.74D6:	DEFB	080H,002H,009H,000H
+I.74D6:	DEFB	080H,2,9,0		; 720 KB 3.5", 2 sides, 9 sectors per track
 	DEFW	I.74F6
 	DEFW	0
 
-	DEFB	088H,002H,012H,000H
+	DEFB	088H,2,18,0		; 1.44 MB 3.5", 2 sides, 18 sectors per track
 	DEFW	I.7514
 	DEFW	0
 
-	DEFB	08CH,002H,024H,000H
+	DEFB	08CH,2,36,0		; 2.88 MB 3.5", 2 sides, 36 sectors per track
 	DEFW	I.7532
 	DEFW	0
 
-	DEFB	080H,001H,009H,000H
+	DEFB	080H,1,9,0		; 720 KB 3.5", 2 sides, 9 sectors per track
 	DEFW	I.7550
 	DEFW	0
 
@@ -1310,7 +1349,7 @@ J$7730:	INC	C
 J$7733:	POP	AF
 
 ; illegal code
-; the following code is against the MSX coding rule, why not use the RTC BIOS calls ?
+; the following code is against the MSX coding rules, why not use the RTC BIOS calls ?
 ; also the alarm feature nibbles are used illegal
 
 J$7734:	LD	C,0B5H
@@ -1398,7 +1437,7 @@ C.7799:	PUSH	BC
 	LD	E,L
 	INC	DE
 	LD	BC,6*8-1
-	LDIR				; initialize driver workarea
+	LDIR				; initialize driver workarea partitions
 	POP	AF
 	LD	HL,-512
 	ADD	HL,SP
@@ -1411,85 +1450,91 @@ C.7799:	PUSH	BC
 	PUSH	HL
 	XOR	A
 	LD	C,A			; number of 'drives' sofar = 0
-	LD	(IX+0),A		; target SCSI ID = 0
+	LD	(IX+0),A		; target SCSI ID = 0, LUN 0
 	LD	(IX+1),A
 	LD	(IX+2),A
-	LD	(IX+3),A		; starting sector = 0
+	LD	(IX+3),A		; partition table is in logical block number 0
 
 J.77C8:	POP	HL
 	PUSH	HL
 	PUSH	BC
-	LD	A,(IX+0)		; target SCSI ID
+	LD	A,(IX+0)		; target SCSI ID + LUN
 	PUSH	HL
+
 J$77CF:	CALL	C.7BD4			; read capacity
 	JR	NC,J$7816		; no error, continue
 	LD	A,D
-	CP	02H
-	JR	NZ,J$7811
+	CP	02H			; SCSI status = CHECK CONDITION ?
+	JR	NZ,J$7811		; nope, stop partition search
 	POP	HL
 	PUSH	HL
 	LD	HL,($SECBUF)
 	EX	(SP),HL
 	PUSH	HL
-	LD	($SECBUF),HL
-	LD	A,(IX+0)		; target SCSI ID
+	LD	($SECBUF),HL		; $SECBUF = temporary sector buffer on stack
+	LD	A,(IX+0)		; target SCSI ID + LUN
 	PUSH	IX
 	CALL	C.7B2F			; request sense
 	POP	IX
 	POP	HL
 	EX	(SP),HL
-	LD	($SECBUF),HL
+	LD	($SECBUF),HL		; restore $SECBUF
 	POP	HL
 	PUSH	HL
 	JR	NC,J$77FB		; no error,
 	LD	A,E
-	CP	02H
-	JR	NZ,J$7804
+	CP	02H			; SCSI sense code = NOT READY ?
+	JR	NZ,J$7804		; nope,
 J$77FB:	LD	DE,2
 	ADD	HL,DE
 	LD	A,(HL)
-	CP	05H
-	JR	NZ,J$7824
+	CP	05H			; sense key = ILLEGAL REQUEST ?
+	JR	NZ,J$7824		; nope, must be a FDD
 J$7804:	POP	HL
 	POP	BC
 	LD	A,(IX+0)
 	AND	07H
-	LD	(IX+0),A
-	JP	J.792D
+	LD	(IX+0),A		; LUN = 0
+	JP	J.792D			; try next target
 
 J$7811:	POP	HL
 	POP	BC
-	JP	J.7963
+	JP	J.7963			; stop partition search
+
+; read capacity successfull
 
 J$7816:	POP	HL
 	PUSH	HL
-	LD	A,(HL)
+	LD	A,(HL)			; size b24-b31
 	INC	HL
-	OR	(HL)
+	OR	(HL)			; size b16-b23
 	LD	(HL),A
 	INC	HL
 	LD	A,(HL)
-	AND	0E0H
+	AND	0E0H			; size b15-b13
 	DEC	HL
-	OR	(HL)			; max block 0 ?
-	JR	NZ,J$785F		; nope,
+	OR	(HL)			; size > 8191 blocks (4 MB) ?
+	JR	NZ,J$785F		; yep, must be a harddisk
+
+; floppy
+
 J$7824:	POP	HL
 	POP	BC
 	INC	C
 	LD	A,C
 	CP	6			; maximium number of drives reached ?
-	JP	NC,J.7963		; yep,
+	JP	NC,J.7963		; yep, stop partition search
 	XOR	A
 	LD	(IX+1),A
 	LD	(IX+2),A
-	LD	(IX+3),A		; starting sector = 0
+	LD	(IX+3),A		; starting sector = 0 (floppy has no partitions)
 	LD	A,(IX+0)		; target SCSI ID
 	PUSH	HL
 	LD	HL,($SECBUF)
 	PUSH	HL
 	LD	HL,I$C000
 	LD	($SECBUF),HL
-	CALL	C.74A7
+	CALL	C.74A7			; try reading sector 0 FDD (try with different media types)
 	POP	HL
 	LD	($SECBUF),HL
 	POP	HL
@@ -1497,7 +1542,7 @@ J$7824:	POP	HL
 	LD	A,20H
 	ADD	A,(IX+0)
 	ADD	IX,DE
-	LD	(IX+0),A
+	LD	(IX+0),A		; next partition, on same target but LUN + 1
 	PUSH	BC
 	PUSH	HL
 	JP	J$77CF
@@ -1512,7 +1557,7 @@ J$785F:	POP	HL
 	CALL	C.7AA8			; read logical block
 	POP	IY
 	POP	BC
-	JP	C,J.7963		; error,
+	JP	C,J.7963		; error, stop partition search
 	LD	DE,01BEH
 	ADD	IY,DE
 	LD	A,(IY+64)
@@ -1521,23 +1566,29 @@ J$785F:	POP	HL
 	INC	HL
 	LD	A,(IY+65)
 	CP	0AAH			; MBR has valid bootsignature ?
-	JP	NZ,J.792D		; nope,
+	JP	NZ,J.792D		; nope, try next target
 	POP	HL
 	PUSH	HL
 	LD	DE,01B6H
-	ADD	HL,DE
+	ADD	HL,DE			; partition rights (BERT custom format)
 	CALL	C.7781			; get host SCSI ID
 	LD	E,A
 	LD	D,0
 	ADD	HL,DE
 	LD	B,4			; 4 partitions
-	LD	DE,8
+	LD	DE,8			; partition entry size
+
+; partition rights
+; 00 = ALL
+; 01 = READ
+; 02 = WRITE
+; 03 = NONE
 
 J$78A0:	LD	A,(HL)
 	CPL
-	AND	03H
-	JR	Z,J.7919		; nope, skip partition
-	OR	0FCH
+	AND	03H			; partition rights for this host = NONE ?
+	JR	Z,J.7919		; yep, skip partition
+	OR	0FCH			; b7-b2 = 1
 	LD	(IX+6),A
 	LD	A,(IY+4)
 	DEC	A			; FAT12 partition ?
@@ -1565,13 +1616,13 @@ J$78A0:	LD	A,(HL)
 	CP	6			; maximium number of drives reached ?
 	JR	NC,J$78FC		; yep,
 	LD	A,(IX+0)
-	LD	(IX+8),A
+	LD	(IX+0+8),A		; next partition same target SCSI ID
 	LD	A,(IX+1)
-	LD	(IX+9),A
+	LD	(IX+1+8),A
 	LD	A,(IX+2)
-	LD	(IX+10),A
+	LD	(IX+2+8),A
 	LD	A,(IX+3)
-	LD	(IX+11),A
+	LD	(IX+3+8),A		; next partition has the partition table in the same logical block number
 J$78FC:	LD	A,(IY+8)
 	ADD	A,(IX+1)
 	LD	(IX+1),A
@@ -1580,40 +1631,40 @@ J$78FC:	LD	A,(IY+8)
 	LD	(IX+2),A
 	LD	A,(IY+10)
 	ADC	A,(IX+3)
-	LD	(IX+3),A		; ? + starting sector of partition
-	ADD	IX,DE
+	LD	(IX+3),A		; starting sector of partition (sector of partition tabel + first sector of partition (rel))
+	ADD	IX,DE			; to next partition info
 J.7919:	ADD	IY,DE
-	ADD	IY,DE
+	ADD	IY,DE			; to next partition entry
 	LD	A,(IY+4)
-	CP	5			; extended partition ?
+	CP	5			; next partition is a extended partition ?
 	JR	Z,J$7949		; yep, handle
 	DEC	B
 	JP	NZ,J$78A0		; next partition entry
 	LD	A,C
 	CP	6			; maximium number of drives reached ?
-	JR	Z,J.7963		; yep,
+	JR	Z,J.7963		; yep, stop partition search
 J.792D:	LD	A,(IX+0)
 	INC	A
-	CP	6			; maximium number of drives reached ?
-	JR	NC,J.7963		; yep,
-	LD	(IX+0),A
+	CP	5+1			; maximium SCSI ID reached ?
+	JR	NC,J.7963		; yep, stop partition search
+	LD	(IX+0),A		; next target SCSI ID
 	XOR	A
 	LD	(IX+1),A
 	LD	(IX+2),A
-	LD	(IX+3),A		; starting sector = 0
-	JP	J.77C8
+	LD	(IX+3),A		; partition table in logical block number 0
+	JP	J.77C8			; start partition search
 
 J$7945:	CP	5-1			; extended partition ?
 	JR	NZ,J.7919		; nope, skip partition
 J$7949:	LD	A,C
 	CP	6			; maximium number of drives reached ?
-	JR	Z,J.7963		; yep,
+	JR	Z,J.7963		; yep, stop partition search
 	LD	A,(IY+8)
 	LD	(IX+1),A
 	LD	A,(IY+9)
 	LD	(IX+2),A
 	LD	A,(IY+10)
-	LD	(IX+3),A		; starting sector = first sector of the extended partition
+	LD	(IX+3),A		; partition table = first sector of the extended partition
 	JP	J.77C8
 
 J.7963:	POP	HL
@@ -1623,8 +1674,8 @@ J.7963:	POP	HL
 	LD	A,0FFH
 	LD	(IX+3),A
 	LD	(IX+2),A
-	LD	(IX+1),A
-	LD	(IX+0),A
+	LD	(IX+1),A		; invalid starting sector
+	LD	(IX+0),A		; partition disabled
 J$7977:	POP	AF			; use minimal drives (CTRL pressed at startup) ?
 	PUSH	AF
 	LD	A,C
@@ -1678,9 +1729,9 @@ J.79C4:	LD	DE,0
 	LD	A,C
 	OR	A
 	JR	Z,J$79EB
-J$79D6:	LD	A,D
-	CP	02H
-	JR	Z,J$79EE
+J$79D6:	LD	A,D			; SCSI status
+	CP	02H			; CHECK CONDITION ?
+	JR	Z,J$79EE		; yep, wait and try again
 	OR	A
 	JR	NZ,J$79FC
 	LD	A,(IX+1)
@@ -1734,7 +1785,7 @@ C.7A3C:	PUSH	DE
 
 C.7A45:	ADD	A,A
 	ADD	A,A
-	ADD	A,A
+	ADD	A,A			; *8
 	LD	E,A
 	LD	D,0
 	CALL	GETWRK
@@ -1804,17 +1855,17 @@ C.7A87:	PUSH	IX
 J$7A8D:	LD	(IX+6),0		; TEST UNIT READY
 	POP	AF
 	PUSH	AF
-	AND	0E0H
-	LD	(IX+7),A
+	AND	0E0H			; LUN
+	LD	(IX+7),A		; LUN
 	XOR	A
-	LD	(IX+8),A
-	LD	(IX+9),A
-	LD	(IX+10),A
-	LD	(IX+11),A
+	LD	(IX+8),A		; Reserved
+	LD	(IX+9),A		; Reserved
+	LD	(IX+10),A		; Reserved
+	LD	(IX+11),A		; CONTROL
 	JP	J.7BFE
 
 ;	  Subroutine read logical block
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN, CDE = Logical Block Address, B = number of blocks
 ;	     Outputs ________________________
 
 C.7AA8:	PUSH	IX
@@ -1823,17 +1874,17 @@ C.7AA8:	PUSH	IX
 	LD	(IX+6),08H		; READ
 	POP	AF
 	PUSH	AF
-	AND	0E0H
-	OR	C
-	LD	(IX+7),A
+	AND	0E0H			; LUN
+	OR	C			; MSB Logical Block Address
+	LD	(IX+7),A		; LUN, MSB Logical Block Address
 	LD	(IX+8),D
-	LD	(IX+9),E
-	LD	(IX+10),B
-	LD	(IX+11),00H
+	LD	(IX+9),E		; Logical Block Address
+	LD	(IX+10),B		; Transfer Length
+	LD	(IX+11),0		; CONTROL
 	JP	J.7BFE
 
 ;	  Subroutine mode select
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN, B = parameter list length
 ;	     Outputs ________________________
 
 C.7ACA:	PUSH	IX
@@ -1842,17 +1893,17 @@ C.7ACA:	PUSH	IX
 	LD	(IX+6),15H		; MODE SELECT
 	POP	AF
 	PUSH	AF
-	AND	0E0H
-	LD	(IX+7),A
+	AND	0E0H			; LUN
+	LD	(IX+7),A		; PF = 0, SP = 0
 	XOR	A
-	LD	(IX+8),A
-	LD	(IX+9),A
-	LD	(IX+10),B
-	LD	(IX+11),A
+	LD	(IX+8),A		; Reserved
+	LD	(IX+9),A		; Reserved
+	LD	(IX+10),B		; Parameter List Length
+	LD	(IX+11),A		; CONTROL
 	JP	J.7BFE
 
 ;	  Subroutine format unit
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN, B = FmtData (b4), CmpLst (b3), Defect list format (b2-b0), DE = interleave
 ;	     Outputs ________________________
 
 C.7AEB:	PUSH	IX
@@ -1861,18 +1912,18 @@ C.7AEB:	PUSH	IX
 	LD	(IX+6),04H		; FORMAT UNIT
 	POP	AF
 	PUSH	AF
-	AND	0E0H
+	AND	0E0H			; LUN
 	OR	B
-	LD	(IX+7),A
+	LD	(IX+7),A		; LUN
 	XOR	A
-	LD	(IX+8),A
+	LD	(IX+8),A		; Vendor-specific = 0
 	LD	(IX+9),D
-	LD	(IX+10),E
-	LD	(IX+11),A
+	LD	(IX+10),E		; Interleave
+	LD	(IX+11),A		; CONTROL
 	JP	J.7BFE
 
 ;	  Subroutine write logical block
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN, CDE = logical block address, B = number of blocks
 ;	     Outputs ________________________
 
 C.7B0D:	PUSH	IX
@@ -1881,19 +1932,19 @@ C.7B0D:	PUSH	IX
 	LD	(IX+6),0AH		; WRITE
 	POP	AF
 	PUSH	AF
-	AND	0E0H
+	AND	0E0H			; LUN
 	OR	C
-	LD	(IX+7),A
+	LD	(IX+7),A		; LUN + MSB Logical Block Addres
 	XOR	A
 	LD	(IX+8),D
-	LD	(IX+9),E
-	LD	(IX+10),B
-	LD	(IX+11),A
+	LD	(IX+9),E		; Logical Block Addres
+	LD	(IX+10),B		; Transfer Length
+	LD	(IX+11),A		; CONTROL
 	JP	J.7BFE
 
 ;	  Subroutine request sense
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Inputs  A = SCSI ID + LUN
+;	     Outputs Cx set if error, A = errorcode
 
 C.7B2F:	PUSH	IX
 	PUSH	AF
@@ -1901,59 +1952,59 @@ C.7B2F:	PUSH	IX
 	LD	(IX+6),03H		; REQUEST SENSE
 	POP	AF
 	PUSH	AF
-	AND	0E0H
-	LD	(IX+7),A
+	AND	0E0H			; LUN
+	LD	(IX+7),A		; LUN + Reserved
 	XOR	A
-	LD	(IX+8),A
-	LD	(IX+9),A
-	LD	B,12H
-	LD	(IX+10),B
-	LD	(IX+11),A
+	LD	(IX+8),A		; Reserved
+	LD	(IX+9),A		; Reserved
+	LD	B,18
+	LD	(IX+10),B		; Allocation Length
+	LD	(IX+11),A		; CONTROL
 	LD	HL,($SECBUF)
 	POP	AF
 	CALL	C.7A77			; convert SCSI ID to SCSI ID bit mask
 	CALL	C.7C08			; execute SCSI CDB
 	POP	IX
-	BIT	3,D
-	LD	A,18H
+	BIT	3,D			; SCSI status BSY ?
+	LD	A,24
 	SCF
-	RET	NZ
+	RET	NZ			; yep, quit with UNFORMATED DISK error
 	INC	D
-	DEC	D
-	LD	A,02H	; 2 
+	DEC	D			; SCSI status OK ?
+	LD	A,2
 	SCF
-	RET	NZ
+	RET	NZ			; nope, quit with NOT READY error
 	LD	IX,($SECBUF)
 	LD	A,(IX+0)
-J$7B6E:	AND	7FH
-	CP	70H	; "p"
-	LD	A,0CH	; 12 
+	AND	7FH			; error code
+	CP	70H			; current error ?
+	LD	A,12
 	SCF
-	RET	NZ
+	RET	NZ			; nope, quit with OTHER error
 	LD	A,(IX+2)
-	OR	A
-	RET	Z
-	CP	07H	; 7 
-	CCF
+	OR	A			; sense key = NO SENSE ?
+	RET	Z			; yep, quit without error
+	CP	7
+	CCF				; sense key 1-6 ?
 	LD	E,A
-	LD	A,00H
-	RET	C
+	LD	A,0
+	RET	C			; nope, quit WRITE PROTECT error
 	LD	HL,I$7B89
 	ADD	HL,DE
 	LD	A,(HL)
 	SCF
 	RET
 
-I$7B89:	DEFB	018H
-	DEFB	004H
-	DEFB	002H
-	DEFB	004H
-	DEFB	008H
-	DEFB	00CH
-	DEFB	018H
+I$7B89:	DEFB	24			; 0 NO SENSE, UNFORMATED DISK error
+	DEFB	4			; 1 SOFT ERROR, DATA error
+	DEFB	2			; 2 NOT READY, NOT READY error
+	DEFB	4			; 3 MEDIUM ERROR, DATA error
+	DEFB	8			; 4 HARDWARE ERROR, RECORD NOT FOUND error
+	DEFB	12			; 5 ILLEGAL REQUEST, OTHER error
+	DEFB	24			; 6 UNIT ATTENTION, UNFORMATED DISK error
 
 ;	  Subroutine inquiry
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN
 ;	     Outputs ________________________
 
 J$7B90:	PUSH	IX
@@ -1962,18 +2013,18 @@ J$7B90:	PUSH	IX
 	LD	(IX+6),12H		; INQUIRY
 	POP	AF
 	PUSH	AF
-	AND	0E0H
-	LD	(IX+7),A
+	AND	0E0H			; LUN
+	LD	(IX+7),A		; LUN, Reserved
 	XOR	A
-	LD	(IX+8),A
-	LD	(IX+9),A
-	LD	B,24H
-	LD	(IX+10),B
-	LD	(IX+11),A
+	LD	(IX+8),A		; Page Code = 0
+	LD	(IX+9),A		; Reserved
+	LD	B,36
+	LD	(IX+10),B		; Allocation Length
+	LD	(IX+11),A		; CONTROL
 	JR	J.7BFE
 
 ;	  Subroutine mode sense
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN, B = PC + Page code
 ;	     Outputs ________________________
 
 C.7BB2:	PUSH	IX
@@ -1982,18 +2033,18 @@ C.7BB2:	PUSH	IX
 	LD	(IX+6),1AH		; MODE SENSE
 	POP	AF
 	PUSH	AF
-	AND	0E0H
-	LD	(IX+7),A
+	AND	0E0H			; LUN
+	LD	(IX+7),A		; LUN, Reserved, DBD = 0
 	XOR	A
-	LD	(IX+8),B
-	LD	(IX+9),A
-	LD	B,80H
-	LD	(IX+10),B
-	LD	(IX+11),A
+	LD	(IX+8),B		; PC, Page code
+	LD	(IX+9),A		; Reserved
+	LD	B,128
+	LD	(IX+10),B		; Allocation length = 128
+	LD	(IX+11),A		; Control
 	JR	J.7BFE
 
 ;	  Subroutine read capacity
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN
 ;	     Outputs ________________________
 
 C.7BD4:	PUSH	IX
@@ -2002,17 +2053,17 @@ C.7BD4:	PUSH	IX
 	LD	(IX+6),25H		; READ CAPACITY
 	POP	AF
 	PUSH	AF
-	AND	0E0H
-	LD	(IX+7),A
+	AND	0E0H			; LUN
+	LD	(IX+7),A		; LUN, RelAdr = 0
 	XOR	A
 	LD	(IX+8),A
 	LD	(IX+9),A
 	LD	(IX+10),A
-	LD	(IX+11),A
-	LD	(IX+12),A
-	LD	(IX+13),A
-	LD	(IX+14),A
-	LD	(IX+15),A
+	LD	(IX+11),A		; Logical block address = 0
+	LD	(IX+12),A		; Reserved
+	LD	(IX+13),A		; Reserved
+	LD	(IX+14),A		; Reserved, PMI = 0
+	LD	(IX+15),A		; Control
 J.7BFE:	POP	AF			; target SCSI ID
 	CALL	C.7A77			; convert SCSI ID to SCSI ID bit mask
 	CALL	C.7C08			; execute SCSI CDB
@@ -2021,16 +2072,16 @@ J.7BFE:	POP	AF			; target SCSI ID
 
 ;	  Subroutine execute SCSI CDB
 ;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Outputs D = SCSI status code, E = sense key code
 
 C.7C08:	CALL	C$7C3D
-	RET	C
-	LD	A,E
-	OR	A
-	JR	Z,J$7C38
-	CP	04H
-	JR	Z,J$7C18
-	LD	D,12H
+	RET	C			; error, quit
+	LD	A,E			; sense key code
+	OR	A			; NO SENSE ?
+	JR	Z,J$7C38		; yep,
+	CP	04H			; HARDWARE ERROR ?
+	JR	Z,J$7C18		; yep,
+	LD	D,12H			; SCSI status 12H
 	SCF
 	RET
 
@@ -2052,8 +2103,8 @@ J$7C2F:	IN	A,(0D4H)		; read SCSI bus status
 	JP	J.7CE1			; terminate actions
 
 J$7C38:	LD	A,D
-	OR	A
-	RET	Z
+	OR	A			; SCSI status OK ?
+	RET	Z			; yep, quit
 	SCF
 	RET
 
@@ -2138,9 +2189,11 @@ J$7CB1:	IN	A,(0D4H)		; read SCSI bus status
 	OUT	(0D1H),A		; deassert
 	OUT	(0D2H),A		; stop arbitrate
 	OUT	(0D3H),A		; data out
-	LD	DE,8
+	LD	DE,8			;
 	SCF
 	JR	J.7CDF
+
+; handle non BSY
 
 J$7CCB:	XOR	A
 	OUT	(0D1H),A		; deassert
@@ -2148,7 +2201,7 @@ J$7CCB:	XOR	A
 	OUT	(0D2H),A		; stop arbitrate
 	OUT	(0D3H),A		; data out
 	LD	(IX+4),L
-	LD	(IX+5),H
+	LD	(IX+5),H		; save pointer
 J$7CDA:	XOR	A
 	CP	D
 	JR	Z,J.7CDF
@@ -2173,22 +2226,28 @@ J.7CE1:	LD	A,00H
 	ADD	HL,DE
 	EX	DE,HL
 	POP	HL
+
+; SCSI bus status main loop
+
 J.7CF6:	XOR	A
 	OUT	(0D2H),A		; stop dma
 	OUT	(0D1H),A		; deassert
 J$7CFB:	IN	A,(0D4H)		; read SCSI bus status
 	RLCA				; RST ?
-	JR	C,J$7CDA		; yep,
+	JR	C,J$7CDA		; yep, quit
 	RLCA				; BSY ?
 	JR	NC,J$7CCB		; nope,
 	RLCA				; REQ ?
-	JR	NC,J$7CFB		; nope,
+	JR	NC,J$7CFB		; nope, get SCSI bus status again
 	RLCA				; MSG ?
 	JP	C,J$7D9A		; yep,
 	RLCA				; C ?
 	JR	C,J$7D5C		; yep,
 	RLCA				; I ?
 	JR	C,J$7D34		; yep,
+
+; handle DATA OUTPUT
+
 	OUT	(0D3H),A		; target command
 	LD	A,82H
 	OUT	(0D2H),A		; enable block mode dma, dma
@@ -2205,9 +2264,11 @@ J.7D1C:	IN	A,(0D5H)
 
 J$7D2A:	IN	A,(0D4H)		; read SCSI bus status
 	AND	0DEH			; ignore REQ and DBP
-	CP	40H
-	JR	Z,J.7D1C
-	JR	J.7CF6
+	CP	40H			; BSY and output ?
+	JR	Z,J.7D1C		; yep, continue pseudo DMA
+	JR	J.7CF6			; scsi bus status main loop
+
+; handle DATA INPUT
 
 J$7D34:	LD	C,0D6H			; data input register
 	OUT	(0D3H),A		; status
@@ -2226,11 +2287,13 @@ J.7D41:	IN	A,(0D5H)
 	JR	J.7D41
 
 J$7D50:	IN	A,(0D4H)		; read SCSI bus status
-	AND	0DEH
-	CP	44H
-	JR	Z,J.7D41
+	AND	0DEH			; ignore REQ and DBP
+	CP	44H			; BSY and input ?
+	JR	Z,J.7D41		; yep, continue pseudo DMA
 	LD	C,0D0H			; SCSI data port
-	JR	J.7CF6
+	JR	J.7CF6			; scsi bus status main loop
+
+; handle C
 
 J$7D5C:	RLCA				; I ?
 	JR	C,J$7D88		; yep,
@@ -2240,8 +2303,8 @@ J$7D5C:	RLCA				; I ?
 	OUT	(0D1H),A		; assert databus
 J.7D66:	IN	A,(0D4H)		; read SCSI bus status
 	AND	0FEH			; ignore DBP
-	CP	68H
-	JR	NZ,J$7D80
+	CP	68H			; BSY and REQ and command ?
+	JR	NZ,J$7D80		; nope,
 	OUTI
 	LD	A,11H
 	OUT	(0D1H),A		; assert ACK and databus
@@ -2252,25 +2315,27 @@ J$7D74:	IN	A,(0D4H)		; read SCSI bus status
 	OUT	(0D1H),A		; assert databus
 	JR	J.7D66
 
-J$7D80:	CP	48H
-	JR	Z,J.7D66
+J$7D80:	CP	48H			; BSY no REQ and command ?
+	JR	Z,J.7D66		; continue
 	EX	DE,HL
-J.7D85:	JP	J.7CF6
+J.7D85:	JP	J.7CF6			; scsi bus status main loop
 
 J$7D88:	OUT	(0D3H),A		; target command
 	LD	A,82H
 	OUT	(0D2H),A		; enable block mode dma, dma
 	OUT	(0D7H),A		; Start DMA Initiator Receive
 	IN	A,(0D6H)		; read data from scsi bus
-	LD	D,A
+	LD	D,A			; SCSI status code
 	IN	A,(C)
 	LD	(IX+2),D
-	JR	J.7D85
+	JR	J.7D85			; scsi bus status main loop
 
-J$7D9A:	RLCA
-	JR	NC,J$7DC4
-	RLCA
-	JR	C,J$7DB1
+; handle MSG
+
+J$7D9A:	RLCA				; data ?
+	JR	NC,J$7DC4		; yep,
+	RLCA				; input or output ?
+	JR	C,J$7DB1		; input,
 	OUT	(0D3H),A		; target command
 	LD	A,01H
 	OUT	(0D1H),A		; assert databus
@@ -2279,23 +2344,23 @@ J$7D9A:	RLCA
 	OUT	(0D5H),A		; Start DMA Send
 	XOR	A
 	OUT	(C),A
-	JR	J.7D85
+	JR	J.7D85			; scsi bus status main loop
 
 J$7DB1:	OUT	(0D3H),A		; target command
 	LD	A,82H
 	OUT	(0D2H),A		; enable block mode dma, dma
 	OUT	(0D7H),A		; Start DMA Initiator Receive
 	IN	A,(0D6H)		; read data from scsi bus
-	LD	E,A
+	LD	E,A			; command status message
 	IN	A,(C)
 	LD	(IX+3),E
-	JP	J.7CF6
+	JP	J.7CF6			; scsi bus status main loop
 
 J$7DC4:	LD	A,50H
 	OUT	(0D1H),A		; assert testmode and ACK 
 	XOR	A
 	OUT	(0D1H),A		; deassert
-	JR	J.7D85
+	JR	J.7D85			; scsi bus status main loop
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
