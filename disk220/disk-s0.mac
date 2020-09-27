@@ -421,7 +421,7 @@ I4049:  PUSH    AF
         RET     
 
 ;         Subroutine inter DOS2 ROM bank call
-;            Inputs  A = DOS2 ROM bank, AF' = 
+;            Inputs  A = DOS2 ROM bank, IX = routine
 ;            Outputs ________________________
 
 J405B:  CALL    C4092                  ; select DOS2 ROM bank
@@ -458,7 +458,7 @@ C403C:  CALL    C40E4                   ; MSX-JE call statement handler
 
 I4043:  LD      IX,I40B4
         CALL    C4051                   ; inter DOS2 ROM bank 0 call
-        JP      J$F2D5
+        JP      J.F2D5
 
 ;         Subroutine H.TIMI handler
 ;            Inputs  ________________________
@@ -481,9 +481,10 @@ C4051:  EX      AF,AF'
         RET     
 
 ;         Subroutine inter DOS2 ROM bank call
-;            Inputs  AF' = 
+;            Inputs  A = DOS2 ROM bank, IX = routine
 ;            Outputs ________________________
 
+J405B:
 J4060:  CALL    C406F                   ; select DOS2 ROM bank and execute routine
         EX      AF,AF'
         XOR     A
@@ -577,14 +578,14 @@ C4092:  BNKCHG
 ;            Outputs ________________________
 
 I40B4:  CALL    C40E7                   ; H.EXTBIO MSX-JE
-        JP      J410C                   ; H.EXTBIO DOS2
+        JP      C410C                   ; H.EXTBIO DOS2
 
 ;         Subroutine H.TIMI handler
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
 I40BA:  CALL    C40EA                   ; H.TIMI MSX-JE
-        JP      J4CF3                   ; H.TIMI DOS2
+        JP      C4CF3                   ; H.TIMI DOS2
 
 ;         Subroutine call 4100 in bank 3 (MSX-JE TOTEXT handler)
 ;            Inputs  ________________________
@@ -716,8 +717,19 @@ C410F:  POP     IX
         JP      J405B                   ; inter DOS2 ROM bank call
 
 I411E:  DEFB    "MSX-DOS kernel version 2.20",0
-I413A:  DEFB    "Disk BASIC version 2.01",0
+I413A:
+	IF DOS201 EQ 1
+
+	DEFB    "Disk BASIC version 2.01",0
         DEFB    "Copyright (C) 1989 ASCII Corporation",0
+	
+	ELSE
+
+	DEFB    "Disk BASIC version 2.00",0
+        DEFB    "Copyright (C) 1988 ASCII Corporation",0
+	
+	ENDIF
+
 
 J4177:  LD      HL,C0086
         JR      J4185
@@ -3004,10 +3016,22 @@ C5A82:  EI
         LD      (PTRFIL),HL
         INC     HL
         INC     HL
+
+	IF DOS201 EQ 1
+
         XOR     A
         LD      (HL),A
         INC     HL
         LD      (HL),A
+
+	ELSE
+	
+	INC	HL
+	XOR	A
+	LD	(HL),A
+
+	ENDIF
+
         INC     HL
         LD      (HL),D
         INC     HL
@@ -4389,8 +4413,14 @@ C6361:  LD      A,1
         JP      Z,J6645
         INC     HL
         LD      B,(HL)
+
+	IF DOS201 EQ 1
+
         INC     HL
         LD      C,(HL)
+
+	ENDIF
+
         LD      A,01H   ; 1 
         LD      DE,D.0000
         LD      HL,D.0000
@@ -4400,18 +4430,33 @@ C6361:  LD      A,1
         POP     BC
         POP     AF
         DEC     A
+
+	IF DOS201 EQ 1
+
         JR      NZ,J6399
         PUSH    BC
         CALL    C63E4
         POP     BC
         JR      J63B7
 
+	ELSE
+
+	JR	Z,J63B7
+
+	ENDIF
+
 J6399:  PUSH    HL
         PUSH    DE
         LD      A,02H   ; 2 
         LD      DE,D.0000
         LD      HL,D.0000
+
+	IF DOS201 EQ 1
+
         LD      C,4AH   ; "J"
+
+	ENDIF
+
         PUSH    BC
         CALL    C655D
         POP     BC
@@ -4446,6 +4491,9 @@ C63BA:  PUSH    BC
         CALL    C664F
         CALL    C.3042
         JP      J$269A
+
+
+	IF DOS201 EQ 1
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
@@ -4484,6 +4532,8 @@ J6403:  OR      A
         RET     NZ
         INC     D
         RET     
+
+	ENDIF
 
 C640D:  CALL    C6888
         LD      IX,M521F

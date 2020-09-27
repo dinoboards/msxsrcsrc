@@ -13,9 +13,8 @@
 	.Z80
 SNSMAT	EQU	0141H
 
+DSKBAS	EQU	4022H			; start disk basic
 C.4D7D	EQU	4D7DH			; print string
-C.4DBB	EQU	4DBBH			; get SLTWRK pointer
-C$4E05	EQU	4E05H			; GETSLT
 C.5604	EQU	5604H			; allocate memory
 J.63AB	EQU	63ABH			; finish seek
 
@@ -26,6 +25,7 @@ TARGET	EQU	0F33FH
 $SECBUF	EQU	0F34DH
 $DPBLI	EQU	0F355H
 BDOS	EQU	0F37DH
+KBUF	EQU	0F41Fh
 AUTLIN	EQU	0F6ABH
 DRVINF	EQU	0FB21H
 PROCNM	EQU	0FD89H
@@ -50,7 +50,7 @@ DEVICE	EQU	0FD99H
 ; +4,2	pointer
 ; +6,10	SCSI CDB (supports only 6 and 10 bytes CDBs)
 
-MYSIZ	EQU	0			; does not use MYSIZ, because init routine is modified
+MYSIZE	EQU	0			; does not use MYSIZ, because init routine is modified
 SECLEN	EQU	512
 
 
@@ -409,6 +409,7 @@ J.7091:	LD	A,12
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+DSKCHG:
 J.7095:	EI
 	CP	5+1			; valid driveid ?
 	JR	NC,J.7091		; nope, quit with OTHER ERROR
@@ -1094,31 +1095,11 @@ LC09F:	DEFB	0
 
 L_BOOT	EQU	$-LC01E
 
+LC0C4	EQU	LC09F+37
+
 	.DEPHASE
 
-;	  Subroutine LOC patch
-;	     Inputs  ________________________
-;	     Outputs ________________________
-
-; patch 0638DH
-;
-;       JR	NZ,L6399		; nop, LOF
-;       PUSH	HL
-;	PUSH	DE
-;	LD	A,2
-;	LD	DE,0
-;	LD	HL,0
-
-;	JP	Z,J.75FB
-;	PUSH	HL
-;	PUSH	DE
-;	LD	A,2
-;	LD	DE,0
-;	LD	H,D
-;	LD	L,E
-
-
-?.75FB:	LD	A,(RECSIZ+0)
+J.75FB:	LD	A,(RECSIZ+0)
 	OR	A
 	JP	Z,J.63AB
 	LD	BC,32*256+0
@@ -1141,41 +1122,25 @@ J$761A:	DJNZ	J$7606
 	RL	D
 	JP	J.63AB
 
-; patched at 048F9H
-
-;       LD	HL,DEVICE
-;       INC	(HL)			; increase number of diskdrivers sofar
-;       RET
-
-;	JP	J.7625
-;       INC	(HL)			; increase number of diskdrivers sofar
-;       RET
-
-?.7625:	LD	HL,DEVICE
-	INC	(HL)
+J.7625:	LD	HL,DEVICE
+	INC	(HL)			; increase number of disk interfaces
 	JR	J.762E
 
-; patched at 04903H
+J.762B:	JR	NZ,J.762E		; no,
+	INC	(HL)			; increase number of disk interfaces
 
-;       RET	NZ			; no, quit
-;       INC	(HL)			; Set 1 diskROM
-;       RET
-
-;	JP	J.762B
-
-?.762B:	JR	NZ,J.762E
-	INC	(HL)
 J.762E:	LD	A,(DEVICE)
-	OR	A
-	RET	M
-	RET	Z
+	OR	A			; disksystem disabled ?
+	RET	M			; yep, quit
+	RET	Z			; 0 disk interfaces, quit
+
 J$7634:	CALL	C$7DEA			; test hdc
 	RET	C			; error, quit
 	LD	HL,16			; driver workarea controller
 	CALL	C.5604			; allocate memory
 	RET	C
 	EX	DE,HL
-	CALL	C.4DBB			; get SLTWRK pointer
+	CALL	GETWRK			; get SLTWRK pointer
 	LD	(HL),E
 	INC	HL
 	LD	(HL),D			; save driver workarea
@@ -1220,7 +1185,7 @@ J$7682:	EXX
 	CALL	C.5604			; allocate memory
 	RET	C
 	EX	DE,HL
-	CALL	C.4DBB			; get SLTWRK pointer
+	CALL	GETWRK			; get SLTWRK pointer
 	LD	(HL),E
 	INC	HL
 	LD	(HL),D			; save driver workarea
@@ -1239,7 +1204,7 @@ J$7682:	EXX
 J$76A4:	PUSH	BC
 	LD	(DE),A			; number of drives
 	INC	DE
-	CALL	C$4E05			; GETSLT
+	CALL	GETSLT			; GETSLT
 	LD	(DE),A			; slotid disk interface
 	POP	BC
 	LD	B,0
@@ -2446,5 +2411,59 @@ D$7FF1:	DEFB	001H			; target id 0
 	DEFB	0D0H			; I/O port
 
 	DEFS	08000H-$,0
+
+
+;	  Subroutine intercept after INIENV
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+; patched at 048F9H
+
+;       LD	HL,DEVICE
+;       INC	(HL)			; increase number of diskdrivers sofar
+;       RET
+
+	ORG	048F9H
+
+	JP	J.7625
+       	INC	(HL)			; increase number of diskdrivers sofar
+       	RET
+
+
+; patched at 04903H
+
+;       RET	NZ			; no, quit
+;       INC	(HL)			; Set 1 diskROM
+;       RET
+
+	ORG	04903H
+
+	JP	J.762B
+
+
+;	  Subroutine LOC patch
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+; patch 0638DH
+;
+;       JR	NZ,L6399		; nop, LOF
+;       PUSH	HL
+;	PUSH	DE
+;	LD	A,2
+;	LD	DE,0
+;	LD	HL,0
+
+	ORG	0638DH
+
+	JP	Z,J.75FB
+	PUSH	HL
+	PUSH	DE
+	LD	A,2
+	LD	DE,0
+	LD	H,D
+	LD	L,E
+
+
 
 	END

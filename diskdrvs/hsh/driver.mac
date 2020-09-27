@@ -2687,7 +2687,7 @@ J$51F1:	IN	A,(34H)
 	JP	J.5651			; TermAct
 
 ;	  Subroutine RdLogBlk
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN, CDE = logical block address, B = number of blocks
 ;	     Outputs ________________________
 
 C.5209:	PUSH	AF
@@ -2699,14 +2699,14 @@ C.5209:	PUSH	AF
 	PUSH	AF
 	AND	0E0H			; LUN
 	PUSH	AF
-	OR	C
-	OUT	(35H),A
+	OR	C			; MSB Logical Block Address
+	OUT	(35H),A			; LUN, MSB Logical Block Address
 	LD	C,35H
 I$521C:	OUT	(C),D
-	OUT	(C),E
+	OUT	(C),E			; Logical Block Address
 	XOR	A
-	OUT	(C),B
-	OUT	(C),A
+	OUT	(C),B			; Transfer Length
+	OUT	(C),A			; CONTROL
 	LD	A,15
 	OUT	(34H),A			; select register 15
 	POP	AF
@@ -2774,7 +2774,7 @@ J$528C:	CALL	C.593C			; restore CPU mode
 	JP	J.5651			; TermAct
 
 ;	  Subroutine ModeSel
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN, B = parameter list length
 ;	     Outputs ________________________
 
 J$5292:	EI
@@ -2787,13 +2787,13 @@ J$5292:	EI
 	PUSH	AF
 	AND	0E0H			; LUN
 	PUSH	AF
-	OUT	(35H),A
+	OUT	(35H),A			; PF = 0, SP = 0
 	LD	C,35H
 	XOR	A
-	OUT	(35H),A
-	OUT	(35H),A
-	OUT	(C),B
-	OUT	(35H),A
+	OUT	(35H),A			; Reserved
+	OUT	(35H),A			; Reserved
+	OUT	(C),B			; Parameter List Length
+	OUT	(35H),A			; CONTROL
 	LD	A,15
 	OUT	(34H),A			; select register 15
 	POP	AF
@@ -2810,7 +2810,7 @@ J$5292:	EI
 	JP	J.5580
 
 ;	  Subroutine FmtUnit
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN, B = FmtData (b4), CmpLst (b3), Defect list format (b2-b0), DE = interleave
 ;	     Outputs ________________________
 
 J$52C6:	EI
@@ -2824,13 +2824,13 @@ J$52C6:	EI
 	AND	0E0H			; LUN
 	PUSH	AF
 	OR	B
-	OUT	(35H),A
+	OUT	(35H),A			; LUN
 	LD	C,35H
 	XOR	A
-	OUT	(35H),A
+	OUT	(35H),A			; Vendor-specific = 0
 	OUT	(C),D
-	OUT	(C),E
-	OUT	(35H),A
+	OUT	(C),E			; Interleave
+	OUT	(35H),A			; CONTROL
 	LD	A,15
 	OUT	(34H),A			; select register 15
 	POP	AF
@@ -2904,7 +2904,7 @@ C.530C:	PUSH	AF
 	JP	J.5580
 
 ;	  Subroutine WrLogBlk
-;	     Inputs  ________________________
+;	     Inputs  A = SCSI ID + LUN, CDE = logical block address, B = number of blocks
 ;	     Outputs ________________________
 
 C.534B:	PUSH	AF
@@ -2917,13 +2917,13 @@ C.534B:	PUSH	AF
 	AND	0E0H			; LUN
 	PUSH	AF
 	OR	C
-	OUT	(35H),A
+	OUT	(35H),A			; LUN + MSB Logical Block Addres
 	LD	C,35H
 	OUT	(C),D
-	OUT	(C),E
+	OUT	(C),E			; Logical Block Addres
 	XOR	A
-	OUT	(C),B
-	OUT	(35H),A
+	OUT	(C),B			; Transfer Length
+	OUT	(35H),A			; CONTROL
 	LD	A,15
 	OUT	(34H),A			; select register 15
 	POP	AF
@@ -3070,25 +3070,25 @@ C.5443:	CALL	C.5486			; request sense
 	LD	A,2
 	SCF
 	RET	Z			; yep, return NOT READY ERROR
-	BIT	3,D
-	LD	A,18H
+	BIT	3,D			; SCSI status BSY ?
+	LD	A,24
 	SCF
-	RET	NZ
+	RET	NZ			; yep, quit with UNFORMATED DISK error
 	INC	D
-	DEC	D			; error ?
+	DEC	D			; SCSI status OK ?
 	LD	A,12
 	SCF
-	RET	NZ			; yep, quit
+	RET	NZ			; nope, quit with OTHER error
 	LD	A,(IX+0)
-	AND	7FH
-	CP	70H
+	AND	7FH			; error code
+	CP	70H			; current error ?
 	LD	A,12
 	SCF
-	RET	NZ
-	LD	A,(IX+12)
+	RET	NZ			; nope, quit with OTHER error
+	LD	A,(IX+12)		; additional sense code (ASC)
 	CP	2BH
 	LD	E,A
-	JR	NC,J$5482
+	JR	NC,J$5482		; return with OTHER error
 	LD	HL,I$625A
 	ADD	HL,DE
 	LD	A,(HL)
@@ -3114,14 +3114,14 @@ C.5486:	PUSH	AF
 	PUSH	AF
 	AND	0E0H			; LUN
 	PUSH	AF
-	OUT	(35H),A
+	OUT	(35H),A			; LUN + Reserved
 	LD	C,35H
 	XOR	A
-	OUT	(35H),A
-	OUT	(35H),A
-	LD	B,12H
-	OUT	(C),B
-	OUT	(35H),A
+	OUT	(35H),A			; Reserved
+	OUT	(35H),A			; Reserved
+	LD	B,18
+	OUT	(C),B			; Allocation Length
+	OUT	(35H),A			; CONTROL
 	LD	A,15
 	OUT	(34H),A			; select register 15
 	POP	AF
@@ -5677,9 +5677,9 @@ J$7E20:	LD	A,(NEWKEY+8)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$7E4A:	LD	B,00H
+C$7E4A:	LD	B,0
 	LD	HL,I$7EA7
-	LD	A,16H
+	LD	A,24
 	LD	(CSRX),A
 	JP	C.7E64
 
@@ -5687,9 +5687,9 @@ C$7E4A:	LD	B,00H
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$7E57:	LD	B,01H	; 1 
+C$7E57:	LD	B,1
 	LD	HL,I$7EAF
-	LD	A,16H
+	LD	A,24
 	LD	(CSRX),A
 	JP	C.7E64
 
