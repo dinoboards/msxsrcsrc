@@ -24,6 +24,7 @@ LPTSTT  EQU     000A8H
 KILBUF  EQU     00156H
 
 J4022   EQU     4022H
+J47D6   EQU     47D6H
 
 DBUF    EQU     0080H
 
@@ -193,6 +194,7 @@ I$F2C7  EQU     0F2C7H  ; ----I
 I$F2CB  EQU     0F2CBH  ; ----I
 D$F2CD  EQU     0F2CDH  ; ---L-
 D.F2CF  EQU     0F2CFH  ; ---L-
+LF2D5	EQU	0F2D5H			; saved EXTBIO hook
 D$F2DA  EQU     0F2DAH  ; ---L-
 D.F2EC  EQU     0F2ECH  ; --SL-
 D$F300  EQU     0F300H  ; ---L-
@@ -289,7 +291,145 @@ DFFFF   EQU     0FFFFH
 
         .Z80
         ASEG
-        ORG     04100H
+        ORG     04000H
+
+        DEFB	"AB"
+
+        IF MSXJE EQ 0
+
+        DEFW    C403C                   ; EXTENSION ROM INIT handler
+        DEFW    0                       ; EXTENSION ROM CALL statement handler
+
+        ELSE
+
+        DEFW    C406A                   ; EXTENSION ROM INIT handler
+        DEFW    0                       ; EXTENSION ROM CALL statement handler
+
+        ENDIF
+
+        DEFW	0
+        DEFW	0
+        DEFW	0
+        DEFW	0
+        DEFW	0
+
+        DEFS    0403CH-$,0
+
+
+        IF      MSXJE EQ 0
+
+;         Subroutine EXTENSION ROM INIT handler
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C403C:  XOR     A
+        CALL    C4092                  ; select DOS2 ROM bank 0
+
+
+        DEFS    0405BH-$,0
+
+;         Subroutine inter DOS2 ROM bank call
+;            Inputs  A = DOS2 ROM bank, IX = routine
+;            Outputs ________________________
+
+J405B:  CALL    C4092                  ; select DOS2 ROM bank
+        EX      AF,AF'
+        CALL    C4069                  ; call routine (in IX)
+        EX      AF,AF'
+        XOR     A
+        CALL    C4092                  ; select DOS2 ROM bank 0
+        EX      AF,AF'
+        RET     
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C4069:  JP      (IX)
+
+        ELSE
+
+        DEFS    04051H-$,0
+
+;         Subroutine inter DOS2 ROM bank 0 call
+;            Inputs  AF' = 
+;            Outputs ________________________
+
+C4051:  EX      AF,AF'
+        LD      A,(D40FF)
+        PUSH    AF                      ; save current DOS2 ROM bank
+        CALL    C406E                   ; select DOS2 ROM bank 0 and execute routine
+        EX      AF,AF'
+        POP     AF
+        CALL    C4092                   ; restore DOS2 ROM bank
+        EX      AF,AF'
+        RET     
+
+;         Subroutine inter DOS2 ROM bank call
+;            Inputs  A = DOS2 ROM bank, IX = routine
+;            Outputs ________________________
+
+J405B:
+J4060:  CALL    C406F                   ; select DOS2 ROM bank and execute routine
+        EX      AF,AF'
+        XOR     A
+        CALL    C4092                   ; select DOS2 ROM bank 0
+        EX      AF,AF'
+        RET     
+
+;         Subroutine EXTENSION ROM INIT handler
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C406A:  LD      IX,J47D6                ; DOS2 kernel INIT routine
+
+;         Subroutine select DOS2 ROM bank 0 and execute routine
+;            Inputs  AF' = 
+;            Outputs ________________________
+
+C406E:  XOR     A
+
+;         Subroutine select DOS2 ROM bank and execute routine
+;            Inputs  AF' = , A = bank
+;            Outputs ________________________
+
+C406F:  CALL    C4092                   ; select DOS2 ROM bank
+        EX      AF,AF'
+        JP      (IX)
+
+        ENDIF
+
+        DEFS    04092H-$,0
+
+;         Subroutine Select DOS2 ROM bank
+;            Inputs  ________________________
+;            Outputs ________________________
+
+        IF BNKTRL EQ 1
+
+C4092:  PUSH	HL
+	PUSH	AF
+	ADD	A,LOW L40A0
+	LD	L,A
+	LD	H,HIGH L40A0
+	LD	A,(HL)
+        BNKCHG
+  	POP	AF
+	POP	HL
+	RET
+
+L40A0:  MBNKTL
+        ELSE
+
+C4092:  BNKCHG
+        RET     
+
+        ENDIF
+
+
+        DEFS    040FFH-$,0
+
+D40FF:  DEFB    2
 
         .PHASE  0
 
