@@ -4392,15 +4392,21 @@ T5807:	rst	030H
         ret
 
 ;	Subroutine	Initialize disksystem, not the first diskrom
+;           Remark      patched for MA-20
 
 A580C:	push	hl			; fake start of workarea
-        jr	A57F3			; hook H.RUNC and register fake driver
+        jr	A57F3			; hook H.RUNC (to take control of the disksystem) and register fake driver
 
         DEFS	05825H-$,0
 
+;	Subroutine	Initialize disksystem, continue
+;           Remark      patched for MA-20
+
 A5825:	jp	A588F
 
-        DEFS	0588FH-$,0
+        DEFS	05897H-$-8,0
+
+;	Subroutine	count MA-20 'diskinterface' as real diskinterface (to take control of the disksystem)
 
 A588F:	call	INIENV			; initialize driver workarea
         ld	hl,DEVICE
@@ -4412,6 +4418,7 @@ A588F:	call	INIENV			; initialize driver workarea
 ;	Outputs		-
 ;	Remark		Control is passed to this routine when the BASIC interpreter is initialized
 ;			There are two ways: a BASIC program in ROM is started OR at the start of MSX-BASIC
+;                       Patched for MA-20 (2x)
 
 A5897:	ld	hl,H.RUNC
         ld	b,5
@@ -4423,7 +4430,7 @@ A589C:	ld	(hl),0C9H
         xor	a
         cp	(hl)
         ld	(hl),a			; clear diskinterface count
-        call	A7421			; patch routine
+        call	A7421			; patched 622D routine for MA-20 (quit if no diskinterface found)
         ld	(YF348),a		; disksystem diskrom slotid
         ld	hl,A7397
         ld	de,XF1C9
@@ -4547,7 +4554,7 @@ A5967:	inc	hl
         call	A5F95
         ld	(RAMAD3),a		; slotid of current page 3
         ld	c,000H
-        call	A750F			; search ram in page 0 (patched)
+        call	A750F			; search ram in page 0 (patched for MA-20, not sure why this is needed)
         jr	c,A59C1
         ld	(RAMAD0),a		; found, set ram slotid page 0
 A59C1:	ld	c,040H
@@ -4601,7 +4608,7 @@ A5A11:	XOR	A
         JP	C,A5B3A			; error, start diskbasic
         LD	(YF346),A		; flag bootable disk
         LD	A,(RAMAD0)
-        LD	H,00H
+        LD	H,HIGH 00000H
         CALL	C64C2			; calculate masks
         SCF
         CALL	P,C64A2			; primairy slot, change it
@@ -4707,8 +4714,9 @@ A5ADB:	LD	HL,YF323		; address diskerror handler pointer
 ;	Subroutine	read bootsector of drive 0 and validate
 ;	Inputs		________________________
 ;	Outputs		________________________
+;       Remark          Patched for MA-20 (not sure why this is needed)
 
-A5AE7:	CALL	A7586
+A5AE7:	CALL	A7586                   ; get current mediadescriptor of drive A:
         LD	C,A			; default mediadescriptor
         LD	B,1			; 1 sector
         LD	HL,(YF351)		; use the dir sectorbuffer
@@ -5122,10 +5130,15 @@ T5E4B:	defw	A5E4D
 A5E4D:	ld	sp,(BUF+98)
         ret
 
+;	Subroutine	search RAM
+;	Inputs		C = page address high byte
+;	Outputs		
+;       Remark          patched for MA-20
+
 A5E52:	LD	HL,EXPTBL
         LD	B,4
         XOR	A
-J5E58:	CALL	A744A
+J5E58:	CALL	A744A                   ; patch routine (because EXPTBL+0 has slotid)
 J5E5B:	PUSH	BC
         PUSH	HL
         LD	H,C
@@ -5362,8 +5375,8 @@ A5F98:	ld	b,4
         push	bc
 A5F9E:	rrca
         djnz	A5F9E
-        call	A757F
-        or	c
+        call	A757F                   ; is primairy slot expanded ?
+        or	c                       ; expanded flag combined with primairy slot
         pop	bc
         ld	c,a
         inc	hl
@@ -5380,9 +5393,10 @@ A5FAE:	rrca
 ;	Subroutine	get my slotid
 ;	Inputs		-
 ;	Outputs		A = slotid
+;       Remark          patched for MA-20
 
-A5FB3:	call	A7578
-        or	c
+A5FB3:	call	A7578                   ; is my primairy slot expanded ?
+        or	c                       ; expanded flag combined with primairy slot
         ret	p			; non expanded slot, quit
         ld	c,a
         inc	hl
@@ -6030,11 +6044,11 @@ T63BA:	DEFW	C63F4-C63F4
         DEFW	0FFFFH
 
 
-;	Subroutine	__________________________
+;	Subroutine	RDSLT
 ;	Inputs		________________________
 ;	Outputs		________________________
 
-C63F4:	CALL	C64C2
+C63F4:	CALL	C64C2			; calculate masks
 R0003:	JP	M,J6404
         IN	A,(0A8H)
         LD	D,A
@@ -6044,7 +6058,7 @@ R0003:	JP	M,J6404
         LD	A,E
         RET
 
-J6404:	CALL	C6524
+J6404:	CALL	C6524                   ; page 0 precation check
 R0013:	JP	Z,J6531
         PUSH	HL
 R0017:	CALL	C64FA
@@ -6053,12 +6067,12 @@ R0017:	CALL	C64FA
 R001C:	CALL	C63F4
         JR	J6436
 
-;	Subroutine	__________________________
+;	Subroutine	WRSLT
 ;	Inputs		________________________
 ;	Outputs		________________________
 
 C6415:	PUSH	DE
-R0022:	CALL	C64C2
+R0022:	CALL	C64C2			; calculate masks
 R0025:	JP	M,J6425
         POP	DE
         IN	A,(0A8H)
@@ -6067,7 +6081,7 @@ R0025:	JP	M,J6425
         OR	B
         JP	WRPRIM
 
-J6425:	CALL	C6524
+J6425:	CALL	C6524                   ; page 0 precation check
 R0034:	JP	Z,J6537
         EX	(SP),HL
         PUSH	HL
@@ -6086,6 +6100,10 @@ J6436:	POP	BC
         POP	AF
         POP	HL
         RET
+
+;	Subroutine	CALSLT
+;	Inputs		________________________
+;	Outputs		________________________
 
 C6443:	EX	(SP),HL
         PUSH	AF
@@ -6114,7 +6132,7 @@ C6455:	EXX
         POP	AF
         PUSH	IX
         POP	HL
-R0069:	CALL	C64C2
+R0069:	CALL	C64C2			; calculate masks
 R006C:	JP	M,J646C
         IN	A,(0A8H)
         PUSH	AF
@@ -6123,7 +6141,7 @@ R006C:	JP	M,J646C
         EXX
         JP	CLPRIM
 
-J646C:	CALL	C6524
+J646C:	CALL	C6524                   ; page 0 precation check
 R007B:	JP	Z,J653F
 R007E:	CALL	C64FA
         PUSH	AF
@@ -6157,7 +6175,11 @@ R0094:	CALL	C6455
         EXX
         RET
 
-J649C:	CALL	C64C2
+;	Subroutine	ENASLT
+;	Inputs		________________________
+;	Outputs		________________________
+
+J649C:	CALL	C64C2			; calculate masks
 R00AB:	JP	M,J64A9
 C64A2:	IN	A,(0A8H)
         AND	C
@@ -6165,7 +6187,7 @@ C64A2:	IN	A,(0A8H)
         OUT	(0A8H),A
         RET
 
-J64A9:	CALL	C6524
+J64A9:	CALL	C6524                   ; page 0 precation check
 R00B8:	JP	Z,C6554
 C64AF:	PUSH	HL
 R00BC:	CALL	C64FA
@@ -6182,9 +6204,10 @@ R00BC:	CALL	C64FA
         JR	J649C
 
 
-;	Subroutine	__________________________
+;	Subroutine	calculate slotmasks
 ;	Inputs		________________________
 ;	Outputs		________________________
+;       Remark          patched for MA-20
 
 C64C2:	BIT	7,H			; page 0 or 1 ?
         JR	NZ,J64D5		; nope, normal method
@@ -6264,7 +6287,7 @@ R0129:	CALL	C7FE6
         AND	03H
         RET
 
-;	Subroutine	__________________________
+;	Subroutine	page 0 precation check
 ;	Inputs		________________________
 ;	Outputs		________________________
 
@@ -8560,6 +8583,8 @@ A7397:	call	XF36B			; enable ram on page 1
 
         defb	31,28,31,30,31,30,31,31,30,31,30,31
 
+; static entry for MA-20
+
 ?7405:	JP	J7452
 
 ; DRIVER section starts here
@@ -8572,7 +8597,8 @@ DSKDRV:
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A7421:	JP	M,A622D			; diskinterface count not cleared, continue normally
+A7421:	JP	M,A622D			; diskinterface count > 0, continue normally
+                                        ; no diskinterface, rollback disksystem initialisation
         POP	HL			; do not return to init routine
         LD	HL,VARWRK
         LD	(HIMEM),HL
@@ -8597,12 +8623,21 @@ J7444:	LD	HL,SLTATR+1
         LD	(HL),B			; clear expansion flags
         RET
 
+;	  Subroutine replace routine for AND 03H, OR (HL)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;            Remark  Because MA-20 changes EXPTBL+0 to slotid MA-20, make sure to mask off b6-b0
+
 A744A:	AND	03H
         LD	E,A
         LD	A,(HL)
         AND	80H
         OR	E
         RET
+
+;	  Subroutine prefer RAM in MA-20 primairy slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J7452:	LD	A,(EXPTBL+0)
         LD	C,A
@@ -8621,52 +8656,52 @@ J7452:	LD	A,(EXPTBL+0)
         RRCA
         RRCA
         AND	0C0H
-        LD	B,A
+        LD	B,A                     ; primairy slot RAM OR mask page 3
         IN	A,(0A8H)
-        LD	E,A
+        LD	E,A                     ; save current primairy slotregister
         AND	3FH
         OR	B
         LD	D,A
-        OUT	(0A8H),A
+        OUT	(0A8H),A                ; select primairy slot RAM on page 3
         LD	A,C
         AND	0CH
         RLCA
         RLCA
         RLCA
         RLCA
-        LD	C,A
+        LD	C,A                     ; secundairy slot OR mask page 3
         LD	A,(D.FFFF)
         CPL
         AND	3FH
         OR	C
-        LD	(D.FFFF),A
+        LD	(D.FFFF),A              ; select secundairy slot RAM on page 3
         LD	C,A
         LD	A,E
-        OUT	(0A8H),A
+        OUT	(0A8H),A                ; restore primairy slotregister
         LD	A,D
         RRCA
         RRCA
         AND	03H
-        ADD	A,0C5H
+        ADD	A,LOW SLTTBL
         LD	L,A
-        LD	H,0FCH
-        LD	(HL),C
+        LD	H,HIGH SLTTBL
+        LD	(HL),C                  ; update SLTTBL
         LD	HL,0FFFBH
 J7499:	LD	A,E
-        OUT	(0A8H),A
-        LD	C,(HL)
+        OUT	(0A8H),A                ; select source primairy slot in page 3
+        LD	C,(HL)                  ; read byte
         LD	A,D
-        OUT	(0A8H),A
-        LD	(HL),C
+        OUT	(0A8H),A                ; select destination primairy slot in page 3
+        LD	(HL),C                  ; write byte
         DEC	HL
         LD	A,H
-        CP	0C0H
-        JR	NC,J7499			; copy page 3
+        CP	HIGH 0C000H
+        JR	NC,J7499		; next byte
         LD	IX,M7B61
-        JP	CALBAS				; initialize system
+        JP	CALBAS			; initialize system
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine search RAM in the same primairy slot as the MA-20 mainrom
+;	     Inputs  A = slotid MA-20
 ;	     Outputs ________________________
 
 C74AE:	RRCA
@@ -8674,60 +8709,62 @@ C74AE:	RRCA
         AND	0C0H
         LD	B,A
         IN	A,(0A8H)
-        LD	E,A
+        LD	E,A                     ; save current primairy slotregister
         AND	3FH
         OR	B
-        OUT	(0A8H),A			; select primairy slot of MA-20 mainrom in page 3
+        OUT	(0A8H),A		; select primairy slot of MA-20 mainrom in page 3
         LD	A,(D.FFFF)
         CPL
-        LD	D,A
-        AND	3FH				; select secundairy slot 0
+        LD	D,A                     ; save current primairy slotregister
+        AND	3FH			; select secundairy slot 0
 J74C2:	LD	C,A
         LD	(D.FFFF),A
         LD	HL,0FFFFH-256
 J74C9:	LD	A,(HL)
         CPL
         LD	(HL),A
-        CP	(HL)				; RAM ?
+        CP	(HL)			; RAM ?
         CPL
         LD	(HL),A
-        JR	NZ,J74E9			; nope, next secundairy slot
+        JR	NZ,J74E9	        ; nope, next secundairy slot
         DEC	HL
         LD	A,H
         CP	0C0H
         JR	NC,J74C9
         LD	A,C
-        AND	0C0H
+        AND	0C0H                    ; secundairy slot on page 3
         RLCA
         RLCA
         LD	L,A
         IN	A,(0A8H)
-        AND	0C0H
+        AND	0C0H                    ; primairy slot on page 3
         OR	L
         RLCA
         RLCA
-        OR	80H
+        OR	80H                     ; slot expanded
         LD	L,A
+                                        ; Cx reset (RAM found)
         JR	J74EE
 
 J74E9:	LD	A,C
         ADD	A,40H
         JR	NC,J74C2
+                                        ; Cx set (no RAM found)
 J74EE:	LD	A,D
-        LD	(D.FFFF),A
+        LD	(D.FFFF),A              ; restore secundairy slotregister
         LD	A,E
-        OUT	(0A8H),A
-        LD	A,L
+        OUT	(0A8H),A                ; restore primairy slotregister
+        LD	A,L                     ; slotid RAM (if found)
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine search RAM in page 0, skip primary slot of the MA-20
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C74F7:	LD	B,0			; primairy slot 0
 J74F9:	LD	A,(EXPTBL+0)
         AND	03H
-        CP	B			; slot of NEOS cartridge ?
+        CP	B			; primairy slot of MA-20 cartridge ?
         LD	A,B
         SCF
         PUSH	BC
@@ -8736,7 +8773,7 @@ J74F9:	LD	A,(EXPTBL+0)
         RET	NC			; RAM found, quit
         INC	B
         LD	A,B
-        CP	04H
+        CP	3+1
         JR	NZ,J74F9		; next primairy slot
         SCF
         RET
@@ -8745,9 +8782,9 @@ J74F9:	LD	A,(EXPTBL+0)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A750F:	CALL	C74F7			; search RAM in page 0 other than NEOS primary slot
+A750F:	CALL	C74F7			; search RAM in page 0, skip primary slot of the MA-20
         RET	NC			; found, quit
-        CALL	C7526			; search RAM in page 0 in NEOS primary slot
+        CALL	C7526			; search RAM in page 0, primairy slot of the MA-20
         RET	C			; not found, quit
         LD	H,A
         RRCA
@@ -8756,20 +8793,20 @@ A750F:	CALL	C74F7			; search RAM in page 0 other than NEOS primary slot
         LD	L,A			; slotid (page 3 based)
         IN	A,(0A8H)
         AND	0C0H
-        CP	L			; slotid of systemvars same as the NEOS RAM ?
+        CP	L			; slotid of systemvars same as the MA-20 RAM ?
         LD	A,H
         RET	Z			; yep, ok
         SCF				; RAM 'not found'
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine search RAM in page 0, primairy slot of the MA-20
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7526:	LD	A,(EXPTBL+0)
-        AND	03H
+        AND	03H                     ; primairy slot of the MA-20
 
-;	  Subroutine __________________________
+;	  Subroutine search RAM in page 0
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -8826,29 +8863,41 @@ J756C:	POP	AF
         AND	A
         SCF
         RET	P
-        ADD	A,04H
+        ADD	A,4
         CP	90H
         JR	C,J7535
         SCF
         RET
 
+;	  Subroutine is my primairy slot expanded ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A7578:	CALL	A5FE7			; get my EXPTBL entry
         LD	A,(HL)
-        AND	80H			; slot expanded flag
+        AND	80H			; only expanded slot flag
         RET
+
+;	  Subroutine is primairy slot expanded ?
+;	     Inputs  A (b1-b0) = primairy slot
+;	     Outputs ________________________
 
 A757F:	CALL	A5FEC			; get EXPTBL entry
         LD	A,(HL)
         AND	80H			; slot expanded flag
         RET
 
+;	  Subroutine get current mediadescriptor of drive A:
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A7586:	LD	HL,YF355
         LD	A,(HL)
         INC	HL
         LD	H,(HL)
-        LD	L,A
+        LD	L,A                     ; pointer to DPB of drive A:
         INC	HL
-        LD	A,(HL)
+        LD	A,(HL)                  ; mediadescriptor
         RET
 
         DEFS	07FE6H-$,0
@@ -8856,7 +8905,7 @@ A7586:	LD	HL,YF355
 ;	  Subroutine slot switching routines for 003BH
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;	     Remark  orginal routines at 655CH moved here because of patch
+;	     Remark  orginal routines at 655CH moved here because does not fit because of the patched C64C2 routine (13H bytes longer)
 
 C7FE6:	OUT	(0A8H),A
         LD	A,(D.FFFF)

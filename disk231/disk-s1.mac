@@ -60,10 +60,11 @@ CALSLT	EQU	001CH
 ENASLT	EQU	0024H
 IDBYT0	EQU	002BH
 KEYINT	EQU	0038H
-C0046	EQU	0046H
-C004B	EQU	004BH
-C005C	EQU	005CH
-C005F	EQU	005FH
+X003B	EQU	0003BH			; start of the slot switching helpers for MSX-DOS environment
+X0046   EQU     X003B+11                ; helper routine in DOS memoryspace: restore secundairy slotregister (RDSLT/WRSLT)
+X004B	EQU	X003B+16		; helper routine in DOS memoryspace: restore secundairy slotregister (CALSLT/CALLF)
+X005C	EQU	005CH
+X005F	EQU	005FH
 CHPUT	EQU	00A2H
 CHGCPU	EQU	0180H
 GETCPU	EQU	0183H
@@ -76,56 +77,53 @@ IBA35	EQU	0BA35H	; memorymapper pointertable
 IBA75	EQU	0BA75H	; upcase table
 IBBFF	EQU	0BBFFH	; last static BDOS data
 
-IF1D3	EQU	0F1D3H
-CF1D9	EQU	0F1D9H
-CF1FD	EQU	0F1FDH
-IF200	EQU	0F200H
-CF218	EQU	0F218H
-CF224	EQU	0F224H
-DF23C	EQU	0F23CH
-IF24F	EQU	0F24FH
-DF2B8	EQU	0F2B8H
-DF2BA	EQU	0F2BAH
-DF2C5	EQU	0F2C5H
-DF2C7	EQU	0F2C7H
-DF2C8	EQU	0F2C8H
-DF2C9	EQU	0F2C9H
-DF2CA	EQU	0F2CAH
-DF2CB	EQU	0F2CBH
-DF2CC	EQU	0F2CCH
-DF2CD	EQU	0F2CDH
-DF2CF	EQU	0F2CFH
-DF2D0	EQU	0F2D0H
-DF2D1	EQU	0F2D1H
-DF2D3	EQU	0F2D3H
-LF2D5	EQU	0F2D5H
-DF2DC	EQU	0F2DCH
-DF2DE	EQU	0F2DEH
-DF2E0	EQU	0F2E0H
-DF2E1	EQU	0F2E1H
-DF2E6	EQU	0F2E6H
-DF2EA	EQU	0F2EAH
-DF2EB	EQU	0F2EBH
-DF2FE	EQU	0F2FEH
-CF303	EQU	0F303H
-DF30F	EQU	0F30FH
-IF314	EQU	0F314H
-CF327	EQU	0F327H
-CF32C	EQU	0F32CH
-DF341	EQU	0F341H
-DF342	EQU	0F342H
-DF343	EQU	0F343H
-DF344	EQU	0F344H
-DF347	EQU	0F347H
-DF348	EQU	0F348H
-DF368	EQU	0F368H
-DF36B	EQU	0F36BH
-DF36E	EQU	0F36EH
-CF371	EQU	0F371H
-CF374	EQU	0F374H
-CF377	EQU	0F377H
-CF37A	EQU	0F37AH
-CF37D	EQU	0F37DH
+LF1D3	EQU	0F1D3H			; start of jump table
+LF1D9	EQU	0F1D9H			; inter slot call BIOS
+LF200	EQU	0F200H			; start of memory mapper jump table
+LF218	EQU	0F218H			; PUT_P0 handler
+LF224	EQU	0F224H			; PUT_P2 handler
+LF23C	EQU	0F23CH			; default drive
+LF24F	EQU	0F24FH			; PROMPT hook, also start of DSK hooks
+LF2B8	EQU	0F2B8H			; number of interrupts per 100 ms
+LF2BA	EQU	0F2BAH			; random number, used for compose a random diskserial
+LF2C5	EQU	0F2C5H			; pointer to memory mapper table
+LF2C7	EQU	0F2C7H                  ; current segment page 0
+LF2C8	EQU	0F2C8H                  ; current segment page 1
+LF2C9	EQU	0F2C9H                  ; current segment page 2
+LF2CA	EQU	0F2CAH                  ; current segment page 3
+LF2CB	EQU	0F2CBH                  ; saved TPA segment page 0
+LF2CC	EQU	0F2CCH                  ; saved TPA segment page 1
+LF2CD	EQU	0F2CDH                  ; saved TPA segment page 2
+LF2CF	EQU	0F2CFH                  ; BDOS data segment
+LF2D0	EQU	0F2D0H                  ; BDOS code segment
+LF2D1	EQU	0F2D1H                  ; saved stackpointer KEYINT
+LF2D3	EQU	0F2D3H                  ; pointer to temporary stack KEYINT
+LF2D5	EQU	0F2D5H                  ; saved EXTBIO
+LF2DC	EQU	0F2DCH                  ; pointer to DOS kernel prompt handler
+LF2DE	EQU	0F2DEH                  ; pointer to DOS kernel BDOS handler
+LF2E0	EQU	0F2E0H                  ; saved secundiary slotregister
+LF2E1	EQU	0F2E1H			; temporary save for transferaddress ramdisk DSKIO
+LF2E6	EQU	0F2E6H			; temporary save for IX parameter BDOS
+LF2EA	EQU	0F2EAH                  ; saved primairy slotregister TPA
+LF2EB	EQU	0F2EBH                  ; saved secundairy slotregister TPA
+LF2FE	EQU	0F2FEH                  ; pointer to temporary stack BDOS
+LF30F	EQU	0F30FH			; double byte header table
+LF314	EQU	0F314H			; TPA segment page 0
+LF327	EQU	0F327H			; AUX input hook
+LF32C	EQU	0F32CH                  ; AUX output hook
+RAMAD0	EQU	0F341H			; slotid DOS ram page 0
+RAMAD1	equ	0F342H			; slotid DOS ram page 1
+RAMAD2	equ	0F343H			; slotid DOS ram page 2
+RAMAD3	EQU	0F344H			; slotid DOS ram page 3
+LF348	EQU	0F348H			; slotid disksystem ROM
+XF368	EQU	0F368H			; select disksystem ROM on page 1
+XF36B	EQU	0F36BH                  ; select RAM on page 1
+XF36E	EQU	0F36EH                  ; XFER
+XF371	EQU	0F371H                  ; $AUXIN
+XF374	EQU	0F374H                  ; $AUXOU
+XF377	EQU	0F377H
+XF37A	EQU	0F37AH
+XF37D	EQU	0F37DH
 
 RDPRIM	EQU	0F380H
 WRPRIM	EQU	0F385H
@@ -207,34 +205,38 @@ L40A6:	RET
 
 L40FF:	DEFB	1			; present bank number register
 
-I4100:	JP	C4A15			; Check and invoke memorymapper of 6 or more segments
+I4100:	JP	C4A15			; check and invoke memorymapper of 6 or more segments
 J4103:	JP	J410F			; install disksystem routines
 J4106:	JP	C4C74			; copy message to buffer
 J4109:	JP	J4C5F			; copy errorstring to buffer
 J410C:	JP	J4B4D			; EXTBIO handler memorymapper
 
+;	  Subroutine 
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J410F:	DI
         CALL	C495C			; initialize memorymapper variables
         RET	C			; error, quit
-        CALL	C427F
-        RET	C
-        LD	A,01H
-        LD	(DF23C),A
+        CALL	C427F                   ; setup slot switching related handlers
+        RET	C                       ; error, quit
+        LD	A,1
+        LD	(LF23C),A               ; default drive = A:
         LD	A,(IDBYT0)
         RLCA
         SBC	A,A
-        ADD	A,6			; number of interrupts per 100 ms
-        LD	(DF2B8),A
-        LD	(DF2BA),A
-        LD	HL,IF314
-        LD	DE,DF2CB
+        ADD	A,6
+        LD	(LF2B8),A		; number of interrupts per 100 ms
+        LD	(LF2BA),A               ; initialize random number
+        LD	HL,LF314
+        LD	DE,LF2CB                ; initialize saved TPA segments
         LD	BC,4
         LDIR
-        LD	A,(DF2CF)
-        CALL	CF224
-        CALL	C418C
-        LD	A,(DF2D0)
-        CALL	CF218
+        LD	A,(LF2CF)               ; BDOS data segment
+        CALL	LF224                   ; PUT_P2
+        CALL	C418C                   ; build upcase table
+        LD	A,(LF2D0)               ; BDOS code segment
+        CALL	LF218                   ; PUT_P0
         LD	HL,0C9F1H		; POP AF RET
         PUSH	HL
         LD	HL,0B0EDH		; LDIR
@@ -248,7 +250,7 @@ J410F:	DI
         LD	HL,6
         ADD	HL,SP
         PUSH	HL			; LDIR routine on stack
-        CALL	CF1FD
+        CALL	CF1FD                   ; DOS mapper slot on page 0
         LD	HL,I4100
         LD	DE,0
         LD	BC,03EF0H		; setup LDIR registers
@@ -261,17 +263,17 @@ I416E:	POP	HL
         EX	AF,AF'
         DI
         LD	A,(EXPTBL+0)
-        LD	H,00H
+        LD	H,HIGH 0000H
         CALL	ENASLT			; rom-bios on page 0
-        LD	A,(DF2CD)
-        CALL	CF224
-        LD	A,(DF2CB)
-        CALL	CF218
+        LD	A,(LF2CD)               ; saved TPA segment page 2
+        CALL	LF224                   ; PUT_P2
+        LD	A,(LF2CB)               ; saved TPA segment page 0
+        CALL	LF218                   ; PUT_P0
         EI
         EX	AF,AF'
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine build upcase table
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -282,7 +284,7 @@ C418C:	LD	A,(IDBYT0)
         XOR	A
         LD	B,A			; 256 chars
 J4199:	PUSH	AF
-        CALL	C41A4
+        CALL	C41A4                   ; to upper
         LD	(HL),A
         POP	AF
         INC	A
@@ -290,7 +292,7 @@ J4199:	PUSH	AF
         DJNZ	J4199			; build upcase table
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine toupper
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -313,9 +315,9 @@ C41A4:	PUSH	HL
         INC	HL
 J41BB:	CP	(HL)
         INC	HL
-        JR	C,J41C2		; below range, next entry
+        JR	C,J41C2		        ; below range, next entry
         CP	(HL)
-        JR	C,J41D7		; in range, adjust with offset
+        JR	C,J41D7		        ; in range, adjust with offset
 J41C2:	INC	HL
         INC	HL
         DJNZ	J41BB
@@ -387,11 +389,11 @@ I423F:	DEFB	080H,09AH,045H,041H,08EH,041H,08FH,080H
         DEFB	0B0H,0B0H,0B2H,0B2H,0B4H,0B4H,0B6H,0B6H
         DEFB	0B8H,0B8H,0BAH,0BBH,0BCH,0BDH,0BEH,0BFH
 
-;	  Subroutine __________________________
+;	  Subroutine setup slot switching related handlers
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C427F:	LD	HL,1636
+C427F:	LD	HL,200+300+S4418
         CALL	C4BBE			; allocate memory (adjust BASIC areapointers)
         RET	C			; error, quit
         LD	(HL),0
@@ -400,68 +402,68 @@ C427F:	LD	HL,1636
         INC	DE
         LD	BC,200
         LDIR				; clear KEYINT stackspace
-        LD	(DF2D3),HL		; top of KEYINT stackspace
+        LD	(LF2D3),HL		; top of KEYINT stackspace
         LD	BC,300
         LDIR				; clear BDOS stackspace
-        LD	(DF2FE),HL		; top of BDOS stackspace
+        LD	(LF2FE),HL		; top of BDOS stackspace
         EX	DE,HL
         LD	HL,I4418
         PUSH	DE
-        LD	BC,L4418
+        LD	BC,S4418
         LDIR
-        LD	BC,IF1D3		; jump entry table
+        LD	BC,LF1D3		; jump entry table
         LD	HL,I4888
 J42AB:	LD	E,(HL)
         INC	HL
         LD	D,(HL)
         INC	HL
         LD	A,D
-        OR	E
-        JR	Z,J42C4
+        OR	E                       ; end of table ?
+        JR	Z,J42C4                 ; yep, continue
         EX	(SP),HL
         EX	DE,HL
-        ADD	HL,DE
+        ADD	HL,DE                   ; add relocate base
         EX	DE,HL
         EX	(SP),HL
         LD	A,0C3H
-        LD	(BC),A
+        LD	(BC),A                  ; JP
         INC	BC
         LD	A,E
         LD	(BC),A
         INC	BC
         LD	A,D
-        LD	(BC),A
+        LD	(BC),A                  ; address handler
         INC	BC
-        JR	J42AB
+        JR	J42AB                   ; next
 
 J42C4:	POP	DE
-        LD	HL,I48C8
+        LD	HL,I48C8                ; table with relocate offsets
 J42C8:	LD	C,(HL)
         INC	HL
-        LD	B,(HL)
+        LD	B,(HL)                  ; offset
         INC	HL
         LD	A,B
-        OR	C
-        JR	Z,J42DE
+        OR	C                       ; end of table ?
+        JR	Z,J42DE                 ; yep, continue
         PUSH	HL
         LD	H,B
         LD	L,C
-        ADD	HL,DE
+        ADD	HL,DE                   ; add relocate base
         LD	A,(HL)
         ADD	A,E
         LD	(HL),A
         INC	HL
         LD	A,(HL)
         ADC	A,D
-        LD	(HL),A
+        LD	(HL),A                  ; adjust with relocate base
         POP	HL
-        JR	J42C8
+        JR	J42C8                   ; next
 
-J42DE:	LD	A,(DF2D0)
+J42DE:	LD	A,(LF2D0)               ; BDOS code segment
         LD	HL,R.0216+1
         ADD	HL,DE
         LD	(HL),A
-        LD	A,(DF344)
+        LD	A,(RAMAD3)
         AND	03H
         LD	HL,R.0295+1
         ADD	HL,DE
@@ -476,7 +478,7 @@ J42DE:	LD	A,(DF2D0)
         LD	HL,R.0144+1
         ADD	HL,DE
         LD	(HL),A
-        LD	A,(DF344)
+        LD	A,(RAMAD3)
         BIT	7,A                     ; DOS mapper in expanded slot ?
         JR	Z,J4356                 ; nope,
         LD	HL,R.027E
@@ -538,7 +540,7 @@ J42DE:	LD	A,(DF2D0)
         LD	(HL),D
         POP	DE
 J4356:	LD	A,(EXPTBL+0)
-        AND	03H	; 3 
+        AND	03H                     ; primairy slot BIOS
         LD	HL,R.0275+1
         ADD	HL,DE
         LD	(HL),A
@@ -550,33 +552,33 @@ J4356:	LD	A,(EXPTBL+0)
         ADD	HL,DE
         LD	(HL),A
         LD	A,(EXPTBL+0)
-        BIT	7,A
-        JR	Z,J43D1
+        BIT	7,A                     ; BIOS in an expanded slot ?
+        JR	Z,J43D1                 ; nope, default code is fine
         LD	HL,R.025F
         ADD	HL,DE
         LD	(HL),B
         INC	HL
-        LD	(HL),B
+        LD	(HL),B                  ; remove JR xx
         RRCA
         RRCA
-        AND	03H	; 3 
+        AND	03H                     ; secundairy slot
         LD	HL,R.0269+1
         ADD	HL,DE
         LD	(HL),A
-        LD	A,(DF344)
+        LD	A,(RAMAD3)
         XOR	C
-        AND	03H	; 3 
-        JR	NZ,J4397
+        AND	03H                     ; RAM in same primairy slot as BIOS ?
+        JR	NZ,J4397                ; nope,
         LD	HL,R.026E
         ADD	HL,DE
-        LD	(HL),32H	; "2"
+        LD	(HL),32H
         INC	HL
         LD	(HL),0FFH
         INC	HL
-        LD	(HL),0FFH
+        LD	(HL),0FFH               ; LD (0FFFFH),A
         JR	J43BC
 
-J4397:	LD	A,0F5H
+J4397:	LD	A,0F5H                  ; PUSH AF
         LD	HL,R.017E
         ADD	HL,DE
         LD	(HL),A
@@ -588,17 +590,17 @@ J4397:	LD	A,0F5H
         LD	(HL),A
         LD	HL,R.024A
         ADD	HL,DE
-        LD	(HL),0CDH
+        LD	(HL),0CDH               ; CALL
         LD	HL,R.01A4
         ADD	HL,DE
         LD	(HL),B
         INC	HL
-        LD	(HL),B
+        LD	(HL),B                  ; remove JR xx
         LD	HL,R.01DB
         ADD	HL,DE
         LD	(HL),B
         INC	HL
-        LD	(HL),B
+        LD	(HL),B                  ; remove JR xx
 J43BC:	PUSH	DE
         LD	HL,SLTTBL
         ADD	HL,BC
@@ -607,61 +609,61 @@ J43BC:	PUSH	DE
         ADD	HL,BC
         LD	(HL),E
         INC	HL
-        LD	(HL),D
-        LD	BC,10
+        LD	(HL),D                  ; SLTTBL entry
+        LD	BC,R.026B-R.0261
         ADD	HL,BC
         LD	(HL),D
         DEC	HL
-        LD	(HL),E
+        LD	(HL),E                  ; SLTTBL entry
         POP	DE
-J43D1:	LD	HL,I43F6
+
+J43D1:	LD	HL,I43F6                ; table with jump entries
 J43D4:	LD	C,(HL)
         INC	HL
         LD	B,(HL)
         INC	HL
         LD	A,B
-        OR	C
-        JR	Z,J43F4
+        OR	C                       ; end of table ?
+        JR	Z,J43F4                 ; yep, continue
         LD	A,0C3H
         LD	(BC),A
         INC	BC
         PUSH	DE
         LD	E,(HL)
         INC	HL
-        LD	D,(HL)
+        LD	D,(HL)                  ; address handler
         INC	HL
         EX	(SP),HL
         EX	DE,HL
-        BIT	7,H
+        BIT	7,H                     ; handler at fixed address ?
         JR	NZ,J43EC
-        ADD	HL,DE
+        ADD	HL,DE                   ; nope, add relocate offset
 J43EC:	LD	A,L
         LD	(BC),A
         INC	BC
         LD	A,H
         LD	(BC),A
         POP	HL
-        JR	J43D4
+        JR	J43D4                   ; next
 
-J43F4:	OR	A
+J43F4:	OR	A                       ; return ok
         RET
 
-
-I43F6:	DEFW	DF368
+I43F6:	DEFW	XF368                   ; $DOSON
         DEFW	R.0000
-        DEFW	DF36B
+        DEFW	XF36B                   ; $DOSOF
         DEFW	R.0009
-        DEFW	DF36E
+        DEFW	XF36E                   ; XFER
         DEFW	R.0022
-        DEFW	CF371
-        DEFW	CF327
-        DEFW	CF374
-        DEFW	CF32C
-        DEFW	CF377
+        DEFW	XF371                   ; $AUXIN
+        DEFW	LF327
+        DEFW	XF374                   ; $AUXOU
+        DEFW	LF32C
+        DEFW	XF377                   ; 
         DEFW	R.00F9
-        DEFW	CF37A
+        DEFW	XF37A                   ; 
         DEFW	R.0101
-        DEFW	CF37D
+        DEFW	XF37D                   ; BDOS
         DEFW	R.0064
         DEFW	0
 
@@ -669,103 +671,103 @@ I43F6:	DEFW	DF368
 I4418:
         .PHASE	0
 
-;
-; enable disksystem rom on page 1
-;
+;	  Subroutine $DOSON (enable disksystem rom on page 1)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.0000:	PUSH	AF
-        LD	A,I
+        LD	A,I                     ; save current interrupt state
         PUSH	AF
-        LD	A,(DF348)
+        LD	A,(LF348)               ; slotid master disksystem
         JR	J0010
 
-;
-; enable dos ram on page 1
-;
+;	  Subroutine $DOSOF (enable dos ram on page 1)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.0009:	PUSH	AF
-        LD	A,I
+        LD	A,I                     ; save current interrupt state
         PUSH	AF
-        LD	A,(DF342)
+        LD	A,(RAMAD1)              ; slotid RAM (page 1)
 J0010:	PUSH	HL
         PUSH	DE
         PUSH	BC
-        LD	H,40H
-        CALL	ENASLT
+        LD	H,HIGH 4000H
+        CALL	ENASLT                  ; select slot on page 1
         POP	BC
         POP	DE
         POP	HL
-        POP	AF
+        POP	AF                      ; interrupt state
         JP	PE,J0020
-        EI
+        EI                              ; was enabled, enable again
 J0020:	POP	AF
         RET
 
-;
-; transfer to/from dos ram
-;
+;	  Subroutine XFER (transfer to/from dos ram)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.0022:	PUSH	AF
         PUSH	HL
         PUSH	DE
         PUSH	BC
         CALL	GETSLO
-        PUSH	AF
-        LD	A,(DF342)
-        LD	H,40H
-        CALL	ENASLT
+        PUSH	AF                      ; save current slot in page 1
+        LD	A,(RAMAD1)
+        LD	H,HIGH 4000H
+        CALL	ENASLT                  ; enable TPA RAM in page 1
         POP	AF
         POP	BC
         POP	DE
         POP	HL
-        LDIR
+        LDIR                            ; transfer
         PUSH	HL
         PUSH	DE
         PUSH	BC
-        LD	H,40H
-        CALL	ENASLT
+        LD	H,HIGH 4000H
+        CALL	ENASLT                  ; restore slot in page 1
         POP	BC
         POP	DE
         POP	HL
         POP	AF
         RET
 
-;
-; Transfer to/from slot (F1D3)
-;
+;	  Subroutine transfer to/from slot (F1D3)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.0045:	PUSH	DE
         PUSH	HL
         LD	A,B
-        LD	H,40H
-        CALL	ENASLT
+        LD	H,HIGH 4000H
+        CALL	ENASLT                  ; select slot in page 1
         EI
         POP	DE
         POP	BC
-        LD	HL,(DF2E1)
+        LD	HL,(LF2E1)              ; transfer address
         EX	AF,AF'
         JR	C,J$0057
-        EX	DE,HL
+        EX	DE,HL                   ; read, swap source/destination
 J$0057:	EX	AF,AF'
         LDIR
-        LD	A,(DF348)
-        LD	H,40H
-        CALL	ENASLT
+        LD	A,(LF348)
+        LD	H,HIGH 4000H
+        CALL	ENASLT                  ; select master disksystem
         EI
         RET
 
-;
-; BDOS entry diskbasic
-;
+;	  Subroutine BDOS diskbasic
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-R.0064:	LD	(DF2E6),IX
-        LD	IY,(DF348-1)
-        LD	IX,(DF2DE)
-        JP	CALSLT
+R.0064:	LD	(LF2E6),IX              ; save IX parameter for later
+        LD	IY,(LF348-1)
+        LD	IX,(LF2DE)              ; pointer to DOS kernel BDOS handler
+        JP	CALSLT                  ; invoke BDOS handler
 
-;
-; jump to adres on pointer
-;
+;	  Subroutine jump to adres on pointer (F1E2)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.0073:	EI
         PUSH	DE
@@ -776,71 +778,102 @@ R.0073:	EI
         POP	DE
         JP	(HL)
 
-;
-; interslot call with PROMPT routine (F1DF)
-;
+;	  Subroutine interslot call with PROMPT routine (F1DF)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-R.007B:	EX	AF,AF'
-        CALL	C$00DD
+R.007B:
+        IF ROMVER EQ 0
+        EXX
+        ENDIF
+	EX	AF,AF'
+        CALL	C$00DD                  ; disable ENKRN entry and install PROMPT handler
 
         IF	TURBOR EQ 1
         PUSH	IX
         LD	IX,GETCPU
-        CALL	CF1D9			; get current cpu mode
+        CALL	LF1D9			; get current cpu mode
         PUSH	AF
         XOR	A			; Z80 mode
         LD	IX,CHGCPU
-        CALL	CF1D9			; change cpu mode
+        CALL	LF1D9			; change cpu mode
         POP	AF
         POP	IX
         PUSH	AF
         ENDIF
 
+        IF ROMVER EQ 0
+        EXX
+        ENDIF
+
         EX	AF,AF'
-        CALL	CALSLT
+        CALL	CALSLT                  ; interslot call
 
         IF	TURBOR EQ 1
         EX	AF,AF'
         POP	AF
         PUSH	IX
         LD	IX,CHGCPU
-        CALL	CF1D9			; restore cpu mode
+        CALL	LF1D9			; restore cpu mode
         POP	IX
         EX	AF,AF'
         ENDIF
 
-C$00A7:	EX	AF,AF'
-        LD	A,(DF36B)
-        CALL	C$00DF
+C$00A7:
+        IF ROMVER EQ 0
+        EXX
+        ENDIF
+
+	EX	AF,AF'
+        LD	A,(XF36B)
+        CALL	C$00DF                  ; enable ENKRN entry (only in DOS) and remove PROMPT handler
         EX	AF,AF'
+
+        IF ROMVER EQ 0
+        EXX
+        ENDIF
+
         RET
 
 J$00B0:	POP	AF
-        CALL	C$00A7
+        CALL	C$00A7                  ; enable ENKRN entry (only in DOS) and remove PROMPT handler
+
+	IF ROMVER GE 1
         PUSH	IY
         PUSH	DE
+        ENDIF
+
         CALL	GETSLO
+        PUSH	AF                      ; save current slot page 1
+        CALL	C.034F                  ; get current segment page 2
         PUSH	AF
-        CALL	C.034F
-        PUSH	AF
-        CALL	C.0107
-        LD	IY,(DF347)
-        LD	IX,(DF2DC)
-        CALL	CALSLT
-        CALL	C.0128
+        CALL	C.0107                  ; restore DOS TPA segments
+        LD	IY,(LF348-1)
+        LD	IX,(LF2DC)
+        CALL	CALSLT                  ; invoke DOS kernel prompt handler
+        CALL	C.0128                  ; select BDOS segments
         POP	AF
-        CALL	C.0349
+        CALL	C.0349                  ; restore segment page 2
         POP	AF
-        LD	H,40H	; "@"
-        CALL	ENASLT
+        LD	H,HIGH 4000H
+        CALL	ENASLT                  ; restore slot page 1
+
+	IF ROMVER GE 1
         POP	DE
         POP	IY
+        ENDIF
+                                        ; disable ENKRN entry and install PROMPT handler and quit
+
 
 C$00DD:	LD	A,0C9H
 
-C$00DF:	LD	(DF368),A
+C$00DF:	LD	(XF368+0),A
+
+	IF ROMVER GE 1
         EXX
-        LD	HL,IF24F
+        ENDIF
+
+        LD	HL,LF24F
         LD	DE,I$00F6
         LD	B,3
 J$00EB:	LD	C,(HL)
@@ -851,180 +884,184 @@ J$00EB:	LD	C,(HL)
         INC	HL
         INC	DE
         DJNZ	J$00EB
+
+	IF ROMVER GE 1
         EXX
+        ENDIF
+
         RET
 
 I$00F6:	JP	J$00B0
 
-;
-; call routine in BDOS code segment
-;
+;	  Subroutine call routine in BDOS code segment
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-R.00F9:	CALL	C.0128
-        CALL	CLPRM1+1
+R.00F9:	CALL	C.0128                  ; select BDOS segments
+        CALL	CLPRM1+1                ; CALL HL
         JR	C.0107
 
-;
-; call BDOS handler in BDOS code segment
-;
+;	  Subroutine call BDOS handler in BDOS code segment
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-R.0101:	CALL	C.0128
+R.0101:	CALL	C.0128                  ; select BDOS segments
         CALL	BDOS
 
-;
-; restore DOS TPA segments (F1FA)
-;
+;	  Subroutine restore DOS TPA segments (F1FA)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.0107:	DI
         PUSH	AF
 R.0109:	JR	J$0114
-        LD	A,(DF2EB)
+        LD	A,(LF2EB)               ; TPA secundairy slot register value
 R.010E: LD	(0),A
         LD	(DFFFF),A
-J$0114:	LD	A,(DF2EA)
+J$0114:	LD	A,(LF2EA)               ; TPA primairy slot register value
         OUT	(0A8H),A
-        LD	A,(DF2CB)
-        CALL	C.0335
-        LD	A,(DF2CD)
-        CALL	C.0349
+        LD	A,(LF2CB)               ; saved TPA segment page 0
+        CALL	C.0335                  ; select segment page 0
+        LD	A,(LF2CD)               ; saved TPA segment page 2
+        CALL	C.0349                  ; select segment page 2
         POP	AF
         EI
         RET
 
-;
-; Activate BDOS segments (F1F7)
-;
+;	  Subroutine activate BDOS segments (F1F7)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.0128:	DI
         PUSH	AF
 R.012A:	JR	J$013D
         LD	A,(DFFFF)
         CPL
-        LD	(DF2EB),A
+        LD	(LF2EB),A               ; save current secundairy slotregister
         AND	0CCH
 R.0135:	OR	0
 R.0137: LD	(0),A
         LD	(DFFFF),A
 J$013D:	IN	A,(0A8H)
-        LD	(DF2EA),A
+        LD	(LF2EA),A               ; save current primairy slotregister
         AND	0CCH
 R.0144:	OR	00H
         OUT	(0A8H),A
-        CALL	C.033B
-        LD	(DF2CB),A
-        CALL	C.0345
-        LD	(DF2CC),A
-        CALL	C.034F
-        LD	(DF2CD),A
-        LD	A,(DF2D0)
-        CALL	C.0335
-        LD	A,(DF2CF)
-        CALL	C.0349
+        CALL	C.033B                  ; get current segment page 0
+        LD	(LF2CB),A               ; save TPA segment page 0
+        CALL	C.0345                  ; get current segment page 1
+        LD	(LF2CC),A               ; save TPA segment page 1
+        CALL	C.034F                  ; get current segment page 2
+        LD	(LF2CD),A               ; save TPA segment page 2
+        LD	A,(LF2D0)               ; BDOS code segment
+        CALL	C.0335                  ; select segment page 0
+        LD	A,(DF2CF)               ; BDOS data segment
+        CALL	C.0349                  ; select segment page 2
         POP	AF
         EI
         RET
 
-;
-; transfer to/from segment (F1D6)
-;
+;	  Subroutine transfer to/from segment (F1D6)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.0169:	PUSH	AF
         DI
-        CALL	C.0335
+        CALL	C.0335                  ; select segment page 0
         LDIR
-        LD	A,(DF2D0)
-        CALL	C.0335
+        LD	A,(LF2D0)               ; BDOS code segment
+        CALL	C.0335                  ; select segment page 0
         EI
         POP	AF
         RET
 
-;
-; interslot call to main-bios (F1D9)
-;
+;	  Subroutine interslot call to main-bios (F1D9)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.0179:	EX	AF,AF'
         PUSH	AF
-        CALL	C.025E
+        CALL	C.025E                  ; select BIOS in page 0
 R.017E:	NOP
-        CALL	C.034F
+        CALL	C.034F                  ; get current segment page 2
         PUSH	AF
-        CALL	C.033B
+        CALL	C.033B                  ; get current segment page 0
         PUSH	AF
-        LD	A,(DF2CB)
-        CALL	C.0335
-        LD	A,(DF2CD)
-        CALL	C.0349
+        LD	A,(LF2CB)               ; saved TPA segment page 0
+        CALL	C.0335                  ; select segment page 0
+        LD	A,(LF2CD)               ; saved TPA segment page 2
+        CALL	C.0349                  ; select segment page 2
         EI
         EX	AF,AF'
-        CALL	CLPRM1
+        CALL	CLPRM1                  ; CALL IX
         EX	AF,AF'
-        CALL	C.027D
+        CALL	C.027D                  ; select DOS memorymapper on page 0
         POP	AF
-        CALL	C.0335
+        CALL	C.0335                  ; select segment page 0
         POP	AF
-        CALL	C.0349
+        CALL	C.0349                  ; select segment page 2
 R.01A4:	JR	J$01AA
         POP	AF
-        CALL	C.024E
+        CALL	C.024E                  ; change secundairy slot register
 J$01AA:	POP	AF
         EX	AF,AF'
         EI
         RET
 
-;
-; print string via CHPUT (F1DC)
-;
+;	  Subroutine print string via CHPUT (F1DC)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-R.01AE:	CALL	C.025E
+R.01AE:	CALL	C.025E                  ; select BIOS in page 0
 R.01B1:	NOP
-        LD	A,(DF2CB)
-        CALL	C.0335
+        LD	A,(LF2CB)               ; saved TPA segment page 0
+        CALL	C.0335                  ; select segment page 0
 J$01B8:	PUSH	HL
         PUSH	BC
         LD	B,(HL)
-        LD	A,(DF2CD)
-        CALL	C.0349
+        LD	A,(LF2CD)               ; saved TPA segment page 2
+        CALL	C.0349                  ; select segment page 2
         LD	A,B
         EI
         CALL	CHPUT
         DI
-        LD	A,(DF2CF)
-        CALL	C.0349
+        LD	A,(DF2CF)               ; BDOS data segment
+        CALL	C.0349                  ; select segment page 2
         POP	BC
         POP	HL
         INC	HL
         DJNZ	J$01B8
-        LD	A,(DF2D0)
-        CALL	C.0335
-        CALL	C.027D
+        LD	A,(LF2D0)               ; BDOS code segment
+        CALL	C.0335                  ; select segment page 0
+        CALL	C.027D                  ; select DOS memorymapper on page 0
 R.01DB:	JR	J$01E1
         POP	AF
-        CALL	C.024E
+        CALL	C.024E                  ; change secundairy slot register
 J$01E1:	EI
         RET
 
-;
-; KEYINT
-;
+;	  Subroutine interrupt handler (F1E5)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.01E3:	DI
         PUSH	AF
         PUSH	HL
         PUSH	BC
-        LD	HL,(DF2D3)
+        LD	HL,(LF2D3)
         OR	A
-        SBC	HL,SP
-        JR	C,J$01F6
+        SBC	HL,SP                   ; already using the KEYINT temporary stack ?
+        JR	C,J$01F6                ; nope, switch to temporary stack
         LD	BC,200
         SBC	HL,BC
-        JR	C,J$0207
-J$01F6:	LD	(DF2D1),SP
-        LD	SP,(DF2D3)
+        JR	C,J$0207                ; yep, invoke KEYINT in BIOS
+J$01F6:	LD	(LF2D1),SP              ; save stackpointer
+        LD	SP,(LF2D3)              ; KEYINT temporary stack
         CALL	C.020F
-        LD	SP,(DF2D1)
-        JR	J$020A
+        LD	SP,(LF2D1)              ; restore stackpointer
+        JR	J$020A                  ; quit
 
-J$0207:	CALL	C.020F
+J$0207:	CALL	C.020F                  ; invoke KEYINT in BIOS
 
 J$020A:	POP	BC
         POP	HL
@@ -1032,34 +1069,34 @@ J$020A:	POP	BC
         EI
         RET
 
-C.020F:	CALL	C.025E
+C.020F:	CALL	C.025E                  ; select BIOS in page 0
 R.0212:	NOP
-        CALL	C.033B
-R.0216:	CP	00H
+        CALL	C.033B                  ; get current segment page 0
+R.0216:	CP	0
         JR	NZ,J$0247
         PUSH	AF
-        CALL	C.0345
+        CALL	C.0345                  ; get current segment page 1
         PUSH	AF
-        CALL	C.034F
+        CALL	C.034F                  ; get current segment page 2
         PUSH	AF
-        LD	A,(DF2CD)
-        CALL	C.0349
-        LD	A,(DF2CC)
-        CALL	C.033F
-        LD	A,(DF2CB)
-        CALL	C.0335
-        CALL	KEYINT
+        LD	A,(LF2CD)               ; saved TPA segment page 2
+        CALL	C.0349                  ; select segment page 2
+        LD	A,(LF2CC)               ; saved TPA segment page 1
+        CALL	C.033F                  ; select segment page 1
+        LD	A,(LF2CB)               ; saved TPA segment page 0
+        CALL	C.0335                  ; select segment page 0
+        CALL	KEYINT                  ; invoke BIOS interrupt handler
         DI
         POP	AF
-        CALL	C.0349
+        CALL	C.0349                  ; select segment page 2
         POP	AF
-        CALL	C.033F
+        CALL	C.033F                  ; select segment page 1
         POP	AF
-        CALL	C.0335
+        CALL	C.0335                  ; select segment page 0
         JR	R.024A
 
-J$0247:	CALL	KEYINT
-R.024A:	JP	C.027D
+J$0247:	CALL	KEYINT                  ; invoke BIOS interrupt handler
+R.024A:	JP	C.027D                  ; select DOS memorymapper on page 0
         POP	AF
 
 C.024E:	PUSH	BC
@@ -1069,7 +1106,7 @@ C.024E:	PUSH	BC
         LD	B,A
         AND	3FH
 R.0256:	OR	0
-        CALL	C004B			; change secundairy slotregister
+        CALL	X004B			; restore secundairy slotregister (CALSLT/CALLF)
         POP	DE
         POP	BC
         RET
@@ -1077,28 +1114,28 @@ R.0256:	OR	0
 C.025E:	DI
 R.025F:	JR	J$0271
 R.0261:	LD	A,(0)
-        LD	(DF2E0),A
+        LD	(LF2E0),A               ; save current secundairy slot register (from SLTTBL)
         AND	0FCH
 R.0269:	OR	00H
-        LD	(0),A
-R.026E:	CALL	C.024E
+R.026B: LD	(0),A
+R.026E:	CALL	C.024E                  ; change secundairy slot register
 J$0271:	IN	A,(0A8H)
         AND	0FCH
 R.0275:	OR	00H
         OUT	(0A8H),A
-        LD	A,(DF2E0)
+        LD	A,(LF2E0)
         RET
 
-;
-; DOS mapper slot on page 0 (F1FD)
-;
+;	  Subroutine select DOS memorymapper on page 0 (F1FD)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.027D:	DI
 R.027E:	JR	J$0291
 
 ?.0280:	LD	A,(DFFFF)
         CPL
-        LD	(DF2E0),A
+        LD	(LF2E0),A
         AND	0FCH
 R.0289:	OR	0
 R.028B:	LD	(0),A
@@ -1107,7 +1144,7 @@ J$0291:	IN	A,(0A8H)
         AND	0FCH
 R.0295:	OR	0
         OUT	(0A8H),A
-        LD	A,(DF2E0)
+        LD	A,(LF2E0)
         RET
 
 R.029D:	RET
@@ -1115,72 +1152,72 @@ R.029D:	RET
         LD	(DFFFF),A
         RET
 
-;
-; allocate segment (F200)
-;
+;	  Subroutine allocate segment (F200)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.02A4:	PUSH	HL
-        LD	HL,C005C
+        LD	HL,X005C                ; ALL_SEG
         JR	J$02AE
-;
-; free segment (F203)
-;
+
+;	  Subroutine free segment (F203)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.02AA:	PUSH	HL
-        LD	HL,C005F
+        LD	HL,X005F                ; FRE_SEG
 J$02AE:	PUSH	DE
-        CALL	CF377
+        CALL	XF377
         POP	DE
         POP	HL
         RET
 
-;
-; RDSEG (F206)
-;
-
+;	  Subroutine RDSEG (F206)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.02B5:	DI
         PUSH	HL
         PUSH	BC
         LD	B,A
-        CALL	C.034F
+        CALL	C.034F                  ; get current segment page 2
         LD	C,A
         LD	A,B
-        CALL	C.0349
+        CALL	C.0349                  ; select segment page 2
         RES	6,H
         SET	7,H
         LD	B,(HL)
         LD	A,C
-        CALL	C.0349
+        CALL	C.0349                  ; select segment page 2
         LD	A,B
         POP	BC
         POP	HL
         RET
 
-;
-; WRSEG (F209)
-;
+;	  Subroutine WRSEG (F209)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.02CE:	DI
         PUSH	HL
         PUSH	BC
         LD	B,A
-        CALL	C.034F
+        CALL	C.034F                  ; get current segment page 2
         LD	C,A
         LD	A,B
-        CALL	C.0349
+        CALL	C.0349                  ; select segment page 2
         RES	6,H
         SET	7,H
         LD	(HL),E
         LD	A,C
-        CALL	C.0349
+        CALL	C.0349                  ; select segment page 2
         POP	BC
         POP	HL
         RET
 
-;
-; CALLF segment (F20F)
-;
+;	  Subroutine CALLF segment (F20F)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.02E6:	EXX
         EX	(SP),HL
@@ -1197,98 +1234,127 @@ R.02E6:	EXX
         EX	(SP),HL
         EXX
 
-;
-; CALSEG (F20C)
-;
+;	  Subroutine CALSEG (F20C)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.02F6:	EXX
         EX	AF,AF'
         PUSH	IX
         POP	HL
-        CALL	C.0325
+        CALL	C.0325                  ; get current segment
         PUSH	AF
         PUSH	HL
         PUSH	IY
         POP	AF
-        CALL	C.0315
+        CALL	C.0315                  ; select segment
         EX	AF,AF'
         EXX
-        CALL	CLPRM1
+        CALL	CLPRM1                  ; CALL IX
         EXX
         EX	AF,AF'
         POP	HL
         POP	AF
-        CALL	C.0315
+        CALL	C.0315                  ; select segment
         EX	AF,AF'
         EXX
         RET
 
-;
-; ENASEG (F212)
-;
+;	  Subroutine ENASEG (F212)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.0315:	BIT	7,H
         JR	NZ,J$031F
         BIT	6,H
-        JR	Z,C.0335
-        JR	C.033F
+        JR	Z,C.0335                ; select segment page 0
+        JR	C.033F                  ; select segment page 1
 
 J$031F:	BIT	6,H
-        JR	Z,C.0349
-        JR	C.0356
+        JR	Z,C.0349                ; select segment page 2
+        JR	C.0356                  ; select segment page 3
 
-;
-; get current segment (F215)
-;
+;	  Subroutine get current segment (F215)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.0325:	BIT	7,H
         JR	NZ,J$032F
         BIT	6,H
-        JR	Z,C.033B
-        JR	C.0345
+        JR	Z,C.033B                ; get current segment page 0
+        JR	C.0345                  ; get current segment page 1
 
 J$032F:	BIT	6,H
-        JR	Z,C.034F
-        JR	C.0353
+        JR	Z,C.034F                ; get current segment page 2
+        JR	C.0353                  ; get current segment page 3
 
-;
-; 
-;
+;	  Subroutine select segment page 0
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-C.0335:	LD	(DF2C7),A
+C.0335:	LD	(LF2C7),A
         OUT	(0FCH),A
         RET
 
-C.033B:	LD	A,(DF2C7)
+;	  Subroutine get segment page 0
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.033B:	LD	A,(LF2C7)
         RET
 
-C.033F:	LD	(DF2C8),A
+;	  Subroutine select segment page 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.033F:	LD	(LF2C8),A
         OUT	(0FDH),A
         RET
 
-C.0345:	LD	A,(DF2C8)
+;	  Subroutine get segment page 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0345:	LD	A,(LF2C8)
         RET
 
-C.0349:	LD	(DF2C9),A
+;	  Subroutine select segment page 2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0349:	LD	(LF2C9),A
         OUT	(0FEH),A
         RET
 
-C.034F:	LD	A,(DF2C9)
+;	  Subroutine get segment page 2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.034F:	LD	A,(LF2C9)
         RET
 
-C.0353:	LD	A,(DF2CA)
+;	  Subroutine get segment page 3
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0353:	LD	A,(LF2CA)
+
+;	  Subroutine select segment page 3 (dummy)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.0356:	RET
 
-;
-; RDSLT (F1E8)
-;
+;	  Subroutine RDSLT (F1E8)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.0357:	RES	6,D
         JR	J$035D
 
-;
-; WRSLT (F1EB)
-;
+;	  Subroutine WRSLT (F1EB)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.035B:	SET	6,D
 J$035D:	DI
@@ -1297,7 +1363,7 @@ J$035D:	DI
         LD	(R.0394+1),HL
         LD	C,A
         LD	B,D
-        CALL	C.043C
+        CALL	C.043C                  ; get slotmasks
         BIT	7,C                     ; slot expanded ?
         JR	Z,C.038A                ; nope,
         CALL	C.0408                  ; change secundairy slot register
@@ -1313,12 +1379,16 @@ J$035D:	DI
         JR	NZ,J$0382
         LD	A,E
         LD	(DFFFF),A               ; yep, change secundairy slot register directly
-J$0382:	CALL	NZ,C004B		; nope, change secundairy slot register with helper routine
+J$0382:	CALL	NZ,X004B		; nope, restore secundairy slotregister (CALSLT/CALLF)
         LD	(HL),E
         POP	HL
         LD	A,C
         LD	E,C
         RET
+
+;	  Subroutine RDSLT/WRSLT on primairy slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.038A:	IN	A,(0A8H)
         LD	B,A
@@ -1335,9 +1405,9 @@ R.0394:	LD	DE,0
         LD	A,E
         RET
 
-;
-; CALLF (F1F4)
-;
+;	  Subroutine CALLF (F1F4)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.03A2:	EXX
         EX	AF,AF'
@@ -1353,9 +1423,9 @@ R.03A2:	EXX
         POP	IX
         JR	J$03B9
 
-;
-; CALSLT (F1EE)
-;
+;	  Subroutine CALSLT (F1EE)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.03B1:	EXX
         EX	AF,AF'
@@ -1364,7 +1434,7 @@ R.03B1:	EXX
         PUSH	IY
         POP	AF
 J$03B9:	LD	C,A
-        CALL	C.043C
+        CALL	C.043C                  ; get slotmasks
         BIT	7,C                     ; slot expanded ?
         JR	Z,C.03E8                ; nope,
         CALL	C.0408                  ; change secundairy slot register
@@ -1376,7 +1446,7 @@ J$03B9:	LD	C,A
         EX	AF,AF'
         POP	BC
         POP	HL
-        LD	A,I
+        LD	A,I                     ; save interrupt state
         DI
         POP	DE
         PUSH	AF
@@ -1386,14 +1456,18 @@ J$03B9:	LD	C,A
         JR	NZ,J$03DC
         LD	A,E
         LD	(DFFFF),A               ; yes, change secundairy slot register directly
-J$03DC:	CALL	NZ,C004B		; nope, change secundairy slot register with helper routine
+J$03DC:	CALL	NZ,X004B		; nope, restore secundairy slotregister (CALSLT/CALLF)
         LD	(HL),E
         POP	AF
         JP	PO,J$03E5
-        EI
+        EI                              ; previous, interrupts where enabled, reenable
 J$03E5:	EX	AF,AF'
         EXX
         RET
+
+;	  Subroutine CALSLT on primairy slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.03E8:	IN	A,(0A8H)
         PUSH	AF
@@ -1404,25 +1478,28 @@ C.03E8:	IN	A,(0A8H)
         DI
         JP	CLPRIM
 
-;
-; ENASLT (F1F1)
-;
+;	  Subroutine ENASLT (F1F1)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 R.03F3:	PUSH	HL
         LD	C,A
         LD	B,H
-        CALL	C.043C
+        CALL	C.043C                  ; get slotmasks
         BIT	7,C                     ; slot expanded ?
         CALL	NZ,C.0408               ; yep, change secundairy slot register
         IN	A,(0A8H)
         AND	(HL)
         INC	HL
-
-C$0402:	OR	(HL)
+	OR	(HL)
         DI
         OUT	(0A8H),A
         POP	HL
         RET
+
+;	  Subroutine change secundairy slot register
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.0408:	PUSH	HL
         AND	03H
@@ -1434,11 +1511,11 @@ C.0408:	PUSH	HL
         RRCA
         RRCA
         LD	C,A
-        CALL	C.043C
+        CALL	C.043C                  ; get slotmasks
         DI
         POP	DE
         LD	A,(DE)
-        LD	(DF2E0),A
+        LD	(LF2E0),A
         AND	(HL)
         INC	HL
         OR	(HL)
@@ -1454,24 +1531,28 @@ C.0408:	PUSH	HL
         JR	NZ,J$0432
         LD	A,L
         LD	(DFFFF),A               ; yep, change secundairy slot register directly
-J$0432:	CALL	NZ,C0046		; nope, change secundairy slotregister with helper routine
-        LD	A,(DF2E0)
+J$0432:	CALL	NZ,X0046		; nope, restore secundairy slotregister (RDSLT/WRSLT)
+        LD	A,(LF2E0)
         LD	C,A
         LD	A,H
         POP	HL
         RET
 
-C.043C:	AND	03H	; 3 
+;	  Subroutine get slotmasks
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.043C:	AND	03H
         LD	D,A
         LD	A,B
         RRCA
         RRCA
         RRCA
         RRCA
-        AND	0CH	; 12 
+        AND	0CH
         OR	D
         LD	E,A
-        LD	D,00H
+        LD	D,0
         LD	HL,I$0450
         ADD	HL,DE
         ADD	HL,DE
@@ -1483,39 +1564,39 @@ I$0450:	DEFB	0FCH,000H,0FCH,001H,0FCH,002H,0FCH,003H
         DEFB	03FH,000H,03FH,040H,03FH,080H,03FH,0C0H
 
         .DEPHASE
-L4418	EQU	$-I4418
+S4418	EQU	$-I4418
 
-I4888:	DEFW	R.0045
-        DEFW	R.0169
-        DEFW	R.0179
-        DEFW	R.01AE
-        DEFW	R.007B
-        DEFW	R.0073
-        DEFW	R.01E3
-        DEFW	R.0357
-        DEFW	R.035B
-        DEFW	R.03B1
-        DEFW	R.03F3
-        DEFW	R.03A2
-        DEFW	C.0128
-        DEFW	C.0107
-        DEFW	C.027D
-        DEFW	R.02A4
-        DEFW	R.02AA
-        DEFW	R.02B5
-        DEFW	R.02CE
-        DEFW	R.02F6
-        DEFW	R.02E6
-        DEFW	C.0315
-        DEFW	C.0325
-        DEFW	C.0335
-        DEFW	C.033B
-        DEFW	C.033F
-        DEFW	C.0345
-        DEFW	C.0349
-        DEFW	C.034F
-        DEFW	C.0356
-        DEFW	C.0353
+I4888:	DEFW	R.0045                  ; F1D3
+        DEFW	R.0169                  ; F1D6
+        DEFW	R.0179                  ; F1D9
+        DEFW	R.01AE                  ; F1DC
+        DEFW	R.007B                  ; F1DF
+        DEFW	R.0073                  ; F1E2
+        DEFW	R.01E3                  ; F1E5
+        DEFW	R.0357                  ; F1E8
+        DEFW	R.035B                  ; F1EB
+        DEFW	R.03B1                  ; F1EE
+        DEFW	R.03F3                  ; F1F1
+        DEFW	R.03A2                  ; F1F4
+        DEFW	C.0128                  ; F1F7
+        DEFW	C.0107                  ; F1FA
+        DEFW	C.027D                  ; F1FD
+        DEFW	R.02A4                  ; F200
+        DEFW	R.02AA                  ; F203
+        DEFW	R.02B5                  ; F206
+        DEFW	R.02CE                  ; F209
+        DEFW	R.02F6                  ; F20C
+        DEFW	R.02E6                  ; F20F
+        DEFW	C.0315                  ; F212
+        DEFW	C.0325                  ; F215
+        DEFW	C.0335                  ; F218
+        DEFW	C.033B                  ; F21B
+        DEFW	C.033F                  ; F21E
+        DEFW	C.0345                  ; F221
+        DEFW	C.0349                  ; F224
+        DEFW	C.034F                  ; F227
+        DEFW	C.0356                  ; F22A
+        DEFW	C.0353                  ; F22D
         DEFW	0
 
 I48C8:	DEFW	001DH
@@ -1593,13 +1674,13 @@ I48C8:	DEFW	001DH
         DEFW	044BH
         DEFW	0
 
-;	  Subroutine __________________________
+;	  Subroutine initialize memorymapper variables
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C495C:	LD	(DF343),A		; disksystem page 2 ram = current page 2 slotid
+C495C:	LD	(RAMAD2),A		; disksystem page 2 ram = current page 2 slotid
         CALL	C4A15			; check and invoke memorymapper with at least 6 pages
-        RET	C
+        RET	C                       ; error, quit
         EX	DE,HL
         LD	HL,KBUF+32
         SBC	HL,DE			; number of memorymappers*2
@@ -1610,7 +1691,7 @@ C495C:	LD	(DF343),A		; disksystem page 2 ram = current page 2 slotid
         CALL	C4BBE			; allocate memory (adjust BASIC areapointers)
         POP	DE
         RET	C			; error, quit
-        LD	(DF2C5),HL		; memorymappertable
+        LD	(LF2C5),HL		; memorymappertable
         EX	DE,HL
 J4976:	LD	A,(HL)
         OR	A
@@ -1629,13 +1710,13 @@ J4984:	LD	(DE),A
         JR	J4976			; next memorymapper
 
 J498A:	LD	(DE),A			; endmarker
-        LD	HL,(DF2C5)
+        LD	HL,(LF2C5)
         LD	A,(HL)			; slotid of disksystem memorymapper
         PUSH	HL
-        LD	(DF344),A		; disksystem page 3 ram
-        LD	(DF342),A		; disksystem page 1 ram
-        LD	(DF341),A		; disksystem page 0 ram
-        LD	H,80H
+        LD	(RAMAD3),A		; disksystem page 3 ram
+        LD	(RAMAD1),A		; disksystem page 1 ram
+        LD	(RAMAD0),A		; disksystem page 0 ram
+        LD	H,HIGH 8000H
         CALL	ENASLT			; enable disksystem ram on page 2
         POP	HL
         INC	HL
@@ -1652,7 +1733,7 @@ J49A8:	SUB	4
         DEC	A
         LD	(DF2CF),A		; BDOS data segment
         DEC	A
-        LD	(DF2D0),A		; BDOS code segment
+        LD	(LF2D0),A		; BDOS code segment
         SUB	4			; 4 segments for DOS tpa
         INC	HL
         LD	(HL),A			; number of free segments
@@ -1664,12 +1745,12 @@ J49A8:	SUB	4
         LD	(HL),4+2
         ENDIF
 
-        LD	DE,IF314
-        LD	HL,DF2C7
+        LD	DE,LF314
+        LD	HL,LF2C7
         LD	A,3
-J49C1:	LD	(DE),A
+J49C1:	LD	(DE),A                  ; initialize TPA segment
         INC	DE
-        LD	(HL),A			; setup current segment
+        LD	(HL),A			; initialize current segment
         INC	HL
         DEC	A
         JP	P,J49C1
@@ -1682,7 +1763,7 @@ J49D1:	LD	(HL),0
         JR	NZ,J49D1		; clear 8000H-0BBFFH
         LD	HL,IB062
         LD	(DB064),HL		; BDOS data memory start at 0B062H downwards
-        LD	HL,(DF2C5)		; memorymappertable
+        LD	HL,(LF2C5)		; memorymappertable
         LD	A,(HL)			; slotid
         INC	HL
         PUSH	HL
@@ -1690,19 +1771,19 @@ J49D1:	LD	(HL),0
         DEC	HL
 
         IF	TURBOR EQ 1
-        DEC	(HL)			; last segment is reserved (shadow rom MSX-kanji)
+        DEC	(HL)			; segment is reserved (shadow rom MSX-kanji)
         DEC	HL
-        DEC	(HL)			; last-1 segment is reserved (shadow rom MSX-subrom)
+        DEC	(HL)			; segment is reserved (shadow rom MSX-subrom)
         DEC	HL
-        DEC	(HL)			; last-2 segment is reserved (shadow rom MSX-basicrom)
+        DEC	(HL)			; segment is reserved (shadow rom MSX-basicrom)
         DEC	HL
-        DEC	(HL)			; last-3 segment is reserved (shadow rom MSX-biosrom)
+        DEC	(HL)			; segment is reserved (shadow rom MSX-biosrom)
         DEC	HL
         ENDIF
 
-        DEC	(HL)			; last-4 segment is reserved (BDOS data segment)
+        DEC	(HL)			; segment is reserved (BDOS data segment)
         DEC	HL
-        DEC	(HL)			; last-5 segment is reserved (BDOS code segment)
+        DEC	(HL)			; segment is reserved (BDOS code segment)
         EX	DE,HL
         LD	B,4
 J49F6:	DEC	(HL)
@@ -1727,7 +1808,7 @@ J4A0F:	LD	A,1
         OR	A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine check and invoke memorymapper of 6 or more segments
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1738,12 +1819,12 @@ C4A15:	DI
         LD	(HL),A
         PUSH	HL
         LD	HL,EXPTBL
-J4A20:	BIT	7,(HL)
-        JR	Z,J4A26
+J4A20:	BIT	7,(HL)                  ; slot expanded ?
+        JR	Z,J4A26                 ; nope,
         SET	7,A
 J4A26:	PUSH	HL
         PUSH	AF
-        LD	H,80H
+        LD	H,HIGH 8000H
         CALL	ENASLT
         CALL	C4A8A			; check if memorymapper and count the segments
         OR	A
@@ -1822,20 +1903,20 @@ J4A6F:	INC	HL
         POP	HL
         POP	AF
         PUSH	HL
-        LD	H,80H
+        LD	H,HIGH 8000H
         CALL	ENASLT			; restore page 1
         POP	HL
         LD	A,(HL)
-        CP	6			; has the preffered memorymapper 6 or more segments
+        CP	6			; has the prefered memorymapper 6 or more segments ?
         RET	C			; nope, quit
         PUSH	HL
         INC	HL
-        CALL	C4ADD			; enable preffered memorymapper on page 2 and 3
+        CALL	C4ADD			; select prefered memorymapper on page 2 and 3
         POP	HL
-        XOR	A
+        XOR	A                       ; no error
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine check if memorymapper and count the segments
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1895,13 +1976,13 @@ J4AD7:	LD	A,1
         LD	A,B
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine select prefered memorymapper on page 2 and 3
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C4ADD:	LD	A,(HL)
         PUSH	AF
-        LD	H,80H
+        LD	H,HIGH 8000H
         CALL	ENASLT
         XOR	A
         OUT	(0FEH),A
@@ -1944,7 +2025,7 @@ C4ADD:	LD	A,(HL)
         LD	(HL),A			; adjust SLTTBL entry, because thats changed after the copy!
 J4B25:	RET
 
-;	  Subroutine __________________________
+;	  Subroutine setup memorymapper pointer table and segment allocationtable
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2012,9 +2093,13 @@ J4B61:	LD	A,D
         JR	Z,J4BA2
         RET
 
+;	  Subroutine memorymapper function 0
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J4B70:	PUSH	HL
-        LD	HL,(DF2C5)
-        LD	C,(HL)
+        LD	HL,(LF2C5)
+        LD	C,(HL)                  ; primairy memory mapper slotid
         INC	HL
         LD	D,(HL)
         INC	HL
@@ -2022,9 +2107,9 @@ J4B70:	PUSH	HL
         POP	HL
         LD	A,C
         CALL	C4BB2
-        LD	A,LOW IF200
+        LD	A,LOW LF200
         CALL	C4BB2
-        LD	A,HIGH IF200
+        LD	A,HIGH LF200
         CALL	C4BB2
         LD	A,E
         CALL	C4BB2
@@ -2034,23 +2119,31 @@ J4B70:	PUSH	HL
         CALL	C4BB2
         JP	C4BB2
 
+;	  Subroutine memorymapper function 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J4B99:	POP	DE
         POP	AF
-        LD	HL,(DF2C5)
+        LD	HL,(LF2C5)
         LD	A,(HL)
         PUSH	AF
         PUSH	DE
         RET
 
+;	  Subroutine memorymapper function 2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J4BA2:	POP	DE
         POP	AF
-        LD	HL,(DF2C5)
+        LD	HL,(LF2C5)
         LD	B,(HL)
         INC	HL
         LD	A,(HL)
         INC	HL
         LD	C,(HL)
-        LD	HL,IF200
+        LD	HL,LF200
         PUSH	AF
         PUSH	DE
         RET
@@ -2206,7 +2299,7 @@ C4C74:	LD	HL,L4CA0
 C4C77:	PUSH	BC
         PUSH	DE
         LD	E,A
-        LD	A,(DF30F)
+        LD	A,(LF30F)
         OR	A			; double byte active ?
         JR	Z,J4C85
         DEC	HL

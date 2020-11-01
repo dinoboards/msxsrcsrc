@@ -194,6 +194,7 @@ RG10SA	EQU	0FFE9H
 RG11SA	EQU	0FFEAH
 RG18SA	EQU	0FFF1H
 DFFF7	EQU	0FFF7H
+DFFF8   EQU     0FFF8H
 DFFFF	EQU	0FFFFH
 
         DEFB	"CD"
@@ -4870,6 +4871,47 @@ J18C0:	JP	NC,J0546		; illegal function call error
         DEFB	"A"
         POP	IX
         OR	01H
+        ENDIF
+
+        IF      DATFMT EQ 1
+
+        LD      E,24H
+        JR      NZ,J18A7
+        LD      D,A
+        LD      E,13H
+J18A7:  CP      E
+        JR      NC,J18C4
+        LD      B,A
+        CALL    C1956
+        LD      E,32H
+        JR      Z,J18B4
+        LD      E,60H
+J18B4:  CP      E
+        JR      NC,J18C4
+        LD      C,A
+        CALL    C1956
+        JR      NZ,J18C2
+        LD      B,A
+        LD      A,C
+        LD      C,D
+        JR      J18C7
+
+J18C2:  CP      60H
+J18C4:  JP      NC,J0546                ; illegal function call error
+J18C7:  LD      D,A
+        POP     HL
+        PUSH    IX
+        DEC     HL
+        RST     10H
+        LD      A,00H
+        JR      Z,J18D7
+        RST     08H
+        DEFB    ","
+        RST     08H
+        DEFB    "A"
+        OR      01H 
+J18D7:  POP     IX
+
         ENDIF
 
         IF	DATFMT EQ 2
@@ -10901,7 +10943,8 @@ I3C87:	DEFB	"Too many files"
 I3C96:	DEFB	"RAM disk offline"
         DEFB	0
 
-        IF	CNTRY EQ 0
+        IF      KEYTYP EQ 0
+
 J3CA7:	LD	HL,KANAMD
         INC	(HL)
         DEC	(HL)			; ANSI layout ?
@@ -11403,35 +11446,67 @@ I3F71:	DEFB	0FDH,0F4H,092H,0F5H,092H,0F6H,0F7H,0F8H
 
         ENDIF
 
-        IF	CNTRY NE 0
+        IF      KEYTYP NE 0
 
-C3CA7:	CALL	C1947
-        DEC	HL
-        LD	C,(HL)
-        DEC	HL
-        LD	B,(HL)
-        DEC	HL
-        BIT	4,(HL)
-        RET	NZ
-J3CB2:	LD	DE,-5
-        ADD	HL,DE
-        LD	D,(HL)
-        LD	(HL),B
-        INC	HL
-        LD	E,(HL)
-        LD	(HL),C
-        LD	BC,5
-J3CBE:	ADD	HL,BC
-        LD	(HL),D
-J3CC0:	INC	HL
-        LD	(HL),E
+        IF      DATFMT EQ 1
+
+C3CA7:  CALL    C1947
+        LD      BC,-8
+        ADD     HL,BC
+        LD      D,H
+        LD      E,L
+        LD      B,(HL)
+        INC     HL
+        LD      C,(HL)
+        INC     HL
+        BIT     4,(HL)
+        RET     NZ
+        INC     HL
+        PUSH    BC
+        LD      BC,5
+        LDIR
+        POP     BC
+        INC     DE
+        EX      DE,HL
+        LD      (HL),B
+        INC     HL
+        LD      (HL),C
         RET
 
-C3CC3:	LD	(D.FAF7),A
+        ENDIF
+
+
+        IF      DATFMT EQ 2
+
+C3CA7:  CALL    C1947
+        DEC     HL
+        LD      C,(HL)
+        DEC     HL
+        LD      B,(HL)
+        DEC     HL
+        BIT     4,(HL)
+        RET     NZ
+J3CB2:  LD      DE,-5
+        ADD     HL,DE
+        LD      D,(HL)
+        LD      (HL),B
+        INC     HL
+        LD      E,(HL)
+        LD      (HL),C
+        LD      BC,5
+J3CBE:  ADD     HL,BC
+        LD      (HL),D
+J3CC0:  INC     HL
+        LD      (HL),E
+        RET
+
+        ENDIF
+
+C3CC3:	LD	(AVCSAV),A
         XOR	A
         OUT	(0F8H),A
-J3CC9:	LD	(D.FFF8),A
-J3CCC:	RET
+	LD	(DFFF8),A
+	RET
 
 C3CCD:	RST	28H
 J3CCE:	CP	16
@@ -11449,7 +11524,7 @@ J3CD0:	RET	NC
         RET
 
 C3CE1:	PUSH	HL
-J3CE2:	LD	HL,D.FFF8
+J3CE2:	LD	HL,DFFF8
         AND	(HL)
         OR	E
         LD	(HL),A
@@ -11471,6 +11546,77 @@ I3CEC:	DEFB	00AH			; id
         DEFB	000H			; title color
         DEFB	003H			; native code
         DEFB	0FFH
+
+
+
+; International version, officially not needed
+
+;       Subroutine      PUTCHR
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J3CC9:  PUSH    AF
+        CALL    X3E78                   ; keyclick
+        POP     AF
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C3E62:  LD      HL,(PUTPNT)
+        LD      (HL),A
+        INC     HL
+        LD      A,L
+        CP      (KEYBUF+40) AND 255
+        JR      NZ,J3E6F
+        LD      HL,KEYBUF
+J3E6F:  LD      A,(GETPNT)
+        CP      L
+        RET     Z
+        LD      (PUTPNT),HL
+        RET
+
+;       Subroutine      KYKLOK
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J3F04:  LD      A,(NEWKEY+6)
+        LD      E,A
+        OR      0FEH                    ; only SHIFT status remains
+        BIT     4,E
+        JR      NZ,X3E96                ; CODE not pressed,
+        AND     0FDH
+X3E96:  CPL
+        INC     A
+        LD      (KANAST),A              ; dead status
+
+
+
+;       Subroutine      keyclick
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+X3E78:  LD      A,(CLIKSW)
+        AND     A
+        RET     Z
+        LD      A,(CLIKFL)
+        AND     A
+        RET     NZ
+        LD      A,0FH
+        LD      (CLIKFL),A
+        DI
+        OUT     (0ABH),A
+        LD      A,0AH
+X3E8C:  DEC     A
+        JR      NZ,X3E8C                ; wait 0.05 ms (in Z80 mode!)
+        LD      A,0EH
+        OUT     (0ABH),A
+        EI
+        RET
+
+; *************************************
+; End of PUTCHR and KYKLOK
+; *************************************
 
         ENDIF
 

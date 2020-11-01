@@ -189,12 +189,11 @@ DBBEE	EQU	0BBEEH	; start of environment chain
 DBBF0	EQU	0BBF0H	; --SL-
 DBBF2	EQU	0BBF2H	; start of the FIB chain
 DBBF4	EQU	0BBF4H	; start of device chain
-IBBF5	EQU	0BBF5H	; ----I
 DBBF6	EQU	0BBF6H	; last FAT buffer read
 DBBF8	EQU	0BBF8H	; start of the buffer chain
 IBBFA	EQU	0BBFAH	; number of buffers
-DBBFB	EQU	0BBFBH	; ---LI
-DBBFD	EQU	0BBFDH	; --S--
+DBBFB	EQU	0BBFBH	; DPB ramdisk
+DBBFD	EQU	0BBFDH	; last BDOS errorcode
 DBBFE	EQU	0BBFEH	; --SLI
 DBBFF	EQU	0BBFFH
 IBC00	EQU	0BC00H	; ramdisk bootsector
@@ -806,7 +805,7 @@ J026A:	POP	BC
 J026D:	EI
         CALL	CF252
         CALL	C0278
-        LD	(DBBFD),A
+        LD	(DBBFD),A               ; save errorcode
         RET
 
 ;	  Subroutine __________________________
@@ -2632,7 +2631,7 @@ A0CFB:	LD	B,0
 ;	     Outputs ________________________
 
 A0CFD:	LD	A,B
-        LD	B,00H
+        LD	B,0
         CALL	C3749			; call program abort routine with DOS segments active
 J0D03:	JR	J0D03			; loop to infinety
 
@@ -2640,7 +2639,7 @@ J0D03:	JR	J0D03			; loop to infinety
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A0D05:	LD	B,(IY+DBBFD-DBB80)
+A0D05:	LD	B,(IY+DBBFD-DBB80)      ; last BDOS errorcode
         XOR	A
         RET
 
@@ -4580,6 +4579,9 @@ J17D1:	OR	A
         SET	4,C			; flag endmarker
         RET
 
+
+
+        IF ROMVER GE 3
 ;	  Subroutine check for double byte header char
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -4591,6 +4593,10 @@ C17D6:	PUSH	HL
 
 I17DC:	DEFB	080H,0A0H
         DEFB	0E0H,0FDH
+
+        ELSE
+C17D6:
+        ENDIF
 
 ;	  Subroutine check for double byte header char if enabled
 ;	     Inputs  ________________________

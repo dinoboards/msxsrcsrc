@@ -369,8 +369,8 @@ GTASPC:	JP	J1901
 PNTINI:	JP	J1909
 SCANR:	JP	J191E
 SCANL:	JP	J1994
-CHGCAP:	JP	K.BCAP
-CHGSND:	JP	K.BSND
+CHGCAP: JP      J0F3D
+CHGSND: JP      J0F7A
 RSLREG:	JP	J140E
 WSLREG:	JP	J1411
 RDVDP:	JP	J140B
@@ -429,7 +429,7 @@ C0190:	PUSH	BC
         LD	D,A			; make sure DE <> 04241H
         INC	HL
         INC	HL
-        RET	
+        RET
 
         DEFS	001B6H-$
 
@@ -443,7 +443,7 @@ J01B6:	POP	AF
         OUT	(0A8H),A
         LD	D,A
         LD	A,(D.FFFF)
-        CPL	
+        CPL
         LD	C,A
         AND	0FCH
         OR	H
@@ -459,12 +459,12 @@ J01B6:	POP	AF
         LD	(HL),E
         PUSH	HL
         PUSH	BC
-        EXX	
+        EXX
         EX	AF,AF'
         CALL	CLPRM1
-        DI	
+        DI
         EX	AF,AF'
-        EXX	
+        EXX
         POP	BC
         POP	HL
         POP	AF
@@ -478,8 +478,8 @@ J01B6:	POP	AF
         OUT	(0A8H),A
         LD	(HL),C
         EX	AF,AF'
-        EXX	
-        RET	
+        EXX
+        RET
 
         DEFS	01F5H-$
 
@@ -887,7 +887,7 @@ J0390:	ADD	A,55H
 ;	Inputs		________________________
 ;	Outputs		________________________
 
-J03AC:	DI	
+J03AC:	DI
         CALL	C03DB			; search subrom
         LD	HL,2			; init entry subrom
         CALL	M7E1A			; read word from extension ROM
@@ -943,14 +943,14 @@ J0402:	POP	DE
         LD	A,C
         CP	04H	; 4 
         JR	C,J03E0
-        SCF	
+        SCF
         RET
 
 J040C:	LD	HL,SLTATR+(0 AND 3)*16+(0 AND 12)+0
         LD	A,(HL)
         LD	(EXPTBL+0),A
         LD	(HL),0
-        RET	
+        RET
 
 ; orginal init MSX2 and above
 
@@ -982,7 +982,7 @@ J0416:	XOR	A
         CALL	C0217			; CALSLT (change system RAM page 3 if RAM in same slot as MA-20 found)
         JP	M7B61
 
-J044C:	DI	
+J044C:	DI
         LD	C,00H
         LD	DE,EXPTBL
         LD	HL,SLTATR
@@ -1069,7 +1069,7 @@ C04D0:	AND	03H
         LD	HL,SLTTBL
         ADD	A,L
         LD	L,A
-        RET	
+        RET
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1077,9 +1077,9 @@ C04D0:	AND	03H
 
 C04D8:	LD	A,C
         ADD	A,A
-        RLCA	
-        RLCA	
-        RLCA	
+        RLCA
+        RLCA
+        RLCA
         OR	C
         AND	3CH	; "<"
         ADD	A,0C9H
@@ -1087,7 +1087,7 @@ C04D8:	LD	A,C
         LD	A,00H
         ADC	A,0FCH
         LD	H,A
-        RET	
+        RET
 
         DEFS	04F0H-$,0
 
@@ -1205,9 +1205,9 @@ C0564:	IN	A,(0AAH)
         LD	(OLDKEY+7),A
 
         IF INTHZ EQ 60
-        LD	A,14H
+        LD	A,20
         ELSE
-        LD	A,20H
+        LD	A,32
         ENDIF
 
         LD	(REPCNT),A
@@ -2971,9 +2971,9 @@ J0D3F:	DEC	DE
 
 J0D49:
         IF INTHZ EQ 60
-        LD	A,14H			; autorepeat at 20 keyboardscans (= 666 ms)
+        LD	A,20			; autorepeat at 20 keyboardscans (= 666 ms)
         ELSE
-        LD	A,20H			; autorepeat at 32 keyboardscans (= 640 ms)
+        LD	A,32			; autorepeat at 32 keyboardscans (= 640 ms)
         ENDIF
 
         LD	(REPCNT),A
@@ -3059,33 +3059,125 @@ J0D97:	RRA
 
 
         IF	KEYTYP EQ 0
-        INCLUDE	KEYJAP
+
+        INCLUDE	KEYJAP.MAC
+
         ENDIF
 
 
         IF	KEYTYP EQ 1
-        INCLUDE KEYINT
+
+        INCLUDE KEYINT.MAC
+
         ENDIF
+
 
         IF	KEYTYP EQ 2
-        INCLUDE KEYFR
+
+        INCLUDE KEYFR.MAC
+
         ENDIF
+
 
         IF	KEYTYP EQ 3
-        INCLUDE KEYUK
+
+        INCLUDE KEYUK.MAC
+
         ENDIF
+
 
         IF	KEYTYP EQ 4
-        INCLUDE KEYGER
+
+        INCLUDE KEYGER.MAC
+
         ENDIF
+
 
         IF	KEYTYP EQ 5
-        INCLUDE KEYRUS
+
+        INCLUDE KEYRUS.MAC
+
         ENDIF
 
+
         IF	KEYTYP EQ 6
-        INCLUDE KEYSPA
+
+        INCLUDE KEYSPA.MAC
+
         ENDIF
+
+
+        ORG     00EF1H
+
+;       Subroutine      raise trap
+;       Inputs          ________________________
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+C0EF1:  LD      A,(HL)
+        AND     01H                     ; trap enabled ?
+        RET     Z                       ; nope, quit
+        LD      A,(HL)
+        OR      04H
+        CP      (HL)                    ; trap already raised ?
+        RET     Z                       ; yep, quit
+        LD      (HL),A                  ; raise trap
+        XOR     05H                     ; trap paused ?
+        RET     NZ                      ; yep, quit
+        LD      A,(ONGSBF)
+        INC     A
+        LD      (ONGSBF),A              ; increase trap counter
+        RET
+
+
+        ORG     00F3DH
+
+;       Subroutine      CHGCAP
+;       Inputs          ________________________
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+J0F3D:  AND     A
+        LD      A,0CH
+        JR      Z,J0F43
+        INC     A
+J0F43:  OUT     (0ABH),A
+        RET     
+
+
+        ORG     00F64H
+
+;       Subroutine      make keyclick
+;       Inputs          -
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+J0F64:  LD      A,(CLIKSW)
+        AND     A                       ; keyclicks enabled ?
+        RET     Z                       ; nope, quit
+        LD      A,(CLIKFL)
+        AND     A                       ; keyclick already done (only one click for multiple keys) ?
+        RET     NZ                      ; yep, quit
+        LD      A,0FH
+        LD      (CLIKFL),A              ; no keyclick until the next scan
+        OUT     (0ABH),A                ; set click bit
+        LD      A,10
+J0F77:  DEC     A
+        JR      NZ,J0F77                ; wait
+                                        ; reset click bit
+
+;       Subroutine      change click bit
+;       Inputs          A = 0, A <> 0
+;       Outputs         ________________________
+;       Remark          code identical among keyboard layout versions
+
+J0F7A:  AND     A
+        LD      A,0EH
+        JR      Z,J0F80
+        INC     A
+J0F80:  OUT     (0ABH),A
+        RET     
+
 
         ORG	010C2H
 
@@ -3746,23 +3838,23 @@ J1418:	CALL	H.FORM
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C141C:	OUTI	
-        NOP	
+C141C:	OUTI
+        NOP
         JR	NZ,C141C
         DEC	A
         JR	NZ,C141C
-        RET	
+        RET
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C1425:	INI	
-        NOP	
+C1425:	INI
+        NOP
         JR	NZ,C1425
         DEC	A
         JR	NZ,C1425
-        RET	
+        RET
 
 J142E:	POP	AF
         PUSH	AF
@@ -3777,14 +3869,14 @@ J142E:	POP	AF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C143E:	RRCA	
-        RRCA	
+C143E:	RRCA
+        RRCA
         LD	L,A
         AND	0C0H			; 
         LD	D,A
         LD	A,L
         AND	03H
-        RET	
+        RET
 
 C1448:	LD	B,A
         AND	83H
@@ -3799,16 +3891,16 @@ C1453:	LD	L,A
         AND	3FH
         LD	B,A
         AND	03H
-        RRCA	
-        RRCA	
+        RRCA
+        RRCA
         OR	B
-        RET	
+        RET
 
 J145D:	LD	A,L
         AND	0F3H
         LD	B,A
-        RLCA	
-        RLCA	
+        RLCA
+        RLCA
         AND	0CH
         OR	B
         JP	J026A
@@ -5136,12 +5228,10 @@ J1B87:	LD	A,(NTMSXP)
         RET	NC
         JR	NZ,J1BB7
 
+; *************************************
+; *************************************
 
         IF	KEYTYP EQ 0
-
-; *************************************
-; *************************************
-
 
         AND	A
         JP	P,J1BAC			; plain ascii, print
@@ -5157,11 +5247,14 @@ J1BA4:	CP	0E0H			; E0H-FFH ?
         SUB	20H			; adjust to C0H-DFH
         DEFB	038H			; JR C,xxxx (skip next instruction)
 
+        ELSE
+
+        JR      J1BAC
+
+	ENDIF
 
 ; *************************************
 ; *************************************
-
-        ENDIF
 
         ORG	01BABH
 
@@ -5184,28 +5277,37 @@ J1BBB:	POP	AF
 
 D1BBF:
 
-        IF	CHRGEN EQ 0
-
-        IF	CNTRY EQ 9
-        INCLUDE	CHRKOR
-        ELSE
-        INCLUDE CHRJAP
+        IF      CNTRY EQ 9
+ 
+        INCLUDE CHRKOR.MAC
+ 
         ENDIF
 
+
+        IF      CNTRY EQ 0
+
+        INCLUDE CHRJAP.MAC
+
         ENDIF
 
-        IF	CHRGEN EQ 1
 
-        IF	CNTRY EQ 10
-        INCLUDE	CHRRUS
-        ENDIF
-        IF	CNTRY EQ 5
-        INCLUDE CHRGER
+        IF      CNTRY EQ 10
+
+        INCLUDE CHRRUS.MAC
+
         ENDIF
 
-        IF	(CNTRY NE 10) AND (CNTRY NE 5)
-        INCLUDE CHRINT
+
+        IF      CNTRY EQ 5
+
+        INCLUDE CHRGER.MAC
+
         ENDIF
+
+
+        IF      (CNTRY NE 9) AND (CNTRY NE 0) AND (CNTRY NE 10) AND (CNTRY NE 5)
+
+        INCLUDE CHRINT.MAC
 
         ENDIF
 
