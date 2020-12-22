@@ -1,0 +1,318 @@
+;
+; ROM expansion using more as 2 bytes of workarea and has not own RAM
+; This code does cooperate with the MSX disksystem
+;
+; by Arjen Zeilemaker
+; code taken from msx disksystem, copyright Microsoft,ASCII
+
+; MSX system constants
+
+CHGET	EQU	0009FH
+CHPUT	EQU	000A2H
+YF349	EQU	0F349H
+MEMSIZ	EQU	0F672H
+STKTOP	EQU	0F674H
+SAVSTK	EQU	0F6B1H
+FILTAB	EQU	0F860H
+NULBUF	EQU	0F862H
+BOTTOM	EQU	0FC48H
+HIMEM	EQU	0FC4AH
+EXPTBL  EQU     0FCC1H
+SLTWRK  EQU     0FD09H
+H.CLEA  EQU     0FED0H
+H.LOPD	EQU	0FED5H
+H.PHYD	EQU	0FFA7H
+
+MYSIZ	EQU	128			; number of bytes to allocate
+
+        .Z80
+        ASEG
+        ORG	04000H
+
+        DEFB	"AB"
+        DEFW	$INIT			; ROM expansion INIT routine
+        DEFW	0			; ROM expansion BASIC CALL handler
+        DEFW	0			; ROM expansion BASIC DEVICE handler
+        DEFW	0			; ROM expansion BASIC program
+        DEFW	0
+        DEFW	0
+        DEFW	0
+
+$INIT:	EI
+	LD	A,(H.CLEA+0)
+	CP	0F7H			; H.CLEA still free ?
+	JR	Z,CLEERR		; nope, error
+	CALL	GETSLT			; get my slotid
+	LD	(H.CLEA+1),A
+	LD	(H.LOPD+1),A
+	LD	A,0F7H
+	LD	(H.CLEA+0),A
+	LD	(H.LOPD+0),A
+	LD	HL,$INI2
+	LD	(H.CLEA+2),HL		; setup H.CLEA (take control of system after diskrom initialization)
+	LD	HL,$LOPD
+	LD	(H.LOPD+2),HL		; setup H.LOPD (register disksystem bottom correctly for older diskroms)
+	LD	HL,INISTR
+	CALL	PRTSTR
+	CALL	CHGET			; wait for key
+	RET
+
+
+
+$INI2:	EI
+	PUSH	HL			; save BASIC pointer
+	LD	HL,0C9C9H
+	LD	(H.CLEA+0),HL
+	LD	(H.CLEA+2),HL		; clean up H.CLEA
+	LD	HL,MYSIZ
+	CALL	ALLMEM			; allocate memory
+	JR	C,ALLERR		; quit expansion INIT
+	CALL	SETWRK			; save pointer to workarea
+;
+;
+;
+	LD	HL,SHWSTR
+	CALL	PRTSTR
+	CALL	GETWRK			; get pointer to workarea
+	CALL	PRTWRD
+	LD	HL,SH2STR
+	CALL	PRTSTR
+	LD	HL,MYSIZ
+	CALL	PRTWRD
+	CALL	CHGET			; wait for key
+	POP	HL			; restore BASIC pointer
+	RET
+
+$LOPD:	PUSH	HL
+	PUSH	BC
+	LD	HL,0C9C9H
+	LD	(H.LOPD+0),HL
+	LD	(H.LOPD+2),HL		; clean up H.LOPD
+	LD	A,(H.PHYD)
+	CP	0C9H			; disk system initialized ?
+	JR	Z,SKPADJ		; nope, skip
+	LD	DE,(HIMEM)
+	LD	(YF349),DE		; yep, register disk system bottom
+SKPADJ:	POP	BC
+	POP	HL
+	RET
+
+CLEERR:	LD	HL,CLESTR
+	CALL	PRTSTR
+	CALL	CHGET			; wait for key
+	RET
+
+ALLERR:	LD	HL,ALLSTR
+	CALL	PRTSTR
+	CALL	CHGET			; wait for key
+	POP	HL			; restore BASIC pointer
+	RET
+
+PRTSTR:	LD	A,(HL)
+	OR	A
+	RET	Z
+	CALL	CHPUT
+	INC	HL
+	JR	PRTSTR
+
+PRTWRD:	LD	A,H
+	CALL	PRTBYT
+	LD	A,L
+
+PRTBYT:	PUSH	AF
+	RRCA
+	RRCA
+	RRCA
+	RRCA
+	CALL	PRTNIB
+	POP	AF
+
+PRTNIB:	AND	00Fh
+	ADD	A,090h
+	DAA
+	ADC	A,040h
+	DAA
+	JP	CHPUT
+
+CLESTR:	DEFB	"H.CLEA already taken!"
+	DEFB	0
+
+ALLSTR:	DEFB	"Allocation of memory in expansion failed!"
+	DEFB	0
+
+INISTR:	DEFB	"H.CLEA initialized"
+	DEFB	0
+
+SHWSTR:	DEFB	"Allocation of memory succesfull, located at "
+	DEFB	0
+
+SH2STR:	DEFB	", size "
+	DEFB	0
+
+
+;	  Subroutine get slotid in page 1
+;	     Inputs  ________________________
+;	     Outputs A = slotid
+
+GETSLT: IN	A,(0A8H)
+	AND	0CH
+	RRCA
+	RRCA				; primairy slot on page 1
+	LD	HL,EXPTBL
+	CALL	AHLA
+        OR	(HL)
+	RET	P
+	LD	C,A
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,(HL)
+	AND	0CH
+	OR	C
+	RET
+
+;	  Subroutine set pointer to workarea
+;	     Inputs  HL = pointer to workarea
+;	     Outputs ________________________
+
+SETWRK:	EX	DE,HL
+	CALL	GETPTR
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	RET
+
+;	  Subroutine get pointer to workarea
+;	     Inputs  ________________________
+;	     Outputs HL = pointer to workarea
+
+GETWRK:	CALL	GETPTR
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	RET
+
+;	  Subroutine get pointer to SLTWRK entry
+;	     Inputs  ________________________
+;	     Outputs HL = pointer to SLTWRK entry
+
+
+GETPTR:	IN	A,(0A8H)
+	AND	0CH
+	RRCA
+	RRCA				; primairy slot on page 1
+	LD	HL,EXPTBL
+	CALL	AHLA
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A			; primairy slot *16
+	INC	A			; page 1
+	LD	C,A
+	LD	A,(HL)
+	ADD	A,A
+	SBC	A,A			; 0FFH if expanded slot, 0 if not
+	AND	0CH			; secundairy slot mask
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	AND	(HL)
+	OR	C
+	ADD	A,A			; primairy slot *32, secundairy (if any) * 8, +2 (page 1)
+	LD	HL,SLTWRK
+
+AHLA:	LD	C,A
+	LD	B,0
+	ADD	HL,BC
+	RET
+
+;	  Subroutine allocate memory
+;	     Inputs  HL = size
+;	     Outputs HL = start of area, Cx set if insufficient memory
+
+ALLMEM:	LD	A,L
+	OR	H
+	RET	Z
+	EX	DE,HL
+	LD	HL,0
+	SBC	HL,DE
+	LD	C,L
+	LD	B,H
+	ADD	HL,SP
+	CCF
+	RET	C
+	LD	A,H
+	CP	HIGH 0C200H
+	RET	C
+	LD	DE,(BOTTOM)
+	SBC	HL,DE
+	RET	C
+	LD	A,H
+	CP	HIGH 512
+	RET	C
+	PUSH	BC
+	LD	HL,0
+	ADD	HL,SP
+	LD	E,L
+	LD	D,H
+	ADD	HL,BC
+	PUSH	HL
+	LD	HL,(STKTOP)
+	OR	A
+	SBC	HL,DE
+	LD	C,L
+	LD	B,H
+	INC	BC
+	POP	HL
+	LD	SP,HL
+	EX	DE,HL
+	LDIR
+	POP	BC
+	LD	HL,(HIMEM)
+	ADD	HL,BC
+	LD	(HIMEM),HL
+	LD	DE,-(2*256 + 2*9 + 2*2)
+	ADD	HL,DE
+	LD	(FILTAB),HL
+	EX	DE,HL
+	LD	HL,(MEMSIZ)
+	ADD	HL,BC
+	LD	(MEMSIZ),HL
+	LD	HL,(NULBUF)
+	ADD	HL,BC
+	LD	(NULBUF),HL
+	LD	HL,(STKTOP)
+	ADD	HL,BC
+	LD	(STKTOP),HL
+	DEC	HL
+	DEC	HL
+	LD	(SAVSTK),HL
+	LD	L,E
+	LD	H,D
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,1+1
+NXTCHN:	EX	DE,HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	EX	DE,HL
+	LD	BC,7
+	LD	(HL),B
+	ADD	HL,BC
+	LD	(HL),B
+	LD	BC,256+9-7
+	ADD	HL,BC
+	DEC	A
+	JR	NZ,NXTCHN
+	RET
+
+	DEFS	08000H-$,0
+
+	END

@@ -1,0 +1,117 @@
+;
+; ROM expansion in page 1 (04000H-07FFFH)
+; get pointer to max 2 bytes of workarea
+;
+; by Arjen Zeilemaker
+; code taken from msx disksystem, copyright Microsoft,ASCII
+
+; MSX system constants
+
+CHGET	EQU	0009FH
+CHPUT	EQU	000A2H
+EXPTBL  EQU     0FCC1H
+SLTWRK  EQU     0FD09H
+
+        .Z80
+        ASEG
+        ORG	04000H
+
+        DEFB	"AB"
+        DEFW	$INIT			; ROM expansion INIT routine
+        DEFW	0			; ROM expansion BASIC CALL handler
+        DEFW	0			; ROM expansion BASIC DEVICE handler
+        DEFW	0			; ROM expansion BASIC program
+        DEFW	0
+        DEFW	0
+        DEFW	0
+
+$INIT:	EI
+
+;
+;
+;
+
+	LD	HL,SHWSTR
+	CALL	PRTSTR
+	CALL	GETWRK			; get pointer to workarea
+	CALL	PRTWRD
+	LD	HL,SH2STR
+	CALL	PRTSTR
+	LD	HL,2
+	CALL	PRTWRD
+	CALL	CHGET			; wait for key
+	RET
+
+
+
+PRTSTR:	LD	A,(HL)
+	OR	A
+	RET	Z
+	CALL	CHPUT
+	INC	HL
+	JR	PRTSTR
+
+PRTWRD:	LD	A,H
+	CALL	PRTBYT
+	LD	A,L
+
+PRTBYT:	PUSH	AF
+	RRCA
+	RRCA
+	RRCA
+	RRCA
+	CALL	PRTNIB
+	POP	AF
+
+PRTNIB:	AND	00Fh
+	ADD	A,090h
+	DAA
+	ADC	A,040h
+	DAA
+	JP	CHPUT
+
+SHWSTR:	DEFB	"Allocation of memory succesfull, located at "
+	DEFB	0
+
+SH2STR:	DEFB	", size "
+	DEFB	0
+
+
+;	  Subroutine get pointer to workarea
+;	     Inputs  ________________________
+;	     Outputs HL = pointer to workarea
+
+
+GETWRK:	IN	A,(0A8H)
+	AND	0CH
+	RRCA
+	RRCA				; primairy slot on page 1
+	LD	HL,EXPTBL
+	CALL	AHLA
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A			; primairy slot *16
+	INC	A			; page 1
+	LD	C,A
+	LD	A,(HL)
+	ADD	A,A
+	SBC	A,A			; 0FFH if expanded slot, 0 if not
+	AND	0CH			; secundairy slot mask
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	AND	(HL)
+	OR	C
+	ADD	A,A			; primairy slot *32, secundairy (if any) * 8, +2 (page 1)
+	LD	HL,SLTWRK
+
+AHLA:	LD	C,A
+	LD	B,0
+	ADD	HL,BC
+	RET
+
+	DEFS	08000H-$,0
+
+	END
