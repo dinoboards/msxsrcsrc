@@ -1,0 +1,56 @@
+;
+; Test if MSXDOS (COM file)
+;
+; by Arjen Zeilemaker
+
+; system constants
+
+WBOOT	EQU	00000H
+BDOS	EQU	00005H
+
+_STROUT	EQU	09H
+_CPMVER	EQU	0CH
+_DOSVER	EQU	6FH
+
+        .Z80
+        ASEG
+        ORG	00100H
+
+; first check if CP/M
+
+	ld	c,_CPMVER
+	call	BDOS			; first do CP/M version check (because _DOSVER is also a CP/M 3.x function call)
+	ld	a,l			; maintain CP/M 1.x compatibility
+	cp	22H			; must be CP/M 2.2
+	jr	nz,NTMDOS
+	ld	a,h
+	or	a			; must be a 8080 machine type and plain CP/M
+	jr	nz,NTMDOS
+	ld	c,_DOSVER
+	call	BDOS
+	or	a			; must succeed without error
+	jr	nz,NTMDOS
+	ld	a,b
+	cp	2
+	jr	c,MDOS1
+
+	ld	de,DS2TXT
+	jr	PRTOS
+
+MDOS1:	ld	de,DS1TXT
+	jr	PRTOS
+	
+NTMDOS:	ld	de,NTDTXT
+
+PRTOS:	ld	c,_STROUT
+	call	BDOS
+	jp	WBOOT
+
+NTDTXT:	defb	"MSXDOS not found"
+	defb	"$"
+
+DS1TXT:	defb	"MSXDOS 1.0 found"
+	defb	"$"
+	
+DS2TXT:	defb	"MSXDOS 2.x or higher found"
+	defb	"$"

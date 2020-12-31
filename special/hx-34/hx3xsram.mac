@@ -1,0 +1,171 @@
+
+RAMAD1  equ     0F342H                  ; slotid DOS ram page 1
+RAMAD2  equ     0F343H                  ; slotid DOS ram page 2
+BDOS    equ     5
+ENASLT  equ     00024H
+
+        CALL    SAVPG1
+
+        LD      B,4
+NXTPG2: PUSH    BC
+        LD      A,4
+        SUB     B
+        LD      (BLOCK),A
+	RRCA
+	RRCA
+	RRCA
+        LD      C,A
+        LD      A,(07FFFH)
+        AND     10011111B
+        OR      C
+        LD      (07FFFH),A
+
+	CALL	RAMTST
+
+        LD      A,(07FFFH)
+        AND     10011111B
+        LD      (07FFFH),A
+        POP     BC
+        DJNZ    NXTPG2
+
+        CALL    RSTPG1
+        RET
+
+RAMTST:
+        LD      DE,STRBL1
+        LD      C,09H
+        CALL    BDOS
+        LD      DE,STRBL2
+        LD      C,09H
+        CALL    BDOS
+        LD      A,(BLOCK)
+        CALL    PRTBYT
+        LD      DE,STRBL3
+        LD      C,09H
+        CALL    BDOS
+
+	LD	HL,08000H
+
+NXT256:	PUSH	HL
+	LD	DE,STRTST
+	LD	C,09H
+	CALL	BDOS
+	POP	HL
+	PUSH	HL
+	LD	A,H
+	CALL	PRTBYT
+	POP	HL
+	PUSH	HL	
+	LD	A,L
+	CALL	PRTBYT
+	POP	HL
+	PUSH	HL	
+	CALL	TST256
+	POP	HL
+	INC	H
+	PUSH	HL
+	LD	DE,STROK
+	JR	NC,OK
+	LD	DE,STRFAIL
+OK:	LD	C,09H
+	CALL	BDOS
+	POP	HL
+	LD	A,H
+	CP	HIGH 0C000H
+	JR	NZ,NXT256
+
+	RET
+
+TST256: LD      A,(HL)
+        CPL
+        LD      (HL),A
+        CP      (HL)                    ; RAM found (write inverted correctly read back) ?
+        CPL
+        LD      (HL),A                  ; restore orginal value
+        JR      NZ,TSTFL                ; no RAM
+        INC     L
+        JR      NZ,TST256
+	OR	A
+	RET
+
+TSTFL:	SCF
+	RET
+
+
+SAVPG1:
+        DI
+        LD      A,(RAMAD1)
+        LD      (SAVAD1),A
+        LD      A,08FH
+        LD      (RAMAD1),A
+        LD      H,HIGH 04000H
+        CALL    ENASLT
+        LD      A,(RAMAD2)
+        LD      (SAVAD2),A
+        LD      A,08FH
+        LD      (RAMAD2),A
+        LD      H,HIGH 08000H
+        CALL    ENASLT
+        EI
+        RET
+
+RSTPG1:
+        DI
+        LD      A,(SAVAD1)
+        LD      (RAMAD1),A
+        LD      H,HIGH 04000H
+        CALL    ENASLT
+        LD      A,(SAVAD2)
+        LD      (RAMAD2),A
+        LD      H,HIGH 08000H
+        CALL    ENASLT
+        EI
+        RET
+
+;	  Subroutine output byte in HEX to screen
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+PRTBYT:	PUSH	AF
+        RRCA	
+        RRCA	
+        RRCA	
+        RRCA	
+	CALL	PRTNIB                  ; output nibble in HEX to screen
+        POP	AF
+
+;	  Subroutine output nibble in HEX to screen
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+PRTNIB:	PUSH	AF
+        AND	0FH
+        CP	0AH
+        SBC	A,69H
+        DAA	
+        LD      C,6
+        LD      E,A
+        CALL    BDOS
+        POP	AF
+        RET	
+
+STRBL1: DEFB    "Testing SRAM in page 2"
+        DEFB    "$"
+STRBL2: DEFB    " block "
+        DEFB    "$"
+STRBL3: DEFB    "...",13,10
+        DEFB    "$"
+
+STRTST:	DEFB	"Testing at address "
+	DEFB	"$"
+
+STROK:	DEFB	" RAM",13,10
+	DEFB	"$"
+
+STRFAIL:DEFB	" ROM",13,10
+	DEFB	"$"
+
+
+SAVAD1: DEFB    0
+SAVAD2: DEFB    0
+BLOCK:  DEFB    0
