@@ -15,6 +15,14 @@
 
 ; kxxxxxxx	COPY key
 
+SR8000	EQU	08000H			; saved vdp registers
+SR8040	EQU	08040H			; saved vdp color registers
+SR8060	EQU	08060H			; saved vdp latch register (14)
+SR8061	EQU	08061H			; saved vdp i/o 099H last written high byte
+SR8062	EQU	08062H			; saved vdp i/o 099H last written low byte
+
+
+
 	.Z80
 	ORG	4000H
 X.0000	EQU	0000H	; -CS-I
@@ -42,14 +50,12 @@ C.0018	EQU	0018H	; -C--I
 CALSLT	EQU	001CH	; -C---
 I.001E	EQU	001EH	; ----I
 C.0020	EQU	0020H	; -C--I
-I$0024	EQU	0024H	; ----I
 C.0028	EQU	0028H	; -C---
 I.002D	EQU	002DH	; ----I
 X.0030	EQU	0030H	; -CS-I
 I$0032	EQU	0032H	; ----I
 I.0036	EQU	0036H	; ----I
 C.0038	EQU	0038H	; -C---
-I$003E	EQU	003EH	; ----I
 WRTVDP	EQU	0047H	; JC---
 I.004B	EQU	004BH	; ----I
 D$0050	EQU	0050H	; --S--
@@ -83,11 +89,7 @@ TAPIOF	EQU	00E7H	; -C---
 TAPOON	EQU	00EAH	; -C---
 TAPOUT	EQU	00EDH	; -C---
 TAPOOF	EQU	00F0H	; -C--I
-I$00F1	EQU	00F1H	; ----I
-I$00F2	EQU	00F2H	; ----I
 STMOTR	EQU	00F3H
-C.00F3	EQU	00F3H	; -C--I
-I$00F4	EQU	00F4H	; ----I
 I$00F5	EQU	00F5H	; ----I
 I.00F6	EQU	00F6H	; ----I
 I$00F7	EQU	00F7H	; ----I
@@ -101,7 +103,6 @@ I.0130	EQU	0130H	; ----I
 I$0133	EQU	0133H	; ----I
 I$0135	EQU	0135H	; ----I
 I$0136	EQU	0136H	; ----I
-I.0138	EQU	0138H	; ----I
 I$0142	EQU	0142H	; ----I
 I$0144	EQU	0144H	; ----I
 I$0146	EQU	0146H	; ----I
@@ -114,7 +115,6 @@ I$0150	EQU	0150H	; ----I
 I.0152	EQU	0152H	; ----I
 I.0154	EQU	0154H	; ----I
 KILBUF	EQU	0156H
-J.0156	EQU	0156H	; J---I
 I$0158	EQU	0158H	; ----I
 I$015A	EQU	015AH	; ----I
 I$0162	EQU	0162H	; ----I
@@ -543,7 +543,6 @@ I$E109	EQU	0E109H	; ----I
 C$E201	EQU	0E201H	; -C---
 J$E401	EQU	0E401H	; J----
 J$EA0B	EQU	0EA0BH	; J----
-J$F301	EQU	0F301H	; J----
 
 CNSDFG	EQU	0F3DEH	; --S--
 PUTPNT	EQU	0F3F8H	; --S--
@@ -575,7 +574,6 @@ I$F5C8	EQU	0F5C8H	; ----I
 I.F5D0	EQU	0F5D0H	; ----I
 VALTYP	EQU	0F663H	; ----I
 DAC	EQU	0F7F6H	; ----I
-C$F80D	EQU	0F80DH	; -C---
 FILTAB	EQU	0F860H	; ---L-
 NULBUF	EQU	0F862H	; ---L-
 PTRFIL	EQU	0F864H	; --S--
@@ -587,7 +585,6 @@ D.F878	EQU	0F878H	; --S--
 FNKSTR	EQU	0F87FH	; ----I
 
 C.F882	EQU	0F882H	; -C---
-D$F887	EQU	0F887H	; --S--
 I.F8CF	EQU	0F8CFH	; ----I
 I$F8DF	EQU	0F8DFH	; ----I
 I$F8EF	EQU	0F8EFH	; ----I
@@ -623,12 +620,12 @@ CSRSR	EQU	0FCA9H	; ---L-
 SLTWRK	EQU	0FD09H
 ; SLTWRK + main_slot*32 + sub_slot*8 + page*2.
 
-D.FD0D	EQU	SLTWRK + 0*32 + 0*8 + 2*2 + 0	; in spooler interrupt flag
-D.FD19	EQU	SLTWRK + 0*32 + 2*8 + 0*2 + 0	; ?
-D.FD7F	EQU	SLTWRK + 3*32 + 2*8 + 3*2 + 0	; spooler get pointer / toshiba rs232 found flag
-D.FD81	EQU	SLTWRK + 3*32 + 3*8 + 0*2 + 0	; spooler put pointer
-C.FD83	EQU	SLTWRK + 3*32 + 3*8 + 1*2 + 0	; old H.TIMI (Spooler)
-D.FD88	EQU	C.FD83+5			; spooler empty flag
+D.FD0D	EQU	SLTWRK + 0*32 + 0*8 + 2*2 + 0	; slot 0-0, page 2: in spooler interrupt flag
+D.FD19	EQU	SLTWRK + 0*32 + 2*8 + 0*2 + 0	; slot 0-2, page 0: ?
+D.FD7F	EQU	SLTWRK + 3*32 + 2*8 + 3*2 + 0	; slot 3-2, page 3: spooler get pointer / toshiba rs232 found flag
+D.FD81	EQU	SLTWRK + 3*32 + 3*8 + 0*2 + 0	; slot 3-3, page 0: spooler put pointer
+C.FD83	EQU	SLTWRK + 3*32 + 3*8 + 1*2 + 0	; slot 3-3, page 1,2,3: old H.TIMI (Spooler)
+D.FD88	EQU	C.FD83+5			; slot 3-3, page 3: spooler empty flag
 
 PROCNM	EQU	0FD89H	; ----I
 H.KEYI	EQU	0FD9AH	; --SLI
@@ -3826,7 +3823,7 @@ J5200:	DI
 	EI
 	RET
 
-;	  Subroutine interrupt handler (COPY key ?)
+;	  Subroutine interrupt handler (COPY key)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3840,16 +3837,16 @@ I521C:	LD	SP,I87FF		; temporary stack in SRAM
 	PUSH	BC
 	PUSH	IX
 	PUSH	IY
-	CALL	C5934
+	CALL	C5934			; display ready for screen print ?
 	CP	128+15
-	JR	Z,J5242
+	JR	Z,J5242			; nope, quit
 	CALL	C5BBB			; save PSG volume and silence
-	CALL	C52EF			; RP501
-	CALL	C5259
+	CALL	C52EF			; save RP501 registers
+	CALL	C5259			; screen print
 I5236:	CALL	C5B9D			; wait for STOP pressed and released
-	CALL	C531C			; RP501
+	CALL	C531C			; restore RP501 registers
 	CALL	C5BD7			; restore PSG volume
-	CALL	C59D3
+	CALL	C59D3			; restore VDP registers
 J5242:	POP	IY
 	POP	IX
 	POP	BC
@@ -3869,13 +3866,16 @@ J5242:	POP	IY
 C5259:	LD	A,(D.80A0)
 	AND	0FEH			; screenmode 0 (TEXT40/TEXT80) ?
 	JR	NZ,J52AF		; nope,
-	LD	HL,I5295
+
+; screen print TEXT40/TEXT80
+
+	LD	HL,I5295		; long toshiba pasopia iq string
 	CALL	C592B			; send string to printer
-	CALL	C532B
+	CALL	C532B			; send date and time to printer
 	CALL	C550B
 	XOR	A
 J526D:	LD	(D.80B9),A
-	CALL	C5928
+	CALL	C5928			; send vertical init string to printer
 	XOR	A
 J5274:	LD	(X.80B8),A
 	CALL	C5603
@@ -3890,25 +3890,25 @@ J5274:	LD	(X.80B8),A
 	LD	HL,D.80C3
 	CP	(HL)
 	JR	NZ,J526D
-	CALL	C573A
+	CALL	C573A			; 2 newlines to printer
 	RET
 
 I5295:	DEFB	"   "
 I5298:	DEFB	"TOSHIBA  PASOPIA IQ   "
 	DEFB	0
 
-J52AF:	LD	HL,I5295
+J52AF:	LD	HL,I5295		; long toshiba pasopia iq string
 	IN	A,(90H)
 	BIT	0,A			; unknown printer bit (8/16 switch ?)
 	JR	NZ,J52BB
-	LD	HL,I5298
+	LD	HL,I5298		; short toshiba pasopia iq string
 J52BB:	CALL	C592B			; send string to printer
-	CALL	C532B
+	CALL	C532B			; send date and time to printer
 	CALL	C5380
 	LD	A,0FCH
 J52C6:	LD	(X.80B8),A
 	CALL	C5922
-	LD	A,(D.8017)
+	LD	A,(SR8000+23)		; saved vdp register 23
 J52CF:	LD	(D.80B9),A
 	CALL	C570D
 	CALL	C5731
@@ -3918,13 +3918,13 @@ J52CF:	LD	(D.80B9),A
 	CP	(HL)
 	JR	NZ,J52CF
 	LD	A,(X.80B8)
-	SUB	04H	; 4 
+	SUB	04H
 	CP	0FCH
 	JR	NZ,J52C6
-	CALL	C573A
+	CALL	C573A			; 2 newlines to printer
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine save RP501 registers
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3956,7 +3956,7 @@ J5305:	OUT	(0B4H),A
 	OUT	(0B5H),A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine restore RP501 registers
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3970,44 +3970,44 @@ I5321:	OUT	(0B4H),A
 	OUT	(0B4H),A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine send date and time to printer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C532B:	LD	HL,I8142
-	LD	A,(HL)
-	ADD	A,08H	; 8 
+	LD	A,(HL)			; saved RP501 register 12
+	ADD	A,8
 	CP	0AH	; 10 
 	JR	C,J5338
-I5335:	LD	A,(HL)
+I5335:	LD	A,(HL)			; saved RP501 register 12
 I5336:	DEC	A
 	DEC	A
-J5338:	OR	30H	; "0"
+J5338:	OR	"0"
 	CALL	C5B51			; send byte to printer
-	INC	HL
+	INC	HL			; saved RP501 register 11
 	LD	A,(HL)
-	OR	30H	; "0"
+	OR	"0"
 	CALL	C5B51			; send byte to printer
-	INC	HL
-	LD	B,02H	; 2 
+	INC	HL			; saved RP501 register 10
+	LD	B,2
 J5347:	PUSH	BC
-	LD	A,2FH	; "/"
+	LD	A,"/"
 	CALL	C5B51			; send byte to printer
 	CALL	C5374
 	POP	BC
 	DJNZ	J5347
-	LD	A,20H	; " "
+	LD	A," "
 	CALL	C5B51			; send byte to printer
-	LD	A,20H	; " "
+	LD	A," "
 	CALL	C5B51			; send byte to printer
-	INC	HL
+	INC	HL			; next saved RP501 register
 	CALL	C5374
-	LD	A,3AH	; ":"
+	LD	A,":"
 	CALL	C5B51			; send byte to printer
 	CALL	C5374
-	LD	A,0DH	; 13 
+	LD	A,13
 	CALL	C5B51			; send byte to printer
-	LD	A,0AH	; 10 
+	LD	A,10
 	CALL	C5B51			; send byte to printer
 	RET
 
@@ -4015,10 +4015,10 @@ J5347:	PUSH	BC
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C5374:	LD	B,02H	; 2 
+C5374:	LD	B,2
 J5376:	LD	A,(HL)
-	INC	HL
-	OR	30H	; "0"
+	INC	HL			; next saved RP501 register
+	OR	"0"
 	CALL	C5B51			; send byte to printer
 	DJNZ	J5376
 	RET
@@ -4040,21 +4040,21 @@ J538B:	CALL	C5B22			; read byte from VRAM
 	IN	A,(90H)
 	BIT	0,A			; unknown printer bit (8/16 switch ?)
 	JR	NZ,J53B0
-	LD	HL,I54CB
+	LD	HL,I54CB		; <esc>S1152
 	LD	(X.80D6),HL
-	LD	HL,I54BD
+	LD	HL,I54BD		; <esc>P<esc>T12
 	CALL	C592B			; send string to printer
-	LD	HL,I5EF5
+	LD	HL,I5EF5		; handler
 	LD	(D.80D8),HL
 	JR	J53C2
 
-J53B0:	LD	HL,I54E3
+J53B0:	LD	HL,I54E3		; <esc>I0768
 	LD	(X.80D6),HL
-	LD	HL,I54C4
+	LD	HL,I54C4		; <esc>M<esc>T16
 	CALL	C592B			; send string to printer
-	LD	HL,I5E88
+	LD	HL,I5E88		; handler
 	LD	(D.80D8),HL
-J53C2:	LD	A,(D.8009)
+J53C2:	LD	A,(SR8000+9)		; saved vdp register 9
 	AND	80H			; 192 lines mode ?
 	JR	Z,J53DA			; yep,
 	LD	A,212
@@ -4062,20 +4062,20 @@ J53C2:	LD	A,(D.8009)
 	LD	HL,(X.80D6)
 	LD	DE,12
 	ADD	HL,DE
-	LD	(X.80D6),HL
+	LD	(X.80D6),HL		; update vertical init string
 	JR	J53DF
 
 J53DA:	LD	A,192
 	LD	(D.80C3),A
-J53DF:	LD	A,(D.8017)
-	LD	B,A
+J53DF:	LD	A,(SR8000+23)
+	LD	B,A			; saved vdp register 23
 	LD	A,(D.80C3)
 	LD	(D.8122),A
 	ADD	A,B
 	LD	(D.80C3),A
-	LD	IX,I8040
+	LD	IX,SR8040
 	LD	HL,I8100
-	LD	B,10H	; 16 
+	LD	B,16
 J53F6:	LD	A,(IX+0)
 	LD	D,(IX+1)
 	INC	IX
@@ -4093,7 +4093,7 @@ J53F6:	LD	A,(IX+0)
 	LD	A,(D.80A0)
 	CP	07H			; screenmode 6 ?
 	JR	NZ,J544E		; nope,
-	LD	A,(D.8007)
+	LD	A,(SR8000+7)		; saved vdp register 7
 	AND	0FH
 	PUSH	AF
 	RRCA
@@ -4123,7 +4123,7 @@ I5436	EQU	$-1
 
 J544E:	LD	HL,I8100
 	PUSH	HL
-	LD	A,(D.8007)
+	LD	A,(SR8000+7)		; saved vdp register 7
 	AND	0FH
 	JR	Z,J545B
 	LD	L,A
@@ -4183,12 +4183,16 @@ I54CB:	DEFB	13,10
 	DEFB	27,"S1152"
 	DEFB	0,0,0,0
 
+	DEFB	13,10
+	DEFB	27,"S1272"
+	DEFB	0,0,0,0
+
 I54E3:	DEFB	13,10
 	DEFB	"   "
 	DEFB	27,"I0768"
 	DEFB	0
 
-I54EF:	DEFB	13,10
+	DEFB	13,10
 	DEFB	"   "
 	DEFB	27,"I0848"
 	DEFB	0
@@ -4210,7 +4214,7 @@ J54FB:	DEFB	000H
 	DEFB	0FCH
 	DEFB	0FFH
 
-C550B:	LD	A,(D.8007)
+C550B:	LD	A,(SR8000+7)		; saved vdp register 7
 	LD	(D.813C),A
 	PUSH	AF
 	AND	0FH	; 15 
@@ -4252,14 +4256,14 @@ J5545:	LD	HL,I55F7
 	XOR	A
 	LD	L,A
 	LD	(D.80A7),HL
-	LD	A,(D.8009)
+	LD	A,(SR8000+9)		; saved vdp register 9
 	AND	80H			; 212 lines mode ?
 	JR	NZ,J5565		; yep,
-	LD	A,30H	; "0"
+	LD	A,48
 	LD	(D.80C3),A
 	JR	J556A
 
-J5565:	LD	A,35H	; "5"
+J5565:	LD	A,48+5
 	LD	(D.80C3),A
 J556A:	LD	A,(D.80A0)
 	OR	A			; screenmode 0 TEXT40 ?
@@ -4270,7 +4274,7 @@ J556A:	LD	A,(D.80A0)
 
 J5577:	LD	A,80
 	LD	(D.80C4),A
-	LD	A,(D$800C)
+	LD	A,(SR8000+12)		; saved vdp register 12
 	LD	(D.813D),A
 	PUSH	AF
 	AND	0FH	; 15 
@@ -4383,10 +4387,10 @@ J5634	EQU	$-2
 	LD	DE,I80F0
 	CALL	C5B40			; read block from VRAM
 	LD	DE,I8300
-	LD	B,06H	; 6 
+	LD	B,6
 J5641:	PUSH	BC
 	LD	HL,I80F0
-	LD	B,04H	; 4 
+	LD	B,4
 J5647:	LD	C,(HL)
 	BIT	7,C
 	JR	NZ,J5652
@@ -4420,7 +4424,7 @@ C5664:	PUSH	BC
 	LD	A,(D.813C)
 	CALL	C56FB
 	LD	HL,I8300
-	LD	B,06H	; 6 
+	LD	B,6
 J5677:	LD	A,(HL)
 	INC	HL
 	PUSH	AF
@@ -4432,7 +4436,7 @@ J5677:	LD	A,(HL)
 	POP	BC
 	RET
 
-J5686:	LD	A,(D.800D)
+J5686:	LD	A,(SR8000+13)		; saved vdp register 13
 	AND	0F0H			; ON
 	LD	A,(D.813C)
 	JR	Z,J56E9
@@ -4475,7 +4479,7 @@ J56BF:	RRCA
 	JR	Z,J56E9
 	CALL	C56FB
 	LD	HL,I8300
-	LD	B,06H	; 6 
+	LD	B,6
 J56DD:	LD	A,(HL)
 	XOR	0FFH
 	CALL	C5B51			; send byte to printer
@@ -4487,7 +4491,7 @@ J56DD:	LD	A,(HL)
 
 J56E9:	CALL	C56FB
 	LD	HL,I8300
-	LD	B,06H	; 6 
+	LD	B,6
 J56F1:	LD	A,(HL)
 	CALL	C5B51			; send byte to printer
 	INC	HL
@@ -4509,7 +4513,7 @@ C56FB:	LD	B,A
 	RET	NZ
 	LD	HL,I8300
 	XOR	A
-	LD	B,06H	; 6 
+	LD	B,6
 J5708:	LD	(HL),A
 	INC	HL
 	DJNZ	J5708
@@ -4520,7 +4524,7 @@ J5708:	LD	(HL),A
 ;	     Outputs ________________________
 
 C570D:	LD	HL,I80F0
-	LD	B,08H	; 8 
+	LD	B,8
 	LD	A,0F0H
 J5714:	LD	(HL),A
 	INC	HL
@@ -4553,14 +4557,14 @@ C5731:	LD	HL,I5739
 
 I5739:	RET
 
-;	  Subroutine __________________________
+;	  Subroutine 2 newlines to printer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C573A:	LD	B,02H	; 2 
-J573C:	LD	A,0DH	; 13 
+C573A:	LD	B,2
+J573C:	LD	A,13
 	CALL	C5B51			; send byte to printer
-	LD	A,0AH	; 10 
+	LD	A,10
 	CALL	C5B51			; send byte to printer
 	DJNZ	J573C
 	RET
@@ -4708,7 +4712,7 @@ C5853:	PUSH	HL
 	LD	H,A
 	RRA
 	LD	H,A
-	AND	03H	; 3 
+	AND	03H
 	LD	L,A
 	LD	A,H
 	RRA
@@ -4839,11 +4843,12 @@ J5919:	LD	A,(HL)
 
 C5922:	LD	HL,I8300
 	LD	(D.8120),HL
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C5928:	LD	HL,(X.80D6)
+C5928:	LD	HL,(X.80D6)		; vertical init string
 
 ;	  Subroutine send string to printer
 ;	     Inputs  ________________________
@@ -4860,20 +4865,19 @@ C592B:	LD	A,(HL)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-
 C5934:	XOR	A
-	LD	(D.80C8),A
+	LD	(D.80C8),A		; assume blink not enabled
 	LD	A,6
 	CALL	C5B78			; read keyboard row 6
 	LD	B,A
 	BIT	1,A			; CTRL pressed ?
-	JR	NZ,C5962		; nope, quit
+	JR	NZ,C5962		; nope, restore vdp status register and quit
 	LD	A,B
 	AND	01H
 	LD	(D.80E5),A		; SHIFT status
-	LD	A,(D.8001)
-	BIT	6,A			; vertical retract interrupt enabled ?
-	JR	Z,C5962			; nope, quit
+	LD	A,(SR8000+1)		; saved vdp register 1
+	BIT	6,A			; display enabled ?
+	JR	Z,C5962			; nope, restore vdp status register and quit
 	LD	A,2
 	OUT	(99H),A
 	LD	A,128+15
@@ -4885,61 +4889,60 @@ C5934:	XOR	A
 	BIT	0,A			; command executing ?
 	JR	Z,J596C			; nope,
 
-;	  Subroutine __________________________
+;	  Subroutine restore vdp status register
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-
-C5962:	LD	A,(X.800F)
+C5962:	LD	A,(SR8000+15)		; saved vdp register 15
 	OUT	(99H),A
 	LD	A,128+15
 	OUT	(99H),A			; select VDP status register
 	RET
 
-J596C:	CALL	C5962
-	CALL	C5A07
-	CALL	C5A61
+J596C:	CALL	C5962			; restore vdp status register
+	CALL	C5A07			; get screen mode
+	CALL	C5A61			; get screen addressing
 	LD	A,(D.80A0)
 	CP	06H			; screenmode 0, 3, 1, 2 or 4 ?
 	RET	C			; yep, quit
-	LD	A,(D.8002)
-	AND	20H
-	RET	Z
-	LD	A,(D.800D)
-	LD	B,A
+	LD	A,(SR8000+2)		; saved vdp register 2
+	AND	20H			; A14=1 ?
+	RET	Z			; nope, skip odd/even check, quit
+	LD	A,(SR8000+13)
+	LD	B,A			; saved vdp register 13
 	AND	0F0H			; ON
-	JR	Z,J59AE
+	JR	Z,J59AE			; odd/even is disabled,
 	RRCA
 	RRCA
 	RRCA
 	RRCA
 	LD	H,A
-	LD	A,B
-	AND	0FH	; 15 
+	LD	A,B			; saved vdp register 13
+	AND	0FH
 	SUB	H
 	JR	NC,J59AE
 J5994:	CALL	C59C0
-	LD	A,0F0H
+	LD	A,0F0H			; display odd page
 
 J5999:	OUT	(99H),A
 	LD	A,128+13
 	OUT	(99H),A			; vdp blink register
 	LD	(D.80C8),A
-	LD	A,(D.8009)
+	LD	A,(SR8000+9)		; saved vdp register 9
 	AND	0F3H			; IL = 0, EO = 0
 	OUT	(99H),A
 	LD	A,128+9
 	OUT	(99H),A			; interlace off
 	RET
 
-J59AE:	LD	A,(D.8009)
+J59AE:	LD	A,(SR8000+9)		; saved vdp register 9
 	AND	04H			; EO = 0 ?
 	JR	Z,J59BC			; yep,
-	LD	A,(D.80C9)
-	AND	04H
+	LD	A,(D.80C9)		; vdp status register 2
+	AND	04H			; unknown bit, should be 1
 	JR	Z,J5994
-J59BC:	LD	A,0FH
-	JR	J5999
+J59BC:	LD	A,0FH			; blinking off
+	JR	J5999			; interlace off, even/odd off and quit
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -4952,46 +4955,46 @@ C59C0:	LD	A,(D.80A0)
 	LD	(D.80AF),A
 	RET
 
-J59CC:	LD	HL,X.0000
+J59CC:	LD	HL,0
 	LD	(D.80A5),HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine restore VDP registers
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C59D3:	LD	A,(D$8060)
+C59D3:	LD	A,(SR8060)
 	OUT	(99H),A
 	LD	A,128+14
 	OUT	(99H),A			; write adress latch register
-	LD	A,(D.8062)
+	LD	A,(SR8062)
 	OUT	(99H),A
-	LD	A,(D$8061)
+	LD	A,(SR8061)
 	OUT	(99H),A
 	LD	A,(D.80C8)
-	OR	A
-	RET	Z
-	LD	A,(D.800D)
+	OR	A			; blink enabled ?
+	RET	Z			; nope, quit
+	LD	A,(SR8000+13)		; saved vdp register 13
 	OUT	(99H),A
 	LD	A,128+13
 	OUT	(99H),A			; vdp blink register
-	LD	A,(D.8002)
+	LD	A,(SR8000+2)		; saved vdp register 2
 	OUT	(99H),A
 	LD	A,128+2
 	OUT	(99H),A			; vdp pattern name table base address
-	LD	A,(D.8009)
+	LD	A,(SR8000+9)		; saved vdp register 9
 	OUT	(99H),A
 	LD	A,128+9
 	OUT	(99H),A			; vdp register 9
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine get screen mode
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C5A07:	LD	A,(X.8000)
+C5A07:	LD	A,(SR8000+0)		; saved vdp register 0
 	LD	C,A
-	LD	A,(D.8001)
+	LD	A,(SR8000+1)		; saved vdp register 1
 	LD	B,A
 	AND	18H			; M1 M2
 	CP	10H			; TEXT40 or TEXT80 ?
@@ -5033,7 +5036,7 @@ J5A47:	LD	(D.80A2),A
 	RRCA
 	AND	01H
 	LD	(D.80A3),A		; sprite size
-	LD	A,(D$8008)
+	LD	A,(SR8000+8)		; saved vdp register 8
 	LD	B,A
 	AND	20H			; transparent mode
 	LD	(D.80C0),A
@@ -5042,42 +5045,42 @@ J5A47:	LD	(D.80A2),A
 	LD	(D.80A4),A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine get screen addressing
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C5A61:	LD	B,02H	; 2 
-	LD	A,(D.8002)
+	LD	A,(SR8000+2)		; saved vdp register 2
 	LD	H,A
-	LD	L,00H
+	LD	L,0
 	CALL	C5AED
 	LD	(D.80A5),HL
 	LD	(D.80AF),A
 	LD	B,06H	; 6 
-	LD	A,(D$800A)
+	LD	A,(SR8000+10)		; saved vdp register 10
 	LD	H,A
-	LD	A,(D$8003)
+	LD	A,(SR8000+3)		; saved vdp register 3
 	LD	L,A
 	CALL	C5AED
 	LD	(D.80A7),HL
 	LD	(X.80B0),A
 	LD	B,03H	; 3 
-	LD	A,(D$8004)
+	LD	A,(SR8000+4)		; saved vdp register 4
 	LD	H,A
 	LD	L,00H
 	CALL	C5AED
 	LD	(D.80A9),HL
 	LD	(D.80B1),A
 	LD	B,07H	; 7 
-	LD	A,(D$800B)
+	LD	A,(SR8000+11)		; saved vdp register 11
 	LD	H,A
-	LD	A,(D$8005)
+	LD	A,(SR8000+5)		; saved vdp register 5
 	LD	L,A
 	CALL	C5AED
 	LD	(D.80AB),HL
 	LD	(D.80B2),A
 	LD	B,03H	; 3 
-	LD	A,(D$8006)
+	LD	A,(SR8000+6)		; saved vdp register 6
 	LD	H,A
 	LD	L,00H
 	CALL	C5AED
@@ -5094,7 +5097,7 @@ C5A61:	LD	B,02H	; 2
 	OR	E
 	JR	Z,J5AD9
 	LD	HL,D.80A5
-	LD	B,08H	; 8 
+	LD	B,8
 J5AD2:	LD	A,(DE)
 	AND	(HL)
 	LD	(HL),A
@@ -5221,7 +5224,7 @@ J5B55:	CALL	C5B8B			; CTRL-STOP pressed ?
 	DJNZ	J5B55
 	POP	BC
 	POP	AF
-	OUT	(91H),A
+	OUT	(91H),A			; set data
 	XOR	A
 	OUT	(90H),A
 	INC	A
@@ -5244,7 +5247,6 @@ C5B73:	IN	A,(90H)
 ;	  Subroutine read keyboard row
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C5B78:	PUSH	BC
 	LD	B,A
@@ -5279,7 +5281,6 @@ C5B8B:	LD	A,6
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C5B9D:	LD	A,7
 	CALL	C5B78			; read keyboard row 7
@@ -5468,7 +5469,7 @@ J5CAC:	LD	HL,(D.80AD)
 	LD	A,(D.80B4)
 	LD	DE,8
 	CALL	C5BB0
-	LD	A,(D.8001)
+	LD	A,(SR8000+1)		; saved vdp register 1
 	AND	010H			; sprite magnified ?
 	JR	Z,J5CCF			; nope,
 	LD	A,(D.80B6)
@@ -5613,7 +5614,7 @@ C5DA2:	LD	A,(D.80B7)
 	LD	DE,16
 	LD	A,(X.80DB)
 	CALL	C5BB0
-	LD	A,(D.8001)
+	LD	A,(SR8000+1)		; saved vdp register 1
 	AND	01H			; sprite magnified ?
 	LD	A,(D.80B6)
 	JR	Z,J5DD0			; nope,
@@ -5670,7 +5671,7 @@ J5E2A:	LD	HL,(D.80AD)
 	LD	A,(D.80B4)
 	LD	DE,8
 	CALL	C5BB0
-	LD	A,(D.8001)
+	LD	A,(SR8000+1)		; saved vdp register 1
 	AND	01H			; sprites magnified ?
 	JR	Z,J5E4D			; nope,
 	LD	A,(D.80B6)
@@ -5761,8 +5762,8 @@ C5ED3:	PUSH	HL
 	PUSH	DE
 	PUSH	AF
 	LD	A,(D.80E5)
-	OR	A
-	JR	NZ,J5EE3
+	OR	A			; SHIFT pressed ?
+	JR	NZ,J5EE3		; nope,
 	POP	AF
 	LD	H,A
 	LD	A,18H
@@ -5797,7 +5798,7 @@ I5EF5:	LD	HL,I80F0
 	CALL	C5F6E
 	LD	IX,I8110
 	LD	HL,(D.8120)
-	LD	B,04H	; 4 
+	LD	B,4
 J5F20:	LD	A,(IX+8)
 	RLCA
 	RLCA
@@ -5831,7 +5832,7 @@ J5F20:	LD	A,(IX+8)
 	LD	A,(D.8122)
 	LD	B,A
 J5F5B:	PUSH	BC
-	LD	B,04H	; 4 
+	LD	B,4
 J5F5E:	LD	A,(HL)
 	CALL	C5B51			; send byte to printer
 	INC	HL
@@ -5850,8 +5851,8 @@ C5F6E:	PUSH	HL
 	PUSH	DE
 	PUSH	AF
 	LD	A,(D.80E5)
-	OR	A
-	JR	NZ,J5F7E
+	OR	A			; SHIFT pressed ?
+	JR	NZ,J5F7E		; nope,
 	POP	AF
 	LD	H,A
 	LD	A,18H
@@ -5951,9 +5952,9 @@ C5FE6:	OR	A
 J5FED:	PUSH	HL
 	PUSH	DE
 	RLCA
-	LD	HL,I8040
+	LD	HL,SR8040
 	LD	E,A
-	LD	D,00H
+	LD	D,0
 	ADD	HL,DE
 	POP	DE
 	LD	A,(HL)
@@ -6332,9 +6333,9 @@ C61D3:	PUSH	IX
 ;	     Outputs ________________________
 
 C61DB:	XOR	A
-J61DC:	CALL	C$D900
+	CALL	C$D900			; sort of hook
 	RET	NZ
-J61E0:	JP	KILBUF
+	JP	KILBUF
 
 ;	  Subroutine about to start european word processor
 ;	     Inputs  ________________________
@@ -6368,11 +6369,11 @@ J61F8:	INC	HL
 	OUT	(0A8H),A		; select primairy slot 3 on page 3,2 and 1
 	LD	A,(D.7FFF)
 	AND	0FCH
-	OR	02H			; select segment 2 ??
+	OR	02H			; select segment 2
 	LD	(D.7FFF),A
 	LD	A,3CH
 	LD	(D.FFFF),A		; secundairy slot 0 on page 3 and 0 (RAM), secundairy slot 3 on page 2 and 1 (FIRMWARE)
-	JP	X.8000			; start word processor
+	JP	S28000			; start word processor
 
 I621F:	DEFB	13,10
 	DEFB	"Are you sure (Y/N) "
@@ -6407,12 +6408,12 @@ J624A:	INC	HL
 	JR	NZ,J6247
 
 J6257:	LD	HL,C.D8FB
-	LD	B,10
+	LD	B,5+5
 J625C:	LD	(HL),0C9H
 	INC	HL
 	DJNZ	J625C
 	LD	SP,(HIMEM)
-	CALL	C61DB
+	CALL	C61DB			; clear keyboard buffer
 	CALL	C7C68
 	CALL	C7CBC
 	CALL	C7E3C
@@ -6420,7 +6421,7 @@ J625C:	LD	(HL),0C9H
 J6274:	CALL	C7F14
 	CALL	C7F56
 	LD	SP,(HIMEM)
-	CALL	C61DB
+	CALL	C61DB			; clear keyboard buffer
 	XOR	A
 	LD	(D.DAD9),A
 	LD	HL,I$1600
@@ -6434,13 +6435,13 @@ J6274:	CALL	C7F14
 
 C6291:	LD	C,0D0H
 J6293:	CALL	C634E
-	LD	B,0AH	; 10 
+	LD	B,10
 J6298:	CALL	C633D
 	RET	C
 	CP	C
 J629D:	JR	NZ,J6293
 J629F:	DJNZ	J6298
-	LD	B,0BH	; 11 
+	LD	B,11
 	LD	HL,FILNM2
 J62A6:	CALL	C633D
 	RET	C
@@ -6462,7 +6463,7 @@ J62C0:	LD	A,(HL)
 	DJNZ	J62C0
 	JR	J62DC
 
-J62CA:	LD	BC,I.0007
+J62CA:	LD	BC,7
 	LD	HL,FILNM2
 	LD	DE,FILNAM
 J62D3:	LD	A,(DE)
@@ -6741,7 +6742,8 @@ J6473:	CP	12H			; INSERT ?
 	JP	Z,J66D5			; yep,
 	CP	09H			; TAB ?
 	JP	Z,J672B			; yep,
-J6482:	CALL	C61DB
+
+J6482:	CALL	C61DB			; clear keyboard buffer
 	CALL	C61D3			; beep
 	JP	J63FE
 
@@ -6764,7 +6766,7 @@ J64A3:	DEC	A
 	CP	06H	; 6 
 	JP	Z,J6B47
 J64AF:	SLA	A
-	CALL	C7CEF
+	CALL	C7CEF			; HL = HL + A
 	LD	E,(HL)
 	INC	HL
 	LD	D,(HL)
@@ -7178,7 +7180,7 @@ J673E:	XOR	A
 	LD	A,(D.D90D)
 	OR	A
 	JP	Z,J63FE
-	CALL	C7CEF
+	CALL	C7CEF			; HL = HL + A
 	LD	A,(HL)
 	OR	A
 	JR	Z,J672B
@@ -7186,7 +7188,7 @@ J673E:	XOR	A
 
 J6756:	LD	HL,I.D924
 	LD	A,(D.D90D)
-	CALL	C7CEF
+	CALL	C7CEF			; HL = HL + A
 	LD	A,(HL)
 	XOR	0FFH
 	LD	(HL),A
@@ -7203,7 +7205,7 @@ J676F:	LD	A,(D.D90D)
 	LD	BC,I86F3
 	LD	HL,I.0215
 	CALL	C7C3E
-J6782:	CALL	C61DB
+J6782:	CALL	C61DB			; clear keyboard buffer
 	CALL	C74D0			; get keyboard input #2
 	JP	NC,J6791		; not aborted,
 J678B:	CALL	C7A37
@@ -7404,7 +7406,7 @@ J68D5:	LD	HL,(D.D909)
 	LD	D,A
 	ADD	A,A
 	ADD	A,D
-	CALL	C7D04
+	CALL	C7D04			; HL = HL - A
 J68E4:	CALL	C6FB1
 	JR	NC,J68EF
 J68E9:	CALL	C61D3			; beep
@@ -7456,7 +7458,7 @@ J692B:	OR	A
 	PUSH	AF
 	LD	D,H
 	LD	E,L
-	CALL	C7CEF
+	CALL	C7CEF			; HL = HL + A
 	EX	DE,HL
 	POP	AF
 	POP	BC
@@ -7591,7 +7593,7 @@ J69F0:	INC	HL
 	CALL	C7C3E
 	XOR	A
 	LD	(D.DAD9),A
-	CALL	C61DB
+	CALL	C61DB			; clear keyboard buffer
 J6A0B:	CALL	C74D0			; get keyboard input #2
 	JP	C,J6C08			; aborted,
 	LD	HL,(D.D909)
@@ -8198,7 +8200,7 @@ J6E35:	CP	0DH			; RETURN ?
 J6E3E:	CP	20H			; control character ?
 	JR	NC,J6E4A		; nope,
 J6E42:	CALL	C61D3			; beep
-	CALL	C61DB
+	CALL	C61DB			; clear keyboard buffer
 	JR	J6DEC
 
 J6E4A:	CP	7FH			; DELETE ?
@@ -8808,7 +8810,7 @@ J724B:	CALL	TAPIOF
 	CALL	C7C44
 	LD	BC,I8737
 	CALL	C7C3E
-	CALL	C61DB
+	CALL	C61DB			; clear keyboard buffer
 	CALL	C61D3			; beep
 	CALL	C74AE			; get keyboard input
 	JP	J71C9
@@ -9054,7 +9056,7 @@ J73F4:	DEC	HL
 	LD	A,H
 	OR	L
 	JR	NZ,J73F4
-	CALL	C61DB
+	CALL	C61DB			; clear keyboard buffer
 	XOR	A
 	LD	(INTFLG),A		; reset STOP or CTRL-STOP flag
 	RET
@@ -9171,7 +9173,7 @@ J74A9:	CALL	C7ECC
 
 C74AE:	EI
 	XOR	A
-	CALL	C.D8FB
+	CALL	C.D8FB			; sort of hook
 	RET	NZ
 	LD	A,(INTFLG)
 	OR	A			; STOP or CTRL-STOP pressed ?
@@ -9196,7 +9198,7 @@ J74C8:	XOR	A
 
 C74D0:	EI
 	XOR	A
-	CALL	C.D8FB
+	CALL	C.D8FB			; sort of hook
 	RET	NZ
 	LD	A,(INTFLG)
 	OR	A			; STOP or CTRL-STOP pressed ?
@@ -9204,7 +9206,7 @@ C74D0:	EI
 	PUSH	HL
 	LD	HL,D.D91B
 	LD	A,(MODE)
-	AND	01H	; 1 
+	AND	01H
 	CP	(HL)
 	JR	Z,J74F2
 	LD	(D.D91B),A
@@ -9212,13 +9214,13 @@ C74D0:	EI
 	LD	(CHRCNT),A
 	CALL	C7CAA
 J74F2:	LD	A,(MODE)
-	AND	01H	; 1 
+	AND	01H
 	JR	Z,J7520
 	PUSH	DE
 	LD	HL,I$D9BB
-	LD	(HL),20H	; " "
+	LD	(HL),20H
 	DEC	HL
-	LD	(HL),20H	; " "
+	LD	(HL),20H
 	LD	DE,ROMA
 	LD	A,(CHRCNT)
 	SUB	1
@@ -9272,8 +9274,8 @@ J754C:	DEC	A
 	LD	(D.D908),A
 J7553:	CALL	C75BB
 	LD	HL,(D.D909)
-	LD	A,78H	; "x"
-	CALL	C7D04
+	LD	A,120
+	CALL	C7D04			; HL = HL - A
 	LD	(D.D909),HL
 	LD	(D.D90B),HL
 J7564:	CALL	C7F1A
@@ -9284,16 +9286,16 @@ J7564:	CALL	C7F1A
 	RET
 
 J756C:	LD	HL,(D.D919)
-	LD	A,78H	; "x"
-	CALL	C7D04
+	LD	A,78H
+	CALL	C7D04			; HL = HL - A
 	LD	(D.D919),HL
 	CALL	C7D24
 	JR	J7553
 
 J757C:	LD	HL,(D.D90B)
 	LD	DE,(D.D909)
-	LD	A,78H	; "x"
-	CALL	C7D04
+	LD	A,120
+	CALL	C7D04			; HL = HL - A
 	RST	20H
 	JR	C,J7544
 	LD	A,(D.D908)
@@ -9310,8 +9312,8 @@ J75A0:	LD	A,(D.D906)
 	INC	A
 	LD	(D.D906),A
 	LD	DE,(D.D919)
-	LD	A,78H	; "x"
-	CALL	C7D0D
+	LD	A,78H
+	CALL	C7D0D			; DE = DE - A
 	LD	(D.D919),DE
 	PUSH	HL
 	CALL	C7D24
@@ -9363,8 +9365,8 @@ C75E4:	PUSH	HL
 	RST	20H
 	JP	NC,J7544
 	LD	HL,(D.D919)
-	LD	A,78H	; "x"
-	CALL	C7CEF
+	LD	A,78H
+	CALL	C7CEF			; HL = HL + A
 	LD	(D.D919),HL
 	CALL	C7D59
 	JR	J7612
@@ -9374,8 +9376,8 @@ J760B:	INC	A
 	LD	(D.D908),A
 J7612:	CALL	C7663
 	LD	HL,(D.D909)
-	LD	A,78H	; "x"
-	CALL	C7CEF
+	LD	A,78H
+	CALL	C7CEF			; HL = HL + A
 	LD	(D.D909),HL
 	LD	(D.D90B),HL
 	JP	J7564
@@ -9388,8 +9390,8 @@ J7626:	LD	A,(D.D908)
 	RST	20H
 	JP	NC,J7544
 	LD	HL,(D.D919)
-	LD	A,78H	; "x"
-	CALL	C7CEF
+	LD	A,78H
+	CALL	C7CEF			; HL = HL + A
 	LD	(D.D919),HL
 	CALL	C7D59
 	LD	A,(D.D906)
@@ -9401,8 +9403,8 @@ J764E:	INC	A
 	LD	(D.D908),A
 J7652:	CALL	C7663
 	LD	HL,(D.D90B)
-	LD	A,78H	; "x"
-	CALL	C7CEF
+	LD	A,78H
+	CALL	C7CEF			; HL = HL + A
 	LD	(D.D90B),HL
 	JP	J759B
 
@@ -9944,7 +9946,7 @@ C7A49:	PUSH	AF
 	LD	D,A
 	ADD	A,A
 	ADD	A,D
-	CALL	C7CFD
+	CALL	C7CFD			; BC = BC + A
 	LD	H,B
 	LD	L,C
 	LD	BC,I.0078
@@ -9960,7 +9962,7 @@ J7A6F:	LD	A,(D.D905)
 	ADD	A,A
 	ADD	A,E
 	LD	HL,(D.D909)
-	CALL	C7D04
+	CALL	C7D04			; HL = HL - A
 	PUSH	HL
 	POP	IX
 	LD	A,(D.D906)
@@ -10179,7 +10181,7 @@ C7BA4:	LD	A,0CH
 ;	     Outputs ________________________
 
 C7BB9:	EXX
-	LD	HL,C98E3
+	LD	HL,S098E3
 	JP	J7BE2			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10187,15 +10189,15 @@ C7BB9:	EXX
 ;	     Outputs ________________________
 
 C7BC0:	EXX
-	LD	HL,IA2EB
+	LD	HL,S0A2EB
 	JR	J7BE2			; call routine in segment 0 and quit
 
 ?7BC6:	EXX
-	LD	HL,CA125
+	LD	HL,S0A125
 	JR	J7BE2			; call routine in segment 0 and quit
 
 ?7BCC:	EXX
-	LD	HL,CA0F1
+	LD	HL,S0A0F1
 	JR	J7BE2			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10203,7 +10205,7 @@ C7BC0:	EXX
 ;	     Outputs ________________________
 
 C7BD2:	EXX
-	LD	HL,I9C93
+	LD	HL,S09C93
 	JR	J7BE2			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10211,7 +10213,7 @@ C7BD2:	EXX
 ;	     Outputs ________________________
 
 C7BD8:	EXX
-	LD	HL,J98EF
+	LD	HL,S098EF
 	JR	J7BE2			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10219,7 +10221,7 @@ C7BD8:	EXX
 ;	     Outputs ________________________
 
 C7BDE:	EXX
-	LD	HL,J995F
+	LD	HL,S0995F
 J7BE2:	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10227,11 +10229,11 @@ J7BE2:	JR	J7C30			; call routine in segment 0 and quit
 ;	     Outputs ________________________
 
 C7BE4:	EXX
-	LD	HL,I99C3
+	LD	HL,S099C3
 	JR	J7C30			; call routine in segment 0 and quit
 
 ?7BEA:	EXX
-	LD	HL,J9A06
+	LD	HL,S09A06
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10239,7 +10241,7 @@ C7BE4:	EXX
 ;	     Outputs ________________________
 
 C7BF0:	EXX
-	LD	HL,I9A58
+	LD	HL,S09A58
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10247,7 +10249,7 @@ C7BF0:	EXX
 ;	     Outputs ________________________
 
 C7BF6:	EXX
-	LD	HL,I9AC3
+	LD	HL,S09AC3
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10255,7 +10257,7 @@ C7BF6:	EXX
 ;	     Outputs ________________________
 
 C7BFC:	EXX
-	LD	HL,I9B80
+	LD	HL,S09B80
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10263,7 +10265,7 @@ C7BFC:	EXX
 ;	     Outputs ________________________
 
 C7C02:	EXX
-	LD	HL,I9BBA
+	LD	HL,S09BBA
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10271,7 +10273,7 @@ C7C02:	EXX
 ;	     Outputs ________________________
 
 C7C08:	EXX
-	LD	HL,J9BF5
+	LD	HL,S09BF5
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine operate selection menu
@@ -10279,7 +10281,7 @@ C7C08:	EXX
 ;	     Outputs ________________________
 
 C7C0E:	EXX
-	LD	HL,C9351		; operate selection menu
+	LD	HL,S09351		; operate selection menu
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10287,7 +10289,7 @@ C7C0E:	EXX
 ;	     Outputs ________________________
 
 C7C14:	EXX
-	LD	HL,I9222
+	LD	HL,S09222
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10295,7 +10297,7 @@ C7C14:	EXX
 ;	     Outputs ________________________
 
 C7C1A:	EXX
-	LD	HL,I93E6
+	LD	HL,S093E6
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine copy from/to lower 32KB RAM
@@ -10303,7 +10305,7 @@ C7C1A:	EXX
 ;	     Outputs ________________________
 
 C7C20:	EXX
-	LD	HL,X.8000
+	LD	HL,S08000
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10311,7 +10313,7 @@ C7C20:	EXX
 ;	     Outputs ________________________
 
 C7C26:	EXX
-	LD	HL,I9866
+	LD	HL,S09866
 	JR	J7C30			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10319,7 +10321,7 @@ C7C26:	EXX
 ;	     Outputs ________________________
 
 C7C2C:	EXX
-	LD	HL,I9838
+	LD	HL,S09838
 J7C30:	JR	J7C78			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10327,7 +10329,7 @@ J7C30:	JR	J7C78			; call routine in segment 0 and quit
 ;	     Outputs ________________________
 
 C7C32:	EXX
-	LD	HL,J9D10
+	LD	HL,S09D10
 	JR	J7C78			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10335,7 +10337,7 @@ C7C32:	EXX
 ;	     Outputs ________________________
 
 C7C38:	EXX
-	LD	HL,I95E1
+	LD	HL,S095E1
 	JR	J7C78			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10343,7 +10345,7 @@ C7C38:	EXX
 ;	     Outputs ________________________
 
 C7C3E:	EXX
-	LD	HL,C98CD
+	LD	HL,S098CD
 	JR	J7C78			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10351,7 +10353,7 @@ C7C3E:	EXX
 ;	     Outputs ________________________
 
 C7C44:	EXX
-	LD	HL,C98C1
+	LD	HL,S098C1
 	JR	J7C78			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10359,7 +10361,7 @@ C7C44:	EXX
 ;	     Outputs ________________________
 
 C7C4A:	EXX
-	LD	HL,C8023
+	LD	HL,S08023
 	JR	J7C78			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10367,19 +10369,19 @@ C7C4A:	EXX
 ;	     Outputs ________________________
 
 C7C50:	EXX
-	LD	HL,C8D9B
+	LD	HL,S08D9B
 	JR	J7C78			; call routine in segment 0 and quit
 
 ?7C56:	EXX
-	LD	HL,I8CE6
+	LD	HL,S08CE6
 	JR	J7C78			; call routine in segment 0 and quit
 
 ?7C5C:	EXX
-	LD	HL,I8FAF
+	LD	HL,S08FAF
 	JR	J7C78			; call routine in segment 0 and quit
 
 ?7C62:	EXX
-	LD	HL,C8C65
+	LD	HL,S08C65
 	JR	J7C78			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10387,7 +10389,7 @@ C7C50:	EXX
 ;	     Outputs ________________________
 
 C7C68:	EXX
-	LD	HL,I907C
+	LD	HL,S0907C
 	JR	J7C78			; call routine in segment 0 and quit
 
 ;	  Subroutine __________________________
@@ -10395,11 +10397,11 @@ C7C68:	EXX
 ;	     Outputs ________________________
 
 C7C6E:	EXX
-	LD	HL,IA290
+	LD	HL,S0A290
 	JR	J7C78			; call routine in segment 0 and quit
 
 ?7C74:	EXX
-	LD	HL,J80FC
+	LD	HL,S080FC
 
 ;	  Subroutine call routine in segment 0
 ;	     Inputs  ________________________
@@ -10409,11 +10411,11 @@ J7C78:	EXX
 	PUSH	HL
 	PUSH	AF
 	LD	A,(D.7FFF)
-	LD	(D.DAD0),A
-	AND	0FCH			; select segment 0 ??
+	LD	(D.DAD0),A		; save old segment
+	AND	0FCH			; select segment 0
 J7C83:	LD	(D.7FFF),A
 	LD	A,(D.DAD0)
-	LD	H,A
+	LD	H,A			; saved old segment
 	POP	AF
 	EX	(SP),HL			; save old segment
 	PUSH	IX
@@ -10440,7 +10442,7 @@ J7C83:	LD	(D.7FFF),A
 ;	     Outputs ________________________
 
 C7CAA:	EXX
-	LD	HL,X.8000
+	LD	HL,S18000
 	JR	J7CC6			; call routine in segment 1
 
 ;	  Subroutine __________________________
@@ -10448,7 +10450,7 @@ C7CAA:	EXX
 ;	     Outputs ________________________
 
 C7CB0:	EXX
-	LD	HL,I8041
+	LD	HL,S18041
 	JR	J7CC6			; call routine in segment 1
 
 ;	  Subroutine __________________________
@@ -10456,7 +10458,7 @@ C7CB0:	EXX
 ;	     Outputs ________________________
 
 C7CB6:	EXX
-	LD	HL,I8096
+	LD	HL,S18096
 	JR	J7CC6			; call routine in segment 1
 
 ;	  Subroutine __________________________
@@ -10464,11 +10466,11 @@ C7CB6:	EXX
 ;	     Outputs ________________________
 
 C7CBC:	EXX
-	LD	HL,I80C6
+	LD	HL,S180C6
 	JR	J7CC6			; call routine in segment 1
 
 ?7CC2:	EXX
-	LD	HL,I8163
+	LD	HL,S18163
 
 ;	  Subroutine call routine in segment 1
 ;	     Inputs  ________________________
@@ -10478,9 +10480,9 @@ J7CC6:	EXX
 	PUSH	HL
 	PUSH	AF
 	LD	A,(D.7FFF)
-	LD	(D.DAD0),A
+	LD	(D.DAD0),A		; save old segment
 	AND	0FCH
-	OR	01H			; select segment 1 ??
+	OR	01H			; select segment 1
 	JP	J7C83
 
 ;	  Subroutine read byte from RAM
@@ -10512,70 +10514,74 @@ C7CE0:	PUSH	BC
 	POP	BC
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine HL = HL + A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7CEF:	ADD	A,L
 	LD	L,A
-	LD	A,00H
+	LD	A,0
 	ADC	A,H
 	LD	H,A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine DE = DE + A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7CF6:	ADD	A,E
 	LD	E,A
-	LD	A,00H
+	LD	A,0
 	ADC	A,D
 	LD	D,A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine BC = BC + A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7CFD:	ADD	A,C
 	LD	C,A
-	LD	A,00H
+	LD	A,0
 	ADC	A,B
 D$7D02:	LD	B,A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine HL = HL - A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7D04:	PUSH	DE
 	LD	E,A
-	LD	D,00H
+	LD	D,0
 	OR	A
 I7D09:	SBC	HL,DE
 	POP	DE
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine DE = DE - A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7D0D:	PUSH	HL
 	EX	DE,HL
 	LD	E,A
-	LD	D,00H
+	LD	D,0
 	OR	A
 	SBC	HL,DE
 	EX	DE,HL
 	POP	HL
 	RET
 
+;	  Subroutine BC = BC - A
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 ?7D18:	PUSH	HL
 	LD	H,B
 	LD	L,C
 	LD	C,A
-	LD	B,00H
+	LD	B,0
 	SBC	HL,BC
 	LD	B,H
 	LD	C,L
@@ -10717,11 +10723,11 @@ J7DEC:	CALL	C7EDE
 ;	     Outputs ________________________
 
 C7E18:	EXX
-	LD	HL,D.8062
+	LD	HL,S38062
 	JR	J7E46			; call routine in segment 3
 
 J7E1E:	EXX
-	LD	HL,IA747
+	LD	HL,S3A747
 	JR	J7E46			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10729,11 +10735,11 @@ J7E1E:	EXX
 ;	     Outputs ________________________
 
 C7E24:	EXX
-	LD	HL,IA363
+	LD	HL,S3A363
 	JR	J7E46			; call routine in segment 3
 
 J7E2A:	EXX
-	LD	HL,IA426
+	LD	HL,S3A426
 	JR	J7E46			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10741,7 +10747,7 @@ J7E2A:	EXX
 ;	     Outputs ________________________
 
 C7E30:	EXX
-	LD	HL,I9A21
+	LD	HL,S39A21
 	JR	J7E46			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10749,7 +10755,7 @@ C7E30:	EXX
 ;	     Outputs ________________________
 
 C7E36:	EXX
-	LD	HL,I8170
+	LD	HL,S38170
 	JR	J7E46			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10757,7 +10763,7 @@ C7E36:	EXX
 ;	     Outputs ________________________
 
 C7E3C:	EXX
-	LD	HL,I9E08
+	LD	HL,S39E08
 	JR	J7E46			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10765,7 +10771,7 @@ C7E3C:	EXX
 ;	     Outputs ________________________
 
 C7E42:	EXX
-	LD	HL,I9AC8
+	LD	HL,S39AC8
 J7E46:	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10773,7 +10779,7 @@ J7E46:	JR	J7EBE			; call routine in segment 3
 ;	     Outputs ________________________
 
 C7E48:	EXX
-	LD	HL,I9C13
+	LD	HL,S39C13
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10781,7 +10787,7 @@ C7E48:	EXX
 ;	     Outputs ________________________
 
 C7E4E:	EXX
-	LD	HL,I9F18
+	LD	HL,S39F18
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10789,7 +10795,7 @@ C7E4E:	EXX
 ;	     Outputs ________________________
 
 C7E54:	EXX
-	LD	HL,I9F74
+	LD	HL,S39F74
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10797,7 +10803,7 @@ C7E54:	EXX
 ;	     Outputs ________________________
 
 C7E5A:	EXX
-	LD	HL,I9DE5
+	LD	HL,S39DE5
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10805,7 +10811,7 @@ C7E5A:	EXX
 ;	     Outputs ________________________
 
 C7E60:	EXX
-	LD	HL,I9DC1
+	LD	HL,S39DC1
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10813,7 +10819,7 @@ C7E60:	EXX
 ;	     Outputs ________________________
 
 C7E66:	EXX
-	LD	HL,I9265
+	LD	HL,S39265
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10821,7 +10827,7 @@ C7E66:	EXX
 ;	     Outputs ________________________
 
 C7E6C:	EXX
-	LD	HL,I92F3
+	LD	HL,S392F3
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10829,7 +10835,7 @@ C7E6C:	EXX
 ;	     Outputs ________________________
 
 C7E72:	EXX
-	LD	HL,I9374
+	LD	HL,S39374
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10837,11 +10843,11 @@ C7E72:	EXX
 ;	     Outputs ________________________
 
 C7E78:	EXX
-	LD	HL,I93EE
+	LD	HL,S393EE
 	JR	J7EBE			; call routine in segment 3
 
 J7E7E:	EXX
-	LD	HL,I946A
+	LD	HL,S3946A
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10849,7 +10855,7 @@ J7E7E:	EXX
 ;	     Outputs ________________________
 
 C7E84:	EXX
-	LD	HL,I9485
+	LD	HL,S39485
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10857,7 +10863,7 @@ C7E84:	EXX
 ;	     Outputs ________________________
 
 C7E8A:	EXX
-	LD	HL,I94D7
+	LD	HL,S394D7
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10865,7 +10871,7 @@ C7E8A:	EXX
 ;	     Outputs ________________________
 
 C7E90:	EXX
-	LD	HL,I950D
+	LD	HL,S3950D
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10873,7 +10879,7 @@ C7E90:	EXX
 ;	     Outputs ________________________
 
 C7E96:	EXX
-	LD	HL,I956C
+	LD	HL,S3956C
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10881,11 +10887,11 @@ C7E96:	EXX
 ;	     Outputs ________________________
 
 C7E9C:	EXX
-	LD	HL,I911F
+	LD	HL,S3911F
 	JR	J7EBE			; call routine in segment 3
 
 J7EA2:	EXX
-	LD	HL,I8F16
+	LD	HL,S38F16
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10893,7 +10899,7 @@ J7EA2:	EXX
 ;	     Outputs ________________________
 
 C7EA8:	EXX
-	LD	HL,I95AA
+	LD	HL,S395AA
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10901,7 +10907,7 @@ C7EA8:	EXX
 ;	     Outputs ________________________
 
 C7EAE:	EXX
-	LD	HL,I9591
+	LD	HL,S39591
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10909,7 +10915,7 @@ C7EAE:	EXX
 ;	     Outputs ________________________
 
 C7EB4:	EXX
-	LD	HL,I95C3
+	LD	HL,S395C3
 	JR	J7EBE			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10917,7 +10923,7 @@ C7EB4:	EXX
 ;	     Outputs ________________________
 
 C7EBA:	EXX
-	LD	HL,I9624
+	LD	HL,S39624
 J7EBE:	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10925,7 +10931,7 @@ J7EBE:	JR	J7F36			; call routine in segment 3
 ;	     Outputs ________________________
 
 C7EC0:	EXX
-	LD	HL,I9764
+	LD	HL,S39764
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10933,7 +10939,7 @@ C7EC0:	EXX
 ;	     Outputs ________________________
 
 C7EC6:	EXX
-	LD	HL,I969C
+	LD	HL,S3969C
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10941,7 +10947,7 @@ C7EC6:	EXX
 ;	     Outputs ________________________
 
 C7ECC:	EXX
-	LD	HL,I9702
+	LD	HL,S39702
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10949,7 +10955,7 @@ C7ECC:	EXX
 ;	     Outputs ________________________
 
 C7ED2:	EXX
-	LD	HL,I957B
+	LD	HL,S3957B
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10957,7 +10963,7 @@ C7ED2:	EXX
 ;	     Outputs ________________________
 
 C7ED8:	EXX
-	LD	HL,I8637
+	LD	HL,S38637
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10965,7 +10971,7 @@ C7ED8:	EXX
 ;	     Outputs ________________________
 
 C7EDE:	EXX
-	LD	HL,I866A
+	LD	HL,S3866A
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10973,7 +10979,7 @@ C7EDE:	EXX
 ;	     Outputs ________________________
 
 C7EE4:	EXX
-	LD	HL,I8239
+	LD	HL,S38239
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10981,7 +10987,7 @@ C7EE4:	EXX
 ;	     Outputs ________________________
 
 C7EEA:	EXX
-	LD	HL,J81D3
+	LD	HL,S381D3
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine display character
@@ -10989,7 +10995,7 @@ C7EEA:	EXX
 ;	     Outputs ________________________
 
 C7EF0:	EXX
-	LD	HL,I82A4
+	LD	HL,S382A4
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -10997,11 +11003,11 @@ C7EF0:	EXX
 ;	     Outputs ________________________
 
 C7EF6:	EXX
-	LD	HL,I8368
+	LD	HL,S38368
 	JR	J7F36			; call routine in segment 3
 
 J7EFC:	EXX
-	LD	HL,I83AC
+	LD	HL,S383AC
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11009,7 +11015,7 @@ J7EFC:	EXX
 ;	     Outputs ________________________
 
 C7F02:	EXX
-	LD	HL,D.80CE
+	LD	HL,S380CE
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11017,11 +11023,11 @@ C7F02:	EXX
 ;	     Outputs ________________________
 
 C7F08:	EXX
-	LD	HL,I81C4
+	LD	HL,S381C4
 	JR	J7F36			; call routine in segment 3
 
 ?7F0E:	EXX
-	LD	HL,I86AA
+	LD	HL,S386AA
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11029,7 +11035,7 @@ C7F08:	EXX
 ;	     Outputs ________________________
 
 C7F14:	EXX
-	LD	HL,I87DB
+	LD	HL,S387DB
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11037,7 +11043,7 @@ C7F14:	EXX
 ;	     Outputs ________________________
 
 C7F1A:	EXX
-	LD	HL,I871A
+	LD	HL,S3871A
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11045,7 +11051,7 @@ C7F1A:	EXX
 ;	     Outputs ________________________
 
 C7F20:	EXX
-	LD	HL,I8786
+	LD	HL,S38786
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11053,11 +11059,11 @@ C7F20:	EXX
 ;	     Outputs ________________________
 
 C7F26:	EXX
-	LD	HL,I8799
+	LD	HL,S38799
 	JR	J7F36			; call routine in segment 3
 
 ?7F2C:	EXX
-	LD	HL,I87F3
+	LD	HL,S387F3
 	JR	J7F36			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11065,7 +11071,7 @@ C7F26:	EXX
 ;	     Outputs ________________________
 
 C7F32:	EXX
-	LD	HL,I8800
+	LD	HL,S38800
 J7F36:	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11073,7 +11079,7 @@ J7F36:	JR	J7F92			; call routine in segment 3
 ;	     Outputs ________________________
 
 C7F38:	EXX
-	LD	HL,I8823
+	LD	HL,S38823
 	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11081,7 +11087,7 @@ C7F38:	EXX
 ;	     Outputs ________________________
 
 C7F3E:	EXX
-	LD	HL,I8845
+	LD	HL,S38845
 	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11089,11 +11095,11 @@ C7F3E:	EXX
 ;	     Outputs ________________________
 
 C7F44:	EXX
-	LD	HL,I882B
+	LD	HL,S3882B
 	JR	J7F92			; call routine in segment 3
 
 ?7F4A:	EXX
-	LD	HL,I81A8
+	LD	HL,S381A8
 	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11101,7 +11107,7 @@ C7F44:	EXX
 ;	     Outputs ________________________
 
 C7F50:	EXX
-	LD	HL,D.80BE
+	LD	HL,S380BE
 	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11109,7 +11115,7 @@ C7F50:	EXX
 ;	     Outputs ________________________
 
 C7F56:	EXX
-	LD	HL,I807F
+	LD	HL,S3807F
 	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11117,15 +11123,15 @@ C7F56:	EXX
 ;	     Outputs ________________________
 
 C7F5C:	EXX
-	LD	HL,X.8000
+	LD	HL,S38000
 	JR	J7F92			; call routine in segment 3
 
 ?7F62:	EXX
-	LD	HL,J8188
+	LD	HL,S38188
 	JR	J7F92			; call routine in segment 3
 
 ?7F68:	EXX
-	LD	HL,I817B
+	LD	HL,S3817B
 	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11133,7 +11139,7 @@ C7F5C:	EXX
 ;	     Outputs ________________________
 
 C7F6E:	EXX
-	LD	HL,I8195
+	LD	HL,S38195
 	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11141,7 +11147,7 @@ C7F6E:	EXX
 ;	     Outputs ________________________
 
 C7F74:	EXX
-	LD	HL,I828F
+	LD	HL,S3828F
 	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine __________________________
@@ -11149,19 +11155,19 @@ C7F74:	EXX
 ;	     Outputs ________________________
 
 C7F7A:	EXX
-	LD	HL,I885F
+	LD	HL,S3885F
 	JR	J7F92			; call routine in segment 3
 
 J7F80:	EXX
-	LD	HL,I8894
+	LD	HL,S38894
 	JR	J7F92			; call routine in segment 3
 
 J7F86:	EXX
-	LD	HL,I8DC0
+	LD	HL,S38DC0
 	JR	J7F92			; call routine in segment 3
 
 J7F8C:	EXX
-	LD	HL,I8EEC
+	LD	HL,S38EEC
 	JR	J7F92			; call routine in segment 3
 
 ;	  Subroutine call routine in segment 3
@@ -11172,9 +11178,9 @@ J7F92:	EXX
 	PUSH	HL
 	PUSH	AF
 	LD	A,(D.7FFF)
-	LD	(D.DAD0),A
+	LD	(D.DAD0),A		; save old segment
 	AND	0FCH
-	OR	03H			; select segment 3 ??
+	OR	03H			; select segment 3
 	JP	J7C83
 
 ?7FA2:	NOP
@@ -11225,5 +11231,6 @@ J7F92:	EXX
 	LD	H,C
 	LD	H,D
 	DEFB	0,0
-D.7FFF:	SBC	A,H
+
+D.7FFF:	DEFB	0
 

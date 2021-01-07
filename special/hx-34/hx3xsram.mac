@@ -1,16 +1,117 @@
 
 RAMAD1  equ     0F342H                  ; slotid DOS ram page 1
 RAMAD2  equ     0F343H                  ; slotid DOS ram page 2
-BDOS    equ     5
+EXPTBL  equ     0FCC1H
+CALSLT  equ     0001CH
 ENASLT  equ     00024H
+CHGET   equ     0009FH
+CHPUT   equ     000A2H
+BDOS    equ     00005H
+
+SAFE    equ     0C000H
 
         CALL    SAVPG1
 
-        LD      B,4
-NXTPG2: PUSH    BC
-        LD      A,4
-        SUB     B
+        LD      DE,STRBLK
+        CALL    PRTSTR
+
+GETKEY: LD      IX,CHGET
+        LD      IY,(EXPTBL+0-1)
+        CALL    CALSLT
+        SUB     "0"
+        JP      C,QUIT
+        CP      4
+        JP      NC,QUIT
+
         LD      (BLOCK),A
+
+        LD      DE,STRBL1
+        CALL    PRTSTR
+        LD      DE,STRBL2
+        CALL    PRTSTR
+        LD      A,(BLOCK)
+        CALL    PRTBYT
+        LD      DE,STRBL3
+        CALL    PRTSTR
+
+        LD      HL,RAMTST
+        LD      DE,SAFE
+        LD      BC,RAMTSZ
+        LDIR
+
+	CALL	SAFE
+
+        LD      HL,RESTB
+        LD      B,64
+
+NXT:    PUSH    BC
+        PUSH    HL
+	LD	DE,STRTST
+	CALL	PRTSTR
+	POP	HL
+	PUSH	HL
+        LD      DE,-RESTB
+        ADD     HL,DE
+        LD      A,L
+        ADD     A,080H
+	CALL	PRTBYT
+	POP	HL
+	PUSH	HL
+	XOR     A
+	CALL	PRTBYT
+	POP	HL
+	PUSH	HL
+        LD      DE,STROK
+        LD      A,(HL)
+        OR      A
+        JR      NZ,POK
+        LD      DE,STRFAIL
+POK:    CALL    PRTSTR
+        POP     HL
+        POP     BC
+        INC     HL
+        DJNZ    NXT
+
+        LD      HL,RAMSAV
+        LD      DE,SAFE
+        LD      BC,RAMSAZ
+        LDIR
+
+        CALL    SAFE
+
+        LD      DE,FCB
+        LD      C,16H
+        CALL    BDOS
+        OR      A
+        JP      NZ,QUIT
+
+        LD      DE,BUF
+        LD      C,1AH
+        CALL    BDOS
+
+        LD      HL,1
+        LD      (FCB+14),HL
+        LD      HL,256
+        LD      DE,FCB
+        LD      C,26H
+        CALL    BDOS
+        OR      A
+        JR      NZ,QUIT
+
+        LD      DE,FCB
+        LD      C,10H
+        CALL    BDOS
+
+
+QUIT:   CALL    RSTPG1
+        RET
+
+RAMTST:
+        .PHASE  SAFE
+
+
+        DI
+        LD      A,(BLOCK)
 	RRCA
 	RRCA
 	RRCA
@@ -20,60 +121,27 @@ NXTPG2: PUSH    BC
         OR      C
         LD      (07FFFH),A
 
-	CALL	RAMTST
-
-        LD      A,(07FFFH)
-        AND     10011111B
-        LD      (07FFFH),A
-        POP     BC
-        DJNZ    NXTPG2
-
-        CALL    RSTPG1
-        RET
-
-RAMTST:
-        LD      DE,STRBL1
-        LD      C,09H
-        CALL    BDOS
-        LD      DE,STRBL2
-        LD      C,09H
-        CALL    BDOS
-        LD      A,(BLOCK)
-        CALL    PRTBYT
-        LD      DE,STRBL3
-        LD      C,09H
-        CALL    BDOS
-
 	LD	HL,08000H
+        LD      DE,RESTB
 
 NXT256:	PUSH	HL
-	LD	DE,STRTST
-	LD	C,09H
-	CALL	BDOS
-	POP	HL
-	PUSH	HL
-	LD	A,H
-	CALL	PRTBYT
-	POP	HL
-	PUSH	HL	
-	LD	A,L
-	CALL	PRTBYT
-	POP	HL
-	PUSH	HL	
 	CALL	TST256
 	POP	HL
-	INC	H
-	PUSH	HL
-	LD	DE,STROK
+        LD      A,0FFH
 	JR	NC,OK
-	LD	DE,STRFAIL
-OK:	LD	C,09H
-	CALL	BDOS
-	POP	HL
+        INC     A
+OK:	LD      (DE),A
+        INC     DE
+	INC	H
 	LD	A,H
 	CP	HIGH 0C000H
 	JR	NZ,NXT256
 
+        LD      A,(07FFFH)
+        AND     10011111B
+        LD      (07FFFH),A
+
+        EI
 	RET
 
 TST256: LD      A,(HL)
@@ -90,6 +158,41 @@ TST256: LD      A,(HL)
 
 TSTFL:	SCF
 	RET
+
+RESTB:  DEFS    64,0
+
+        .DEPHASE
+RAMTSZ  EQU     $-RAMTST
+
+RAMSAV:
+        .PHASE  SAFE
+        DI
+        LD      A,(BLOCK)
+	RRCA
+	RRCA
+	RRCA
+        LD      C,A
+        LD      A,(07FFFH)
+        AND     10011111B
+        OR      C
+        LD      (07FFFH),A
+
+        LD      HL,08000H
+        LD      DE,BUF
+        LD      BC,256
+        LDIR
+
+        LD      A,(07FFFH)
+        AND     10011111B
+        LD      (07FFFH),A
+
+        EI
+	RET
+
+BUF:    DEFS    256,0
+
+        .DEPHASE
+RAMSAZ  EQU     $-RAMSAV
 
 
 SAVPG1:
@@ -122,6 +225,19 @@ RSTPG1:
         EI
         RET
 
+;	  Subroutine output string to screen
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+PRTSTR: LD      A,(DE)
+        OR      A
+        RET     Z
+        LD      IX,CHPUT
+        LD      IY,(EXPTBL+0-1)
+        CALL    CALSLT
+        INC     DE
+        JR      PRTSTR
+
 ;	  Subroutine output byte in HEX to screen
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -142,30 +258,52 @@ PRTNIB:	PUSH	AF
         AND	0FH
         CP	0AH
         SBC	A,69H
-        DAA	
-        LD      C,6
-        LD      E,A
-        CALL    BDOS
+        DAA
+        LD      IX,CHPUT
+        LD      IY,(EXPTBL+0-1)
+        CALL    CALSLT
         POP	AF
         RET	
 
-STRBL1: DEFB    "Testing SRAM in page 2"
-        DEFB    "$"
-STRBL2: DEFB    " block "
-        DEFB    "$"
-STRBL3: DEFB    "...",13,10
-        DEFB    "$"
+STRBLK: DEFB    "Enter block number key (0-3)",13,10
+        DEFB    0
 
-STRTST:	DEFB	"Testing at address "
-	DEFB	"$"
+STRBL1: DEFB    "Testing SRAM in page 2"
+        DEFB    0
+
+STRBL2: DEFB    " block "
+        DEFB    0
+
+STRBL3: DEFB    "...",13,10
+        DEFB    0
+
+STRTST:	DEFB	"Result at address "
+	DEFB	0
 
 STROK:	DEFB	" RAM",13,10
-	DEFB	"$"
+	DEFB	0
 
 STRFAIL:DEFB	" ROM",13,10
-	DEFB	"$"
+	DEFB	0
 
 
 SAVAD1: DEFB    0
 SAVAD2: DEFB    0
 BLOCK:  DEFB    0
+
+FCB:    DEFB    0
+        DEFB    "SRAM    SAV"
+        DEFW    0
+        DEFW    0
+        DEFB    0,0,0,0
+        DEFW    0
+        DEFW    0
+        DEFB    0
+        DEFB    0
+        DEFW    0
+        DEFW    0
+        DEFW    0
+        DEFB    0
+        DEFB    0,0,0,0
+
+        END

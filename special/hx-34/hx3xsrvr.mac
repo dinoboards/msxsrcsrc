@@ -1,0 +1,544 @@
+
+RAMAD1  equ     0F342H                  ; slotid DOS ram page 1
+RAMAD2  equ     0F343H                  ; slotid DOS ram page 2
+EXPTBL  equ     0FCC1H
+CALSLT  equ     0001CH
+ENASLT  equ     00024H
+CHGET   equ     0009FH
+CHPUT   equ     000A2H
+BDOS    equ     00005H
+
+SAFE    equ     0C000H
+
+; results:
+; x01xxxxx
+; 0D 11 60 61 62
+; --------------
+; 00 00 F8 00 01
+; 00 00 F9 01 02
+; 00 00 FA 42 03
+; 00 00 FB 43 04
+
+; x11xxxxx
+; 0D 11 60 61 62
+; --------------
+; FF 0D F8 00 01
+; FF 0D F8 00 01
+; 00 0D FA 42 03
+; 00 0D FA 42 03
+
+
+
+
+        CALL    SAVPG1
+
+        LD      DE,STRBL1
+        CALL    PRTSTR
+
+
+        LD      HL,RAMTST
+        LD      DE,SAFE
+        LD      BC,RAMTSZ
+        LDIR
+
+        LD      A,1
+	LD	HL,08000H
+	CALL	SAFE
+
+        LD      HL,RESTB
+
+NXT1:   LD      C,(HL)
+        INC     HL
+        LD      B,(HL)
+        INC     HL
+        LD      A,B
+        OR      C
+        JR      Z,QUT1
+
+        LD      A,B
+        CALL    PRTBYT
+        LD      A,C
+        CALL    PRTBYT
+
+        LD      DE,STRNWL
+        CALL    PRTSTR
+
+        JR      NXT1
+
+QUT1:
+        LD      A,1
+	LD	HL,00000H
+	CALL	SAFE
+
+        LD      HL,RESTB
+
+NXT2:   LD      C,(HL)
+        INC     HL
+        LD      B,(HL)
+        INC     HL
+        LD      A,B
+        OR      C
+        JR      Z,QUT2
+
+        LD      A,B
+        CALL    PRTBYT
+        LD      A,C
+        CALL    PRTBYT
+
+        LD      DE,STRNWL
+        CALL    PRTSTR
+
+        JR      NXT2
+
+QUT2:
+
+
+
+        LD      DE,STRVDP
+        CALL    PRTSTR
+
+        LD      HL,VDPTST
+        LD      DE,SAFE
+        LD      BC,VDPTSZ
+        LDIR
+
+        LD      A,1
+	CALL	SAFE
+
+        LD      HL,BUF
+        LD      B,4*5
+VDP1:   LD      A,(HL)
+        INC     HL
+        CALL    PRTBYT
+        DJNZ    VDP1
+
+        LD      DE,STRNWL
+        CALL    PRTSTR
+
+        LD      DE,STRBL3
+        CALL    PRTSTR
+
+        LD      HL,RAMTST
+        LD      DE,SAFE
+        LD      BC,RAMTSZ
+        LDIR
+
+        LD      A,3
+	LD	HL,08000H
+	CALL	SAFE
+
+        LD      HL,RESTB
+
+NXT3:   LD      C,(HL)
+        INC     HL
+        LD      B,(HL)
+        INC     HL
+        LD      A,B
+        OR      C
+        JR      Z,QUT3
+
+        LD      A,B
+        CALL    PRTBYT
+        LD      A,C
+        CALL    PRTBYT
+
+        LD      DE,STRNWL
+        CALL    PRTSTR
+
+        JR      NXT3
+
+QUT3:
+        LD      A,3
+	LD	HL,00000H
+	CALL	SAFE
+
+        LD      HL,RESTB
+
+NXT4:   LD      C,(HL)
+        INC     HL
+        LD      B,(HL)
+        INC     HL
+        LD      A,B
+        OR      C
+        JR      Z,QUT4
+
+        LD      A,B
+        CALL    PRTBYT
+        LD      A,C
+        CALL    PRTBYT
+
+        LD      DE,STRNWL
+        CALL    PRTSTR
+
+        JR      NXT4
+
+QUT4:
+
+        LD      DE,STRVDP
+        CALL    PRTSTR
+
+        LD      HL,VDPTST
+        LD      DE,SAFE
+        LD      BC,VDPTSZ
+        LDIR
+
+        LD      A,3
+	CALL	SAFE
+
+        LD      HL,BUF
+        LD      B,4*5
+VDP2:   LD      A,(HL)
+        INC     HL
+        CALL    PRTBYT
+        DJNZ    VDP2
+
+        LD      DE,STRNWL
+        CALL    PRTSTR
+
+QUIT:   CALL    RSTPG1
+        RET
+
+RAMTST:
+        .PHASE  SAFE
+
+
+        DI
+
+	RRCA
+	RRCA
+	RRCA
+        LD      C,A
+        LD      A,(07FFFH)
+        AND     10011111B
+        OR      C
+        LD      (07FFFH),A
+
+        LD      DE,RESTB
+
+NXT256:	CALL	TSTRAM
+	JR	NC,OK
+        LD      A,L
+        LD      (DE),A
+        INC     DE
+        LD      A,H
+        LD      (DE),A
+        INC     DE
+OK:
+        INC     HL
+	LD	A,L
+	CP	LOW 08080H
+	JR	NZ,NXT256
+
+        XOR     A
+        LD      (DE),A
+        INC     DE
+        LD      (DE),A
+
+        LD      A,(07FFFH)
+        AND     10011111B
+        LD      (07FFFH),A
+
+        EI
+	RET
+
+TSTRAM: LD      A,(HL)
+        CPL
+        LD      (HL),A
+        CP      (HL)                    ; RAM found (write inverted correctly read back) ?
+        CPL
+        LD      (HL),A                  ; restore orginal value
+        SCF
+        RET     NZ
+ 	CCF
+	RET
+
+RESTB:  DEFS    2*257,0
+
+        .DEPHASE
+RAMTSZ  EQU     $-RAMTST
+
+
+VDPTST:
+        .PHASE  SAFE
+
+
+        DI
+
+        LD      (VDPBLK),A
+
+        LD      A,13			; vdp blink register
+        OUT     (99H),A
+        LD      A,080H+17
+        OUT     (99H),A                 ; set indirect vdp register pointer to 13, autoincrement
+        LD      A,0FFH
+        OUT     (9BH),A                 ; write blink register
+        LD      A,0
+	OUT	(99H),A
+	LD	A,128+14
+	OUT	(99H),A			; write adress latch register
+        LD      A,0
+	OUT	(99H),A
+	LD	A,0+0
+	OUT	(99H),A			; prepare read VRAM at 00000H
+        EX      (SP),HL
+        EX      (SP),HL
+        IN      A,(98H)                 ; read VRAM
+
+
+        LD      HL,BUF
+
+        LD      A,(VDPBLK)
+	RRCA
+	RRCA
+	RRCA
+        LD      C,A
+        LD      A,(07FFFH)
+        AND     10011111B
+        OR      C
+        LD      (07FFFH),A
+
+        LD      A,(08000H+13)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08000H+17)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08060H)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08061H)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08062H)
+        LD      (HL),A
+        INC     HL
+
+        LD      A,13			; vdp blink register
+        OUT     (99H),A
+        LD      A,080H+17
+        OUT     (99H),A                 ; set indirect vdp register pointer to 13, autoincrement
+        LD      A,0AAH
+        OUT     (9BH),A                 ; write blink register
+        LD      A,1
+	OUT	(99H),A
+	LD	A,128+14
+	OUT	(99H),A			; write adress latch register
+        LD      A,1
+	OUT	(99H),A
+	LD	A,1+0
+	OUT	(99H),A			; prepare read VRAM at 4101H
+        EX      (SP),HL
+        EX      (SP),HL
+        IN      A,(98H)                 ; read VRAM
+
+        LD      A,(08000H+13)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08000H+17)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08060H)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08061H)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08062H)
+        LD      (HL),A
+        INC     HL
+
+        LD      A,(07FFFH)
+        AND     10011111B
+        LD      (07FFFH),A
+
+        LD      A,13			; vdp blink register
+        OUT     (99H),A
+        LD      A,080H+17
+        OUT     (99H),A                 ; set indirect vdp register pointer to 13, autoincrement
+        LD      A,0
+        OUT     (9BH),A                 ; write blink register
+        LD      A,2
+	OUT	(99H),A
+	LD	A,128+14
+	OUT	(99H),A			; write adress latch register
+        LD      A,2
+	OUT	(99H),A
+	LD	A,2+40H
+	OUT	(99H),A			; prepare write VRAM at 8202H
+        EX      (SP),HL
+        EX      (SP),HL
+        XOR     A
+        OUT     (98H),A                 ; write VRAM
+
+        LD      A,(VDPBLK)
+	RRCA
+	RRCA
+	RRCA
+        LD      C,A
+        LD      A,(07FFFH)
+        AND     10011111B
+        OR      C
+        LD      (07FFFH),A
+
+        LD      A,(08000H+13)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08000H+17)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08060H)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08061H)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08062H)
+        LD      (HL),A
+        INC     HL
+
+        LD      A,13			; vdp blink register
+        OUT     (99H),A
+        LD      A,080H+17
+        OUT     (99H),A                 ; set indirect vdp register pointer to 13, autoincrement
+        LD      A,055H
+        OUT     (9BH),A                 ; write blink register
+        LD      A,3
+	OUT	(99H),A
+	LD	A,128+14
+	OUT	(99H),A			; write adress latch register
+        LD      A,3
+	OUT	(99H),A
+	LD	A,3+40H
+	OUT	(99H),A			; prepare write VRAM at 10303H
+        EX      (SP),HL
+        EX      (SP),HL
+        XOR     A
+        OUT     (98H),A                 ; write VRAM
+
+        LD      A,(08000H+13)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08000H+17)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08060H)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08061H)
+        LD      (HL),A
+        INC     HL
+        LD      A,(08062H)
+        LD      (HL),A
+        INC     HL
+
+        LD      A,(07FFFH)
+        AND     10011111B
+        LD      (07FFFH),A
+
+        LD      A,0
+	OUT	(99H),A
+	LD	A,128+13
+	OUT	(99H),A			; vdp blink register
+
+
+        EI
+	RET
+
+VDPBLK: DEFB    0
+BUF:    DEFS    4*5,0
+
+        .DEPHASE
+VDPTSZ  EQU     $-VDPTST
+
+
+SAVPG1:
+        DI
+        LD      A,(RAMAD1)
+        LD      (SAVAD1),A
+        LD      A,08FH
+        LD      (RAMAD1),A
+        LD      H,HIGH 04000H
+        CALL    ENASLT
+        LD      A,(RAMAD2)
+        LD      (SAVAD2),A
+        LD      A,08FH
+        LD      (RAMAD2),A
+        LD      H,HIGH 08000H
+        CALL    ENASLT
+        EI
+        RET
+
+RSTPG1:
+        DI
+        LD      A,(SAVAD1)
+        LD      (RAMAD1),A
+        LD      H,HIGH 04000H
+        CALL    ENASLT
+        LD      A,(SAVAD2)
+        LD      (RAMAD2),A
+        LD      H,HIGH 08000H
+        CALL    ENASLT
+        EI
+        RET
+
+;	  Subroutine output string to screen
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+PRTSTR: LD      A,(DE)
+        OR      A
+        RET     Z
+        LD      IX,CHPUT
+        LD      IY,(EXPTBL+0-1)
+        CALL    CALSLT
+        INC     DE
+        JR      PRTSTR
+
+;	  Subroutine output byte in HEX to screen
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+PRTBYT:	PUSH	AF
+        RRCA	
+        RRCA	
+        RRCA	
+        RRCA	
+	CALL	PRTNIB                  ; output nibble in HEX to screen
+        POP	AF
+
+;	  Subroutine output nibble in HEX to screen
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+PRTNIB:	PUSH	AF
+        AND	0FH
+        CP	0AH
+        SBC	A,69H
+        DAA
+        LD      IX,CHPUT
+        LD      IY,(EXPTBL+0-1)
+        CALL    CALSLT
+        POP	AF
+        RET	
+
+STRBL1: DEFB    "Testing with 7FFF = x01xxxxx",13,10
+        DEFB    "The following addresses are read only:",13,10
+        DEFB    0
+
+STRBL3: DEFB    "Testing with 7FFF = x11xxxxx",13,10
+        DEFB    "The following addresses are read only:",13,10
+        DEFB    0
+
+STRNWL: DEFB    13,10
+        DEFB    0
+
+STRVDP: DEFB    "Testing VDP readback:",13,10
+        DEFB    0
+
+
+SAVAD1: DEFB    0
+SAVAD2: DEFB    0
+
+BLOCK:  DEFB    0
+
+        END

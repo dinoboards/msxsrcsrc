@@ -589,9 +589,6 @@ OLDSTT	EQU	0FB0CH	; J---I
 OLDINT	EQU	0FB11H	; J---I
 DEVNUM	EQU	0FB16H	; ---LI
 DATCNT	EQU	0FB17H	; ---LI
-D$FB18	EQU	0FB18H	; ---L-
-D.FB1A	EQU	0FB1AH	; --SLI
-D.FB1B	EQU	0FB1BH	; --SLI
 ERRORS	EQU	0FB1CH	; --SLI
 ESTBLS	EQU	0FB1DH	; --S-I
 COMMSV	EQU	0FB1EH	; --SL-
@@ -605,22 +602,10 @@ TRPTBL	EQU	0FC82H	; ----I
 INTFLG	EQU	0FC9BH	; --SL-
 CSRSR	EQU	0FCA9H	; ---L-
 
-SLTWRK	EQU	0FD09H
-; SLTWRK + main_slot*32 + sub_slot*8 + page*2.
-
-D.FD0D	EQU	SLTWRK + 0*32 + 0*8 + 2*2 + 0	; in spooler interrupt flag
-D.FD19	EQU	SLTWRK + 0*32 + 2*8 + 0*2 + 0	; ?
-D.FD7F	EQU	SLTWRK + 3*32 + 2*8 + 3*2 + 0	; spooler get pointer / toshiba rs232 found flag
-D.FD81	EQU	SLTWRK + 3*32 + 3*8 + 0*2 + 0	; spooler put pointer
-C.FD83	EQU	SLTWRK + 3*32 + 3*8 + 1*2 + 0	; old H.TIMI (Spooler)
-D.FD88	EQU	C.FD83+5			; spooler empty flag
-
 PROCNM	EQU	0FD89H	; ----I
 H.KEYI	EQU	0FD9AH	; --SLI
 H.TIMI	EQU	0FD9FH	; ----I
 
-I.FF00	EQU	0FF00H	; ----I
-I$FF02	EQU	0FF02H	; ----I
 H.NEWS	EQU	0FF3EH	; --S-I
 H.LPTO	EQU	0FFB6H	; --S-I
 I.FFC0	EQU	0FFC0H	; ----I
@@ -629,13 +614,14 @@ DISINT	EQU	0FFCFH	; ----I
 D.FFFF	EQU	0FFFFH	; --S-I
 
 
+S08000:
 X.8000:	DI
-D.8001:	LD	A,30H
-D$8003:	LD	(D.FFFF),A		; secundairy slot 0 on page 3,1 and 0 (RAM), secundairy slot 3 on page 2 (FIRMWARE)
-D$8006:	LDIR
-D$8008:	LD	A,3CH
-D$800A:	LD	(D.FFFF),A		; secundairy slot 0 on page 3 and 0 (RAM), secundairy slot 3 on page 2 and 1 (FIRMWARE)
-D.800D:	EI
+	LD	A,30H
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3,1 and 0 (RAM), secundairy slot 3 on page 2 (FIRMWARE)
+	LDIR
+	LD	A,3CH
+	LD	(D.FFFF),A		; secundairy slot 0 on page 3 and 0 (RAM), secundairy slot 3 on page 2 and 1 (FIRMWARE)
+	EI
 	RET
 
 ;	  Subroutine __________________________
@@ -660,6 +646,7 @@ X.800F:	PUSH	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+S08023:
 C8023:	LD	IX,I.FFC0
 J8027:	CALL	X.800F
 	LD	HL,I.0215
@@ -811,6 +798,7 @@ I80F3	EQU	$-2
 	JR	Z,X.80DB
 	JP	J8063
 
+S080FC:
 J80FC:	CALL	C7F56
 	LD	HL,I.0200
 I8100	EQU	$-2
@@ -2743,7 +2731,8 @@ I8C5F:	RRCA
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C8C65:	CALL	C8D81
+S08C65:
+C8C65:	CALL	C8D81			; select RAM on page 3,1 and 0, FIRMWARE on page 2
 I8C67	EQU	$-1
 	OR	A
 	JR	NZ,J8C71
@@ -2787,7 +2776,7 @@ J8CA1:	LD	A,(HL)
 	CALL	C8CD4
 	LD	(D.DA62),HL
 	OR	A
-	JP	J8D8E
+	JP	J8D8E			; select RAM on page 3, FIRMWARE on page 2 and 1, BIOS on page 0
 
 J8CB1:	LD	A,(HL)
 	INC	HL
@@ -2823,14 +2812,15 @@ C8CD4:	OR	A
 	RET
 
 J8CE2:	SCF
-	JP	J8D8E
+	JP	J8D8E			; select RAM on page 3, FIRMWARE on page 2 and 1, BIOS on page 0
 
+S08CE6:
 I8CE6:	OR	A
 	RET	Z
 	PUSH	HL
 	PUSH	AF
 	PUSH	DE
-	CALL	C8D81
+	CALL	C8D81			; select RAM on page 3,1 and 0, FIRMWARE on page 2
 	LD	H,A
 	LD	B,01H	; 1 
 J8CF1:	LD	A,(DE)
@@ -2919,7 +2909,7 @@ J8D69:	LD	A,(HL)
 	INC	HL
 	DJNZ	J8D69
 	SCF
-	JP	J8D8E
+	JP	J8D8E			; select RAM on page 3, FIRMWARE on page 2 and 1, BIOS on page 0
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2936,9 +2926,9 @@ J8D7A:	POP	BC
 	POP	DE
 	POP	AF
 	POP	HL
-	JP	J8D8E
+	JP	J8D8E			; select RAM on page 3, FIRMWARE on page 2 and 1, BIOS on page 0
 
-;	  Subroutine __________________________
+;	  Subroutine select RAM on page 3,1 and 0, FIRMWARE on page 2
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2950,6 +2940,10 @@ C8D81:	PUSH	AF
 	OUT	(0A8H),A		; primairy slot 3 on page 3,2,1 and 0
 	POP	AF
 	RET
+
+;	  Subroutine select RAM on page 3, FIRMWARE on page 2 and 1, BIOS on page 0
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J8D8E:	PUSH	AF
 	LD	A,3CH
@@ -2964,6 +2958,7 @@ J8D8E:	PUSH	AF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+S08D9B:
 C8D9B:	PUSH	HL
 	PUSH	AF
 	LD	HL,I8DAF
@@ -3331,6 +3326,8 @@ J8F5F:	LD	HL,(D$2B02)
 	NOP
 	LD	H,C
 	NOP
+
+S08FAF:
 I8FAF:	CP	60H	; "`"
 	JR	C,J8FB5
 	SBC	A,60H	; "`"
@@ -3487,6 +3484,7 @@ I8FCE:	DEFB	0,0
 	CP	C
 	NOP
 
+S0907C:
 I907C:	LD	HL,D.D905
 	XOR	A
 	LD	(D.FD81+1),A
@@ -3546,7 +3544,7 @@ J909F:	PUSH	HL
 	LD	A,(D.DAAE)
 	LD	(D.DA72),A
 	LD	HL,I7800
-	LD	BC,I.0800
+	LD	BC,0800H
 J910D:	LD	A,83H			; slot 3-0 (RAM)
 	LD	E,0FFH
 	PUSH	BC
@@ -3614,7 +3612,7 @@ I917E:	CALL	C$DAE1
 
 I9182:	DEFB	1,0F0H,0
 	RST	30H
-	DEFB	8FH			; slot 3-3
+	DEFB	8FH			; slot 3-3 (FIRMWARE)
 	DEFW	I4010+3			; RS232.INIT
 	RET
 
@@ -3636,6 +3634,7 @@ I91A9:	DEFB	"Ver 3.0",13,13,13
 	DEFB	"      Presented by TOSHIBA"
 	DEFB	0FFH
 
+S09222:
 I9222:	LD	HL,I.000D
 	LD	DE,I4006
 	XOR	A
@@ -3801,6 +3800,7 @@ I9343:	JR	NZ,J9367
 ;	     Inputs  A = number of options
 ;	     Outputs A = selected option
 
+S09351:
 C9351:	PUSH	AF
 	LD	A,1
 J9354:	PUSH	AF
@@ -3919,6 +3919,7 @@ I93CE:	INC	B
 	LD	DE,I$1013
 	JR	J93FA
 
+S093E6:
 I93E6:	CALL	C7F14
 J93E9:	CALL	C7F56
 	LD	HL,X.0000
@@ -4266,7 +4267,9 @@ I95C3:	DEC	SP
 	EX	AF,AF'
 	JP	Z,J.000B
 	NOP
-I95E1:	EI
+
+S095E1:
+?95E1:	EI
 	LD	IY,I$DA82
 	CALL	C7F14
 	LD	HL,I.D9C2
@@ -4594,7 +4597,10 @@ I9829:	INC	B
 	INC	C
 	RRCA
 	RRCA
-I9838:	LD	HL,I.0212
+
+
+S09838:
+?9838:	LD	HL,I.0212
 	LD	BC,I.D924
 	LD	A,(D.D907)
 	LD	D,A
@@ -4622,6 +4628,7 @@ J985F:	INC	BC
 	JR	NZ,J984C
 	RET
 
+S09866:
 I9866:	EI
 	XOR	A
 	CALL	C8C65
@@ -4675,6 +4682,7 @@ J98B7:	LD	(D.DA67),DE
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+S098C1
 C98C1:	LD	A,(D.DA8F)
 	OR	A
 	JR	Z,C98CD
@@ -4687,6 +4695,7 @@ C98C1:	LD	A,(D.DA8F)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+S098CD:
 C98CD:	LD	A,(BC)
 	LD	E,A
 	INC	BC
@@ -4707,6 +4716,7 @@ J98D7:	LD	A,(D.DA8F)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+S098E3:
 C98E3:	LD	A,(BC)
 	INC	BC
 	CP	0FFH
@@ -4716,6 +4726,7 @@ C98E3:	LD	A,(BC)
 J98EA:	CALL	C7EF0			; display character
 	JR	C98E3
 
+S098EF:
 J98EF:	CALL	C7F56
 	LD	HL,I.0200
 	LD	A,60H	; "`"
@@ -4757,6 +4768,7 @@ J98EF:	CALL	C7F56
 	JR	C,J98EF
 	RET
 
+S0995F:
 J995F:	CALL	C7F56
 	LD	HL,I.0200
 	LD	DE,I.1C02
@@ -4794,6 +4806,7 @@ J995F:	CALL	C7F56
 	JR	C,J995F
 	RET
 
+S099C3:
 I99C3:	CALL	C7F56
 	LD	HL,I.0200
 	LD	DE,I.1802
@@ -4819,6 +4832,7 @@ J9A00:	LD	A,3
 	CALL	C9351			; operate selection menu
 	RET
 
+S09A06:
 J9A06:	CALL	C7F56
 ;
 ;	  Subroutine __________________________
@@ -4856,6 +4870,7 @@ I9A21	EQU	$-2
 	JR	C,J9A06
 	RET
 
+S09A58:
 I9A58:	LD	A,(H.KEYI+0)
 	CP	0C9H
 	JR	NZ,J9A80
@@ -4901,6 +4916,7 @@ J9A80:	CALL	C7F56
 	CALL	C9351			; operate selection menu
 	RET
 
+S09AC3:
 I9AC3:	CALL	C7F56
 	LD	HL,I.0200
 I9AC8	EQU	$-1
@@ -4982,6 +4998,7 @@ I9B73:	DEFB	"8N3XHNNN"
 	DEFW	300
 	DEFB	10
 
+S09B80:
 I9B80:	CALL	C7F56
 	LD	HL,I.0200
 	LD	DE,I.1C02
@@ -5004,6 +5021,7 @@ I9B80:	CALL	C7F56
 	CALL	C9351			; operate selection menu
 	RET
 
+S09BBA:
 I9BBA:	CALL	C7F56
 	LD	HL,I.0200
 	LD	DE,I.1C02
@@ -5026,6 +5044,7 @@ J9BC3:	LD	A,60H	; "`"
 	CALL	C74AE			; get keyboard input
 	RET
 
+S09BF5:
 J9BF5:	CALL	C7F56
 	LD	HL,I.0200
 	LD	A,60H	; "`"
@@ -5094,6 +5113,7 @@ J9C77:	LD	BC,I8647
 	JP	C,J9BF5
 	RET
 
+S09C93:
 I9C93:	LD	HL,I.0E03
 	LD	DE,I.2413
 	LD	A,0C0H
@@ -5144,6 +5164,7 @@ C9CFA:	CALL	C98C1
 	CALL	C98CD
 	RET
 
+S09D10:
 J9D10:	LD	H,05H	; 5 
 	LD	A,(D.DA8F)
 	OR	A
@@ -5585,6 +5606,7 @@ JA0D1:	CP	30H	; "0"
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+S0A0F1:
 CA0F1:	LD	HL,IBA56
 	LD	A,(D.DA6A)
 	OR	A
@@ -5615,10 +5637,12 @@ JA118:	BIT	1,(HL)
 
 JA120:	LD	A,0FFH
 JA122:	LD	(D.DA94),A
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+S0A125:
 CA125:	LD	HL,I$DA99
 	LD	A,(D.DA94)
 	OR	A
@@ -5838,6 +5862,8 @@ IA288:	CALL	X.0000
 	NOP
 IA28C:	CALL	Z,X.0000
 	NOP
+
+S0A290:
 IA290:	LD	IX,I.2800
 	XOR	A
 	LD	(D.DAC8),A
@@ -5879,6 +5905,7 @@ JA2B7:	LD	A,01H	; 1
 	CALL	CB082
 	RET
 
+S0A2EB:
 IA2EB:	LD	IX,I.2800
 	LD	(D.DA88),SP
 JA2F3:	XOR	A
