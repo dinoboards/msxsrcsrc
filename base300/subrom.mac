@@ -1016,16 +1016,26 @@ J045F:  CALL    C1C85                   ; select bank 2 clockchip
         CALL    C1C60
         LD      E,A
         CALL    C18E0
+
+IFNDEF RESDIS
         CALL    C2769                   ; read reset register
         RLCA                            ; cold boot ?
         JR      C,J0480                 ; nope, skip bootup logo
+ENDIF
         CALL    C05E1                   ; count RAM
+
+IFNDEF RESDIS
         PUSH    HL
-        CALL    C05AA
+        CALL    C05AA                   ; clear RAM (cartridge headers)
         POP     HL
-        CALL    C2C76
-J0480:  LD      A,80H
+ENDIF
+
+        CALL    C2C76                   ; bootup logo
+J0480:
+IFNDEF RESDIS
+        LD      A,80H
         CALL    C276F                   ; flag cold boot happened
+ENDIF
         CALL    C067D                   ; disable vdp display output
         XOR     A
         LD      L,A
@@ -8369,8 +8379,10 @@ C2C76:  PUSH    HL
         LD      HL,I2CB9
         LD      BC,11
         LDIR
+IFNDEF OPTROM_MODE
         LD      A,(EXBRSA)
         LD      (BUF+3),A
+ENDIF
         LD      IX,NMI
         CALL    C279D
         LD      HL,0C9C9H
@@ -8390,9 +8402,12 @@ J2CB1:  DEC     HL
         RET
 
 I2CB9:  LD      IY,0
+IFDEF OPTROM_MODE
+        LD      IX,OPTENT_ALT
+ELSE
         LD      IX,OPTENT
+ENDIF
         JP      CALSLT
-
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
