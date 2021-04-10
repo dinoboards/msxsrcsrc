@@ -5,6 +5,11 @@ MSXVER	EQU	2			; MSX version
 
 OPTENT	EQU	07A00H			; optrom entrypoint
 
+;	RTCENA	use RP-501
+;		not defined  = Do not use RP-501
+;		defined      = Use RP-501
+
+RTCENA	EQU	1
 
 ;	OPTM	Optimized code
 ;		0 = Use orginal code
@@ -48,10 +53,10 @@ F4INV	EQU	0
 ; 		1 = M-D-Y
 ;		2 = D-M-Y
 ;	KEYTYP	keyboard layout
-;		0 = Japanese 
-;		1 = International (QWERTY/other) 
-;		2 = French (AZERTY) 
-;		3 = English 
+;		0 = Japanese
+;		1 = International (QWERTY/other)
+;		2 = French (AZERTY)
+;		3 = English
 ;		4 = German (DIN)
 ;		5 = USSR
 ;		6 = Spanish
