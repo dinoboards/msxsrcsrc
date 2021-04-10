@@ -988,8 +988,10 @@ J0423:  LD      A,C
         JR      NZ,J0430
         LD      HL,MODE
         SET     6,(HL)
-J0430:  CALL    C1C85                   ; select bank 2 clockchip
-        LD      B,00H
+J0430:
+        IFDEF	RTCENA
+        CALL	C1C85			; select clockchip bank 2
+        LD	B,0			; register 0
         CALL    C1C60                   ; read nibble from clockchip
         CP      0AH
         JR      Z,J043F
@@ -1009,33 +1011,42 @@ J043F:  CALL    C1C85                   ; select bank 2 clockchip
         JR      NZ,J045F
         CP      32+1
         JP      NC,J043C
-J045F:  CALL    C1C85                   ; select bank 2 clockchip
-        LD      B,01H
-        CALL    C1C60
-        LD      D,A
-        CALL    C1C60
-        LD      E,A
-        CALL    C18E0
+        ENDIF
 
-IFNDEF RESDIS
-        CALL    C2769                   ; read reset register
-        RLCA                            ; cold boot ?
-        JR      C,J0480                 ; nope, skip bootup logo
-ENDIF
-        CALL    C05E1                   ; count RAM
+J045F:
+        IFDEF	RTCENA
+        CALL	C1C85			; select clockchip bank 2
+        LD	B,1			; register 1
+        CALL	C1C60			; read nibble from clockchip register
+        LD	D,A
+        CALL	C1C60			; read nibble from clockchip register
+        LD	E,A
+        ELSE
+        LD	DE,0
+        ENDIF
 
-IFNDEF RESDIS
-        PUSH    HL
-        CALL    C05AA                   ; clear RAM (cartridge headers)
-        POP     HL
-ENDIF
+        CALL	C18E0
 
-        CALL    C2C76                   ; bootup logo
+        IFDEF	RESENA
+        CALL	C2769			; read reset register
+        RLCA				; cold boot ?
+        JR	C,J0480			; nope, skip bootup logo
+        ENDIF
+
+        CALL	C05E1			; count RAM
+
+        IFDEF	RESENA
+        PUSH	HL
+        CALL	C05AA			; clear RAM (cartridge headers)
+        POP	HL
+        ENDIF
+
+        CALL	C2C76			; bootup logo
 J0480:
-IFNDEF RESDIS
-        LD      A,80H
+        IFDEF	RESENA
+        LD	A,80H
         CALL    C276F                   ; flag cold boot happened
-ENDIF
+        ENDIF
         CALL    C067D                   ; disable vdp display output
         XOR     A
         LD      L,A
@@ -1046,42 +1057,42 @@ ENDIF
         JP      J1041                   ; S.INIT32 and quit
 
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	  Subroutine initialize bank 2 and 3 clockchip
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-C0497:  LD      HL,I057B
-        LD      C,02H   ; 2 
-J049C:  LD      B,0DH   ; 13 
-        LD      A,04H   ; 4 
-        SUB     C
-        CALL    C1B4A
-        LD      B,0DH   ; 13 
-J04A6:  LD      A,0DH   ; 13 
-        SUB     B
-        OUT     (0B4H),A
-        LD      A,(HL)
-        INC     HL
-        CP      0FFH
-        JR      NZ,J04B3
-        DEC     HL
-        XOR     A
-J04B3:  OUT     (0B5H),A
-        DJNZ    J04A6
-        DEC     C
-        JR      NZ,J049C
-        LD      B,0DH   ; 13 
-        LD      A,08H   ; 8 
-        CALL    C1B4A
-        XOR     A
-        CALL    C1B4A
-        LD      A,0DH   ; 13 
-        CALL    C1B4A
-        LD      A,01H   ; 1 
-        CALL    C1C87
-        LD      B,0AH   ; 10 
-        LD      A,01H   ; 1 
-        JP      C1B4A
+C0497:	LD	HL,I057B
+        LD	C,2
+J049C:	LD	B,13			; clockchip MODE register
+        LD	A,4
+        SUB	C			; clock paused, alarm off, select bank
+        CALL	C1B4A			; write nibble to clockchip
+        LD	B,13
+J04A6:	LD	A,13
+        SUB	B
+        OUT	(0B4H),A		; select clockchip register
+        LD	A,(HL)
+        INC	HL
+        CP	0FFH
+        JR	NZ,J04B3
+        DEC	HL
+        XOR	A
+J04B3:	OUT	(0B5H),A		; write clockchip register
+        DJNZ	J04A6
+        DEC	C
+        JR	NZ,J049C		; next bank
+        LD	B,13			; clockchip MODE register
+        LD	A,8			; clock running, alarm off, select bank 0
+        CALL	C1B4A			; write nibble to clockchip
+        XOR	A			; test3 off, test2 off, test1 off, test0 off
+        CALL	C1B4A			; write nibble to clockchip (TEST register)
+        LD	A,13			; 1 Hz test off, 16 Hz test off, do not reset divider stages, reset alarm registers
+        CALL	C1B4A			; write nibble to clockchip
+        LD	A,1
+        CALL	C1C87			; select clockchip bank 1
+        LD	B,10			; clockchip LEAPYEAR register
+        LD	A,1			; 24 hour mode
+        JP	C1B4A			; write nibble to clockchip
 
 J04D6:  SCF
         CALL    C04FD
@@ -1116,11 +1127,19 @@ J04FC:  XOR     A
 ;            Outputs ________________________
 
 C04FD:  PUSH    AF
-        CALL    C1C85
-        LD      B,03H   ; 3 
-        CALL    C1C60
+        IFDEF	RTCENA
+        CALL	C1C85			; select clockchip bank 2
+        LD	B,3			; register 3
+        CALL	C1C60			; read nibble from clockchip register
         LD      C,A
         AND     01H     ; 1 
+        ELSE
+        XOR	A
+        IF BASVER EQ 0
+        INC	A
+        ENDIF
+        LD	C,A
+        ENDIF
         POP     DE
         PUSH    AF
         PUSH    DE
@@ -1137,19 +1156,47 @@ C04FD:  PUSH    AF
         LD      C,09H   ; 9 
         CALL    C0688
         POP     BC
-        CALL    C1C69
+        IFDEF	RTCENA
+        CALL    C1C69			; read byte from clockchip registers
+        ELSE
+        IF BASVER EQ 0
+        LD	A,01DH
+        ELSE
+        LD	A,025H
+        ENDIF
+        ENDIF
         LD      E,A
         POP     AF
         PUSH    DE
         PUSH    AF
-        CALL    C1C60
+        IFDEF	RTCENA
+        CALL    C1C60			; read nibble from clockchip register
+        ELSE
+        LD	A,15
+        ENDIF
         LD      (FORCLR),A
         LD      (ATRBYT),A
-        CALL    C1C60
+        IFDEF	RTCENA
+        CALL    C1C60			; read nibble from clockchip register
+        ELSE
+        LD	A,4
+        ENDIF
         LD      (BAKCLR),A
-        CALL    C1C60
+        IFDEF	RTCENA
+        CALL    C1C60			; read nibble from clockchip register
+        ELSE
+        IF BASVER EQ 0
+        LD	A,7
+        ELSE
+        LD	A,4
+        ENDIF
+        ENDIF
         LD      (BDRCLR),A
+        IFDEF	RTCENA
         CALL    C1C60
+        ELSE
+        LD	A,3
+        ENDIF
         LD      C,A
         RRC     C
         SBC     A,A
@@ -4582,15 +4629,21 @@ J17E6:  POP     BC
         AND     01H     ; 1 
         LD      B,A
         LD      C,04H   ; 4 
+        IFDEF	RTCENA
         CALL    C1A3C
+        ENDIF
         LD      C,02H   ; 2 
 J1800:  LD      B,02H   ; 2 
 J1802:  LD      A,(DE)
         INC     A
         JR      Z,J180B
         DEC     A
+        IFDEF	RTCENA
         OUT     (0B4H),A
         IN      A,(0B5H)
+        ELSE
+        LD	A,0
+        ENDIF
 J180B:  INC     DE
         EX      DE,HL
         ADD     A,(HL)
@@ -4614,7 +4667,10 @@ J180B:  INC     DE
         DEC     C
         JR      J1800
 
-J1826:  CALL    C1A38
+J1826:
+        IFDEF	RTCENA
+        CALL	C1A38			; put clockchip in running state
+        ENDIF
         POP     DE
         POP     HL
         LD      (HL),08H        ; 8 
@@ -4692,6 +4748,7 @@ I184F:
 
 
 J186B:  RST     S.CHRGTR
+        IFDEF	RTCENA
         PUSH    HL
         CALL    C1C85
         LD      B,03H   ; 3 
@@ -4731,6 +4788,9 @@ J18B3:  LD      A,(CS1200)
         SET     3,C
 J18BE:  LD      A,C
         JP      J1B7D
+        ELSE
+        RET
+        ENDIF
 
 C18C2:  RST     S.SYNCHR
         DEFB    "("
@@ -4746,10 +4806,14 @@ C18C2:  RST     S.SYNCHR
         AND     0FH     ; 15 
         LD      D,A
         CALL    C18E0
-        CALL    C1C85
-        LD      B,01H   ; 1 
-        LD      A,D
-        JP      C1B41
+        IFDEF	RTCENA
+        CALL	C1C85			; select clockchip bank 2
+        LD	B,1
+        LD	A,D
+        JP	C1B41			; write byte to clockchip
+        ELSE
+        RET
+        ENDIF
 
 
 ;         Subroutine __________________________
@@ -4954,24 +5018,33 @@ J19CA:  PUSH    HL
         PUSH    DE
         JR      NZ,J19DB
         LD      BC,00004H
-        CALL    C1A3C
+        IFDEF	RTCENA
+        CALL    C1A3C			; write clockchip MODE register
+        ENDIF
         LD      BC,00E00H
         JR      J19E9
 
 J19DB:  LD      BC,00108H
-        CALL    C1A3C
+        IFDEF	RTCENA
+        CALL    C1A3C			; write clockchip MODE register
+        ENDIF
         CALL    C1A5D
         JR      Z,J19EE
         LD      BC,00D00H
-J19E9:  LD      A,0FH   ; 15 
-        CALL    C1A3E
+J19E9:
+        IFDEF	RTCENA
+        LD	A,15			; RESET register
+        CALL    C1A3E			; write clockchip register
+        ENDIF
 J19EE:  POP     DE
         LD      B,00H
         CALL    C1A5D
         JR      NZ,J19F8
         LD      B,07H   ; 7 
 J19F8:  LD      A,D
-        CALL    C1B41
+        IFDEF	RTCENA
+        CALL    C1B41			; write clockchip register
+        ENDIF
         POP     DE
         POP     AF
         PUSH    AF
@@ -4979,7 +5052,9 @@ J19F8:  LD      A,D
         CALL    C1A5D
         JR      Z,J1A32
 J1A06:  LD      A,E
-        CALL    C1B41
+        IFDEF	RTCENA
+        CALL    C1B41			; write clockchip register
+        ENDIF
         LD      A,D
         CALL    C1A5D
         JR      NZ,J1A2F
@@ -4989,19 +5064,24 @@ J1A06:  LD      A,E
         JR      Z,J1A18
         ADD     A,02H   ; 2 
 J1A18:  AND     03H     ; 3 
+        IFDEF	RTCENA
         PUSH    AF
-        LD      A,01H   ; 1 
-        CALL    C1C87
+        LD	A,1
+        CALL    C1C87			; write clockchip register
         POP     AF
-        LD      B,0BH   ; 11 
+        LD	B,11
         CALL    C1B4A
         XOR     A
         CALL    C1C87
+        ENDIF
         POP     BC
         POP     AF
         SUB     80H
         DAA
-J1A2F:  CALL    C1B41
+J1A2F:
+        IFDEF	RTCENA
+        CALL	C1B41			; write byte to clockchip
+        ENDIF
 J1A32:  POP     AF
         POP     HL
         LD      B,04H   ; 4 
@@ -5018,18 +5098,23 @@ J1A3A:  LD      C,0FH   ; 15
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C1A3C:  LD      A,0DH   ; 13 
+C1A3C:	LD	A,13			; MODE register
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C1A3E:  OUT     (0B4H),A
+C1A3E:
+        IFDEF	RTCENA
+        OUT	(0B4H),A
         IN      A,(0B5H)
         AND     C
         OR      B
         OUT     (0B5H),A
         RET
+        ELSE
+        RET
+        ENDIF
 
 
 ;         Subroutine __________________________
@@ -5095,22 +5180,39 @@ J1A7C:  RST     S.SYNCHR
         CP      04H     ; 4 
         JR      NC,J1A6E
         PUSH    AF
-        CALL    C1C85
-        LD      B,0BH   ; 11 
-        CALL    C1C60
+        IFDEF	RTCENA
+        CALL    C1C85			; select clockchip bank 2
+        LD	B,11			; register 11
+        CALL    C1C60			; read nibble from clockchip register
+        ELSE
+        LD	A,0
+        ENDIF
         AND     0CH     ; 12 
         LD      C,A
         POP     AF
         OR      C
         DEC     B
+        IFDEF	RTCENA
         JP      C1B4A
+        ELSE
+        RET
+        ENDIF
 
-J1A97:  CALL    C1C85
-        LD      B,0AH   ; 10 
+J1A97:
+        IFDEF	RTCENA
+        CALL	C1C85			; select clockchip bank 2
+        LD	B,10			; register 10
         CALL    C1C60
+        ELSE
+        IF CNTRY NE 0
+        LD	A,1
+        ELSE
+        LD	A,0
+        ENDIF
+        ENDIF
         PUSH    AF
         RST     S.CHRGTR
-        CP      2CH     ; ","
+        CP	","
         JR      Z,J1AB9
         RST     S.GETBYT
         DEC     A
@@ -5140,7 +5242,11 @@ J1ABF:  JP      NC,J274A
         PUSH    AF
 J1AC8:  LD      B,0AH   ; 10 
         POP     AF
-        JP      C1B4A
+        IFDEF	RTCENA
+        JP      C1B4A			; write nibble to clockchip
+        ELSE
+        RET
+        ENDIF
 
 C1ACE:  LD      A,01H   ; 1 
         JR      J1AD4
@@ -5160,14 +5266,18 @@ J1AD4:  CALL    C1ADD
 C1ADD:  PUSH    AF
         CALL    C190D
         LD      C,A
-        CALL    C1C81
+        IFDEF	RTCENA
+        CALL    C1C81			; select clockchip bank 3
         LD      B,0CH   ; 12 
         XOR     A
 J1AE8:  CALL    C1B4A
         DEC     B
         DJNZ    J1AE8
+        ENDIF
         POP     AF
-        CALL    C1B4A
+        IFDEF	RTCENA
+        CALL    C1B4A			; write nibble to clockchip
+        ENDIF
         PUSH    HL
         EX      DE,HL
         DEC     A
@@ -5178,25 +5288,32 @@ J1AF9:  DEC     C
         JR      Z,J1B06
         LD      A,(HL)
         INC     HL
-        CALL    C1B41
+        IFDEF	RTCENA
+        CALL    C1B41			; write byte to clockchip
+        ENDIF
         DEC     C
         DEC     E
         JR      NZ,J1AF9
 J1B06:  POP     HL
         RET
 
-J1B08:  LD      A,21H   ; "!"
-        CALL    C1B41
+J1B08:
+        IFDEF	RTCENA
+        LD	A,21H
+        CALL    C1B41			; write byte to clockchip
         LD      A,03H   ; 3 
-        CALL    C1B4A
+        CALL    C1B4A			; write nibble to clockchip
+        ENDIF
         LD      A,C
         PUSH    AF
         CALL    C2E07
-        LD      B,04H   ; 4 
+        IFDEF	RTCENA
+        LD	B,4
         LD      A,E
-        CALL    C1B41
+        CALL    C1B41			; write byte to clockchip
         LD      A,D
-        CALL    C1B41
+        CALL    C1B41			; write byte to clockchip
+        ENDIF
         POP     AF
         LD      C,A
         XOR     A
@@ -5209,14 +5326,21 @@ J1B08:  LD      A,21H   ; "!"
         LD      A,01H   ; 1 
         JR      Z,J1B33
         INC     A
-J1B33:  CALL    C1B4A
+J1B33:
+        IFDEF	RTCENA
+        CALL	C1B4A			; write nibble to clockchip
+        ENDIF
         PUSH    BC
         CALL    C2DF9
         POP     BC
+        IFDEF	RTCENA
         LD      A,E
-        CALL    C1B41
+        CALL    C1B41			; write byte to clockchip
         LD      A,D
         POP     HL
+        ELSE
+        RET
+        ENDIF
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
@@ -5243,7 +5367,15 @@ C1B4A:  PUSH    AF
         RET
 
 J1B53:  PUSH    HL
-        CALL    C1BC1
+        IFDEF	RTCENA
+        CALL    C1BC1			; read beep settings from clockchip
+        ELSE
+        IF CNTRY NE 0
+        LD	BC,0001H
+        ELSE
+        LD	BC,0000H
+        ENDIF
+        ENDIF
         PUSH    AF
         DEC     B
         JR      Z,J1B81
@@ -5261,9 +5393,13 @@ J1B53:  PUSH    HL
         CALL    C1C19
 J1B77:  CALL    C277B
         POP     AF
-        LD      B,0DH   ; 13 
+        LD	B,13			; MODE register
 J1B7D:  POP     HL
-        JP      C1B4A
+        IFDEF	RTCENA
+        JP      C1B4A			; write nibble to clockchip
+        ELSE
+        RET
+        ENDIF
 
 J1B81:  LD      HL,I1C2F
         LD      E,0B8H
@@ -5299,12 +5435,12 @@ J1BAD:  LD      HL,I1C37
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C1BC1:  LD      B,0DH   ; 13 
-        CALL    C1C60
+C1BC1:	LD	B,13			; MODE register
+        CALL    C1C60			; read nibble from clockchip register
         PUSH    AF
-        CALL    C1C85
-        LD      B,0AH   ; 10 
-        CALL    C1C60
+        CALL    C1C85			; select clockchip bank 2
+        LD	B,10			; register 10
+        CALL    C1C60			; read nibble from clockchip register
         LD      C,A
         RRCA
         RRCA
@@ -5424,29 +5560,34 @@ I1C37:  DEFW    059DH
         DEFW    017FH
 
 J1C3F:  CALL    C27C4
-        CALL    C1C81
-        CALL    C1C5E
-        CP      02H     ; 2 
-        LD      HL,M3FD7
-        JP      NZ,C280C
-J1C50:  CALL    C1C69
-        JR      Z,J1C5B
-        RST     S.OUTDO
-        LD      A,B
-        CP      0DH     ; 13 
-        JR      C,J1C50
-J1C5B:  JP      J27BE
+        IFDEF	RTCENA
+         CALL	C1C81			; select clockchip bank 3
+        CALL	C1C5E			; read nibble from clockchip register 0
+        CP	02H
+        LD	HL,M3FD7
+        JP	NZ,C280C
+J1C50:	CALL	C1C69			; read byte from clockchip registers
+        JR	Z,J1C5B
+        RST	S.OUTDO
+        LD	A,B
+        CP	0DH	; 13 
+        JR	C,J1C50
+J1C5B:	JP	J27BE
+        ELSE
+        LD	HL,M3FD7
+        JP	C280C
+        ENDIF
 
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	  Subroutine read nibble from clockchip register 0
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-C1C5E:  LD      B,00H
+C1C5E:	LD	B,0
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	Subroutine	read nibble from clockchip register
+;	Inputs		B = register
+;	Outputs		A = nibble, B = register (updated)
 
 C1C60:  LD      A,B
         OUT     (0B4H),A
@@ -5456,62 +5597,69 @@ C1C60:  LD      A,B
         RET
 
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	Subroutine	read byte from clockchip registers
+;	Inputs		B = register
+;	Outputs		A = byte, B = register (updated)
 
-C1C69:  PUSH    DE
-        CALL    C1C60
-        LD      D,A
-        CALL    C1C60
+C1C69:	PUSH	DE
+        CALL	C1C60			; read nibble from clockchip register
+        LD	D,A
+        CALL	C1C60			; read nibble from clockchip register
         RLCA
         RLCA
         RLCA
         RLCA
-        OR      D
-        POP     DE
+        OR	D
+        POP	DE
         RET
 
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	  Subroutine read word from clockchip
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-C1C78:  CALL    C1C69
-        LD      L,A
-        CALL    C1C69
-        LD      H,A
+C1C78:	CALL	C1C69			; read byte from clockchip registers
+        LD	L,A
+        CALL	C1C69			; read byte from clockchip registers
+        LD	H,A
         RET
 
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	  Subroutine select clockchip bank 3
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
-C1C81:  LD      A,03H   ; 3 
-        JR      C1C87
+C1C81:	LD	A,3
+        JR	C1C87			; select bank
 
-
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
-
-C1C85:  LD      A,02H   ; 2 
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C1C87:  PUSH    BC
-        PUSH    AF
-        LD      B,0DH   ; 13 
-        CALL    C1C60
-        AND     0CH     ; 12 
-        POP     BC
-        OR      B
-        OUT     (0B5H),A
-        POP     BC
+C1C85:	LD	A,2
+
+;	  Subroutine select clockchip bank
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C1C87:	PUSH	BC
+        PUSH	AF
+        LD	B,13			; MODE register
+        CALL	C1C60			; read nibble from clockchip register
+        AND	0CH			; keep running and alarm
+        POP	BC
+        OR	B
+        OUT	(0B5H),A		; write MODE register
+        POP	BC
         RET
+
+
+        IFDEF	RTCENA
+
+;	  Subroutine read nibble from clockchip register (with bank)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J1C96:  CALL    C1CA8
         IN      A,(0B5H)
@@ -5526,9 +5674,9 @@ J1C9E:  PUSH    AF
         RET
 
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	  Subroutine select clockchip bank and register
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C1CA8:  LD      A,C
         PUSH    AF
@@ -5542,6 +5690,80 @@ C1CA8:  LD      A,C
         AND     0FH     ; 15 
         OUT     (0B4H),A
         RET
+        ELSE
+
+;	  Subroutine read nibble from clockchip register (with bank)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J1C96:	PUSH	HL
+        LD	A,C
+        AND	03FH
+        ADD	A,LOW RTCTAB
+        LD	L,A
+        LD	A,HIGH RTCTAB
+        ADC	A,0
+        LD	H,A
+        LD	A,(HL)
+        AND	A
+        POP	HL
+        RET
+
+RTCTAB:	DEFB	00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,08H,00H,00H
+        DEFB	00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,09H,00H,00H
+
+
+        DEFB	003H
+
+
+        DEFB	0FFH
+
+
+        DEFB	0AH,00H,00H
+
+        IF BASVER EQ 0
+        DEFB	001H
+        ELSE
+        DEFB	000H
+        ENDIF
+
+        IF BASVER EQ 0
+        DEFB	00DH,001H
+        ELSE
+        DEFB	005H,002H
+        ENDIF
+
+        DEFB	0FH,04H
+
+        IF BASVER EQ 0
+        DEFB	007H
+        ELSE
+        DEFB	004H
+        ENDIF
+
+        DEFB	03H
+
+        IF CNTRY NE 0
+        DEFB	001H
+        DEFB	000H
+        DEFB	CNTRY
+        ELSE
+        DEFB	000H
+        DEFB	000H
+        DEFB	000H
+        ENDIF
+
+        DEFB	0AH,00H,00H
+        DEFB	00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,0BH,00H,00H
+
+;	  Subroutine write nibble to clockchip register (with bank)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J1C9E:	AND	0FH
+        RET
+
+        ENDIF
 
 J1CB9:  LD      A,(HL)
         EX      (SP),HL
