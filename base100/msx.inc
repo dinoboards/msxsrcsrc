@@ -11,23 +11,28 @@ MSXVER  EQU     0                       ; MSX version
 OPTM    EQU     0
 
 ;       NDEVFIX
-;               0 = Use null device bug
-;               1 = Use null device bugfix
+;               0 = device bug
+;               1 = fix device bug
 
 NDEVFIX EQU     1
 
 ;       SLOTFIX
-;               0 = Use slot bug
-;               1 = Use slot bugfix
+;               0 = slot bug
+;               1 = fix slot bug
 
 SLOTFIX EQU     1
 
 ;       KEYBFIX
-;               0 = Use keyboard speed fix
-;               1 = Use keyboard speed fix
+;               0 = no keyboard speed fix
+;               1 = keyboard speed fix
 
 KEYBFIX EQU     1
 
+;       CHIBFIX
+;               0 = LOAD bug
+;               1 = fix LOAD bug
+
+CHIFIX EQU     1
 
 ;       CNTRY   Country
 ;               0 = Japan
@@ -217,7 +222,7 @@ CHRVLN  EQU     "&"
         ENDIF
 
         IF      (BASVER EQ 1) AND (CNTRY EQ 3)
-CHRCUR  EQU     0ACH            ; pound sign
+CHRCUR  EQU     09CH            ; pound sign
 CHRFLN  EQU     "\"
 CHRVLN  EQU     "&"
         ENDIF

@@ -1,0 +1,365 @@
+; SLOT.MAC
+
+; BIOS slot functions, MSX 1 version (version 1.0)
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
+        .Z80
+        ASEG
+        ORG     015CH
+
+        INCLUDE MSX.INC
+
+
+M7FBE   EQU     7FBEH   ; helper routine RDSLT in basicrom
+M7FC4   EQU     7FC4H   ; helper routine WRSLT in basicrom
+
+RDPRIM  equ     0F380H
+WRPRIM  equ     0F385H
+CLPRIM  equ     0F38CH
+EXPTBL  equ     0FCC1H
+SLTTBL  equ     0FCC5H
+D.FFFF  equ     0FFFFH
+
+
+; START SUBTTL  SLOT
+
+        SUBTTL  SLOT
+
+
+        PUBLIC  RDSLT
+        PUBLIC  WRSLT
+        PUBLIC  ENASLT
+        PUBLIC  CALSLT
+        PUBLIC  CALLF
+        PUBLIC  CALBAS
+
+
+        IF	SLOTFIX EQ 0
+
+        defs    001B6H-$,0
+
+        ELSE
+        
+        defs    0016FH-$,0
+
+C016F:  CALL    C01AD
+        JR      NZ,A01C6
+        PUSH    HL
+        CALL    C0199
+        EX      (SP),HL
+        CALL    M7FBE
+        JR      J018D
+
+C017E:  CALL    C01AD
+        JP      NZ,A01E1
+        POP     DE
+        PUSH    HL
+        CALL    C0199
+        EX      (SP),HL
+        CALL    M7FC4
+J018D:  EX      (SP),HL
+        PUSH    AF
+        LD      A,L
+        OUT     (0A8H),A
+        LD      A,H
+        LD      (D.FFFF),A
+        POP     AF
+        POP     HL
+        RET
+
+C0199:  PUSH    AF
+        LD      A,(D.FFFF)
+        CPL
+        LD      H,A
+        AND     0F3H
+        LD      (D.FFFF),A
+        IN      A,(0A8H)
+        LD      L,A
+        AND     0F3H
+        OUT     (0A8H),A
+        POP     AF
+        RET
+
+C01AD:  INC     D
+        DEC     D
+        RET     NZ
+        LD      B,A
+        LD      A,E
+        CP      3
+        LD      A,B
+        RET
+        ENDIF
+
+;       Subroutine      RDSLT
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+RDSLT:
+A01B6:  call    A027E                   ; calculate masks
+
+        IF	SLOTFIX EQ 1
+        jp      m,C016F
+        ELSE
+        jp      m,A01C6                 ; expanded slot, handle
+        ENDIF
+
+        in      a,(0A8H)
+        ld      d,a
+        and     c                       ; clear slot of page
+        or      b                       ; set new slot
+        call    RDPRIM                  ; read byte
+        ld      a,e
+        ret
+;
+A01C6:  push    hl
+        call    A02A3                   ; change sec. slotregister
+        ex      (sp),hl
+        push    bc
+        call    A01B6                   ; do a RDSLT for primary slot
+        jr      A01EC
+
+;       Subroutine      WRSLT
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+WRSLT:
+A01D1:  push    de
+        call    A027E                   ; calculate masks
+
+        IF	SLOTFIX EQ 1
+        jp      m,C017E
+        ELSE
+        jp      m,A01E1                 ; expanded slot, handle
+        ENDIF
+
+        pop     de
+        in      a,(0A8H)
+        ld      d,a
+        and     c                       ; clear slot of page
+        or      b                       ; set new slot
+        jp      WRPRIM                  ; write byte
+;
+A01E1:  ex      (sp),hl
+        push    hl
+        call    A02A3                   ; change sec. slotregister
+        pop     de
+        ex      (sp),hl
+        push    bc
+        call    A01D1                   ; do a WRSLT for primairy slot
+A01EC:  pop     bc
+        ex      (sp),hl
+        push    af
+        ld      a,b
+        and     03FH
+        or      c                       ; slot of sec. slotreg
+        out     (0A8H),a
+        ld      a,l
+        ld      (D.FFFF),a              ; restore register
+        ld      a,b
+        out     (0A8H),a                ; restore prim. slotreg
+        pop     af
+        pop     hl
+        ret
+
+;       Subroutine      CALBAS
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+CALBAS:
+A01FF:  ld      iy,(EXPTBL+0-1)         ; slotid mainrom
+        jr      A0217                   ; CALSLT
+
+;       Subroutine      CALLF
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+CALLF:
+A0205:  ex      (sp),hl
+        push    af
+        push    de
+        ld      a,(hl)
+        push    af
+        pop     iy                      ; slotid
+        inc     hl
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)
+        inc     hl
+        push    de
+        pop     ix                      ; adres
+        pop     de
+        pop     af
+        ex      (sp),hl
+
+;       Subroutine      CALSLT
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+CALSLT:
+A0217:  exx
+        ex      af,af'                  ; alternative set
+        push    iy
+        pop     af
+        push    ix
+        pop     hl
+        call    A027E                   ; calculate masks
+        jp      m,A022E                 ; expanded slot, handle
+        in      a,(0A8H)
+        push    af
+        and     c
+        or      b
+        exx
+        jp      CLPRIM
+;
+A022E:  call    A02A3
+        push    af
+        pop     iy
+        push    hl
+        push    bc
+        ld      c,a
+        ld      b,0
+        ld      a,l
+        and     h
+        or      d
+        ld      hl,SLTTBL
+        add     hl,bc
+        ld      (hl),a
+        push    hl
+        ex      af,af'
+        exx
+        call    A0217                   ; do a CALSLT with primairy slot
+        exx
+        ex      af,af'
+        pop     hl
+        pop     bc
+        pop     de
+        ld      a,b
+        and     03FH
+        or      c
+        di
+        out     (0A8H),a
+        ld      a,e
+        ld      (D.FFFF),a
+        ld      a,b
+        out     (0A8H),a
+        ld      (hl),e
+        ex      af,af'
+        exx
+        ret
+
+;       Subroutine      ENASLT
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+ENASLT:
+A025E:  call    A027E                   ; calculate masks
+        jp      m,A026B                 ; expanded slot, handle
+        in      a,(0A8H)
+        and     c
+        or      b
+        out     (0A8H),a
+        ret
+;
+A026B:  push    hl
+        call    A02A3
+        ld      c,a
+        ld      b,0
+        ld      a,l
+        and     h
+        or      d
+        ld      hl,SLTTBL
+        add     hl,bc
+        ld      (hl),a
+        pop     hl
+        ld      a,c
+        jr      A025E                   ; ENASLT for primairy slot
+
+;       Subroutine      calculate masks
+;       Inputs          A=slotid, HL=adres
+;       Outputs         P set if expanded slot, A=slotid, D=PPPPPPPP, E=page select mask
+;                       B=primairy slot OR mask, C=page clear mask
+
+A027E:  di
+        push    af
+        ld      a,h
+        rlca
+        rlca
+        and     003H                    ; page
+        ld      e,a
+        ld      a,0C0H
+A0288:  rlca
+        rlca
+        dec     e
+        jp      p,A0288
+        ld      e,a                     ; e = page select mask
+        cpl
+        ld      c,a                     ; c = page clear mask
+        pop     af
+        push    af
+        and     003H                    ; primairy slot
+        inc     a                       ; +1
+        ld      b,a
+        ld      a,0-01010101b
+A0299:  add     a,01010101b
+        djnz    A0299
+        ld      d,a                     ; d = slot set mask
+        and     e
+        ld      b,a                     ; b = slot set mask
+        pop     af
+        and     a                       ; flag expanded slot
+        ret
+
+;       Subroutine      Adjust secundairy slotregister
+;       Inputs          A=slotid, D=, E=
+;       Outputs         A=slotid primairy slot
+
+A02A3:  push    af
+        ld      a,d
+        and     0C0H
+        ld      c,a                     ; page set mask for page 3
+        pop     af
+        push    af
+        ld      d,a
+        in      a,(0A8H)
+        ld      b,a
+        and     03FH                    ; clear slot of page 3
+        or      c                       ; set page 3 for sec. slotreg
+        out     (0A8H),a                ; invoke
+        ld      a,d
+        rrca
+        rrca
+        and     003H                    ; secundairy slot
+        ld      d,a
+        ld      a,0-01010101b
+A02BB:  add     a,01010101b
+        dec     d
+        jp      p,A02BB                 ; slot set mask
+        and     e
+        ld      d,a                     ; slot set (page) mask
+        ld      a,e
+        cpl
+        ld      h,a                     ; page clear mask
+        ld      a,(D.FFFF)
+        cpl
+        ld      l,a                     ; old sec. slotreg
+        and     h                       ; clear page
+        or      d                       ; set new slot
+        ld      (D.FFFF),a
+        ld      a,b
+        out     (0A8H),a                ; restore primairy slot on page 3
+        pop     af
+        and     003H
+        ret
+
+; END   SUBTTL  SLOT
+
+        end

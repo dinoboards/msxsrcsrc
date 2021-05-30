@@ -1,0 +1,961 @@
+; MSXGRP.MAC
+
+; BIOS graphic functions, MSX Turbo-R version (version 4.1)
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
+        .Z80
+        ASEG
+        ORG     150EH
+
+        INCLUDE MSX.INC
+
+DCOMPR		EQU	0020H
+
+S.GRPPRT        EQU     0089h
+S.MAPXYC        EQU     0091h
+S.READC         EQU     0095h
+S.SETC          EQU     009Dh
+S.TRIGHT        EQU     00A1h
+S.RIGHTC        EQU     00A5h
+S.TLEFTC        EQU     00A9h
+S.LEFTC         EQU     00ADh
+S.TDOWNC        EQU     00B1h
+S.DOWNC         EQU     00B5h
+S.TUPC          EQU     00B9h
+S.UPC           EQU     00BDh
+S.SCANR         EQU     00C1h
+S.SCANL         EQU     00C5h
+
+GRPCGP  equ     0F3CBH
+FORCLR  equ     0F3E9H
+ATRBYT  equ     0F3F2H
+ASPCT1  equ     0F40BH
+ASPCT2  equ     0F40DH
+FILNAM  equ     0F866H
+CLOC    equ     0F92AH
+CMASK   equ     0F92CH
+CSAVEA  equ     0F942H
+CSAVEM  equ     0F944H
+ACPAGE  EQU     0FAF6H
+PATWRK  EQU     0FC40H
+SCRMOD  equ     0FCAFH
+BRDATR  EQU     0FCB2H
+GRPACX  equ     0FCB7H
+GRPACY  equ     0FCB9H
+
+	PUBLIC	GRPPRT
+	PUBLIC	SCALXY
+	PUBLIC	MAPXYC
+	PUBLIC	FETCHC
+	PUBLIC	STOREC
+	PUBLIC	READC
+	PUBLIC	SETATR
+	PUBLIC	SETC
+	PUBLIC	RIGHTC
+	PUBLIC	LEFTC
+	PUBLIC	TDOWNC
+	PUBLIC	DOWNC
+	PUBLIC	TUPC
+	PUBLIC	UPC
+	PUBLIC	NSETCX
+	PUBLIC	GTASPC
+	PUBLIC	PNTINI
+	PUBLIC	SCANR
+	PUBLIC	SCANL
+	PUBLIC	J16DE
+
+	EXTRN	CNVCHR
+	EXTRN	RDVRM
+	EXTRN	WRTVRM
+	EXTRN	SUBROM
+	EXTRN	CHKNEW
+	EXTRN	GETPAT
+	EXTRN	POPALL
+	EXTRN	C141C
+	EXTRN	C1428
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+
+; START SUBTTL 	MSXGRP
+
+        SUBTTL	MSXGRP
+
+
+;       Subroutine      GRPPRT
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+GRPPRT:
+J150E:  CALL    CHKNEW                  ; CHKNEW (check if new style screenmode)
+        JR      C,J151C                 ; nope,
+        PUSH    IX
+        LD      IX,S.GRPPRT
+        JP      SUBROM                  ; new style GRPPRT handled by SUBROM
+
+J151C:  PUSH    HL
+        PUSH    DE
+        PUSH    BC
+        PUSH    AF
+        CALL    CNVCHR                  ; CNVCHR
+        JR      NC,J1587
+        JR      NZ,J152F
+        CP      0DH
+        JR      Z,J158A
+        CP      20H
+        JR      C,J1587
+J152F:  CALL    GETPAT                  ; copy charpattern to PATWRK
+        LD      A,(FORCLR)
+        LD      (ATRBYT),A
+        LD      HL,(GRPACY)
+        EX      DE,HL
+        LD      BC,(GRPACX)
+        CALL    C15A5                   ; SCALXY
+        JR      NC,J1587
+        CALL    C1604                   ; MAPXYC
+        LD      DE,PATWRK
+        LD      C,8                     ; 8 pixels vertical
+J154D:  LD      B,8                     ; 8 pixels horizontal
+        CALL    C1651                   ; FETCHC
+        PUSH    HL
+        PUSH    AF
+        LD      A,(DE)
+J1555:  ADD     A,A
+        PUSH    AF
+        CALL    C,C16C3                 ; has dot, SETC
+        CALL    C1735                   ; pixel pos right if possible
+        POP     HL
+        JR      C,J1564                 ; not possible, quit with this row
+        PUSH    HL
+        POP     AF
+        DJNZ    J1555
+J1564:  POP     AF
+        POP     HL
+        CALL    C1658                   ; STOREC
+        CALL    C17B4                   ; TDOWNC (pixel pos down if possible)
+        JR      C,J1572                 ; not possible, quit
+        INC     DE
+        DEC     C
+        JR      NZ,J154D
+J1572:  CALL    C15FB                   ; check if screenmode 2 or 4
+        LD      A,(GRPACX)
+        JR      Z,J1580                 ; yep,
+        ADD     A,20H
+        JR      C,J158A
+        JR      J1584
+
+J1580:  ADD     A,08H
+        JR      C,J158A
+J1584:  LD      (GRPACX),A
+J1587:  JP      POPALL
+
+J158A:  XOR     A
+        LD      (GRPACX),A
+        CALL    C15FB                   ; check if screenmode 2 or 4
+        LD      A,(GRPACY)
+        JR      Z,J1599                 ; yep,
+        ADD     A,20H
+        DEFB    001H                    ; skip next instruction
+J1599:  ADD     A,08H
+        CP      0C0H
+        JR      C,J15A0
+        XOR     A
+J15A0:  LD      (GRPACY),A
+        JR      J1587
+
+;       Subroutine      SCALXY
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SCALXY:
+C15A5:  PUSH    HL
+        PUSH    BC
+        LD      B,1
+        EX      DE,HL
+        LD      A,H
+        ADD     A,A
+        JR      NC,J15B3
+        LD      HL,0
+        JR      J15C4
+
+J15B3:  LD      DE,192                  ; msx1 style screenmodes have ymax=192
+        LD      A,(SCRMOD)
+        CP      5
+        CALL    NC,C141C                ; new style screenmode, determine y-size
+        NOP                             ; ??
+        _RST    DCOMPR
+        JR      C,J15C6                 ; y-coordinate in range
+        EX      DE,HL
+        DEC     HL                      ; use max y-coordinate
+J15C4:  LD      B,0
+J15C6:  EX      (SP),HL
+        LD      A,H
+        ADD     A,A
+        JR      NC,J15D0
+        LD      HL,0                    ; negative x-coordinate, use x=0
+        JR      J15E3
+
+J15D0:  LD      DE,256                  ; most screenmodes have xmax 256
+        LD      A,(SCRMOD)
+        AND     07H
+        CP      06H
+        JR      C,J15DE
+        LD      D,HIGH 512              ; screenmode 6 and 7, xmax is 512
+J15DE:  _RST    DCOMPR
+        JR      C,J15E5                 ; x-coordinate in range
+        EX      DE,HL
+        DEC     HL                      ; use max x-coordinate
+J15E3:  LD      B,0
+J15E5:  POP     DE
+        LD      A,(SCRMOD)
+        CP      03H
+        JR      NZ,J15F5
+        SRL     L
+        SRL     L
+        SRL     E
+        SRL     E                       ; screenmode 3, divide coordinates by 4
+J15F5:  LD      A,B
+        RRCA
+        LD      B,H
+        LD      C,L
+        POP     HL
+        RET
+
+;       Subroutine      check if screenmode 2 or 4
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C15FB:  LD      A,(SCRMOD)
+        CP      4
+        RET     Z
+        CP      2
+        RET
+
+;       Subroutine      MAPXYC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+MAPXYC:
+C1604:  LD      A,(SCRMOD)
+        CP      5
+        JR      NC,J163E
+        CP      3
+        JR      Z,J1648
+        PUSH    BC
+        LD      D,C
+        LD      A,C
+        AND     07H
+        LD      C,A
+        LD      HL,I1636
+        ADD     HL,BC
+        LD      A,(HL)
+        LD      (CMASK),A
+        LD      A,E
+        RRCA
+        RRCA
+        RRCA
+        AND     1FH
+        LD      B,A
+        LD      A,D
+        AND     0F8H
+        LD      C,A
+        LD      A,E
+        AND     07H
+        OR      C
+        LD      C,A
+        LD      HL,(GRPCGP)
+        ADD     HL,BC
+        LD      (CLOC),HL
+        POP     BC
+        RET
+
+I1636:  DEFB    080H,040H,020H,010H,008H,004H,002H,001H
+
+J163E:  LD      H,B
+        LD      L,C
+        LD      (CLOC),HL
+        LD      A,E
+        LD      (CMASK),A
+        RET
+
+J1648:  PUSH    IX
+        LD      IX,S.MAPXYC
+        JP      SUBROM                  ; SUBROM
+
+;       Subroutine      FETCHC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+FETCHC:
+C1651:  LD      A,(CMASK)
+        LD      HL,(CLOC)
+        RET
+
+;       Subroutine      STOREC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+STOREC:
+C1658:  LD      (CMASK),A
+        LD      (CLOC),HL
+        RET
+
+;       Subroutine      READC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+READC:
+C165F:  CALL    CHKNEW                  ; CHKNEW (check if new style screenmode)
+        JR      C,J166D                 ; nope,
+J1664:  PUSH    IX
+        LD      IX,S.READC
+        JP      SUBROM                  ; READC new style handled by SUBROM
+
+J166D:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      NZ,J1664                ; nope, use subrom version of READC
+        PUSH    BC
+        PUSH    HL
+        CALL    C1651                   ; FETCHC
+        LD      B,A
+        CALL    RDVRM                   ; RDVRM
+        AND     B
+        PUSH    AF
+        LD      BC,2000H
+        ADD     HL,BC
+        CALL    RDVRM                   ; RDVRM
+        LD      B,A
+        POP     AF
+        LD      A,B
+        JR      Z,J168D
+        RRCA
+        RRCA
+        RRCA
+        RRCA
+J168D:  AND     0FH
+        POP     HL
+        POP     BC
+        RET
+
+;       Subroutine      SETATR
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SETATR:
+J1692:  CALL    C169A
+        RET     C
+        LD      (ATRBYT),A
+        RET
+
+;       Subroutine      validate graphical attribute
+;       Inputs          A = attribute
+;       Outputs         Cx = if error
+
+C169A:  PUSH    AF
+        LD      A,(SCRMOD)
+        CP      06H
+        JR      Z,J16AE                 ; screenmode 6 has 4 colors
+        CP      08H
+        JR      Z,J16AB                 ; screenmode 8 has 256 colors, so it is always valid
+        POP     AF
+        CP      10H                     ; screenmode 2,3, 5 and 7 have 16 colors
+        CCF
+        RET
+
+J16AB:  POP     AF
+        AND     A
+        RET
+
+J16AE:  POP     AF
+        CP      20H
+        CCF
+        RET     C
+        CP      10H
+        JR      C,J16BA
+        AND     0FH
+        RET
+
+J16BA:  AND     03H
+        PUSH    BC
+        LD      B,A
+        ADD     A,A
+        ADD     A,A
+        ADD     A,B
+        POP     BC
+        RET
+
+;       Subroutine      SETC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SETC:
+C16C3:  LD      A,(SCRMOD)
+        CP      05H
+        JR      NC,J16E7                ; new style screenmode, use VDP command
+        CP      03H
+        JR      Z,J16DE                 ; screenmode 3 SETC handled by SUBROM
+        PUSH    HL
+        PUSH    BC
+        PUSH    DE
+        LD      A,(CMASK)
+        LD      HL,(CLOC)
+        CALL    C18A6
+        POP     DE
+        POP     BC
+        POP     HL
+        RET
+
+J16DE:  PUSH    IX
+        LD      IX,S.SETC
+        JP      SUBROM                  ; SUBROM
+
+J16E7:  CALL    C1428
+        LD      A,(CMASK)
+        PUSH    AF
+J16EE:  DI
+        LD      A,02H
+        OUT     (99H),A
+        LD      A,8FH
+        OUT     (99H),A
+        PUSH    HL
+        POP     HL
+        IN      A,(99H)
+        PUSH    AF
+        XOR     A
+        OUT     (99H),A
+        LD      A,8FH
+        OUT     (99H),A
+        POP     AF
+        EI
+        RRCA
+        JR      C,J16EE
+        DI
+        LD      A,24H
+        OUT     (99H),A
+        LD      A,91H
+        OUT     (99H),A
+        LD      A,L
+        OUT     (9BH),A
+        LD      A,H
+        OUT     (9BH),A
+        POP     AF
+        OUT     (9BH),A
+        LD      A,(ACPAGE)
+        OUT     (9BH),A
+        LD      A,2CH
+        OUT     (99H),A
+        LD      A,91H
+        OUT     (99H),A
+        LD      A,(ATRBYT)
+        OUT     (9BH),A
+        XOR     A
+        OUT     (9BH),A
+        LD      A,50H
+        OUT     (9BH),A
+        EI
+        RET
+
+;       Subroutine      pixel pos right if possible
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C1735:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J1743                 ; yep,
+        PUSH    IX
+        LD      IX,S.TRIGHT
+        JP      SUBROM                  ; SUBROM
+
+J1743:  PUSH    HL
+        CALL    C1651                   ; FETCHC
+        RRCA
+        JR      NC,J17AE
+        LD      A,L
+        AND     0F8H
+        CP      0F8H
+        LD      A,80H
+        JR      NZ,J176B
+        JP      J181C
+
+;       Subroutine      RIGHTC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+RIGHTC:
+C1756:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J1764                 ; yep,
+        PUSH    IX
+        LD      IX,S.RIGHTC
+        JP      SUBROM                  ; SUBROM
+
+J1764:  PUSH    HL
+        CALL    C1651                   ; FETCHC
+        RRCA
+        JR      NC,J17AE
+J176B:  PUSH    DE
+        LD      DE,8
+        JR      J17A9
+
+;       Subroutine      pixel pos left if possible
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C1771:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J177F
+        PUSH    IX
+        LD      IX,S.TLEFTC
+        JP      SUBROM                  ; SUBROM
+
+J177F:  PUSH    HL
+        CALL    C1651                   ; FETCHC
+        RLCA
+        JR      NC,J17AE
+        LD      A,L
+        AND     0F8H
+        LD      A,01H
+        JR      NZ,J17A5
+        JP      J181C
+
+;       Subroutine      LEFTC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+LEFTC:
+J1790:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J179E
+        PUSH    IX
+        LD      IX,S.LEFTC
+        JP      SUBROM                  ; SUBROM
+
+J179E:  PUSH    HL
+        CALL    C1651                   ; FETCHC
+        RLCA
+        JR      NC,J17AE
+J17A5:  PUSH    DE
+        LD      DE,-8
+J17A9:  ADD     HL,DE
+        LD      (CLOC),HL
+        POP     DE
+J17AE:  LD      (CMASK),A
+        AND     A
+        POP     HL
+        RET
+
+;       Subroutine      TDOWNC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+TDOWNC:
+C17B4:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J17C2
+        PUSH    IX
+        LD      IX,S.TDOWNC
+        JP      SUBROM                  ; SUBROM
+
+J17C2:  PUSH    HL
+        PUSH    DE
+        LD      HL,(CLOC)
+        PUSH    HL
+        LD      HL,(GRPCGP)
+        LD      DE,01700H
+        ADD     HL,DE
+        EX      DE,HL
+        POP     HL
+        _RST    DCOMPR
+        JR      C,J17EF
+        LD      A,L
+        INC     A
+        AND     07H
+        JR      NZ,J17EF
+        JR      J181B
+
+;       Subroutine      DOWNC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+DOWNC:
+J17DC:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J17EA
+        PUSH    IX
+        LD      IX,S.DOWNC
+        JP      SUBROM                  ; SUBROM
+
+J17EA:  PUSH    HL
+        PUSH    DE
+        LD      HL,(CLOC)
+J17EF:  INC     HL
+        LD      A,L
+        LD      DE,00F8H
+        JR      J1837
+
+;       Subroutine      TUPC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+TUPC:
+J17F6:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J1804
+        PUSH    IX
+        LD      IX,S.TUPC
+        JP      SUBROM                  ; SUBROM
+
+J1804:  PUSH    HL
+        PUSH    DE
+        LD      HL,(CLOC)
+        PUSH    HL
+        LD      HL,(GRPCGP)
+        LD      DE,0100H
+        ADD     HL,DE
+        EX      DE,HL
+        POP     HL
+        _RST    DCOMPR
+        JR      NC,J1832
+        LD      A,L
+        AND     07H
+        JR      NZ,J1832
+J181B:  POP     DE
+J181C:  SCF
+        POP     HL
+        RET
+
+;       Subroutine      UPC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+UPC:
+J181F:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J182D
+        PUSH    IX
+        LD      IX,S.UPC
+        JP      SUBROM                  ; SUBROM
+
+J182D:  PUSH    HL
+        PUSH    DE
+        LD      HL,(CLOC)
+J1832:  LD      A,L
+        DEC     HL
+        LD      DE,0FF08H
+J1837:  AND     07H
+        JR      NZ,J183C
+        ADD     HL,DE
+J183C:  LD      (CLOC),HL
+        AND     A
+        POP     DE
+        POP     HL
+        RET
+
+;       Subroutine      NSETCX
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+NSETCX:
+C1843:  CALL    C15FB                   ; check if screenmode 2 or 4
+        JP      NZ,J18F5
+        PUSH    HL
+        CALL    C1651                   ; FETCHC
+        EX      (SP),HL
+        ADD     A,A
+        JR      C,J1869
+        PUSH    AF
+        LD      BC,-1
+        RRCA
+J1856:  ADD     HL,BC
+        JR      NC,J189E
+        RRCA
+        JR      NC,J1856
+        POP     AF
+        DEC     A
+        EX      (SP),HL
+        PUSH    HL
+        CALL    C18A6
+        POP     HL
+        LD      DE,8
+        ADD     HL,DE
+        EX      (SP),HL
+J1869:  LD      A,L
+        AND     07H
+        LD      C,A
+        LD      A,H
+        RRCA
+        LD      A,L
+        RRA
+        RRCA
+        RRCA
+        AND     3FH
+        POP     HL
+        LD      B,A
+        JR      Z,J188D
+J1879:  XOR     A
+        CALL    WRTVRM                  ; WRTVRM
+        LD      DE,2000H
+        ADD     HL,DE
+        LD      A,(ATRBYT)
+        CALL    WRTVRM                  ; WRTVRM
+        LD      DE,2008H
+        ADD     HL,DE
+        DJNZ    J1879
+J188D:  DEC     C
+        RET     M
+        PUSH    HL
+        LD      HL,I1897
+        ADD     HL,BC
+        LD      A,(HL)
+        JR      J18A5
+
+I1897:  DEFB    080H,0C0H,0E0H,0F0H,0F8H,0FCH,0FEH
+
+J189E:  ADD     A,A
+        DEC     A
+        CPL
+        LD      B,A
+        POP     AF
+        DEC     A
+        AND     B
+J18A5:  POP     HL
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C18A6:  LD      B,A
+        CALL    RDVRM                   ; RDVRM
+        LD      C,A
+        LD      DE,2000H
+        ADD     HL,DE
+        CALL    RDVRM                   ; RDVRM
+        PUSH    AF
+        AND     0FH
+        LD      E,A
+        POP     AF
+        SUB     E
+        LD      D,A
+        LD      A,(ATRBYT)
+        CP      E
+        JR      Z,J18D8
+        ADD     A,A
+        ADD     A,A
+        ADD     A,A
+        ADD     A,A
+        CP      D
+        JR      Z,C18DC
+        PUSH    AF
+        LD      A,B
+        OR      C
+        CP      0FFH
+        JR      Z,J18E4
+        PUSH    HL
+        PUSH    DE
+        CALL    C18DC
+        POP     DE
+        POP     HL
+        POP     AF
+        OR      E
+        JR      J18F2
+
+J18D8:  LD      A,B
+        CPL
+        AND     C
+        DEFB    011H                    ; LD DE,xxxx (skip next 2 instructions)
+C18DC:  LD      A,B
+        OR      C
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C18DE:  LD      DE,2000H
+        ADD     HL,DE
+        JR      J18F2
+
+J18E4:  POP     AF
+        LD      A,B
+        CPL
+        PUSH    HL
+        PUSH    DE
+        CALL    C18DE
+        POP     DE
+        POP     HL
+        LD      A,(ATRBYT)
+        OR      D
+J18F2:  JP      WRTVRM                  ; WRTVRM
+
+J18F5:  PUSH    HL
+        CALL    C16C3                   ; SETC
+        CALL    C1756                   ; RIGHTC
+        POP     HL
+        DEC     L
+        JR      NZ,J18F5
+        RET
+
+;       Subroutine      GTASPC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+GTASPC:
+J1901:  LD      HL,(ASPCT1)
+        EX      DE,HL
+        LD      HL,(ASPCT2)
+        RET
+
+;       Subroutine      PNTINI
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+PNTINI:
+J1909:  PUSH    AF
+        CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J1915
+        POP     AF
+        CP      10H
+        CCF
+        JR      J191A
+
+J1915:  POP     AF
+        LD      A,(ATRBYT)
+        AND     A
+J191A:  LD      (BRDATR),A
+        RET
+
+;       Subroutine      SCANR
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SCANR:
+J191E:  LD      HL,0
+        LD      C,L
+        CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J1930
+        PUSH    IX
+        LD      IX,S.SCANR
+        JP      SUBROM                  ; SUBROM
+
+J1930:  LD      A,B
+        LD      (FILNAM+0),A
+        XOR     A
+        LD      (FILNAM+3),A
+        LD      A,(BRDATR)
+        LD      B,A
+J193C:  CALL    C165F                   ; READC
+        CP      B
+        JR      NZ,J194F
+        DEC     DE
+        LD      A,D
+        OR      E
+        RET     Z
+        CALL    C1735                   ; pixel pos right if possible
+        JR      NC,J193C                ; is possible,
+        LD      DE,0
+        RET
+
+J194F:  CALL    C19D1
+        PUSH    DE
+        CALL    C1651                   ; FETCHC
+        LD      (CSAVEA),HL
+        LD      (CSAVEM),A
+        LD      DE,0
+J195F:  INC     DE
+        CALL    C1735                   ; pixel pos right if possible
+        JR      C,J1970                 ; not possible,
+        CALL    C165F                   ; READC
+        CP      B
+        JR      Z,J1970
+        CALL    C19D1
+        JR      J195F
+
+J1970:  PUSH    DE
+        CALL    C1651                   ; FETCHC
+        PUSH    HL
+        PUSH    AF
+        LD      HL,(CSAVEA)
+        LD      A,(CSAVEM)
+        CALL    C1658                   ; STOREC
+        EX      DE,HL
+        LD      (FILNAM+1),HL
+        LD      A,(FILNAM+0)
+        AND     A
+        CALL    NZ,C1843                ; NSETCX
+        POP     AF
+        POP     HL
+        CALL    C1658                   ; STOREC
+        POP     HL
+        POP     DE
+        JP      J19CC
+
+;       Subroutine      SCANL
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SCANL:
+J1994:  LD      HL,0
+        LD      C,L
+        CALL    C15FB                   ; check if screenmode 2 or 4
+        JR      Z,J19A6
+        PUSH    IX
+        LD      IX,S.SCANL
+        JP      SUBROM                  ; SUBROM
+
+J19A6:  XOR     A
+        LD      (FILNAM+3),A
+        LD      A,(BRDATR)
+        LD      B,A
+J19AE:  CALL    C1771                   ; pixel pos left if possible
+        JR      C,J19C2                 ; not possible,
+        CALL    C165F                   ; READC
+        CP      B
+        JR      Z,J19BF
+        CALL    C19D1
+        INC     HL
+        JR      J19AE
+
+J19BF:  CALL    C1756                   ; RIGHTC
+J19C2:  PUSH    HL
+        LD      DE,(FILNAM+1)
+        ADD     HL,DE
+        CALL    C1843                   ; NSETCX
+        POP     HL
+J19CC:  LD      A,(FILNAM+3)
+        LD      C,A
+        RET
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C19D1:  PUSH    HL
+        LD      HL,ATRBYT
+        CP      (HL)
+        POP     HL
+        RET     Z
+        INC     A
+        LD      (FILNAM+3),A
+        RET
+
+; END	SUBTTL 	MSXGRP
+
+        END

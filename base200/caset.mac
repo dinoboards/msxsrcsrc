@@ -1,0 +1,309 @@
+; CASET.MAC
+
+; MSX BIOS CASSETTE functions, MSX 2 version (version 2.0)
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
+        .Z80
+        ASEG
+        ORG     19DDH
+
+        INCLUDE MSX.INC
+
+LOW.    equ     0F406H
+HIGH.   equ     0F408H
+HEADER  equ     0F40AH
+LOWLIM  equ     0FCA4H
+WINWID  equ     0FCA5H
+
+	PUBLIC	TAPION
+	PUBLIC	TAPIN
+	PUBLIC	TAPIOF
+	PUBLIC	TAPOON
+	PUBLIC	TAPOUT
+	PUBLIC	TAPOOF
+
+	EXTRN	BREAKX
+
+
+; START SUBTTL 	CASET
+
+        SUBTTL	CASET
+
+TAPOOF:
+J19DD:  PUSH    BC
+        PUSH    AF
+        LD      BC,0
+J19E2:  DEC     BC
+        LD      A,B
+        OR      C
+        JR      NZ,J19E2
+        POP     AF
+        POP     BC
+
+TAPIOF:
+J19E9:  PUSH    AF
+        LD      A,09H   ; 9 
+        OUT     (0ABH),A
+        POP     AF
+        EI
+        RET
+
+TAPOON:
+J19F1:  OR      A
+        PUSH    AF
+        LD      A,08H   ; 8 
+        OUT     (0ABH),A
+        LD      HL,0
+J19FA:  DEC     HL
+        LD      A,H
+        OR      L
+        JR      NZ,J19FA
+        POP     AF
+        LD      A,(HEADER)
+        JR      Z,J1A07
+        ADD     A,A
+        ADD     A,A
+J1A07:  LD      B,A
+        LD      C,0
+        DI
+J1A0B:  CALL    C1A4D
+        CALL    C1A3F
+        DEC     BC
+        LD      A,B
+        OR      C
+        JR      NZ,J1A0B
+        JP      BREAKX
+
+TAPOUT:
+J1A19:  LD      HL,(LOW.)
+        PUSH    AF
+        LD      A,L
+        SUB     0EH     ; 14 
+        LD      L,A
+        CALL    C1A50
+        POP     AF
+        LD      B,08H   ; 8 
+J1A27:  RRCA
+        CALL    C,C1A40
+        CALL    NC,C1A39
+        DJNZ    J1A27
+        CALL    C1A40
+        CALL    C1A40
+        JP      BREAKX
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1A39:  LD      HL,(LOW.)
+        CALL    C1A50
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1A3F:  RET
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1A40:  CALL    C1A4D
+        EX      (SP),HL
+        EX      (SP),HL
+        DEFB    0,0,0,0
+        CALL    C1A4D
+        RET
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1A4D:  LD      HL,(HIGH.)
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1A50:  PUSH    AF
+J1A51:  DEC     L
+        JP      NZ,J1A51
+        LD      A,0BH   ; 11 
+        OUT     (0ABH),A
+J1A59:  DEC     H
+        JP      NZ,J1A59
+        LD      A,0AH   ; 10 
+        OUT     (0ABH),A
+        POP     AF
+        RET
+
+TAPION:
+J1A63:  LD      A,08H   ; 8 
+        OUT     (0ABH),A
+        DI
+        LD      A,0EH   ; 14 
+        OUT     (0A0H),A
+J1A6C:  LD      HL,0457H
+J1A6F:  LD      D,C
+        CALL    C1B34
+        RET     C
+        LD      A,C
+        CP      0DEH
+        JR      NC,J1A6C
+        CP      05H     ; 5 
+        JR      C,J1A6C
+        SUB     D
+        JR      NC,J1A82
+        CPL
+        INC     A
+J1A82:  CP      04H     ; 4 
+        JR      NC,J1A6C
+        DEC     HL
+        LD      A,H
+        OR      L
+        JR      NZ,J1A6F
+        LD      HL,0
+        LD      B,L
+        LD      D,L
+J1A90:  CALL    C1B34
+        RET     C
+        ADD     HL,BC
+        DEC     D
+        JP      NZ,J1A90
+        LD      BC,06AEH
+        ADD     HL,BC
+        LD      A,H
+        RRA
+        AND     7FH
+        LD      D,A
+        ADD     HL,HL
+        LD      A,H
+        SUB     D
+        LD      D,A
+        SUB     06H     ; 6 
+        LD      (LOWLIM),A
+        LD      A,D
+        ADD     A,A
+        LD      B,0
+J1AAF:  SUB     03H     ; 3 
+        INC     B
+        JR      NC,J1AAF
+        LD      A,B
+        SUB     03H     ; 3 
+        LD      (WINWID),A
+        OR      A
+        RET
+
+TAPIN:
+J1ABC:  LD      A,(LOWLIM)
+        LD      D,A
+J1AC0:  CALL    BREAKX
+        RET     C
+        IN      A,(0A2H)
+        RLCA
+        JR      NC,J1AC0
+J1AC9:  CALL    BREAKX
+        RET     C
+        IN      A,(0A2H)
+        RLCA
+        JR      C,J1AC9
+        LD      E,0
+        CALL    C1B1F
+J1AD7:  LD      B,C
+        CALL    C1B1F
+        RET     C
+        LD      A,B
+        ADD     A,C
+        JP      C,J1AD7
+        CP      D
+        JR      C,J1AD7
+        LD      L,08H   ; 8 
+J1AE6:  CALL    C1B03
+        CP      04H     ; 4 
+        CCF
+        RET     C
+        CP      02H     ; 2 
+        CCF
+        RR      D
+        LD      A,C
+        RRCA
+        CALL    NC,C1B23
+        CALL    C1B1F
+        DEC     L
+        JP      NZ,J1AE6
+        CALL    BREAKX
+        LD      A,D
+        RET
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1B03:  LD      A,(WINWID)
+        LD      B,A
+        LD      C,0
+J1B09:  IN      A,(0A2H)
+        XOR     E
+        JP      P,J1B17
+        LD      A,E
+        CPL
+        LD      E,A
+        INC     C
+        DJNZ    J1B09
+        LD      A,C
+        RET
+J1B17:  DEFB    0,0,0,0
+J1B1B:  DJNZ    J1B09
+        LD      A,C
+        RET
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1B1F:  CALL    BREAKX
+        RET     C
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1B23:  LD      C,0
+J1B25:  INC     C
+        JR      Z,J1B32
+        IN      A,(0A2H)
+        XOR     E
+        JP      P,J1B25
+        LD      A,E
+        CPL
+        LD      E,A
+        RET
+J1B32:  DEC     C
+        RET
+
+;         Subroutine __________________________
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1B34:  CALL    BREAKX
+        RET     C
+        IN      A,(0A2H)
+        RLCA
+        JR      C,C1B34
+        LD      E,0
+        CALL    C1B23
+        JP      J1B25
+
+
+; END	SUBTTL 	CASET
+
+        END

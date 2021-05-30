@@ -1,0 +1,228 @@
+; CASET.MAC
+
+; MSX BIOS CASSETTE functions, MSX Turbo-R version (version 4.1)
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
+        .Z80
+        ASEG
+        ORG     19DDH
+
+        INCLUDE MSX.INC
+
+CASPRV  EQU     0FCB1H
+H.MDIN  EQU     0FF75H
+H.MDTM  EQU     0FF93H
+
+	PUBLIC	TAPION
+	PUBLIC	TAPIN
+	PUBLIC	TAPIOF
+	PUBLIC	TAPOON
+	PUBLIC	TAPOUT
+	PUBLIC	TAPOOF
+	PUBLIC	PCMPLY
+	PUBLIC	PCMREC
+	PUBLIC	J19EE
+	PUBLIC	J1A0B
+	PUBLIC	J1A70
+
+        IF      MSXMID EQ 1
+	PUBLIC	J1A31
+	ENDIF
+
+	EXTRN	GETCPU
+	EXTRN	CHGCPU
+	EXTRN	CALBAS
+	EXTRN	C71DB
+	EXTRN	C7042
+	EXTRN	C12B4
+	EXTRN	J0C4A
+	EXTRN	J0C50
+	EXTRN	INIT
+
+	IF	INTHZ EQ 50
+	PUBLIC	PTCPAL
+	EXTRN	J0431
+	ENDIF
+
+; START SUBTTL 	CASET
+
+        SUBTTL	CASET
+
+;       Subroutine      TAPION,TAPIN,TAPIOF,TAPOON,TAPOUT,TAPOOF
+;       Inputs          ________________________
+;       Outputs         ________________________
+;       Remark          Cassette interface not supported with Turbo-R
+;                       all routines just quit with error flag
+
+TAPION:
+TAPIN:
+TAPIOF:
+TAPOON:
+TAPOUT:
+TAPOOF:
+J19DD:  SCF
+        RET                             ; error!
+
+
+	DEFS	1B45H-$,0
+
+
+	ORG	19DFH
+
+
+;       Subroutine      PCMPLY
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+PCMPLY:
+J19DF:  LD      IX,C71DB
+J19E3:  CALL    CALBAS                  ; CALBAS
+        EI
+        RET
+
+;       Subroutine      PCMREC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+PCMREC:
+J19E8:  LD      IX,C7042
+        JR      J19E3                   ; call routine in basicrom
+
+;       Subroutine      patchroutine GTPAD
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J19EE:  PUSH    AF
+        CALL    GETCPU                  ; GETCPU
+        LD      L,A
+        OR      A
+        LD      A,0
+        CALL    NZ,CHGCPU               ; not in Z80 mode, CHGCPU: Z80 mode without led change
+        POP     AF
+        PUSH    HL
+        CP      04H
+        LD      DE,0CECH
+        CALL    C12B4
+        POP     HL
+        PUSH    AF
+        LD      A,L
+        CALL    CHGCPU                  ; CHGCPU: restore cpu mode
+        POP     AF
+        RET
+
+;       Subroutine      patchroutine for supporting PAUSE key
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J1A0B:  IN      A,(99H)
+        AND     A                       ; orginal code at patchlocation
+        EX      AF,AF'
+        IN      A,(0A7H)
+        RRCA                            ; read pause key
+        JR      NC,J1A2D                ; not pressed, quit
+        LD      A,(CASPRV)
+        OR      01H
+        OUT     (0A7H),A                ; pause led on
+        LD      A,01H
+        OUT     (0A5H),A                ; sound off
+J1A1F:  IN      A,(0A7H)
+        RRCA
+        JR      C,J1A1F                 ; wait until pause key pressed again
+        LD      A,(CASPRV)
+        OUT     (0A7H),A                ; pause led off
+        LD      A,03H
+        OUT     (0A5H),A                ; sound on
+J1A2D:  EX      AF,AF'
+        JP      J0C50                   ; resume orginal routine
+
+        IF      MSXMID EQ 1
+
+;       Subroutine      patchroutine for initializing MIDI hardware
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J1A31:  XOR     A
+        OUT     (0E9H),A
+        JR      J1A36                   ; wait
+J1A36:  OUT     (0E9H),A
+        JR      J1A3A                   ; wait
+J1A3A:  OUT     (0E9H),A
+        JR      J1A3E                   ; wait
+J1A3E:  LD      A,40H
+        OUT     (0E9H),A
+        JR      J1A44                   ; wait
+J1A44:  LD      A,4EH
+        OUT     (0E9H),A
+        JR      J1A4A                   ; wait
+J1A4A:  XOR     A
+        OUT     (0E9H),A
+        JR      J1A4F                   ; wait
+J1A4F:  LD      A,16H
+        OUT     (0EFH),A
+        JR      J1A55                   ; wait
+J1A55:  LD      A,08H
+        OUT     (0ECH),A
+        JR      J1A5B                   ; wait
+J1A5B:  LD      A,0B4H
+        OUT     (0EFH),A
+        JR      J1A61                   ; wait
+J1A61:  LD      A,20H
+        OUT     (0EEH),A
+        JR      J1A67                   ; wait
+J1A67:  LD      A,4EH
+        OUT     (0EEH),A
+        JR      J1A6D                   ; wait
+J1A6D:  JP      INIT                    ; resume orginal routine
+
+;       Subroutine      patchroutine for supporting MIDI interrupts
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J1A70:  PUSH    IY
+        PUSH    IX
+        IN      A,(0E9H)
+        AND     02H
+        CALL    NZ,H.MDIN
+        IN      A,(0E9H)
+        AND     80H
+        CALL    NZ,H.MDTM
+        JP      J0C4A                   ; resume orginal routine
+
+        ENDIF
+
+
+	IF	INTHZ EQ 50
+
+;       Subroutine      patchroutine for PAL setup of VDP
+;       Inputs          ________________________
+;       Outputs         ________________________
+;       Remark          This was not in the orginal Turbo-R code
+;                       Added by Arjen Zeilemaker to support PAL countries
+
+PTCPAL: LD      A,50H
+        OUT     (0AAH),A
+        LD      A,2
+        OUT     (99H),A
+        LD      A,89H
+        OUT     (99H),A
+        LD      HL,0A0F9H
+PTCPA1: DEC     HL
+        LD      A,H
+        OR      L
+        JR      NZ,PTCPA1               ; wait
+        JP      J0431                   ; resume orginal routine
+
+	ENDIF
+
+; END	SUBTTL 	CASET
+
+        END
