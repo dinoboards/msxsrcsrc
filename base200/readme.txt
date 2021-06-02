@@ -41,6 +41,10 @@ DCPM
 FIVEDSK
 INIT
 
+based on GWBASIC
+MACLNG
+GENGRP
+ADVGRP
 
 
 subrom msx2
