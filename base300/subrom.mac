@@ -408,16 +408,16 @@ S.KEYINT:
         EI
         JP      C0B28
 
-        EI
+        EI		; $E5 -> SETTXT
         JP      C0BE6
 
-        EI
+        EI		; $E9 -> SETT32
         JP      C0C40
 
-        EI
+        EI		; $ED -> SETGRP
         JP      C0C76
 
-        EI
+        EI		; $F1 -> SETMLT
         JP      C0CC6
 
         EI
@@ -1594,25 +1594,26 @@ C06F3:  LD      A,(RG0SAV)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C0714:  LD      A,(SCRMOD)
+C0714:
+	LD      A,(SCRMOD)		; load current screen mode
         PUSH    AF
         PUSH    BC
         PUSH    DE
         PUSH    HL
         DI
         LD      HL,I0724
-        CALL    C0A59
+        CALL    C0A59		; JUMP TO (I0724+A)
         JR      J0768
 
-I0724:  DEFW    0BE6H
-        DEFW    0C40H
-        DEFW    0C76H
-        DEFW    0CC6H
-        DEFW    0C7DH
-        DEFW    0CFAH
-        DEFW    0D24H
-        DEFW    0D3BH
-        DEFW    0D6BH
+I0724:  DEFW    C0BE6			; SETTXT ? J065F
+        DEFW    C0C40			; SETT32
+        DEFW    C0C76			; SETGRP
+        DEFW    C0CC6			; SETMLT
+        DEFW    C0C7D			; setup for GRAPHIC 3 mode (screenmode 4)
+        DEFW    C0CFA			; setup for GRAPHIC 4 mode (screenmode 5)
+        DEFW    C0D24			; setup for GRAPHIC 5 mode (screenmode 6)
+        DEFW    C0D3B			; setup for GRAPHIC 6 mode (screenmode 7)
+        DEFW    C0D6B			; setup for GRAPHIC 7 mode (screenmode 8)
 
 J0736:  PUSH    AF
         PUSH    BC
@@ -2261,7 +2262,7 @@ J0A53:  CP      09H     ; 9
         RET     NC
         LD      HL,I0A63
 
-;         Subroutine __________________________
+;         Subroutine JUMP TO (HL+A)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -2463,9 +2464,9 @@ C0BB2:  LD      (SCRMOD),A
         JP      C0687
 
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	  Subroutine SETTXT
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C0BE6:  CALL    C0DD1
         LD      A,(LINLEN)
@@ -2510,7 +2511,7 @@ J0C16:  LD      A,(DPPAGE)
         JP      J0736
 
 
-;         Subroutine __________________________
+;	  Subroutine SETT32
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -2550,7 +2551,7 @@ C0C76:  XOR     A
         JR      J0C84
 
 
-;         Subroutine __________________________
+;	  Subroutine setup for GRAPHIC 3 mode (screenmode 4)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -2620,7 +2621,7 @@ C0CC6:  CALL    C0DD1
         JR      J0CC0
 
 
-;         Subroutine __________________________
+;	  Subroutine setup for GRAPHIC 4 mode (screenmode 5)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -2646,7 +2647,7 @@ J0D1A:  LD      E,00H
         JP      J0736
 
 
-;         Subroutine __________________________
+;	  Subroutine setup for GRAPHIC 5 mode (screenmode 6)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -2660,9 +2661,9 @@ C0D24:  CALL    C0DD8
         JR      J0D03
 
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	  Subroutine setup for GRAPHIC 6 mode (screenmode 7)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C0D3B:  CALL    C0DD8
         LD      BC,00A00H
@@ -2688,7 +2689,7 @@ J0D50:  LD      A,(DPPAGE)
         JR      J0D1A
 
 
-;         Subroutine __________________________
+;	  Subroutine setup for GRAPHIC 7 mode (screenmode 8)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -6258,11 +6259,18 @@ J1F8E:  LD      A,B
         POP     BC
         RET
 
-C1F91:  LD      DE,(DPPAGE)
-        CP      2CH     ; ","
-        JR      Z,J1FA7
+
+;         Subroutine SET PAGE
+;            Inputs  ________________________
+;            Outputs ________________________
+
+
+C1F91:
+	LD      DE,(DPPAGE)		; get current page
+        CP      2CH     ; ","		; is first argument missing
+        JR      Z,J1FA7			; yes, so skip reading it.
         PUSH    DE
-        RST     S.GETBYT
+        RST     S.GETBYT		; convert to byte
         POP     DE
         CALL    C1F7E
 J1F9F:  JP      C,J274A
@@ -6280,12 +6288,13 @@ J1FA7:  PUSH    DE
         LD      D,A
 J1FB2:  LD      (DPPAGE),DE
         PUSH    HL
-        CALL    C2BE4
+        CALL    C2BE4		; wait for any vdp command to complete?
         CALL    C0714
         POP     HL
         RET
 
-C1FBF:  CP      2CH     ; ","
+C1FBF:
+	CP      2CH     ; ","
         JR      Z,J1FEA
         CALL    C281E
         LD      A,D
@@ -8420,12 +8429,12 @@ C2BC0:  LD      B,A
         RET
 
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;       Subroutine      wait until VDP command is done
+;       Inputs          ________________________
+;       Outputs         ________________________
 
-C2BE4:  LD      A,02H   ; 2 
-        CALL    C2BEF
+C2BE4:  LD      A,02H   ; 2
+        CALL    C2BEF	 ; read vdp statusregister 2
         EI
         RRCA
         JR      C,C2BE4
