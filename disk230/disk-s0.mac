@@ -72,7 +72,6 @@ C.0141	EQU	0141H	; -C---
 I$0148	EQU	0148H	; ----I
 I$0156	EQU	0156H	; ----I
 C.0159	EQU	0159H	; JC---
-C.0180	EQU	0180H	; JC---
 I.01B7	EQU	01B7H	; ----I
 I.0200	EQU	0200H	; ----I
 I$021E	EQU	021EH	; ----I
@@ -137,7 +136,6 @@ I.BC20	EQU	0BC20H	; ----I
 D.BE00	EQU	0BE00H	; ---L-
 I$BE02	EQU	0BE02H	; ----I
 I$C000	EQU	0C000H	; ----I
-I$C001	EQU	0C001H	; ----I
 J$C01E	EQU	0C01EH	; J----
 I$C020	EQU	0C020H	; ----I
 I.C200	EQU	0C200H	; ----I
@@ -231,7 +229,7 @@ J$F37A	EQU	0F37AH	; J----
 C.F37D	EQU	0F37DH	; -C---
 I$F380	EQU	0F380H	; ----I
 I.F38B	EQU	0F38BH	; ----I
-I$F39A	EQU	0F39AH	; ----I
+USRTAB	EQU	0F39AH	; ----I
 D$F3B0	EQU	0F3B0H	; ---L-
 D$F3DE	EQU	0F3DEH	; --S--
 D$F415	EQU	0F415H	; ---L-
@@ -482,47 +480,57 @@ L47BE:	LD	C,026H
 L47D1:	LD	C,028H
         JP	J.4F71
 
-?.47D6:	CALL	INIHRD
+?.47D6:	CALL	INIHRD			; DRIVER: initialize hardware
 	DI
 	LD	A,(D$002D)
 	OR	A
 	RET	Z
 	LD	A,(D.FD99)
 	OR	A
-	JP	M,J.481A
+
+	IF	TURBOR
+	JP	M,J.481A		; disksystem initialization canceled, quit
+	ELSE
+	RET	M
+	ENDIF
+
 	JP	NZ,J$4873
 	LD	HL,I$FB20
 	BIT	0,(HL)
 	JR	NZ,J$47FC
 	SET	0,(HL)
 	LD	HL,I.FFCA
-	LD	B,0FH	; 15 
+	LD	B,3*5
 J$47F7:	LD	(HL),0C9H
 	INC	HL
 	DJNZ	J$47F7
 J$47FC:	LD	HL,(D.FC48)
-	LD	DE,I$C001
-	RST	20H
-	JR	NC,J.481A
+	LD	DE,I$C000+1
+	RST	20H			; at least 16 KB of RAM ?
+	JR	NC,J.481A		; nope, cancel disksystem initialization and quit
 	LD	HL,(D.FC4A)
 	LD	DE,I$F380
-	RST	20H
-	JR	NZ,J.481A
-I$480E:	LD	A,06H	; 6 
+	RST	20H			; HIMEM still at default location ?
+	JR	NZ,J.481A		; nope, cancel disksystem initialization and quit
+I$480E:	LD	A,6
 	CALL	C.0141
 	DI
-	RRCA
-	JR	C,J$482B
-	LD	A,07H	; 7 
-	RST	18H
+	RRCA				; SHIFT key pressed ?
+	JR	C,J$482B		; nope, continue
+	LD	A,7
+	RST	18H			; beep
+
 J.481A:	LD	A,0FFH
-	LD	(D.FD99),A
-I$481E	EQU	$-1
+	LD	(D.FD99),A		; disable disksystem initialization
+
+	IF	TURBOR
 	XOR	A
 	CALL	C.0141
-	BIT	1,A
+	BIT	1,A			; 1 pressed ?
 	LD	A,82H
-	CALL	NZ,C.0180
+	CALL	NZ,CHGCPU		; nope, select R800 DRAM mode
+	ENDIF
+
 	RET
 
 J$482B:	CALL	C.4938
@@ -539,13 +547,13 @@ J$4839:	XOR	A
 	OR	B
 	JR	NZ,J$4839
 	LD	(D.F6AB),BC
-	LD	B,14H	; 20 
+	LD	B,4*2+4*3
 	LD	HL,I.FB21
 J$484A:	LD	(HL),A
 	INC	HL
-	DJNZ	J$484A
+	DJNZ	J$484A			; clear DRVINF and DRVINT entries
 	LD	HL,C.F24F
-	LD	B,69H	; "i"
+	LD	B,69H
 J$4853:	LD	(HL),0C9H
 	INC	HL
 	DJNZ	J$4853
@@ -555,21 +563,21 @@ J$4853:	LD	(HL),0C9H
 	LD	(HL),0A8H
 	INC	HL
 	LD	(HL),0C9H
-	LD	A,06H	; 6 
+	LD	A,6
 	CALL	C.0141
 	DI
-	AND	02H	; 2 
+	AND	02H
 	LD	(D.F33F),A
-	LD	A,07H	; 7 
+	LD	A,7
 	RST	18H
 	JR	J$487E
 
 J$4873:	LD	A,(D.F313)
-	CP	23H	; "#"
+	CP	23H
 	JR	NC,J$4896
 	CALL	C.4938
 	RET	C
-J$487E:	LD	A,23H	; "#"
+J$487E:	LD	A,23H
 	LD	(D.F313),A
 	CALL	C.402D
 	LD	HL,I.FECB
@@ -577,14 +585,14 @@ J$487E:	LD	A,23H	; "#"
 	INC	HL
 	LD	(HL),A
 	INC	HL
-	LD	(HL),69H	; "i"
+	LD	(HL),HIGH C.4969
 	INC	HL
-	LD	(HL),49H	; "I"
+	LD	(HL),LOW C.4969
 	INC	HL
 	LD	(HL),0C9H
 J$4896:	CALL	C.4914
 	RET	Z
-	LD	HL,MYSIZE
+	LD	HL,MYSIZE		; DRIVER: size of the workarea
 	CALL	C.5604
 	JR	C,J.490C
 	EX	DE,HL
@@ -593,45 +601,45 @@ J$4896:	CALL	C.4914
 	INC	HL
 	LD	(HL),D
 	LD	HL,(D.F6AB)
-	LD	DE,SECLEN
+	LD	DE,SECLEN		; DRIVER: bigest sector size
 	RST	20H
 	JR	NC,J$48B6
 	LD	(D.F6AB),DE
 J$48B6:	CALL	C.4914
 	LD	HL,I.FB21
-	LD	D,00H
+	LD	D,0
 	ADD	HL,DE
 	ADD	HL,DE
 	EX	DE,HL
 	LD	A,(D.F33F)
 	OR	A
 	LD	A,C
-	CALL	DRIVES
+	CALL	DRIVES			; DRIVER: get number of drives
 	ADD	A,L
-	CP	09H	; 9 
+	CP	8+1
 	JR	C,J$48D0
-	LD	A,08H	; 8 
+	LD	A,8
 J$48D0:	SUB	C
 	JR	Z,J.490C
-	LD	(DE),A
+	LD	(DE),A			; register number of drives of disk interface
 	INC	DE
 	CALL	C.402D
-	LD	(DE),A
-	LD	B,00H
+	LD	(DE),A			; register slotid of disk interface
+	LD	B,0
 	LD	HL,I$F355
 	ADD	HL,BC
 	ADD	HL,BC
 	PUSH	HL
 	DEC	DE
-	LD	A,(DE)
+	LD	A,(DE)			; number of drives of disk interface
 	PUSH	AF
 	LD	C,A
 	ADD	A,A
+	ADD	A,A			; *4
+	ADD	A,C			; *5
 	ADD	A,A
-	ADD	A,C
-	ADD	A,A
-	ADD	A,A
-	ADD	A,C
+	ADD	A,A			; *20
+	ADD	A,C			; *21
 	LD	L,A
 	LD	H,B
 	CALL	C.4C6D
@@ -644,21 +652,21 @@ J$48F3:	LD	(HL),E
 	INC	HL
 	PUSH	HL
 	LD	HL,DEFDPB
-	LD	BC,I.0015
-	LDIR
+	LD	BC,21
+	LDIR				; initialize DPB with default DPB
 	POP	HL
 	DEC	A
-	JR	NZ,J$48F3
-	CALL	INIENV
+	JR	NZ,J$48F3		; next drive
+	CALL	INIENV			; DRIVER: initialize workarea
 	LD	HL,D.FD99
 	INC	(HL)
 	RET
 
 J.490C:	LD	HL,D.FD99
 	INC	(HL)
-	DEC	(HL)
-	RET	NZ
-	INC	(HL)
+	DEC	(HL)			; first disk interface ?
+	RET	NZ			; nope, quit
+	INC	(HL)			; register this disk interface (no drives, but RAMDISK useable)
 	RET
 
 ;	  Subroutine __________________________
@@ -666,13 +674,12 @@ J.490C:	LD	HL,D.FD99
 ;	     Outputs ________________________
 
 C.4914:	LD	HL,I.FB21
-	LD	B,04H	; 4 
+	LD	B,4
 	XOR	A
 	LD	E,A
 J$491B:	LD	C,A
 	ADD	A,(HL)
 	JR	C,J.4935
-I$491E	EQU	$-1
 	CP	C
 	JR	Z,J.4929
 	INC	E
@@ -691,7 +698,7 @@ J.4929:	ADD	A,(HL)
 	CP	08H	; 8 
 	RET	Z
 	RET	C
-J.4935:	JP	J.4C71
+J.4935:	JP	J.4C71			; halt system
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -700,7 +707,7 @@ J.4935:	JP	J.4C71
 C.4938:	CALL	C.4E2F
 	CALL	C$4100
 	RET	C
-	LD	HL,BDOS
+	LD	HL,5
 	ADD	HL,SP
 	IN	A,(0A8H)
 	RRD
@@ -725,27 +732,27 @@ J$4962:	DEC	HL
 	LD	(HL),A
 	RET
 
-?.4969:	LD	HL,I.FECB
-	LD	B,05H	; 5 
+C.4969:	LD	HL,I.FECB
+	LD	B,5
 J$496E:	LD	(HL),0C9H
 	INC	HL
 	DJNZ	J$496E
 	LD	HL,D.FD99
 	LD	A,(HL)
 	LD	(HL),B
-	OR	A
-	RET	M
+	OR	A			; disksystem initialization canceled ?
+	RET	M			; yep, quit
 	LD	D,A
 	CALL	C.4914
 	LD	(D$F347),A
 	LD	A,D
-	SUB	E
-	JR	Z,J$4994
-	DEC	A
-	JP	NZ,J.4C71
+	SUB	E			; number of disk interfaces equals the number of DRVINF entries ?
+	JR	Z,J$4994		; yep, skip
+	DEC	A			; 1 extra disk interface ?
+	JP	NZ,J.4C71		; nope, halt system (DRVINF is invalid)
 	LD	DE,I.FB29
-	LD	HL,I$FB2C
-	LD	BC,C.000C
+	LD	HL,I.FB29+3
+	LD	BC,4*3
 	LDIR
 J$4994:	CALL	C.402D
 	LD	(D.F348),A
@@ -825,7 +832,7 @@ J$4A32:	INC	C
 	DJNZ	J$4A1A
 	CALL	C.4E2F
 	CALL	C$4103
-	JP	C,J.4C71
+	JP	C,J.4C71		; halt system
 	LD	HL,I$0148
 	CALL	C.4C6D
 	LD	(D.F2F5),HL
@@ -872,7 +879,11 @@ J$4A32:	INC	C
 	CALL	C.001C
 	CALL	C$4C83
 	LD	SP,I.C200
-	CALL	C$518D
+
+	IF	DOS1
+	CALL	C$518D			; start DOS1 kernel if DOS1 key is pressed, otherwise select R800 DRAM mode
+	ENDIF
+
 	LD	A,(D$FEDA)
 	CP	0C9H
 	LD	IX,I$7D17
@@ -880,13 +891,17 @@ J$4A32:	INC	C
 	LD	A,(D$FBB1)
 	OR	A
 	LD	IX,I$7DE9
-	JR	NZ,J.4AD1
+	JR	NZ,J.4AD1		; ROM BASIC program,
 	CALL	C.4C33
 	LD	A,(D.F344)
-	LD	(D.F343),A
-	JR	J$4ADA
+	LD	(D.F343),A		; make sure page 2 uses the system memorymapper RAM
+	JR	J$4ADA			;
 
-J.4AD1:	CALL	C$519A
+J.4AD1:
+	IF	DOS1
+	CALL	C$519A			; start DOS1 kernel if DEFUSR0 is still default
+	ENDIF
+
 	CALL	C.4C05
 	JP	C.0159
 
@@ -894,7 +909,13 @@ J$4ADA:	LD	HL,I.4B38
 	PUSH	HL
 	CALL	C.6952
 	RET	Z
-	CALL	C$523B
+
+	IF	DOS1
+	CALL	C$523B			; start DOS1 kernel if disk has no volumeid, otherwise start boot loader with Cx reset
+	ELSE
+	CALL	J$4B18
+	ENDIF
+
 	LD	HL,(D.FC48)
 	LD	DE,I$8000
 	RST	20H
@@ -921,11 +942,16 @@ I.4AFF:	EX	(SP),HL
 
 J$4B0A:	CALL	C.6952
 	RET	Z
-	CALL	C.5244
-	RET	NZ
+
+	IF	DOS1
+	CALL	C.5244			; check if disk has a volumeid
+	RET	NZ			; nope, quit
+	ENDIF
+
 	LD	A,0C3H
 	CALL	C$4C35
-	SCF
+	SCF				; Cx set (inform bootloader MSXDOS environment is prepared)
+
 J$4B18:	LD	HL,D.F323
 	LD	DE,D.F368
 I$4B1E:	LD	A,(D.F340)
@@ -1115,7 +1141,7 @@ I$4C5F	EQU	$-1
 	SBC	HL,BC
 	LD	(D.FC4A),HL
 I.4C64	EQU	$-2
-	JR	C,J.4C71
+	JR	C,J.4C71		; halt system
 	LD	A,H
 	CP	0C2H
 	JR	J$4C70
@@ -1126,6 +1152,11 @@ I.4C64	EQU	$-2
 
 C.4C6D:	CALL	C.5604
 J$4C70:	RET	NC
+
+;	  Subroutine halt system
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J.4C71:	LD	A,0CH	; 12 
 	CALL	C.4DB4
 	LD	A,01H	; 1 
@@ -1224,7 +1255,7 @@ J$4CEA:	INC	HL
 	RET
 
 ?.4CF0:	LD	HL,I.FB21
-	LD	B,04H	; 4 
+	LD	B,4
 J$4CF5:	INC	HL
 	LD	A,(HL)
 	PUSH	AF
@@ -1246,40 +1277,40 @@ J$4CF5:	INC	HL
 
 ?.4D10:	PUSH	AF
 	CALL	C$6A4C
-	CALL	C$4D1B
+	CALL	C$4D1B			; invoke interrupt handler of all disk intefaces
 	POP	AF
 	JP	J.F2C0
 
-;	  Subroutine __________________________
+;	  Subroutine invoke interrupt handler of all disk intefaces
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4D1B:	LD	DE,I.FB21
 	LD	HL,I.FB29
-	LD	B,04H	; 4 
+	LD	B,4
 J$4D23:	LD	A,(DE)
-	AND	A
-	RET	Z
+	AND	A			; DRVINF entry used ?
+	RET	Z			; nope, quit
 	INC	DE
 	LD	A,(DE)
 	INC	DE
-	CP	(HL)
-	JR	NZ,J$4D44
+	CP	(HL)			; slotid DRVINT entry of this disk interface ?
+	JR	NZ,J$4D44		; nope, next DRVINF and DRVINT entry
 	LD	A,(D.F348)
-	CP	(HL)
-	LD	A,(HL)
+	CP	(HL)			; slotid DRVINT of the master disk interface ?
+	LD	A,(HL)			; slotid DRVINT entry
 	PUSH	BC
 	PUSH	DE
 	PUSH	HL
 	INC	HL
 	LD	E,(HL)
 	INC	HL
-	LD	D,(HL)
+	LD	D,(HL)			; get address disk interface interrupt handler
 	PUSH	AF
-	POP	IY
+	POP	IY			; IYH = slotid
 	PUSH	DE
-	POP	IX
-	CALL	C$4D4A
+	POP	IX			; IX = address interrupt handler
+	CALL	C$4D4A			; invoke interrupt handler
 	POP	HL
 	POP	DE
 	POP	BC
@@ -1289,15 +1320,15 @@ J$4D44:	INC	HL
 	DJNZ	J$4D23
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine invoke interrupt handler
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4D4A:	JP	NZ,C.001C
-	JP	(IX)
+C$4D4A:	JP	NZ,C.CALSLT		; handler not in the master disk interface slot, use CALSLT
+	JP	(IX)			; handler in the master disk interface slot, call direct
 
 I$4D4F:	LD	A,(D.F33F)
-	ADD	A,41H	; "A"
+	ADD	A,"A"
 	CALL	C.F24F
 	PUSH	AF
 	CALL	C.4D7E
@@ -1434,24 +1465,29 @@ C.4DD8:	IN	A,(0A8H)
 ;	     Outputs ________________________
 
 C.4DF9:	LD	C,A
-	LD	B,00H
+	LD	B,0
 	ADD	HL,BC
 	RET
 
+;	  Subroutine register disk interface interrupt handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+SETINT:
 ?.4DFE:	EX	DE,HL
-	CALL	C.402D
+	CALL	C.402D			; get slotid
 	PUSH	AF
-	LD	A,(D.FD99)
+	LD	A,(D.FD99)		; disk interface number
 	LD	HL,I.FB29
 	CALL	C.4DF9
 	ADD	HL,BC
 	ADD	HL,BC
 	POP	AF
-	LD	(HL),A
+	LD	(HL),A			; slotid
 	INC	HL
 	LD	(HL),E
 	INC	HL
-	LD	(HL),D
+	LD	(HL),D			; disk interface interrupt handler
 	RET
 
 ?.4E15:	PUSH	HL
@@ -1791,60 +1827,79 @@ L5183:	LD	E,13
         LD	E,10
         JP	C.53A7
 
-;	  Subroutine __________________________
+	IF	DOS1
+;
+; DOS1 kernel integration code
+;
+
+;	  Subroutine start DOS1 kernel if DOS1 key is pressed, otherwise select R800 DRAM mode
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$518D:	XOR	A
 	CALL	C.0141
-	BIT	1,A
-	JR	Z,J.51A7
-	LD	A,82H
-	JP	C.0180
+	BIT	1,A			; 1 key pressed ?
+	JR	Z,J.51A7		; yep, start DOS1 kernel
 
-;	  Subroutine __________________________
+	IF	TURBOR
+	LD	A,82H
+	JP	CHGCPU			; select R800 DRAM mode and quit
+	ELSE
+	RET
+	ENDIF
+
+;	  Subroutine start DOS1 kernel if DEFUSR0 is still default
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$519A:	LD	HL,I$F39A
+C$519A:	LD	HL,USRTAB+0*2
 	LD	A,(HL)
-	CP	5AH	; "Z"
-	RET	NZ
+	CP	LOW M475A		; DEFUSR0 still default ?
+	RET	NZ			; nope, quit
 	INC	HL
 	LD	A,(HL)
-	CP	47H	; "G"
-	RET	NZ
+	CP	HIGH M475A		; DEFUSR0 still default ?
+	RET	NZ			; nope, quit
 	POP	HL
-J.51A7:	LD	A,80H
-	CALL	C.0180
+
+;	  Subroutine start DOS1 kernel
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J.51A7:
+	IF	TURBOR
+	LD	A,80H
+	CALL	CHGCPU			; select Z80 mode
+	ENDIF
+
 	LD	A,(D.F343)
 	LD	H,80H
-	CALL	C.0024
+	CALL	C.0024			; select RAM in page 2
 	DI
 	LD	HL,J.F2C0
 	LD	DE,I.FD9F
-	LD	BC,BDOS
-	LDIR
+	LD	BC,5
+	LDIR				; restore orginal H.TIMI
 	LD	HL,I.F2D5
 	LD	DE,I.FFCA
-	LD	BC,BDOS
-	LDIR
+	LD	BC,5
+	LDIR				; restore orginal EXTBIO
 	LD	HL,(D.F34F)
-	LD	(D.F6AB),HL
+	LD	(D.F6AB),HL		; bigests sectorsize
 	LD	HL,(D.F353)
-	LD	DE,I.0015
+	LD	DE,21
 	ADD	HL,DE
-	LD	(D.FC4A),HL
-	CALL	C.565C
-	LD	SP,(D.F674)
+	LD	(D.FC4A),HL		; deallocate RAMDISK DPB
+	CALL	C.565C			; intialize BASIC stack and file buffers
+	LD	SP,(D.F674)		; initialize stack
 	XOR	A
 
 	IF STVER EQ 0
-	LD	(D.F313),A
+	LD	(D.F313),A		; clear DOS2 version
 	LD	(D.F314),A
 	ENDIF
 
-	LD	(D.F23C),A
+	LD	(D.F23C),A		; default drive = A:
 
 	IF STVER EQ 1
 	LD	HL,D.F313
@@ -1858,20 +1913,20 @@ J.51A7:	LD	A,80H
 
 	LD	DE,I.FB21
 	LD	HL,I.FB29
-	LD	B,04H	; 4 
+	LD	B,4
 J$51F4:	LD	A,(DE)
-	OR	A
-	JR	Z,J$522C
+	OR	A			; DRVINF entry used ?
+	JR	Z,J$522C		; nope,
 	INC	DE
 	LD	A,(DE)
 	INC	DE
-	CP	(HL)
-	JR	NZ,J$5227
+	CP	(HL)			; does disk interface has a interrupt handler ?
+	JR	NZ,J$5227		; nope, next DRVINF and DRVINT entry
 	PUSH	HL
 	LD	HL,I.FD9F
 	LD	A,(HL)
-	SUB	0C9H
-	JR	NZ,J$5212
+	SUB	0C9H			; H.TIMI used ?
+	JR	NZ,J$5212		; yep,
 	LD	(HL),0F7H
 	INC	HL
 	LD	(HL),A
@@ -1879,14 +1934,14 @@ J$51F4:	LD	A,(DE)
 	LD	(HL),A
 	INC	HL
 	LD	(HL),A
-I$520F:	INC	HL
-	LD	(HL),0C9H
+	INC	HL
+	LD	(HL),0C9H		; setup H.TIMI with basic CALLF
 J$5212:	POP	HL
 	PUSH	HL
 	PUSH	DE
 	PUSH	BC
-	LD	B,03H	; 3 
-	LD	DE,I$FDA0
+	LD	B,3
+	LD	DE,I.FD9F+1
 J.521B:	LD	A,(DE)
 I.521C:	LD	C,(HL)
 	LD	(HL),A
@@ -1894,41 +1949,36 @@ I.521C:	LD	C,(HL)
 I.521F:	LD	(DE),A
 	INC	DE
 	INC	HL
-	DJNZ	J.521B
+	DJNZ	J.521B			; setup H.TIMI with disk interface interrupt handler (requires DOS1 and DOS2 interrupt handler at the same address)
 	POP	BC
 	POP	DE
 	POP	HL
 J$5227:	INC	HL
 	INC	HL
 	INC	HL
-	DJNZ	J$51F4
+	DJNZ	J$51F4			; next DRVINF entry
 J$522C:	LD	HL,I$58A8
-	PUSH	HL
-	LD	A,03H	; 3 
-	JP	J$7FD0
+	PUSH	HL			; start DOS1 kernel entry
+	LD	A,3
+	JP	J$7FD0			; select segment 3 (DOS 1 kernel)
 
-I$5235:	LD	D,(HL)
-	LD	C,A
-	LD	C,H
-	LD	E,A
-	LD	C,C
-	LD	B,H
+I$5235:	DEFB	"VOL_ID"
 
-;	  Subroutine __________________________
+;	  Subroutine start DOS1 kernel if disk has no volumeid, otherwise start boot loader with Cx reset
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$523B:	CALL	C.5244
-	JP	NZ,J.51A7
-	JP	J$4B18
+C$523B:	CALL	C.5244			; check if disk has a volumeid
+	JP	NZ,J.51A7		; no volumeid, start DOS1 kernel
+	JP	J$4B18			; start boot loader with Cx reset (inform bootloader DOS environment is prepared)
 
-;	  Subroutine __________________________
+;	  Subroutine check if disk has a volumeid
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.5244:	LD	HL,I$C020
 	LD	DE,I$5235
-	LD	B,06H	; 6 
+	LD	B,6
 J$524C:	LD	A,(DE)
 	CP	(HL)
 	RET	NZ
@@ -1937,6 +1987,7 @@ J$524C:	LD	A,(DE)
 	DJNZ	J$524C
 	RET
 
+	ENDIF
 
 	IF STVER GE 1
 
@@ -5393,7 +5444,7 @@ J$6992:	LD	A,C
 	LD	(D.F23C),A
 	LD	HL,(D.F34D)
 	LD	DE,I$C000
-	LD	BC,J.0100
+	LD	BC,256
 	LDIR
 	OR	A
 	RET

@@ -20,7 +20,7 @@
         ORG     04000H
 
 
-; symbols which must be defined by the diskdriver
+; symbols which must be defined by the disk hardware driver
 
 ;       EXTRN   INIHRD
 ;       EXTRN   DRIVES
@@ -36,7 +36,7 @@
 ;       EXTRN   SECLEN
 ;       EXTRN   DEFDPB
 
-; symbols of routines which can be used by the diskdriver
+; symbols of routines which can be used by the disk hardware driver
 
 ;       PUBLIC  PROMPT
 ;       PUBLIC  SETINT
@@ -72,7 +72,7 @@ PHYDIO  equ     00144H
 KILBUF  equ     00156H
 CALBAS  equ     00159H
 
-X003B   equ     0003BH                  ; helper routine in DOS memoryspace: save and change secundairy slotregister
+X003B   equ     0003BH                  ; helper routine in DOS memoryspace: store and change secundairy slotregister
 X0046   equ     00046H                  ; helper routine in DOS memoryspace: restore secundairy slotregister (RDSLT/WRSLT)
 X004B   equ     0004BH                  ; helper routine in DOS memoryspace: restore secundairy slotregister (CALSLT/CALLF)
 
@@ -209,7 +209,7 @@ HIMSAV  equ     0F349H
 YF349   equ     0F349H                  ; disksystem bottom (lowest address used by the disksystem)
 DOSHIM  equ     0F34BH
 YF34B   equ     0F34BH                  ; msxdos system bottom
-$SECBUF equ     0F34DH                  ; pointer to sectorbuffer, can be used by the diskdriver
+$SECBUF equ     0F34DH                  ; pointer to sectorbuffer, can be used by the disk hardware driver
 YF34F   equ     0F34FH                  ; pointer to datasectorbuffer
 YF351   equ     0F351H                  ; pointer to directorysectorbuffer
 YF353   equ     0F353H                  ; pointer to the diskbasic FCB's
@@ -267,8 +267,8 @@ FILNAM  equ     0F866H
 NLONLY  equ     0F87CH
 SAVEND  equ     0F87DH
 HOKVLD  equ     0FB20H
-YFB21   equ     0FB21H                  ; diskdriver table
-YFB29   equ     0FB29H                  ; diskdriver interrupt table
+YFB21   equ     0FB21H                  ; disk interface table
+YFB29   equ     0FB29H                  ; disk interface interrupt table
 BOTTOM  equ     0FC48H
 HIMEM   equ     0FC4AH
 FLBMEM  equ     0FCAEH
@@ -279,7 +279,7 @@ SLTTBL  equ     0FCC5H
 SLTATR  equ     0FCC9H
 SLTWRK  equ     0FD09H
 PROCNM  equ     0FD89H
-DEVICE  equ     0FD99H
+DEVICE  equ     0FD99H			; used temp for disk interface count
 
 H.TIMI  equ     0FD9FH
 H.DSKO  equ     0FDEFH
@@ -423,7 +423,7 @@ RETRTN  equ     WRPRIM+6        ; address with a RET instruction, allways availa
         defw    0
         defs    6
 
-; diskdriver entries
+; disk hardware driver entries
 
 T4010:  jp      DSKIO                   ; DSKIO entrypoint
 T4013:  jp      DSKCHG                  ; DSKCHG entrypoint
@@ -4327,10 +4327,10 @@ T570D:  defw    A40A7,A5445,A53A7,A546E,A5474,A5465,A5454,A5462
 
 A576F:  call    INIHRD                  ; initialize diskhardware
         di
-        ld      a,(DEVICE)
-        and     a                       ; abort disksystem init ?
-        ret     m                       ; yep, quit
-        jp      nz,A580C                ; disksystem init already started by an other diskrom, skip init
+        ld      a,(DEVICE)		; disksystem initialization status
+        and     a
+        ret     m			; disksystem initialization canceled, quit
+        jp      nz,A580C                ; disksystem initialization already started by an other disk interface, skip init
         ld      hl,HOKVLD
         bit     0,(hl)                  ; EXTBIO hook valid ?
         jr      nz,A578E
@@ -4343,7 +4343,7 @@ A5789:  ld      (hl),0C9H
 A578E:  ld      hl,(BOTTOM)
         ld      de,0C001H
         rst     020H                    ; at least 16Kb RAM ?
-        jr      nc,A57A3                ; nop, abort
+        jr      nc,A57A3                ; nop, cancel disksystem initiazation
         ld      a,006H
         call    SNSMAT
         di
@@ -4352,10 +4352,10 @@ A578E:  ld      hl,(BOTTOM)
         ld      a,007H
         rst     018H                    ; beep
 A57A3:  ld      a,0FFH
-        ld      (DEVICE),a              ; flag abort disksystem init
+        ld      (DEVICE),a              ; disksystem initialization canceled
         ret
 
-;       Subroutine      Initialize disksystem, first diskrom
+;       Subroutine      Initialize disksystem, first disk interface
 
 A57A9:  ld      hl,0F380H+MYSIZE
         ld      de,XF1C9
@@ -4398,9 +4398,9 @@ A57D6:  ld      (hl),0C9H
         ld      de,H.RUNC
         ld      bc,5
         ldir
-        call    A402D
+        call    A402D                   ; get slotid of this disk interface
         ld      (H.RUNC+1),a            ; init RUNC hook, to intialize further when the interpeter is initialized
-        pop     de                      ; base diskdriver workarea
+        pop     de                      ; base disk hardware driver workarea
         jr      A5825
 
 T5807:  rst     030H
@@ -4408,19 +4408,19 @@ T5807:  rst     030H
         defw    A5897
         ret
 
-;       Subroutine      Initialize disksystem, not the first diskrom
+;       Subroutine      Initialize disksystem, not the first disk interface
 
 A580C:  ld      hl,YFB21                ; DRVTBL
-        ld      b,4                     ; 4 diskroms
-        xor     a
-A5812:  add     a,(hl)
-        jp      c,A5ECC                 ; invalid DRVTBL, error
+        ld      b,4                     ; 4 disk interfaces
+        xor     a                       ; number of drives = 0
+A5812:  add     a,(hl)                  ; update number of drives
+        jp      c,A5ECC                 ; invalid DRVTBL, halt system
         inc     hl
         inc     hl
         djnz    A5812
         cp      8                       ; 8 or more drives ?
         ret     nc                      ; yep, no more drives!
-        ld      hl,MYSIZE               ; number of bytes for workarea driver
+        ld      hl,MYSIZE               ; number of bytes for workarea hardware driver
         call    A5EE8                   ; allocate memory (adjust BASIC areapointers)
         ret     c                       ; failed, quit
         ex      de,hl
@@ -4435,23 +4435,23 @@ A5825:  call    A5FCD                   ; get my SLTWRK entry
         jr      nc,A5838
         ld      (AUTLIN),de             ; nop, adjust
 A5838:  ld      de,YFB21                ; DRVTBL
-        ld      bc,00400H               ; 4 diskroms
+        ld      bc,00400H               ; 4 disk interfaces, number of drives = 0
 A583E:  ld      a,(de)
         and     a
         jr      z,A584B                 ; free entry, use it
         add     a,c
-        ld      c,a
+        ld      c,a                     ; update number of drives
         inc     de
         inc     de
         djnz    A583E                   ; next entry
-        jp      A5ECC                   ; none free, error
+        jp      A5ECC                   ; none free, halt system
 
 A584B:  ld      a,(YF33F)
         and     a
         ld      a,c                     ; phantom flag
 A5850:  call    DRIVES                  ; query no. of drives
         add     a,l
-        cp      9
+        cp      8+1
         ld      a,l                     ; more as 8 drives ?
         jr      c,A585C                 ; nop, ok
         ld      a,8
@@ -4459,8 +4459,8 @@ A5850:  call    DRIVES                  ; query no. of drives
 A585C:  push    bc
         ld      (de),a                  ; save drives
         inc     de
-        call    A402D
-        ld      (de),a                  ; save slotid diskrom
+        call    A402D                   ; get slotid of this disk interface
+        ld      (de),a                  ; save slotid disk interface
         pop     bc                      ; drivenumber
         ld      b,0
         ld      hl,YF355
@@ -4490,9 +4490,9 @@ A587E:  ld      (hl),e
         pop     hl
         dec     a
         jr      nz,A587E                ; next drive
-        call    INIENV                  ; initialize driver workarea
+        call    INIENV                  ; initialize hardware driver workarea
         ld      hl,DEVICE
-        inc     (hl)                    ; increase diskdriver count
+        inc     (hl)                    ; increase disk interface count
         ret
 
 ;       Subroutine      H.RUNC interceptor
@@ -4512,7 +4512,7 @@ A589C:  ld      (hl),0C9H
         ld      (hl),a                  ; clear diskinterface count
         ret     p                       ; already cleared, return control
 A58A8:  call    A622D                   ; hook H.LOPD when H.CLEA is hooked (for register system bottom)
-        ld      (YF348),a               ; disksystem diskrom slotid
+        ld      (YF348),a               ; master diskrom slotid
         ld      hl,A7397
         ld      de,XF1C9
         ld      bc,0006EH
@@ -4557,15 +4557,15 @@ A58F0:  ld      (hl),0C3H
         call    A5EC8                   ; allocate memory (adjust BASIC areapointers, halt when error)
         ld      (YF351),hl              ; allocate dirsector buffer
         ld      hl,YFB21                ; DRVTBL
-        ld      b,4                     ; 4 diskroms
-        xor     a
-A5916:  add     a,(hl)
-        jp      c,A5ECC                 ; invalid DRVTBL, error
+        ld      b,4                     ; 4 disk interfaces
+        xor     a                       ; number of drives = 0
+A5916:  add     a,(hl)                  ; update number of drives
+        jp      c,A5ECC                 ; invalid DRVTBL, halt system
         inc     hl
         inc     hl
         djnz    A5916
-        cp      9                       ; more as 8 drives ?
-        jp      nc,A5ECC                ; yep, error
+        cp      8+1                     ; more as 8 drives ?
+        jp      nc,A5ECC                ; yep (DRVTBL corrupted ?), halt system
         ld      (YF347),a               ; drives in system
         ld      b,a                     ; number of drives
         ld      c,0                     ; drive 0
@@ -4689,11 +4689,11 @@ A5A11:  XOR     A
         JP      C,A5B3A                 ; error, start diskbasic
         LD      (YF346),A               ; flag bootable disk
         LD      A,(RAMAD0)
-        LD      H,00H
-        CALL    C64C2                   ; calculate masks
+        LD      H,00H                   ; page 0
+        CALL    C64C2                   ; calculate slot masks
         SCF
-        CALL    P,C64A2                 ; primairy slot, change it
-        CALL    C,C64AF                 ; secundairy slot, change it
+        CALL    P,C64A2                 ; slot is not expanded, change it
+        CALL    C,C64AF                 ; slot is expanded, change it
         XOR     A
         LD      L,A
         LD      H,A
@@ -4730,7 +4730,7 @@ J5A36:  LD      (HL),A
         ADD     HL,DE
         LD      (HL),LOW X003B
         INC     HL
-        LD      (HL),HIGH X003B         ; change "save and change secundairy slotregister" routine
+        LD      (HL),HIGH X003B         ; update "store and change secundairy slotregister" routine
         LD      HL,T63BA
         CALL    A6306                   ; relocate
         LD      HL,I5B0F
@@ -5298,7 +5298,7 @@ A5EB8:  ld      hl,(HIMEM)
         and     a
         sbc     hl,bc
         ld      (HIMEM),hl              ; new top of system
-A5EC1:  jr      c,A5ECC                 ; new top below zero, halt with error
+A5EC1:  jr      c,A5ECC                 ; new top below zero, halt system
         ld      a,h
         cp      0C2H                    ; new top below 0C200H ?
         jr      A5ECB
@@ -5485,10 +5485,10 @@ A5FBE:  and     00CH
         or      c
         ret
 
-;       Subroutine      get my diskdriver workarea
+;       Subroutine      get my disk hardware driver workarea
 ;       Inputs          -
 ;       Outputs         HL = IX = pointer to workarea
-;       Remark          used by the diskdriver
+;       Remark          used by the disk hardware driver
 
 GETWRK:
 A5FC2:  call    A5FCD                   ; get my SLTWRK entry
@@ -5539,44 +5539,44 @@ A5FF3:  ld      c,a
         add     hl,bc
         ret
 
-;       Subroutine      install my diskdriver interrupt handler
-;       Inputs          HL = pointer to interrupt handler
-;       Outputs         -
-;       Remark          used by the diskdriver
+;	  Subroutine register interrupt handler
+;	     Inputs  HL = interrupt handler
+;	     Outputs ________________________
+;            Remark  used by the disk hardware driver
 
 SETINT:
 A5FF6:  ld      a,(H.TIMI+0)
         cp      0C9H
         jr      z,A6012                 ; H.TIMI not hooked, skip saving H.TIMI
         push    hl
-        ld      a,(DEVICE)              ; this diskdriver number
+        ld      a,(DEVICE)              ; current disk interface number
         ld      hl,YFB29
         call    A5FF1
         add     hl,bc
-        add     hl,bc                   ; get DRVINT pointer
+        add     hl,bc                   ; get pointer to DRVINT entry
         ex      de,hl
         ld      hl,H.TIMI+1
-        ld      c,003H
+        ld      c,3
         ldir                            ; save slotid and address (assumes that is hooked by a CALLF!)
         pop     hl
 A6012:  di
         ld      a,0F7H
         ld      (H.TIMI+0),a
-        ld      (H.TIMI+2),hl           ; diskdriver interrupt handler
+        ld      (H.TIMI+2),hl           ; disk hardware driver interrupt handler
         ld      a,0C9H
         ld      (H.TIMI+4),a
-        call    A402D
-        ld      (H.TIMI+1),a            ; slotid of this diskdriver
+        call    A402D                   ; get slotid of this disk interface
+        ld      (H.TIMI+1),a            ; slotid of this disk interface
         ret
 
 ;       Subroutine      call orginal interrupt handler
 ;       Inputs          -
 ;       Outputs         -
-;       Remark          used by the diskdriver
+;       Remark          used by the disk hardware driver
 
 PRVINT:
-A6027:  push    af
-        call    A402D                   ; slotid of this diskdriver
+A6027:  push    af                      ; store VDP status register
+        call    A402D                   ; get slotid of this disk interface
         ld      b,4
         ld      de,YFB29
         ld      hl,YFB21+1
@@ -5588,13 +5588,13 @@ A6033:  cp      (hl)                    ; is this my DRVTBL entry ?
         inc     hl
         inc     hl
         djnz    A6033                   ; next DRVTBL and DRVINT entry
-A603D:  pop     af
+A603D:  pop     af                      ; restore VDP status register
         ret                             ; quit
 
 A603F:  ex      de,hl
         ld      a,(hl)
-        and     a
-        jr      z,A603D                 ; DRVINT entry not used, quit
+        and     a                       ; disk interface has saved a interrupt handler ?
+        jr      z,A603D                 ; nope, quit
         push    af
         pop     iy                      ; slotid
         inc     hl
@@ -5602,9 +5602,9 @@ A603F:  ex      de,hl
         inc     hl
         ld      b,(hl)
         push    bc
-        pop     ix                      ; address
-        pop     af
-        jp      CALSLT
+        pop     ix                      ; address interrupt handler
+        pop     af                      ; restore VDP status register
+        jp      CALSLT                  ; call interrupt handler
 
 ;       Subroutine      read disksector
 ;       Inputs          A = driveid, B = number of sectors, C = mediadescriptor, DE = start sector, HL = transferaddress
@@ -5661,16 +5661,16 @@ A607B:  pop     hl
 ;       Outputs         IYH=slotid diskdriver, H=slotid diskdriver, A=local driveid diskdriver
 
 A6086:  ld      (YF33F),a               ; save driveid (for PROMPT)
-        ld      hl,YFB21                ; diskdriver table
+        ld      hl,YFB21                ; disk interface table
 A608C:  sub     (hl)
         jr      c,A6093
         inc     hl
         inc     hl
         jr      A608C
 
-A6093:  add     a,(hl)                  ; driveid driver
+A6093:  add     a,(hl)                  ; driveid disk interface
         inc     hl
-        ld      h,(hl)                  ; slotid driver
+        ld      h,(hl)                  ; slotid disk interface
         push    hl
         pop     iy
         ret
@@ -5841,15 +5841,15 @@ A61F1:  ld      de,TEMPST+30
 A620D:  ld      hl,YFB21
         ld      b,4
 A6212:  inc     hl
-        ld      a,(hl)                  ; number of drivers of this interface
+        ld      a,(hl)                  ; slotid of this interface
         push    af
-        pop     iy
+        pop     iy                      ; IYH = slotid
         inc     hl
         push    hl
         push    bc
         ld      hl,T401F
         push    hl
-        pop     ix
+        pop     ix                      ; IX = MTOFF
         and     a                       ; entry for interface used ?
         call    nz,RDSLT                ; yep, read MTOFF entry
         and     a                       ; entry for interface used AND a valid MTOFF entry ?
@@ -5866,9 +5866,9 @@ A6234:  ld      hl,T72F2
         ld      de,H.LOPD
         ld      bc,00005H
         ldir
-        call    A402D
+        call    A402D                   ; get slotid of this disk interface
         ld      (H.LOPD+1),a
-A6245:  jp      A402D
+A6245:  jp      A402D                   ; get slotid of this disk interface
 
 T6248:  defw    T61AD           ; dskfmt error 0
         defw    T61BD           ; dskfmt error 2
@@ -6053,7 +6053,7 @@ I637B:  PUSH    AF
         PUSH    HL
         PUSH    DE
         PUSH    BC
-        CALL    A402D
+        CALL    A402D                   ; get slotid of this disk interface
         PUSH    AF
         LD      H,40H
         LD      A,(RAMAD1)
@@ -6132,8 +6132,8 @@ T63BA:  DEFW    C63F4-C63F4
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C63F4:  CALL    C64C2
-R0003:  JP      M,J6404
+C63F4:  CALL    C64C2                   ; calculate slot masks
+R0003:  JP      M,J6404                 ; slot is expanded,
         IN      A,(0A8H)
         LD      D,A
         AND     C
@@ -6148,7 +6148,7 @@ R0013:  JP      Z,J651E                 ; yep, use workaround code RDSLT in page
 R0017:  CALL    C64E7
         EX      (SP),HL
         PUSH    BC
-R001C:  CALL    C63F4
+R001C:  CALL    C63F4                   ; MSXDOS RDSLT
         JR      J6436
 
 ;       Subroutine      MSXDOS WRSLT
@@ -6156,8 +6156,8 @@ R001C:  CALL    C63F4
 ;       Outputs         ________________________
 
 C6415:  PUSH    DE
-R0022:  CALL    C64C2
-R0025:  JP      M,J6425
+R0022:  CALL    C64C2                   ; calculate slot masks
+R0025:  JP      M,J6425                 ; slot is expanded,
         POP     DE
         IN      A,(0A8H)
         LD      D,A
@@ -6173,19 +6173,19 @@ R0039:  CALL    C64E7
         POP     DE
         EX      (SP),HL
         PUSH    BC
-R003F:  CALL    C6415
+R003F:  CALL    C6415                   ; MSXDOS WRSLT
 J6436:  POP     BC
         EX      (SP),HL
         PUSH    AF
         LD      A,B
         AND     3FH
         OR      C
-        CALL    X0046
+        CALL    X0046                   ; restore secundairy slotregister
         POP     AF
         POP     HL
         RET
 
-;       Subroutine      MSXDOS CALFF
+;       Subroutine      MSXDOS CALLF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -6206,7 +6206,7 @@ C6443:  EX      (SP),HL
         POP     AF
         EX      (SP),HL
 
-;       Subroutine      __________________________
+;       Subroutine      MSXDOS CALSLT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -6216,8 +6216,8 @@ C6455:  EXX
         POP     AF
         PUSH    IX
         POP     HL
-R0069:  CALL    C64C2
-R006C:  JP      M,J646C
+R0069:  CALL    C64C2                   ; calculate slot masks
+R006C:  JP      M,J646C                 ; slot is expanded,
         IN      A,(0A8H)
         PUSH    AF
         AND     C
@@ -6239,11 +6239,11 @@ R007E:  CALL    C64E7
         OR      D
         LD      HL,SLTTBL
         ADD     HL,BC
-        LD      (HL),A
+        LD      (HL),A                  ; update secundairy slotregister copy in SLTTBL
         PUSH    HL
         EX      AF,AF'
         EXX
-R0094:  CALL    C6455
+R0094:  CALL    C6455                   ; MSXDOS CALSLT
         EXX
         EX      AF,AF'
         POP     HL
@@ -6253,14 +6253,18 @@ R0094:  CALL    C6455
         AND     3FH
         OR      C
         DI
-        CALL    X004B
+        CALL    X004B                   ; restore secundairy slotregister
         LD      (HL),E
         EX      AF,AF'
         EXX
         RET
 
-J649C:  CALL    C64C2
-R00AB:  JP      M,J64A9
+;       Subroutine      MSXDOS ENASLT
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J649C:  CALL    C64C2                   ; calculate slot masks
+R00AB:  JP      M,J64A9                 ; slot is expanded,
 C64A2:  IN      A,(0A8H)
         AND     C
         OR      B
@@ -6278,13 +6282,13 @@ R00BC:  CALL    C64E7
         OR      D
         LD      HL,SLTTBL
         ADD     HL,BC
-        LD      (HL),A
+        LD      (HL),A                  ; update secundairy slotregister copy in SLTTBL
         POP     HL
         LD      A,C
-        JR      J649C
+        JR      J649C                   ; MSXDOS ENASLT
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+;       Subroutine      calculate slot masks
+;       Inputs          A = slotid, HL = address
 ;       Outputs         ________________________
 
 C64C2:  DI
@@ -6350,7 +6354,7 @@ J64FF:  ADD     A,55H
         CPL
         LD      H,A
         POP     AF
-R0116:  CALL    C655C           ; save and change secundair slotregister
+R0116:  CALL    C655C                   ; store and change secundairy slotregister
         POP     AF
         AND     03H
         RET
@@ -6359,23 +6363,23 @@ R0116:  CALL    C655C           ; save and change secundair slotregister
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C6511:  LD      C,A
+C6511:  LD      C,A                     ; store slotid
         LD      A,E
-        CP      03H             ; page 0 ?
-        LD      A,C
-        RET     NZ              ; not page 0, quit
+        CP      03H                     ; page 0 ?
+        LD      A,C                     ; restore slotid
+        RET     NZ                      ; not page 0, quit
         LD      A,(RAMAD0)
-        AND     E               ; primary slot of the helper routines
-        CP      B               ; same as requested ?
-        LD      A,C
+        AND     E                       ; get primairy slot from slotid helper routines
+        CP      B                       ; same as requested ?
+        LD      A,C                     ; restore slotid
         RET
 
 ;       Subroutine      workaround code RDSLT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-J651E:  CALL    C6549
-        LD      E,(HL)
+J651E:  CALL    C6549                   ; switch page 0 (same primairy slot)
+        LD      E,(HL)                  ; read byte from slot
         JR      C6529
 
 ;       Subroutine      workaround code WRSLT
@@ -6383,32 +6387,32 @@ J651E:  CALL    C6549
 ;       Outputs         ________________________
 
 J6524:  POP     DE
-R0131:  CALL    C6549
-        LD      (HL),E
+R0131:  CALL    C6549                   ; switch page 0 (same primairy slot)
+        LD      (HL),E                  ; write byte to slot
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C6529:  LD      A,B
-        JR      J6557
+C6529:  LD      A,B                     ; stored secundairy slotregister
+        JR      J6557                   ; restore secundairy slotregister and quit
 
 ;       Subroutine      workaround code CALSLT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-J652C:  CALL    C6541
+J652C:  CALL    C6541                   ; switch page 0 (same primairy slot)
         PUSH    HL
         PUSH    BC
         EX      AF,AF'
         EXX
-        CALL    CLPRM1
+        CALL    CLPRM1                  ; call routine in slot
         EXX
         EX      AF,AF'
         POP     BC
 R0145:  CALL    C6529
         POP     HL
-        LD      (HL),B
+        LD      (HL),B                  ; update secundairy slotregister copy in SLTTBL
         EX      AF,AF'
         EXX
         RET
@@ -6417,48 +6421,56 @@ R0145:  CALL    C6529
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C6541:  CALL    C6549
+C6541:  CALL    C6549                   ; switch page 0 (same primairy slot)
         LD      HL,SLTTBL
-        LD      (HL),D
+        LD      (HL),D                  ; update secundairy slotregister copy in SLTTBL (BUG, assumes primairy slot 0!)
         RET
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+;       Subroutine      switch page 0 (same primairy slot)
+;       Inputs          A = slotid
 ;       Outputs         ________________________
 
 C6549:  RRCA
         RRCA
         AND     03H
-        LD      D,A
+        LD      D,A                     ; get secundiary slot from slotid
         LD      A,(YFFFF)
         CPL
-        LD      B,A
+        LD      B,A                     ; store current secundairy slot register
         AND     0FCH
         OR      D
-        LD      D,A
+        LD      D,A                     ; new secundairy slot register, page 0 switched
 J6557:  LD      (YFFFF),A
         LD      A,E
         RET
 
 L63F4   EQU     $-C63F4
 
-;       Subroutine      __________________________
+;       Subroutine      store and change secundairy slotregister (helper routine at 003BH)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C655C:  OUT     (0A8H),A
+C655C:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
         LD      A,(YFFFF)
         CPL
-        LD      L,A
+        LD      L,A                     ; store current secundairy slotregister
         AND     H
         OR      D
-        JR      J656F
+        JR      J656F                   ; change secundairy slotregister, restore primairy slotregister and quit
 
-?6567:  OUT     (0A8H),A
+;       Subroutine      restore secundairy slotregister (helper routine at 0046H)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+?6567:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
         LD      A,L
-        JR      J656F
+        JR      J656F                   ; change secundairy slotregister, restore primairy slotregister and quit
 
-?656C:  OUT     (0A8H),A
+;       Subroutine      restore secundairy slotregister (helper routine at 004BH)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+?656C:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
         LD      A,E
 J656F:  LD      (YFFFF),A
         LD      A,B
@@ -6472,10 +6484,10 @@ A6576:  ld      a,(H.GETP+0)
         scf
         ret     z
         push    hl
-        call    A402D
+        call    A402D                   ; get slotid of this disk interface
         ld      hl,YF348
-        cp      (hl)
-        jr      nz,A65AD
+        cp      (hl)                    ; is this the master diskrom ?
+        jr      nz,A65AD                ; nope, only try the disk interface OEM statements
         ld      hl,T65B1
 A658A:  ld      de,PROCNM
 A658D:  ld      a,(de)
@@ -8611,7 +8623,7 @@ A738E:  add     hl,sp
 
 A7397:  call    XF36B                   ; enable ram on page 1
         ld      a,(de)
-        call    XF368                   ; enable system diskrom
+        call    XF368                   ; enable master diskrom
         inc     de
         cp      '$'
         ret     z                       ; end of string, quit
@@ -8625,7 +8637,7 @@ A7397:  call    XF36B                   ; enable ram on page 1
 
         call    XF36B                   ; enable ram on page 1
         ldir                            ; transfer
-        call    XF368                   ; enable system diskrom
+        call    XF368                   ; enable master diskrom
         ret
 
 ;       Subroutine      Warm Boot
@@ -8642,7 +8654,7 @@ A7397:  call    XF36B                   ; enable ram on page 1
 ;       Remark          is copied to 0F1E8H
 
         ld      de,XF1D9+5
-        push    de                      ; on return, enable system diskrom
+        push    de                      ; on return, enable master diskrom
         ld      e,(hl)
         inc     hl
         ld      d,(hl)                  ; get pointer

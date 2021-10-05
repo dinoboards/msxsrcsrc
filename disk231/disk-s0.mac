@@ -261,8 +261,8 @@ FILNAM	EQU	0F866H
 NLONLY	EQU	0F87CH
 SAVEND	EQU	0F87DH
 HOKVLD	EQU	0FB20H			; EXTBIO valid flag (b0)
-DRVTBL	EQU	0FB21H			; diskdriver table
-DRVINT	EQU	0FB29H			; diskdriver interrupt table
+DRVTBL	EQU	0FB21H			; disk interface table
+DRVINT	EQU	0FB29H			; disk interface interrupt table
 BASROM	EQU	0FBB1H
 BOTTOM	EQU	0FC48H
 HIMEM	EQU	0FC4AH
@@ -273,7 +273,7 @@ EXPTBL	EQU	0FCC1H
 SLTTBL	EQU	0FCC5H
 SLTWRK	EQU	0FD09H
 PROCNM	EQU	0FD89H
-DEVICE	EQU	0FD99H			; used temp for diskdriver count
+DEVICE	EQU	0FD99H			; used temp for disk interface count
 H.TIMI	EQU	0FD9FH
 H.DSKO	EQU	0FDEFH
 H.NAME	EQU	0FDF9H
@@ -759,9 +759,15 @@ J47D6:	CALL	INIHRD			; driver: initialize hardware
 	OR	A			; MSX1 ?
 	RET	Z			; yep, quit
 	LD	A,(DEVICE)
-	OR	A			; disksystem initialisation status
-	JP	M,J481A			; abort status, quit
-	JP	NZ,J4873		; not the first diskinterface, skip
+	OR	A			; disksystem initialization status
+
+	IF	TURBOR
+	JP	M,J481A			; disksystem initialization canceled, select R800 DRAM when DOS1 key was not pressed and quit
+	ELSE
+	RET	M			; disksystem initialization canceled, quit
+	ENDIF
+
+	JP	NZ,J4873		; not the first disk interface, skip
 	LD	HL,HOKVLD
 	BIT	0,(HL)			; extended BIOS initialized ?
 	JR	NZ,J47FC		; yep, skip
@@ -774,11 +780,11 @@ J47F7:	LD	(HL),0C9H
 J47FC:	LD	HL,(BOTTOM)
 	LD	DE,BOT16K+1
 	RST	DCOMPR			; at least 16KB RAM ?
-	JR	NC,J481A		; nope, quit
+	JR	NC,J481A		; nope, cancel disksystem initialization and quit
 	LD	HL,(HIMEM)
 	LD	DE,VARWRK
 	RST	DCOMPR			; memory allocated below VARWRK ?
-	JR	NZ,J481A		; yep, quit
+	JR	NZ,J481A		; yep, cancel disksystem initialization and quit
 	LD	A,6
 	CALL	SNSMAT
 	DI
@@ -817,7 +823,7 @@ J4839:	XOR	A
 	LD	HL,DRVTBL
 J484A:	LD	(HL),A
 	INC	HL
-	DJNZ	J484A			; clear diskinterface tables
+	DJNZ	J484A			; clear disk interface tables
 	LD	HL,LF24F
 	LD	B,69H
 J4853:	LD	(HL),0C9H
@@ -862,7 +868,7 @@ J487E:	LD	A,23H
 	INC	HL
 	LD	(HL),0C9H		; hook H.RUNC for further disksystem init
 ;
-; intialize for drives supported by this diskinterface
+; intialize for drives supported by this disk interface
 ;
 J4896:	CALL	C4914			; check DRVTBL
 	RET	Z			; no entries or drives left, quit
@@ -936,8 +942,8 @@ J48F3:	LD	(HL),E
 	INC	(HL)			; update number of disksystems
 	RET
 
-; set number of diskdrivers to 1 if this is the first diskinterface but memory allocation for diskdriver fails
-; by doing this, this diskinterface stays in control of the disksystem init
+; set number of disk interfaces to 1 if this is the first disk interface but memory allocation for diskdriver fails or number of drives = 0
+; by doing this, this disk interface can still work as a (standalone) DOS2
 
 J490C:	LD	HL,DEVICE
 	INC	(HL)
@@ -962,16 +968,16 @@ J491B:	LD	C,A
 	INC	E
 	INC	HL
 	INC	HL			; next entry
-	DJNZ	J491B			; next diskinterface
+	DJNZ	J491B			; next disk interface
 	CP	A			; Zx set, Cx reset
 	RET
 
 J4929:	ADD	A,(HL)
 	CP	C			; empty entry (drives = 0) ?
-	JR	NZ,J4935		; should not happen (DRVTBL corrupt), halt system
+	JR	NZ,J4935		; nope, should not happen (DRVTBL corrupt), halt system
 	INC	HL
 	INC	HL			; next entry
-	DJNZ	J4929			; next diskinterface
+	DJNZ	J4929			; next disk interface
 	CP	8			; maximum number of drives ?
 	RET	Z			; yep, quit with Zx set, Cx reset
 	RET	C			; nope, quit with Zx reset, Cx set
@@ -1025,17 +1031,17 @@ J496E:	LD	(HL),0C9H
 	LD	(HL),B			; clear DEVICE
 	OR	A			; disksystem initialization flag
 	RET	M			; disksystem initialization aborted, quit
-	LD	D,A			; save number of diskinterfaces
+	LD	D,A			; save number of disk interfaces
 	CALL	C4914			; check DRVTBL
 	LD	(LF347),A		; register total number of drives
 	LD	A,D
 	SUB	E			; number of used DRVTBL entries same as number of interfaces ?
 	JR	Z,J4994			; yep, continue
 	DEC	A			; 1 extra (standalone DOS2) ?
-	JP	NZ,J4C7C		; nope, halt system
+	JP	NZ,J4C7C		; nope (DRVTBL corrupted?), halt system
 	LD	DE,DRVINT+0
 	LD	HL,DRVINT+3
-	LD	BC,4*3
+	LD	BC,4*3			; BUG: should be 3*3
 	LDIR				; remove entry from DRVINT
 J4994:	CALL	C402D			; get my slotid
 	LD	(LF348),A		; master disksystem slotid
@@ -1562,7 +1568,7 @@ J4CF5:	INC	HL
 J4CFB:	LD	HL,DRVTBL
 	LD	B,4
 J4D00:	INC	HL
-	LD	A,(HL)			; slotid diskinterface
+	LD	A,(HL)			; slotid disk interface
 	PUSH	AF
 	POP	IY
 	INC	HL
@@ -1573,8 +1579,8 @@ J4D00:	INC	HL
 	POP	IX
 	OR	A			; entry used ?
 	CALL	NZ,RDSLT		; yep, read MTOFF entry
-	OR	A			; diskinterface has an MTOFF entry ?
-	CALL	NZ,LF1DF		; yep, invoke diskinterface MTOFF
+	OR	A			; disk interface has an MTOFF entry ?
+	CALL	NZ,LF1DF		; yep, invoke disk interface MTOFF
 	POP	BC
 	POP	HL
 	DJNZ	J4D00			; next entry
@@ -1584,13 +1590,13 @@ J4D00:	INC	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4D1B:	PUSH	AF
+C4D1B:	PUSH	AF			; store VDP statusregister
 	CALL	C6A9A			; invoke DOS2 interrupt handler
-	CALL	C4D26			; invoke the driver interrupt handler of all diskinterfaces
-	POP	AF
+	CALL	C4D26			; invoke the interrupt handler of all disk interfaces
+	POP	AF			; restore VDP statusregister
 	JP	LF2C0			; other interrupt handler (old H.TIMI)
 
-;	  Subroutine invoke the driver interrupt handler of all diskinterfaces
+;	  Subroutine invoke the interrupt handler of all disk interfaces
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1601,10 +1607,10 @@ J4D2E:	LD	A,(DE)
 	AND	A			; DRVTBL entry used ?
 	RET	Z			; nope, end of table, quit
 	INC	DE
-	LD	A,(DE)			; slotid diskinterface
+	LD	A,(DE)			; slotid disk interface
 	INC	DE
-	CP	(HL)			; does diskinterface has a driver interrupt handler ?
-	JR	NZ,J4D4F		; nope, next diskinterface
+	CP	(HL)			; does disk interface has an interrupt handler ?
+	JR	NZ,J4D4F		; nope, next disk interface
 	LD	A,(LF348)
 	CP	(HL)			; is it the master diskrom ?
 	LD	A,(HL)
@@ -1614,22 +1620,22 @@ J4D2E:	LD	A,(DE)
 	INC	HL
 	LD	E,(HL)
 	INC	HL
-	LD	D,(HL)			; address driver interrupt routine
+	LD	D,(HL)			; address interrupt routine
 	PUSH	AF
 	POP	IY
 	PUSH	DE
 	POP	IX
-	CALL	C4D55			; invoke driver interrupt routine
+	CALL	C4D55			; invoke interrupt routine
 	POP	HL
 	POP	DE
 	POP	BC
 J4D4F:	INC	HL
 	INC	HL
 	INC	HL
-	DJNZ	J4D2E			; next diskinterface
+	DJNZ	J4D2E			; next disk interface
 	RET
 
-;	  Subroutine invoke driver interrupt routine
+;	  Subroutine invoke interrupt routine
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1788,25 +1794,25 @@ C4E04:	LD	C,A
 	ADD	HL,BC
 	RET
 
-;	  Subroutine register driver interrupt handler
-;	     Inputs  HL = driver interrupt handler
+;	  Subroutine register interrupt handler
+;	     Inputs  HL = interrupt handler
 ;	     Outputs ________________________
 
 SETINT:
 C4E09:	EX	DE,HL
 	CALL	C402D			; get my slotid
 	PUSH	AF
-	LD	A,(DEVICE)		; diskinterface number
+	LD	A,(DEVICE)		; disk interface number
 	LD	HL,DRVINT
 	CALL	C4E04
 	ADD	HL,BC
 	ADD	HL,BC			; DRVINT entry
 	POP	AF
-	LD	(HL),A			; slotid diskinterface
+	LD	(HL),A			; slotid disk interface
 	INC	HL
 	LD	(HL),E
 	INC	HL
-	LD	(HL),D			; driver interrupt handler
+	LD	(HL),D			; interrupt handler
 
 ;	  Subroutine previous interrupt handler
 ;	     Inputs  ________________________
@@ -2338,9 +2344,9 @@ J5202:	LD	A,(DE)
 	OR	A			; entry used ?
 	JR	Z,J523A			; nope, start DOS1 kernel
 	INC	DE
-	LD	A,(DE)			; slotid diskinterface
+	LD	A,(DE)			; slotid disk interface
 	INC	DE
-	CP	(HL)			; diskinterface has a driver interrupt handler ?
+	CP	(HL)			; disk interface has an interrupt handler ?
 	JR	NZ,J5235		; nope,
 	PUSH	HL
 	LD	HL,H.TIMI
@@ -2376,7 +2382,7 @@ J5229:	LD	A,(DE)
 J5235:	INC	HL
 	INC	HL
 	INC	HL			; next DRVINT entry
-	DJNZ	J5202			; next diskinterface
+	DJNZ	J5202			; next disk interface
 J523A:	LD	HL,A58A8
 	PUSH	HL			; start DOS1 kernel entry
 	LD	A,3
@@ -2849,7 +2855,7 @@ C575C:	EI
 	PUSH	HL
 	CALL	C402D			; get my slotid
 	LD	HL,LF348
-	CP	(HL)			; is this diskinterface the master disksystem ?
+	CP	(HL)			; is this disk interface the master disksystem ?
 	JR	NZ,J5795		; nope, skip DOS2 CALL statements and try interface CALL statements
 	LD	HL,I5799
 J5771:	LD	DE,PROCNM
@@ -5847,12 +5853,12 @@ J696C:	PUSH	BC
 	JR	Z,J6990			; yep, valid boot drive
 J6988:	LD	A,(DE)
 	ADD	A,C
-	LD	C,A			; update driveid to drive of next diskinterface
+	LD	C,A			; update driveid to drive of next disk interface
 	INC	DE
-	INC	DE			; next diskinterface
+	INC	DE			; next disk interface
 	LD	A,(DE)			; entry used ?
 	AND	A
-	JR	NZ,J696C		; yep, try diskinterface
+	JR	NZ,J696C		; yep, try disk interface
 					; no valid bootdrive found
 
 	ENDIF
@@ -5915,14 +5921,14 @@ C69B8:	PUSH	AF
 	LD	B,A			; driveid used by PROMPT
 	XOR	A
 J69CF:	ADD	A,(HL)
-	CP	B			; driveid handled by this diskinterface ?
+	CP	B			; driveid handled by this disk interface ?
 	JR	NC,J69D7		; yep,
 	INC	HL
 	INC	HL
-	JR	J69CF			; next diskinterface
+	JR	J69CF			; next disk interface
 
 J69D7:	SUB	(HL)
-	LD	L,A			; first drive of the diskinterface
+	LD	L,A			; first drive of the disk interface
 	LD	H,1			; 1 sector
 	LD	DE,0			; bootsector
 	LD	C,2FH			; Absolute sector read

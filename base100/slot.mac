@@ -122,7 +122,7 @@ A01B6:  call    A027E                   ; calculate masks
         ret
 ;
 A01C6:  push    hl
-        call    A02A3                   ; change sec. slotregister
+        call    A02A3                   ; store and change secundairy slot register
         ex      (sp),hl
         push    bc
         call    A01B6                   ; do a RDSLT for primary slot
@@ -151,7 +151,7 @@ A01D1:  push    de
 ;
 A01E1:  ex      (sp),hl
         push    hl
-        call    A02A3                   ; change sec. slotregister
+        call    A02A3                   ; store and change secundairy slot register
         pop     de
         ex      (sp),hl
         push    bc
@@ -164,7 +164,7 @@ A01EC:  pop     bc
         or      c                       ; slot of sec. slotreg
         out     (0A8H),a
         ld      a,l
-        ld      (D.FFFF),a              ; restore register
+        ld      (D.FFFF),a              ; restore secundairy slot register
         ld      a,b
         out     (0A8H),a                ; restore prim. slotreg
         pop     af
@@ -209,9 +209,9 @@ CALSLT:
 A0217:  exx
         ex      af,af'                  ; alternative set
         push    iy
-        pop     af
+        pop     af                      ; A = slotid
         push    ix
-        pop     hl
+        pop     hl                      ; HL = address
         call    A027E                   ; calculate masks
         jp      m,A022E                 ; expanded slot, handle
         in      a,(0A8H)
@@ -221,7 +221,7 @@ A0217:  exx
         exx
         jp      CLPRIM
 ;
-A022E:  call    A02A3
+A022E:  call    A02A3                   ; store and change secundairy slot register
         push    af
         pop     iy
         push    hl
@@ -233,7 +233,7 @@ A022E:  call    A02A3
         or      d
         ld      hl,SLTTBL
         add     hl,bc
-        ld      (hl),a
+        ld      (hl),a                  ; update secundairy slot register copy in SLTTBL
         push    hl
         ex      af,af'
         exx
@@ -252,7 +252,7 @@ A022E:  call    A02A3
         ld      (D.FFFF),a
         ld      a,b
         out     (0A8H),a
-        ld      (hl),e
+        ld      (hl),e                  ; update secundairy slot register copy in SLTTBL
         ex      af,af'
         exx
         ret
@@ -271,7 +271,7 @@ A025E:  call    A027E                   ; calculate masks
         ret
 ;
 A026B:  push    hl
-        call    A02A3
+        call    A02A3                   ; store and change secundairy slot register
         ld      c,a
         ld      b,0
         ld      a,l
@@ -279,7 +279,7 @@ A026B:  push    hl
         or      d
         ld      hl,SLTTBL
         add     hl,bc
-        ld      (hl),a
+        ld      (hl),a                  ; update secundairy slot register copy in SLTTBL
         pop     hl
         ld      a,c
         jr      A025E                   ; ENASLT for primairy slot
@@ -301,9 +301,9 @@ A0288:  rlca
         rlca
         dec     e
         jp      p,A0288
-        ld      e,a                     ; e = page select mask
+        ld      e,a                     ; e = page select AND mask
         cpl
-        ld      c,a                     ; c = page clear mask
+        ld      c,a                     ; c = page clear AND mask
         pop     af
         push    af
         and     003H                    ; primairy slot
@@ -312,51 +312,51 @@ A0288:  rlca
         ld      a,0-01010101b
 A0299:  add     a,01010101b
         djnz    A0299
-        ld      d,a                     ; d = slot set mask
+        ld      d,a                     ; d = primairy slot OR mask (all pages)
         and     e
-        ld      b,a                     ; b = slot set mask
+        ld      b,a                     ; b = primairy slot OR mask (page of address)
         pop     af
         and     a                       ; flag expanded slot
         ret
 
-;       Subroutine      Adjust secundairy slotregister
-;       Inputs          A=slotid, D=, E=
+;       Subroutine      store and change secundairy slot register
+;       Inputs          A=slotid, D=primairy slot OR mask (all pages), E=page select AND mask
 ;       Outputs         A=slotid primairy slot
 
 A02A3:  push    af
-        ld      a,d
+        ld      a,d                     ; primairy slot OR mask (all pages)
         and     0C0H
-        ld      c,a                     ; page set mask for page 3
+        ld      c,a                     ; primairy slot OR mask (page 3)
         pop     af
         push    af
-        ld      d,a
+        ld      d,a                     ; store slotid
         in      a,(0A8H)
-        ld      b,a
-        and     03FH                    ; clear slot of page 3
-        or      c                       ; set page 3 for sec. slotreg
-        out     (0A8H),a                ; invoke
+        ld      b,a                     ; store primairy slot register
+        and     03FH
+        or      c
+        out     (0A8H),a                ; make secundairy slot register accessable
         ld      a,d
         rrca
         rrca
-        and     003H                    ; secundairy slot
+        and     003H                    ; get secundairy slot from slotid
         ld      d,a
         ld      a,0-01010101b
 A02BB:  add     a,01010101b
         dec     d
-        jp      p,A02BB                 ; slot set mask
+        jp      p,A02BB                 ; secundairy slot OR mask (all pages)
         and     e
-        ld      d,a                     ; slot set (page) mask
+        ld      d,a                     ; secundairy slot OR mask (page of address)
         ld      a,e
         cpl
         ld      h,a                     ; page clear mask
         ld      a,(D.FFFF)
         cpl
-        ld      l,a                     ; old sec. slotreg
+        ld      l,a                     ; store currrent secundairy slot register
         and     h                       ; clear page
         or      d                       ; set new slot
         ld      (D.FFFF),a
         ld      a,b
-        out     (0A8H),a                ; restore primairy slot on page 3
+        out     (0A8H),a                ; restore primairy slot register (switch back page 3)
         pop     af
         and     003H
         ret

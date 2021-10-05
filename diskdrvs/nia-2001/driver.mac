@@ -1,37 +1,48 @@
-;  
-;   AUCNET -> Source re-created by Z80DIS 2.2
-;      Z80DIS was written by Kenneth Gielow
-;                            Palo Alto, CA
-        .Z80
-        ORG	7405H
-BDOS	EQU	0F37DH	; ----I
-SNSMAT	EUQ	0141H	; -C---
+; Diskdriver NIA-2001 (possible ASCII SASI harddisk controller)
 
-C$4029	EQU	4029H	; -C---
-GETSLT	EQU	402DH	; -C---
-GETWRK	EQU	4DAFH	; -C---
-D.BFF8	EQU	0BFF8H	; ---LI
-D.BFF9	EQU	0BFF9H	; ---L-
-I$C000	EQU	0C000H	; ----I
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
 
-RAMAD1	EQU	0F342H	; ---L-
-RAMAD2	EQU	0F343H	; ---L-
-$SECBUF	EQU	0F34DH	; --SL-
-ENAKRN	EQU	0F368H	; -C---
-XFER	EQU	0F36EH	; -C---
-JIFFY	EQU	0FC9EH	; ---L-
-PROCNM	EQU	0FD89H	; ----I
+; Code Copyrighted by Panasonic and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+BDOS	EQU	0F37DH
+SNSMAT	EQU	0141H
+
+C$4029	EQU	4029H
+I$C000	EQU	0C000H
+
+RAMAD1	EQU	0F342H
+RAMAD2	EQU	0F343H
+$SECBUF	EQU	0F34DH
+ENAKRN	EQU	0F368H
+XFER	EQU	0F36EH
+JIFFY	EQU	0FC9EH
+PROCNM	EQU	0FD89H
+
+D$7FF0  EQU     07FF0H          ; segment select
+D.7FF8  EQU     07FF8H          ; data register (R/W)
+D.7FF9  EQU     07FF9H          ; status register (R) b7 = I/O (0 = input, 1 = output), b6 = C/D (0 = C, 1 = D), b5 MSG (1 = MSG), b4 SEL (1 = SEL), b3 = ?, b0 = REQ
+                                ; control register (W)
 
 MYSIZE	EQU	5
+                                ; +0, SASI OP code
+                                ; +1, block size (0FFH undetermined, 01H 512 bytes, 00H 256 bytes)
+                                ; +2, disk change status
+                                ; +3, force 1st read to fail
+                                ; +4, format choice
 
+; DPB for 32 MB HD
 
-I$7405:
-        DEFB	0FEH
+I$7405: DEFB	0FEH
         DEFW	512		; sectorsize
         DEFB	00FH
         DEFB	004H
-        DEFB	00Fh		; 16 sectors/cluster
-        DEFB	005h
+        DEFB	00FH		; 16 sectors/cluster
+        DEFB	005H
         DEFW	1		; FAT at 1
         DEFB	2		; 2 FATs
         DEFB	240		; 240 entries
@@ -42,91 +53,91 @@ I$7405:
 
 DEFDPB	EQU	I$7405-1
 
-;	 Subroutine __________________________
+;	 Subroutine DSKIO
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
 DSKIO:
-C$7417:	EI	
-        JP	NC,J$7428
-        CALL	C.760E		; get workarea
-        LD	(IX+3),00H
-        LD	(IX+0),0AH
+C$7417:	EI
+        JP	NC,J$7428               ; sector read operation, handle
+        CALL	C.760E		        ; get driver workarea
+        LD	(IX+3),00H              ; reset force 1st read fail
+        LD	(IX+0),0AH              ; OP code = WRITE(6)
         JR	J$743A
 
-J$7428:	CALL	C.760E		; get workarea
+J$7428:	CALL	C.760E		        ; get driver workarea
         XOR	A
-        CP	(IX+3)
-        LD	(IX+3),A
-        LD	A,2
+        CP	(IX+3)                  ; force 1st read to fail ?
+        LD	(IX+3),A                ; reset force 1st read fail
+        LD	A,2                     ; NOT READY error
         SCF
-        RET	NZ		; quit with NOT READY ERROR
-        LD	(IX+0),08H
+        RET	NZ		        ; yep, quit with NOT READY ERROR
+        LD	(IX+0),08H              ; OP code = READ(6)
 J$743A:	LD	A,(IX+1)
-        CP	02H
+        CP	2                       ; block size determined ?
         LD	A,0CH
-        CCF	
-        RET	C		; quit with OTHER ERROR
-        CALL	C.7531
-        RET	C
+        CCF
+        RET	C		        ; nope, quit with OTHER ERROR
+        CALL	C.7531                  ; translate sectornumber and issue command
+        RET	C                       ; error, quit
         LD	A,H
-        AND	A		; page 2 or 3 transfer ?
-        JP	M,J.7491	; yep,
-        CALL	C$7965
-        CALL	C$79A8
-        RET	C
+        AND	A		        ; page 2 or 3 transfer ?
+        JP	M,J.7491	        ; yep,
+        CALL	C$7965                  ; install routine in $SECBUF
+        CALL	C$79A8                  ; execute routine in $SECBUF
+        RET	C                       ; error, quit
         INC	B
-        DEC	B
-        RET	Z
+        DEC	B                       ; sectors left ?
+        RET	Z                       ; nope, quit
         LD	A,H
-        AND	A
-        JP	M,J.7491
+        AND	A                       ; page 2 or 3 transfer ?
+        JP	M,J.7491                ; yep,
         LD	A,(IX+0)
-        CP	0AH		; sector write ?
-        JR	Z,J$747A	; yep,
+        CP	0AH		        ; OP code = WRITE(6) ?
+        JR	Z,J$747A	        ; yep,
         PUSH	HL
         LD	HL,($SECBUF)
-        CALL	C.749B
+        CALL	C.749B                  ; read/write sector
         POP	HL
-        RET	C
+        RET	C                       ; error, quit
         PUSH	BC
         EX	DE,HL
         LD	HL,($SECBUF)
         LD	BC,512
-        CALL	XFER
+        CALL	XFER                    ; copy from $SECBUF to page 0/1
         POP	BC
         EX	DE,HL
-        JR	J.7495
+        JR	J.7495                  ; next sector
 
 J$747A:	PUSH	BC
         LD	DE,($SECBUF)
         LD	BC,512
-        CALL	XFER
+        CALL	XFER                    ; copy from page 0/1 to $SECBUF
         PUSH	HL
         LD	HL,($SECBUF)
-        CALL	C.749B
+        CALL	C.749B                  ; read/write sector
         POP	HL
         POP	BC
-        RET	C
-        JR	J.7495
+        RET	C                       ; error, quit
+        JR	J.7495                  ; next sector
 
-J.7491:	CALL	C.749B
-        RET	C
-J.7495:	DJNZ	J.7491
-        CALL	C.74F9
-        RET	
+J.7491:	CALL	C.749B                  ; read/write sector
+        RET	C                       ; error, quit
+J.7495:	DJNZ	J.7491                  ; next sector
+        CALL	C.74F9                  ; read operation status
+        RET
 
-;	 Subroutine __________________________
-;	    Inputs  ________________________
+;	 Subroutine read/write sector
+;	    Inputs  DE = sector number, HL = transfer address
 ;	    Outputs ________________________
 
-C.749B:	PUSH	BC
-        CALL	C.751D
-        JR	Z,J.74F8
-        LD	B,40H	; "@"
+C.749B:	PUSH	BC                      ; store number of sectors
+        CALL	C.751D                  ; wait for data phase
+        JR	Z,J.74F8                ; timeout or no data phase,
+        LD	B,64
         LD	DE,D.7FF8
         LD	A,(IX+0)
-        CP	0AH			; sector write ?
+        CP	0AH			; OP code = WRITE(6) ?
         JR	Z,J.74D2		; yep,
 J$74AD:	LD	A,(DE)
         LD	(HL),A
@@ -141,9 +152,9 @@ J$74AD:	LD	A,(DE)
         LD	(HL),A
         INC	HL
         DJNZ	J$74AD
-        CALL	C.751D
-        JR	Z,J.74F8
-        LD	B,40H	; "@"
+        CALL	C.751D                  ; wait for data phase
+        JR	Z,J.74F8                ; timeout or no data phase,
+        LD	B,64
 J$74C2:	LD	A,(DE)
         LD	(HL),A
         INC	HL
@@ -172,9 +183,9 @@ J.74D2:	LD	A,(HL)
         LD	(DE),A
         INC	HL
         DJNZ	J.74D2
-        CALL	C.751D
-        JR	Z,J.74F8
-        LD	B,40H	; "@"
+        CALL	C.751D                  ; wait for data phase
+        JR	Z,J.74F8                ; timeout or no data phase,
+        LD	B,64
 J$74E7:	LD	A,(HL)
         LD	(DE),A
         INC	HL
@@ -188,25 +199,27 @@ J$74E7:	LD	A,(HL)
         LD	(DE),A
         INC	HL
         DJNZ	J$74E7
-J$74F5:	POP	BC
-        AND	A
-        RET	
 
-J.74F8:	POP	BC
-;	 Subroutine __________________________
+J$74F5:	POP	BC                      ; restore number of sectors
+        AND	A                       ; operation succesfull
+        RET
+
+J.74F8:	POP	BC                      ; restore number of sectors
+
+;	 Subroutine read operation status
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
-C.74F9:	CALL	C.7506
+C.74F9:	CALL	C.7506                  ; read byte (status)
         LD	E,A
-        CALL	C.7506
-        OR	E
-        RET	Z
-        LD	A,0CH	; 12 
-        SCF	
-        RET	
+        CALL	C.7506                  ; read byte (message)
+        OR	E                       ; status = GOOD and message = COMMAND COMPLETE
+        RET	Z                       ; yep, quit (success)
+        LD	A,12                    ; OTHER error
+        SCF
+        RET
 
-;	 Subroutine __________________________
+;	 Subroutine read byte
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
@@ -216,15 +229,15 @@ J$750A:	DEC	BC
         LD	A,C
         OR	B
         LD	A,0FFH
-        JR	Z,J$751B
+        JR	Z,J$751B                ; time out, return status 0FFH
         LD	A,(D.7FF9)
-        BIT	0,A
-        JR	Z,J$750A
+        BIT	0,A                     ; b0 set ?
+        JR	Z,J$750A                ; nope, try again
         LD	A,(D.7FF8)
 J$751B:	POP	BC
-        RET	
+        RET
 
-;	 Subroutine __________________________
+;	 Subroutine wait for data phase
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
@@ -235,80 +248,80 @@ J$7521:	DEC	BC
         OR	B
         JR	Z,J$752F
         LD	A,(D.7FF9)
-        BIT	0,A
-        JR	Z,J$7521
-        AND	40H	; "@"
+        BIT	0,A                     ; b0 set ?
+        JR	Z,J$7521                ; nope, try again
+        AND	40H                     ; b6 set (C/D) ?
 J$752F:	POP	BC
-        RET	
+        RET
 
-;	 Subroutine __________________________
-;	    Inputs  ________________________
+;	 Subroutine translate sectornumber and issue command
+;	    Inputs  B = number of sectors, DE = starting sector number
 ;	    Outputs ________________________
 
 C.7531:	PUSH	BC
         PUSH	HL
-        LD	H,B
-        LD	L,00H
-        LD	B,(IX+0)
+        LD	H,B                     ; number of sectors
+        LD	L,0                     ; code = 0
+        LD	B,(IX+0)                ; OP code
         XOR	A
-        CP	(IX+1)
-        JR	NZ,J$7546
-        SLA	H
+        CP	(IX+1)                  ; block size = 256 ?
+        JR	NZ,J$7546               ; nope,
+        SLA	H                       ; double number of sectors
         SLA	E
         RL	D
-        RLA	
+        RLA                             ; logical block number = sector number *2
 J$7546:	LD	C,A
-        CALL	C.7555
+        CALL	C.7555                  ; issue command (with logical block address)
         POP	HL
         POP	BC
-        RET	
+        RET
 
-;	 Subroutine __________________________
-;	    Inputs  ________________________
+;	 Subroutine issue command (without logical block address)
+;	    Inputs  B = OP code
 ;	    Outputs ________________________
 
-C.754D:	LD	C,00H
-        LD	DE,0
-        LD	HL,0
+C.754D:	LD	C,0
+        LD	DE,0                    ; logical block address = 0
+        LD	HL,0                    ; transfer length = 0
 
-;	 Subroutine __________________________
-;	    Inputs  ________________________
+;	 Subroutine issue command (with logical block address)
+;	    Inputs  B = OP code, CDE = logical block address, HL = transfer length
 ;	    Outputs ________________________
 
 C.7555:	PUSH	DE
-        CALL	C$7588
+        CALL	C$7588                  ; wait for command phase
         POP	DE
-        LD	A,02H	; 2 
-        SCF	
-        RET	Z
-        PUSH	BC
-        PUSH	DE
-        PUSH	HL
+        LD	A,2                     ; NOT READY error
+        SCF
+        RET	Z                       ; time out, quit with NOT READY error
+        PUSH	BC                      ; OP code + MSB logical block address
+        PUSH	DE                      ; logical block address
+        PUSH	HL                      ; transfer length
         LD	HL,5
         ADD	HL,SP
-        LD	B,06H	; 6 
+        LD	B,6                     ; number of OP bytes
         LD	DE,0
 J.756A:	DEC	DE
         LD	A,E
         OR	D
-        LD	A,02H	; 2 
-        SCF	
-        JR	Z,J$7584
+        LD	A,2                     ; NOT READY error
+        SCF
+        JR	Z,J$7584                ; time out, quit with NOT READY error
         LD	A,(D.7FF9)
-        BIT	0,A
-        JR	Z,J.756A
+        BIT	0,A                     ; b0 set ?
+        JR	Z,J.756A                ; nope, try again
         LD	DE,0
         LD	A,(HL)
         LD	(D.7FF8),A
         DEC	HL
         DJNZ	J.756A
-        AND	A
+        AND	A                       ; operation successfull
 J$7584:	POP	HL
         POP	DE
         POP	BC
-        RET	
+        RET
 
-;	 Subroutine __________________________
+;	 Subroutine wait for command phase
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
@@ -316,82 +329,82 @@ C$7588:	LD	DE,0
 J$758B:	DEC	DE
         LD	A,E
         OR	D
-        RET	Z
+        RET	Z                       ; time out, quit with Zx set
         LD	A,(D.7FF9)
-        AND	10H	; 16 
-        JR	Z,J$758B
-        LD	A,01H	; 1 
-        LD	(D.7FF8),A
-        LD	A,08H	; 8 
-        LD	(D.7FF9),A
+        AND	10H                     ; b4 set (SEL) ?
+        JR	Z,J$758B                ; nope, try again
+        LD	A,01H
+        LD	(D.7FF8),A              ; target SCSI ID 0
+        LD	A,08H
+        LD	(D.7FF9),A              ; b3 set (ATN)
         LD	DE,0
 J$75A3:	DEC	DE
         LD	A,E
         OR	D
-        RET	Z
+        RET	Z                       ; time out, quit with Zx set
         LD	A,(D.7FF9)
-        AND	10H	; 16 
-        JR	NZ,J$75A3
+        AND	10H                     ; b4 set (SEL) ?
+        JR	NZ,J$75A3               ; yep, try again
         XOR	A
-        LD	(D.7FF9),A
+        LD	(D.7FF9),A              ; b3 reset
 J.75B2:	LD	DE,0
 J$75B5:	DEC	DE
         LD	A,E
         OR	D
-        RET	Z
+        RET	Z                       ; time out, quit with Zx set
         LD	A,(D.7FF9)
-        AND	0F9H
-        CP	89H
-        JR	Z,J$75CC
-        CP	09H	; 9 
-        JR	Z,J$75D3
-        CP	0A9H
-        JR	NZ,J$75B5
-        AND	A
-        RET	
+        AND	0F9H                    ; ignore b2 and b1
+        CP	89H                     ; b7 (O), b3 (?) and b0 set, b6 (C/D), b5 (MSG), b4 reset (SEL=0) ?
+        JR	Z,J$75CC                ; yep, write MSG data
+        CP	09H                     ; b3 (?) and b0 set, b7 (I), b6 (C/D), b5 (MSG), b4 reset (SEL=0) ?
+        JR	Z,J$75D3                ; yep, read MSG data
+        CP	0A9H                    ; b7 (O), b5 (MSG=0), b3 (?) and b0 set, b6 (C/D) and b4 reset (SEL=0) ?
+        JR	NZ,J$75B5               ; nope, try again
+        AND	A                       ; ok, quit with Zx reset
+        RET
 
-J$75CC:	LD	A,08H	; 8 
+J$75CC:	LD	A,08H                   ; MSG no operation
         LD	(D.7FF8),A
-        JR	J.75B2
+        JR	J.75B2                  ; try again (reset timeout)
 
-J$75D3:	LD	A,(D.7FF8)
-        JR	J.75B2
+J$75D3:	LD	A,(D.7FF8)              ; read MSG
+        JR	J.75B2                  ; try again (reset timeout)
 
-;	 Subroutine __________________________
+;	 Subroutine read capacity
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
 C.75D8:	PUSH	HL
-        LD	B,25H	; "%"
-        CALL	C.754D
+        LD	B,25H                   ; OP code = READ CAPACITY(10)
+        CALL	C.754D                  ; issue command (without logical block address)
         POP	HL
-        RET	C
-        LD	B,04H	; 4 
+        RET	C                       ; error, quit
+        LD	B,4                     ; 10 bytes op, 4 more op bytes to send
         LD	DE,0
 J.75E5:	DEC	DE
         LD	A,E
         OR	D
-        LD	A,02H	; 2 
-        SCF	
-        RET	Z
+        LD	A,2                     ; NOT READY error
+        SCF
+        RET	Z                       ; timeout, quit with NOT READY error
         LD	A,(D.7FF9)
-        BIT	0,A
-        JR	Z,J.75E5
+        BIT	0,A                     ; b0 set ?
+        JR	Z,J.75E5                ; nope, try again
         LD	DE,0
         XOR	A
         LD	(D.7FF8),A
         DJNZ	J.75E5
         LD	DE,D.7FF8
-        LD	B,08H	; 8 
-J$7601:	CALL	C.751D
-        JR	Z,J$760B
+        LD	B,8
+J$7601:	CALL	C.751D                  ; wait for data phase
+        JR	Z,J$760B                ; timeout or no data phase,
         LD	A,(DE)
         LD	(HL),A
         INC	HL
         DJNZ	J$7601
-J$760B:	JP	C.74F9
+J$760B:	JP	C.74F9                  ; read operation status and quit
 
-;	 Subroutine __________________________
+;	 Subroutine get driver workarea
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
@@ -400,10 +413,14 @@ C.760E:	PUSH	BC
         CALL	GETWRK
         POP	HL
         POP	BC
-        RET	
+        RET
+
+;	 Subroutine initialize drive hardware
+;	    Inputs  ________________________
+;	    Outputs ________________________
 
 INIHRD:
-?.7616:	RET	
+?.7616:	RET                             ; NAI-2001, normally RET is removed
 
 ?.7617:	LD	HL,(JIFFY)
         PUSH	HL
@@ -416,77 +433,89 @@ J.761B:	LD	HL,(JIFFY)
         SBC	HL,BC
         RET	NC
         PUSH	DE
-        CALL	C.7642
-        LD	B,00H
-        CALL	C.754D
-        JR	C,J.761B
-        CALL	C.74F9
-        JR	C,J.761B
+        CALL	C.7642                  ; wait for period of inactivity
+        LD	B,00H                   ; OP code = TEST UNIT READY
+        CALL	C.754D                  ; issue command (without logical block address)
+        JR	C,J.761B                ; error, try again
+        CALL	C.74F9                  ; read operation status
+        JR	C,J.761B                ; error, try again
         POP	AF
-        LD	B,01H	; 1 
-        CALL	C.754D
-        JP	C.74F9
+        LD	B,01H                   ; OP code = REZERO UNIT
+        CALL	C.754D                  ; issue command (without logical block address)
+        JP	C.74F9                  ; read operation status and quit
 
-;	 Subroutine __________________________
+;	 Subroutine wait for period of inactivity
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
 C.7642:	PUSH	HL
         XOR	A
-        LD	(D.7FF9),A
-        LD	HL,0
+        LD	(D.7FF9),A              ; b3 reset
+        LD	HL,0                    ; reset timeout counter
 J$764A:	LD	A,(D.7FF9)
-        RRCA	
-        JR	NC,J$7656
-        LD	A,(D.7FF8)
-        LD	HL,0
+        RRCA                            ; b0 set ?
+        JR	NC,J$7656               ; nope,
+        LD	A,(D.7FF8)              ; read data
+        LD	HL,0                    ; reset timeout counter
 J$7656:	DEC	HL
         LD	A,L
         OR	H
         JR	NZ,J$764A
         POP	HL
-        RET	
+        RET
+
+;	 Subroutine determine number of drives
+;	    Inputs  ________________________
+;	    Outputs ________________________
 
 DRIVES:
-?.765D:	LD	L,0
-        RET	
+?.765D:	LD	L,0                     ; NAI-2001, normally this would be LD L,1
+        RET
+
+;	 Subroutine initialize driver workarea
+;	    Inputs  ________________________
+;	    Outputs ________________________
 
 INIENV:
 ?.7660:	CALL	GETWRK
         CALL	C$769E			; ESC pressed ?
-        LD	(IX+3),00H
+        LD	(IX+3),00H              ; reset force 1st read fail
         JR	NZ,J$766F		; nope,
-        INC	(IX+3)
+        INC	(IX+3)                  ; yep, force 1st read fail (force bootsector boot to fail ?)
 J$766F:	CALL	C$76A6			; SELECT pressed ?
-        LD	(IX+1),0FFH
-        RET	Z			; yep, quit
-        LD	HL,I$C000
+        LD	(IX+1),0FFH             ; block size = unknown
+        RET	Z			; yep, quit (block size undetermined)
+        LD	HL,I$C000               ; use temporary buffer at 0C000H
 
-C$767A:	LD	(IX+2),0FFH
-        LD	(IX+1),0FFH
+;	 Subroutine determine block size
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
+C$767A:	LD	(IX+2),0FFH             ; disk change status = CHANGED
+        LD	(IX+1),0FFH             ; block size = unknown
         PUSH	HL
-        CALL	C.75D8
+        CALL	C.75D8                  ; read capacity
         POP	HL
-        RET	C
+        RET	C                       ; error, quit
         INC	HL
         INC	HL
         INC	HL
         INC	HL
         LD	A,(HL)
         INC	HL
-        OR	(HL)
-        RET	NZ
+        OR	(HL)                    ; block length < 64KB ?
+        RET	NZ                      ; nope, quit
         INC	HL
         INC	HL
-        OR	(HL)
-        RET	NZ
+        OR	(HL)                    ; block length multiply of 256 ?
+        RET	NZ                      ; nope, quit
         DEC	HL
         LD	A,(HL)
         DEC	A
-        CP	02H	; 2 
-        RET	NC
-        LD	(IX+1),A
-        RET	
+        CP	2                       ; block length 256 or 512 ?
+        RET	NC                      ; nope, quit
+        LD	(IX+1),A                ; block size (0 = 256, 1 = 512)
+        RET
 
 ;	 Subroutine ESC pressed ?
 ;	    Inputs  ________________________
@@ -495,7 +524,7 @@ C$767A:	LD	(IX+2),0FFH
 C$769E:	LD	A,7
         CALL	SNSMAT
         BIT	2,A
-        RET	
+        RET
 
 ;	 Subroutine SELECT pressed ?
 ;	    Inputs  ________________________
@@ -504,50 +533,62 @@ C$769E:	LD	A,7
 C$76A6:	LD	A,7
         CALL	SNSMAT
         BIT	6,A
-        RET	
+        RET
 
 MTOFF:
-?.76AE:	EI	
+?.76AE:	EI
         LD	HL,($SECBUF)
-        CALL	C.75D8
-        RET	C
-        LD	B,0BH	; 11 
+        CALL	C.75D8                  ; read capacity
+        RET	C                       ; error, quit
+        LD	B,0BH                   ; OP code = SEEK
         LD	HL,($SECBUF)
         INC	HL
         LD	C,(HL)
         INC	HL
         LD	D,(HL)
         INC	HL
-        LD	E,(HL)
-        LD	HL,0
-        CALL	C.7555
-        JP	C.74F9
+        LD	E,(HL)                  ; max logical block address
+        LD	HL,0                    ; transfer length = 0
+        CALL	C.7555                  ; issue command (with logical block address)
+        JP	C.74F9                  ; read operation status and quit
+
+;	 Subroutine DSKCHG
+;	    Inputs  ________________________
+;	    Outputs ________________________
 
 DSKCHG:
-?.76CA:	EI	
+?.76CA:	EI
         CALL	GETWRK
         LD	A,(IX+1)
-        CP	02H	; 2 
-        LD	B,00H
-        JR	NC,J$76DE
-        LD	B,(IX+2)
-        LD	(IX+2),01H	; 1 
+        CP	2                       ; block size determined ?
+        LD	B,0                     ; disk change = UNKNOWN
+        JR	NC,J$76DE               ; nope, return UNKOWN
+        LD	B,(IX+2)                ; current disk change status
+        LD	(IX+2),1                ; new disk change = UNCHANGED
 J$76DE:	OR	A
-        RET	
+        RET
+
+;	 Subroutine GETDPB
+;	    Inputs  ________________________
+;	    Outputs ________________________
 
 GETDPB:
-?.76E0:	EI	
+?.76E0:	EI
         INC	HL
         EX	DE,HL
         LD	HL,I$7405
         LD	BC,18
-        LDIR	
+        LDIR
         AND	A
-        RET	
+        RET
+
+;	 Subroutine CHOICE
+;	    Inputs  ________________________
+;	    Outputs ________________________
 
 CHOICE:
 ?.76ED:	LD	HL,I$76F1
-        RET	
+        RET
 
 I$76F1:	DEFB	13,10
         DEFB	"1 - Format with verify",13,10
@@ -555,87 +596,90 @@ I$76F1:	DEFB	13,10
         DEFB	13,10
         DEFB	0
 
+;	 Subroutine DSKFMT
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
 DSKFMT:
-        EI	
+        EI
         DEC	A
-        CP	02H	; 2 
+        CP	2
         JR	C,J$7729
-        LD	A,0CH	; 12 
-        SCF	
-        RET	
+        LD	A,12                    ; BAD PARAMETER error
+        SCF
+        RET
 
 J$7729:	PUSH	AF
         CALL	GETWRK
         POP	AF
-        LD	(IX+4),A
-        CALL	C.7642
-        LD	B,04H	; 4 
-        CALL	C.754D
-        RET	C
+        LD	(IX+4),A                ; format choice
+        CALL	C.7642                  ; wait for period of inactivity
+        LD	B,04H                   ; OP code = FORMAT UNIT
+        CALL	C.754D                  ; issue command (without logical block address)
+        RET	C                       ; error, quit
 J$773A:	LD	A,(D.7FF9)
-        BIT	0,A
-J$773E	EQU	$-1
-        JR	Z,J$773A
-        CALL	C.74F9
-        LD	A,10H	; 16 
-        RET	C
+        BIT	0,A                     ; b0 set ?
+        JR	Z,J$773A                ; nope, try again
+        CALL	C.74F9                  ; read operation status
+        LD	A,10H                   ; OTHER error
+        RET	C                       ; error, quit
         LD	HL,($SECBUF)
-        CALL	C$767A
+        CALL	C$767A                  ; determine block size
         LD	HL,($SECBUF)
         LD	E,L
         LD	D,H
         INC	DE
         LD	BC,512-1
-J$7756:	LD	(HL),0
-        LDIR	
-        LD	DE,2			; second sector of FAT #1
+	LD	(HL),0
+        LDIR                            ; clear $SECBUF
+        LD	DE,1+1			; second sector of FAT #1
         CALL	C.7859			; write FAT sectors
-        RET	C
-        LD	DE,14			; second sector of FAT #2
+        RET	C                       ; error, quit
+        LD	DE,1+1+12		; second sector of FAT #2
         CALL	C.7859			; write FAT sectors
-        RET	C
+        RET	C                       ; error, quit
         LD	B,15			; 15 directory sectors
-        LD	DE,25			; first sector of rootdirectory
-        CALL	C.785B			; write directory sectors
-        RET	C
+        LD	DE,1+2*12		; first sector of rootdirectory
+        CALL	C.785B			; write sectors
+        RET	C                       ; error, quit
         LD	HL,($SECBUF)
-        LD	(HL),0FEH
+        LD	(HL),0FEH               ; media byte
 J$7776:	INC	HL
         LD	(HL),0FFH
         INC	HL
 J$777A:	LD	(HL),0FFH
         LD	DE,1			; first sector of FAT #1
-        CALL	C.7866			; write sector
-        RET	C
-        LD	DE,13			; first sector of FAT #2
-J$7786:	CALL	C.7866			; write sector
-        RET	C
+        CALL	C.7866			; write $SECBUF to sector
+        RET	C                       ; error, quit
+        LD	DE,1+12			; first sector of FAT #2
+J$7786:	CALL	C.7866			; write $SECBUF to sector
+        RET	C                       ; error, quit
         LD	DE,($SECBUF)
         LD	HL,I$787C
-        LD	BC,00B3H
-        LDIR	
+        LD	BC,L787C
+        LDIR                            ; copy boot sector in $SECBUF
         LD	DE,0			; bootsector
-        CALL	C.7866			; write sector
-        RET	C
+        CALL	C.7866			; write $SECBUF to sector
+        RET	C                       ; error, quit
         LD	A,(IX+4)
-        AND	A			; verify ?
-        RET	NZ			; nope, quit
-        LD	HL,2
-        LD	BC,4085
+        AND	A			; format with verify ?
+        RET	NZ			; nope, quit with success (Cx reset)
+        LD	HL,2                    ; cluster number = 2
+        LD	BC,4085                 ; number of clusters
 J$77A8:	PUSH	BC
         PUSH	HL
-        CALL	C$77B9
+        CALL	C$77B9                  ; verify cluster
         POP	HL
-        CALL	C,C$77F2
+        CALL	C,C$77F2                ; error, mark cluster as bad
         POP	BC
         INC	HL
         DEC	BC
         LD	A,C
         OR	B
-        JR	NZ,J$77A8
-        RET	
+        JR	NZ,J$77A8               ; next cluster
+        RET                             ; quit with success (Cx reset)
 
-;	 Subroutine __________________________
+;	 Subroutine verify cluster
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
@@ -644,20 +688,20 @@ C$77B9:	DEC	HL
         ADD	HL,HL
         ADD	HL,HL
         ADD	HL,HL
-        ADD	HL,HL
-        LD	B,10H	; 16 
+        ADD	HL,HL                   ; * 16 (sectors per cluster)
+        LD	B,16                    ; 16 sectors
         LD	DE,40
-        ADD	HL,DE
+        ADD	HL,DE                   ; + 40 (first data sector)
         EX	DE,HL
-        LD	(IX+0),08H	; 8 
-        CALL	C.7531
+        LD	(IX+0),08H              ; OP code = READ(6)
+        CALL	C.7531                  ; translate sectornumber and issue command
         LD	DE,D.7FF8
         LD	A,B
         ADD	A,A
-        LD	C,A
-J$77D3:	CALL	C.751D
-        JR	Z,J$77EF
-        LD	B,10H	; 16 
+        LD	C,A                     ; number of 256 units = number of sectors *2
+J$77D3:	CALL	C.751D                  ; wait for data phase
+        JR	Z,J$77EF                ; timeout or no data phase,
+        LD	B,16
 J$77DA:	LD	A,(DE)
         LD	A,(DE)
         LD	A,(DE)
@@ -674,12 +718,12 @@ J$77DA:	LD	A,(DE)
         LD	A,(DE)
         LD	A,(DE)
         LD	A,(DE)
-        DJNZ	J$77DA
+        DJNZ	J$77DA                  ; read 256 bytes from sector
         DEC	C
         JR	NZ,J$77D3
-J$77EF:	JP	C.74F9
+J$77EF:	JP	C.74F9                  ; read operation status and quit
 
-;	 Subroutine __________________________
+;	 Subroutine mark cluster as bad
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
@@ -696,13 +740,13 @@ C$77F2:	PUSH	HL
         LD	E,A
         LD	D,00H
         LD	A,H
-        AND	01H	; 1 
+        AND	01H
         LD	H,A
         LD	BC,512-1
         PUSH	HL
         SBC	HL,BC
         JR	Z,J$782F
-        CALL	C.7865			; read sector
+        CALL	C.7865			; read sector in $SECBUF
         POP	HL
         LD	BC,($SECBUF)
         ADD	HL,BC
@@ -710,71 +754,76 @@ C$77F2:	PUSH	HL
         JR	C,J$7821
         LD	(HL),0F7H
         INC	HL
-        LD	(HL),0FH	; 15 
+        LD	(HL),0FH
         JR	J$782A
 
 J$7821:	LD	A,(HL)
-        AND	0FH	; 15 
-        OR	70H	; "p"
+        AND	0FH
+        OR	70H
         LD	(HL),A
         INC	HL
 J$7828:	LD	(HL),0FFH
 J$782A:	CALL	C.784B			; write FAT sector (both FATs)
         POP	HL
-        RET	
+        RET
 
-J$782F:	CALL	C.7865			; read sector
+J$782F:	CALL	C.7865			; read sector in $SECBUF
         POP	HL
         LD	BC,($SECBUF)
         ADD	HL,BC
         POP	AF
         LD	A,(HL)
-        AND	0FH	; 15 
-        OR	70H	; "p"
+        AND	0FH
+        OR	70H
         LD	(HL),A
         CALL	C.784B			; write FAT sector (both FATs)
         INC	DE
-        CALL	C.7865			; read sector
+        CALL	C.7865			; read sector in $SECBUF
         LD	HL,($SECBUF)
         JR	J$7828
 
-;	 Subroutine __________________________
-;	    Inputs  ________________________
+;	 Subroutine write FAT sector (both FATs)
+;	    Inputs  DE = FAT #1 sector nummber
 ;	    Outputs ________________________
 
 C.784B:	PUSH	DE
-        CALL	C.7866			; write sector
+        CALL	C.7866			; write $SECBUF to sector
         LD	HL,12
         ADD	HL,DE
         EX	DE,HL
-        CALL	C.7866			; write sector
+        CALL	C.7866			; write $SECBUF to sector
         POP	DE
-        RET	
+        RET
 
-;	 Subroutine __________________________
+;	 Subroutine write FAT sectors
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
 C.7859:	LD	B,11
 
-;	 Subroutine __________________________
+;	 Subroutine write sectors
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
 C.785B:	PUSH	BC
-        CALL	C.7866
+        CALL	C.7866                  ; write $SECBUF to sector
         POP	BC
-        RET	C
+        RET	C                       ; error, quit
         INC	DE
         DJNZ	C.785B
-        RET	
+        RET
 
-;	 Subroutine __________________________
+;	 Subroutine read sector in $SECBUF
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
-C.7865:	OR	37H	; "7"
-C.7866	EQU	$-1
+C.7865:	DEFB    0F6H                    ; OR xx
+
+;	 Subroutine write $SECBUF to sector
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
+C.7866:	SCF
         PUSH	DE
         LD	A,0			; drive 0
         LD	HL,($SECBUF)
@@ -782,19 +831,19 @@ C.7866	EQU	$-1
         CALL	C$7417			; read/write sector
         POP	DE
         RET	NC
-        CP	02H	; 2 
-        SCF	
-        RET	Z
-        LD	A,10H	; 16 
-        RET	
+        CP	02H                     ; NOT READY error ?
+        SCF
+        RET	Z                       ; yep, quit
+        LD	A,10H                   ; OTHER error
+        RET
 
 I$787C:
         .PHASE	0C000H
 
-        DEFB	0EBH,0FEH
-        DEFB	090H
+        DEFB	0EBH,0FEH               ; x86 JMP +0100H
+        DEFB	090H                    ; x86 NOP
         DEFB	"TAKAOKA "
-J$7888:	DEFW	512			; 512 bytes per sector
+	DEFW	512			; 512 bytes per sector
         DEFB	16			; 16 sectors per cluster
         DEFW	1			; 1 reserved sector
         DEFB	2			; 2 fat copies
@@ -855,6 +904,12 @@ LC09F:	DEFB	0
 
         .DEPHASE
 
+L787C   EQU     $-I$787C
+
+;	 Subroutine OEM statement handler
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
 OEMSTA:
         PUSH	HL
         LD	HL,I$7952
@@ -871,41 +926,40 @@ J$7936:	LD	A,(DE)
         LD	D,(HL)
         POP	HL
         PUSH	DE
-        RET	
+        RET
 
 J$7945:	LD	C,0FFH
         XOR	A
-        CPIR	
+        CPIR
         INC	HL
         INC	HL
 J$794C:	CP	(HL)
         JR	NZ,J$7933
         POP	HL
-        SCF	
-        RET	
+        SCF                             ; statement not recognized
+        RET
 
 I$7952:	DEFB	"SHUTDOWN",0
         DEFW	C795E
         DEFB	0
 
-C795E:	PUSH	HL
+C795E:	PUSH	HL                      ; store BASIC pointer
         CALL	C$4029			; stop all drives
-        POP	HL
-        AND	A
-        RET	
+        POP	HL                      ; restore BASIC pointer
+        AND	A                       ; statement recognized
+        RET
 
-;	 Subroutine __________________________
+;	 Subroutine install routine in $SECBUF
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
 C$7965:	PUSH	HL
         PUSH	BC
         LD	HL,I$79AE
-J$7968	EQU	$-2
         LD	DE,($SECBUF)
-        LD	BC,00DAH
-J$7971:	LDIR	
-        LD	HL,I$7996
+        LD	BC,L79AE
+	LDIR                            ; install routine in $SECBUF
+        LD	HL,I$7996               ; table with relocation addresses
 J$7976:	LD	E,(HL)
         INC	HL
         LD	D,(HL)
@@ -913,8 +967,8 @@ J$7976:	LD	E,(HL)
         LD	A,E
         OR	D
         JR	Z,J$7993
-J$797E:	PUSH	HL
-J$797F:	LD	HL,($SECBUF)
+	PUSH	HL
+	LD	HL,($SECBUF)
         ADD	HL,DE
         INC	HL
         LD	C,(HL)
@@ -925,84 +979,100 @@ J$797F:	LD	HL,($SECBUF)
         ADD	HL,BC
         EX	DE,HL
         LD	(HL),D
-J$798E:	DEC	HL
+	DEC	HL
         LD	(HL),E
         POP	HL
         JR	J$7976
 
 J$7993:	POP	BC
         POP	HL
-        RET	
+        RET
 
-I$7996:	DEFW	0005H
-        DEFW	0019H
-        DEFW	003EH
-        DEFW	0047H
-        DEFW	0066H
-        DEFW	008BH
-        DEFW	00A2H
-        DEFW	00A6H
+I$7996:	DEFW	R0004+1
+        DEFW	R0018+1
+        DEFW	R003E+1
+        DEFW	R0047+1
+        DEFW	R0065+1
+        DEFW	R008A+1
+        DEFW	R00A1+1
+        DEFW	R00A5+1
         DEFW	0
 
-;	 Subroutine __________________________
+;	 Subroutine execute routine in $SECBUF
 ;	    Inputs  ________________________
 ;	    Outputs ________________________
 
 C$79A8:	PUSH	HL
         LD	HL,($SECBUF)
         EX	(SP),HL
-        RET	
+        RET
 
-I$79AE:	PUSH	HL
-        PUSH	BC
-        CALL	GETSLT
-        LD	(D$002C),A
+I$79AE:
+        .PHASE  0
+
+;	 Subroutine read/write sectors (in page 0/1)
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
+R0000:	PUSH	HL                      ; store transfer address
+        PUSH	BC                      ; store number of sectors
+        CALL	GETSLT                  ; get slotid of page 1 (this disk driver)
+R0004:  LD	(R002B+1),A
         LD	H,80H
-        CALL	ENASLT
-        EI	
+        CALL	ENASLT                  ; switch disk driver hardware on page 2
+        EI
         LD	A,(RAMAD1)
-        LD	H,40H	; "@"
-        CALL	ENASLT
-        EI	
-        POP	BC
-        POP	HL
-        CALL	C$0037
-        PUSH	HL
-        PUSH	BC
-        PUSH	AF
+        LD	H,HIGH 04000H
+        CALL	ENASLT                  ; switch RAM on page 1
+        EI
+        POP	BC                      ; restore number of sectors
+        POP	HL                      ; restore transfer address
+R0018:  CALL	R0037                   ; read/write sectors (in page 0/1)
+        PUSH	HL                      ; store current transfer address
+        PUSH	BC                      ; store number of sectors left
+        PUSH	AF                      ; store result
         LD	A,(RAMAD2)
         LD	H,80H
-        CALL	ENASLT
-        CALL	ENAKRN
-        EI	
-        LD	A,00H
-        LD	H,40H	; "@"
-        CALL	ENASLT
-        EI	
-        POP	AF
-        POP	BC
-        POP	HL
-        RET	
+        CALL	ENASLT                  ; switch RAM on page 2
+        CALL	ENAKRN                  ; switch disk kernel on page 1
+        EI
+R002B:  LD	A,0
+        LD	H,HIGH 04000H
+        CALL	ENASLT                  ; switch disk driver on page 1
+        EI
+        POP	AF                      ; restore result
+        POP	BC                      ; restore number of sectors left
+        POP	HL                      ; restore current transfer address
+        RET
 
+;	 Subroutine read/write sectors (in page 0/1)
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
+R0037:
 J$79E5:	DEC	HL
         LD	A,H
         INC	HL
-        ADD	A,02H	; 2 
-        RET	M
+        ADD	A,HIGH 512              ; transfer partitial in page 2 ?
+        RET	M                       ; yep, quit
         PUSH	BC
-        CALL	C$0047
+R003E:  CALL	R0047                   ; read/write sector
         POP	BC
         RET	C
         DJNZ	J$79E5
-        JR	J.7A50
+        JR	J.7A50                  ; read operation status and quit
 
-?.79F5:	CALL	C.00C6
-        JR	Z,J.7A50
-        LD	B,40H	; "@"
-        LD	DE,D.BFF8
+;	 Subroutine __________________________
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
+R0047:  CALL	R00C6                   ; wait for data phase
+        JR	Z,J.7A50                ; timeout or no data phase, read operation status and quit
+        LD	B,64
+        LD	DE,D.7FF8+04000H        ; data register
         LD	A,(IX+0)
-        CP	0AH	; 10 
-        JR	Z,J.7A2B
+        CP	0AH                     ; OP code = WRITE(6) ?
+        JR	Z,J.7A2B                ; yep, write sector
 J$7A06:	LD	A,(DE)
         LD	(HL),A
         INC	HL
@@ -1015,10 +1085,10 @@ J$7A06:	LD	A,(DE)
         LD	A,(DE)
         LD	(HL),A
         INC	HL
-        DJNZ	J$7A06
-        CALL	C.00C6
-        JR	Z,J.7A50
-        LD	B,40H	; "@"
+        DJNZ	J$7A06                  ; read 64*4 = 256 bytes
+R0065:  CALL	R00C6                   ; wait for data phase
+        JR	Z,J.7A50                ; timeout or no data phase, read operation status and quit
+        LD	B,64
 J$7A1B:	LD	A,(DE)
         LD	(HL),A
         INC	HL
@@ -1031,9 +1101,9 @@ J$7A1B:	LD	A,(DE)
         LD	A,(DE)
         LD	(HL),A
         INC	HL
-        DJNZ	J$7A1B
-        AND	A
-        RET	
+        DJNZ	J$7A1B                  ; read 64*4 = 256 bytes
+        AND	A                       ; operation succesfull
+        RET
 
 J.7A2B:	LD	A,(HL)
         LD	(DE),A
@@ -1047,10 +1117,10 @@ J.7A2B:	LD	A,(HL)
         LD	A,(HL)
         LD	(DE),A
         INC	HL
-        DJNZ	J.7A2B
-        CALL	C.00C6
-        JR	Z,J.7A50
-        LD	B,40H	; "@"
+        DJNZ	J.7A2B                  ; write 64*4 = 256 bytes
+R008A:  CALL	R00C6                   ; wait for data phase
+        JR	Z,J.7A50                ; timeout or no data phase, read operation status and quit
+        LD	B,64
 J$7A40:	LD	A,(HL)
         LD	(DE),A
         INC	HL
@@ -1063,93 +1133,67 @@ J$7A40:	LD	A,(HL)
         LD	A,(HL)
         LD	(DE),A
         INC	HL
-        DJNZ	J$7A40
-        AND	A
-        RET	
+        DJNZ	J$7A40                  ; write 64*4 = 256 bytes
+        AND	A                       ; operation successfull
+        RET
 
-J.7A50:	CALL	C.00AF
+;	 Subroutine read operation status
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
+R00A1:
+J.7A50:	CALL	R00AF                   ; read byte (status)
         LD	E,A
-        CALL	C.00AF
-        OR	E
-        RET	Z
-        LD	A,0CH	; 12 
-        SCF	
-        RET	
+R00A5:  CALL	R00AF                   ; read byte (message)
+        OR	E                       ; status = GOOD and message = COMMAND COMPLETE
+        RET	Z                       ; yep, quit with success
+        LD	A,12                    ; OTHER error
+        SCF
+        RET
 
-?.7A5D:	PUSH	BC
+;	 Subroutine read byte
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
+R00AF:  PUSH	BC
         LD	BC,0
 J$7A61:	DEC	BC
         LD	A,C
         OR	B
         LD	A,0FFH
-        JR	Z,J$7A72
-        LD	A,(D.BFF9)
-        BIT	0,A
-        JR	Z,J$7A61
-        LD	A,(D.BFF8)
+        JR	Z,J$7A72                ; timeout, return 0FFH
+        LD	A,(D.7FF9+04000H)
+        BIT	0,A                     ; b0 set ?
+        JR	Z,J$7A61                ; nope, try again
+        LD	A,(D.7FF8+04000H)
 J$7A72:	POP	BC
-        RET	
+        RET
 
-?.7A74:	PUSH	BC
+;	 Subroutine wait for data phase
+;	    Inputs  ________________________
+;	    Outputs ________________________
+
+R00C6:  PUSH	BC
         LD	BC,0
 J$7A78:	DEC	BC
         LD	A,C
         OR	B
         JR	Z,J$7A86
-        LD	A,(D.BFF9)
-        BIT	0,A
-        JR	Z,J$7A78
-        AND	40H	; "@"
+        LD	A,(D.7FF9+04000H)
+        BIT	0,A                     ; b0 set ?
+        JR	Z,J$7A78                ; nope, try again
+        AND	40H                     ; b6 set (C/D) ?
 J$7A86:	POP	BC
-        RET	
+        RET
+
+        .DEPHASE
+L79AE   EQU     $-I$79AE
 
         DEFS	07FD0H-$,0
 
         LD	(D$7FF0),A
-        RET	
+        RET
 
-?.7FD4:	RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-D$7FF0:	RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-D.7FF8:	RST	38H
-D.7FF9:	RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
-        RST	38H
+        DEFS    08000H-$,0FFH
+
         END
