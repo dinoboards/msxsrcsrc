@@ -1,11 +1,17 @@
-;  Diskdriver Philips VY-0010
-;   VY0010 -> Source re-created by Z80DIS 2.2
-;      Z80DIS was written by Kenneth Gielow
-;                            Palo Alto, CA
-        .Z80
-        ORG	7405H
+; Diskdriver Philips VY0010 (external floppydisk controller)
+; FDC	WD2793A
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by JVC and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
 
 
+SECLEN  EQU     512
 MYSIZE	EQU	8
 
 ; offset	function
@@ -19,8 +25,6 @@ MYSIZE	EQU	8
 ; 7		number of physical drives
 
 
-SECLEN	EQU	512
-
 BDOS	EQU	0F37DH
 CLS	EQU	000C3H
 
@@ -28,9 +32,9 @@ D7FF8	EQU	07FF8H
 D7FF9	EQU	D7FF8+1
 D7FFA	EQU	D7FF8+2
 D7FFB	EQU	D7FF8+3
-D7FFC	EQU	07FFCH
+D7FFC	EQU	07FFCH                  ; b0 = side select
 X7FFD	EQU	07FFDH
-D7FFF	EQU	07FFFH
+D7FFF	EQU	07FFFH                  ; b4 = TYPE0, b5 = TYPE1, b6 = -IRQ, b7 = -DRQ
 
 I7405:
 
@@ -155,33 +159,34 @@ I7417:	DEFB	0F9h		; Media F9
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-DSKIO:	JP	NC,C7613
-        CALL	C74C5
+DSKIO:	JP	NC,C7613                ; DSKIO read
+        CALL	C74C5                   ; write sectors
+
+; DSKIO finish
 
 J749B:	PUSH	AF
-        LD	C,0             ; disk unchanged for 0 seconds
+        LD	C,0                     ; assume no error, disk unchanged timer = 0 seconds
         JR	NC,J74A2
-        LD	C,0             ; disk unchanged for 0 seconds
+        LD	C,0                     ; error, disk unchanged timer = 0 seconds
 J74A2:	LD	A,0D0H
-        LD	(D7FF8),A	; abort command
+        LD	(D7FF8),A	        ; abort command
         EX	(SP),HL
         EX	(SP),HL
         EX	(SP),HL
         EX	(SP),HL
-        LD	A,(D7FFB)       ; clear DRQ
-        LD	A,(D7FF8)       ; clear INTRQ
-        LD	(IX+0),120      ; motor stop timer 120 ticks (should be 100 for european machines)
+        LD	A,(D7FFB)               ; clear DRQ
+        LD	A,(D7FF8)               ; clear INTRQ
+        LD	(IX+0),2*60             ; motor stop timer 120 ticks (should be 100 for european machines)
         LD	A,(IX+3)
-        AND	A		; used drive 0 ?
-        JR	NZ,J74C0	; nope, set disk change timer drive 1
-        LD	(IX+1),C	; set disk change timer drive 0
+        AND	A		        ; used drive 0 ?
+        JR	NZ,J74C0	        ; nope, set disk change timer drive 1
+        LD	(IX+1),C	        ; set disk change timer drive 0
         POP	AF
         RET
 
-J74C0:	LD	(IX+2),C
+J74C0:	LD	(IX+2),C                ; set disk change timer drive 1
         POP	AF
         RET
-
 
 ;	  Subroutine write sectors
 ;	     Inputs  ________________________
@@ -191,9 +196,9 @@ C74C5:	CALL	C76E0		; setup for disk i/o
         RET	C
 
 J74C9:	LD	A,L
-        ADD	A,LOW (512-1)
+        ADD	A,LOW (SECLEN-1)
         LD	A,H
-        ADC	A,HIGH (512-1)
+        ADC	A,HIGH (SECLEN-1)
         CP	40H             ; writes from page 0 ?
         JP	C,J74F4         ; yep, direct I/O
         LD	A,H
@@ -204,7 +209,7 @@ J74C9:	LD	A,L
         PUSH	BC
         LD	DE,($SECBUF)
         PUSH	DE
-        LD	BC,512
+        LD	BC,SECLEN
         CALL	XFER
         POP	HL
         POP	BC
@@ -393,13 +398,12 @@ I7602:	POP	BC
         SCF
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine DSKIO read
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7613:	CALL	C7619
-        JP	J749B
+C7613:	CALL	C7619                   ; read sectors
+        JP	J749B                   ; DSKIO finish
 
 
 ;	  Subroutine read sectors
@@ -409,9 +413,9 @@ C7613:	CALL	C7619
 C7619:	CALL	C76E0		; setup for disk i/o
         RET	C
 J761D:	LD	A,L
-        ADD	A,LOW (512-1)
+        ADD	A,LOW (SECLEN-1)
         LD	A,H
-        ADC	A,HIGH (512-1)
+        ADC	A,HIGH (SECLEN-1)
         CP	40H
         JP	C,J7649
         LD	A,H
@@ -427,7 +431,7 @@ J761D:	LD	A,L
         PUSH	BC
         EX	DE,HL
         LD	HL,($SECBUF)
-        LD	BC,512
+        LD	BC,SECLEN
         CALL	XFER
         POP	BC
         POP	DE
@@ -1072,7 +1076,7 @@ J7A0A:	PUSH	AF
         CALL	C783B		; recalibrate head
         POP	AF
 J7A0F:	SCF
-        JP	J749B
+        JP	J749B           ; DSKIO finish
 
 J7A13:	CALL	C7858		; head settle delay
         INC	D
@@ -1117,7 +1121,7 @@ J7A4F:	LD	BC,9
         LD	BC,000C4H
         LD	DE,($SECBUF)
         LDIR
-        LD	BC,512-000C4H
+        LD	BC,SECLEN-000C4H
         EX	DE,HL
         CALL	C7AE3
         LD	(IY+0),0	; sector 0
@@ -1134,7 +1138,7 @@ J7A8C:	LD	HL,($SECBUF)
         INC	HL
         LD	(HL),A
         INC	HL
-        LD	BC,512-3
+        LD	BC,SECLEN-3
         CALL	C7AE3
         PUSH	DE
         CALL	C7CB4		; write sector
@@ -1143,7 +1147,7 @@ J7A8C:	LD	HL,($SECBUF)
 J7AAB:	DEC	E
         JR	Z,J7AC1
         LD	HL,($SECBUF)
-        LD	BC,512
+        LD	BC,SECLEN
         CALL	C7AE3
         PUSH	DE
         CALL	C7CB4		; write sector
@@ -1158,7 +1162,7 @@ J7AC1:	DEC	D
         SUB	D
         LD	D,A
 J7ACC:	LD	HL,($SECBUF)
-        LD	BC,512
+        LD	BC,SECLEN
         CALL	C7AE3
         PUSH	DE
         CALL	C7CB4		; write sector
@@ -1166,7 +1170,7 @@ J7ACC:	LD	HL,($SECBUF)
         JP	C,J7A0A
         DEC	D
         JR	NZ,J7ACC
-        JP	J749B
+        JP	J749B           ; DSKIO finish
 
 
 ;	  Subroutine __________________________
