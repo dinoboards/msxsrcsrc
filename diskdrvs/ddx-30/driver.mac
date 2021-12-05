@@ -10,16 +10,33 @@
 ; Sourcecode supplied for STUDY ONLY
 ; Recreation NOT permitted without authorisation of the copyrightholders
 
+SECLEN  EQU     512
 MYSIZE	EQU	10
+                                ; +0    disk motor timer
+                                ; +1    disk change timer drive 0
+                                ; +2    disk change timer drive 1
+                                ; +3    current physical drive
+                                ; +4    saved current track physical drive 0
+                                ; +5    saved current track physical drive 1
+                                ; +6    current phantom drive (used with 1 physical drive)
+                                ; +7    b0 = verify sector
+                                ; +8    b0 = write sectors
+                                ; +9    number of physical drives
 
-J$4022	EQU	4022H	; J----
-J$41C8	EQU	41C8H	; J----
-J$5AE2	EQU	5AE2H	; J----
-D$5C93	EQU	5C93H	; --S--
-C.5F81	EQU	5F81H	; -C---
-D.6205	EQU	6205H	; --S--
-D.7114	EQU	7114H	; --S--
-I.8348	EQU	8348H	; ----I
+BASENT	EQU	4022H
+BDOS    EQU     0F37DH
+
+; based upon disk.mac internal symbols
+
+;
+; PAL16L8ANC
+;
+; A2-A7, SLTSL
+
+D$5C93	EQU	5C93H	        ; 0101 1100 1001 0011 motor off
+D.6205	EQU	6205H	        ; 0110 0011 0000 0101 enable I/O ports
+D.7114	EQU	7114H	        ; 0111 0001 0001 0100 disable I/O ports
+I.8348	EQU	8348H           ; unused
 
 I7405:	DEFB	0F8h		; Media F8
         DEFW	512		; 80 Tracks
@@ -136,7 +153,7 @@ DEFDPB	equ	$-1
         DEFW	3
 
 DSKIO:
-        LD	(D.6205),A		; debug ??
+        LD	(D.6205),A		; enable I/O ports
         CALL	C749E
         JP	J79BF
 
@@ -150,15 +167,18 @@ C749E:	EI
         PUSH	BC
         PUSH	DE
         PUSH	HL
-        CALL	C74EA
+        CALL	C74EA                   ; write sectors
         POP	HL
         POP	DE
         POP	BC
-        JR	C,J74B5
+        JR	C,J74B5                 ; error,
         LD	A,(RAWFLG)
         AND	A			; verify after write ?
         JR	NZ,J74DC		; yep,
 J74B5:	POP	DE
+
+; DSKIO finish
+
 J74B6:	POP	DE
         PUSH	AF
         LD	C,60
@@ -188,36 +208,36 @@ J74DC:	POP	AF
         SET	0,(IX+7)		; set verify flag
         CALL	C7500			; read/verify sector
         RES	0,(IX+7)		; reset verify flag
-        JR	J74B6
+        JR	J74B6                   ; DSKIO finish
 
-;	  Subroutine __________________________
+;	  Subroutine write sectors
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C74EA:	CALL	C7510
+C74EA:	CALL	C7510                   ; prepare for disk i/o
         RET	C
-        SET	0,(IX+8)
+        SET	0,(IX+8)                ; write sectors flag
         LD	A,H
         AND	A
-        JP	M,C7819		; read/verify sector
+        JP	M,C7819		        ; read/verify/write sectors
         JP	J775F
 
 J74FA:	CALL	C7500			; read/verify sector
-        JP	J74B6
+        JP	J74B6                   ; DSKIO finish
 
 ;	  Subroutine read/verify sector
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7500:	CALL	C7510
+C7500:	CALL	C7510                   ; prepare for disk i/o
         RET	C
-        RES	0,(IX+8)
+        RES	0,(IX+8)                ; read/verify sectors flag
         LD	A,H
         AND	A
-        JP	M,C7819		; read/verify sector
+        JP	M,C7819		        ; read/verify/write sectors
         JP	J775F
 
-;	  Subroutine __________________________
+;	  Subroutine prepare for disk i/o
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -256,8 +276,8 @@ J752A:	POP	AF
         JR	Z,J754D
         LD	(IX+6),A
         XOR	A
-        OUT	(0D4H),A
-        LD	(IX),A
+        OUT	(0D4H),A                ; motor off
+        LD	(IX+0),A
         PUSH	HL
         CALL	PROMPT
         POP	HL
@@ -298,9 +318,9 @@ J7579:	LD	D,A
         LD	D,A
         DI	
         OUT	(0D4H),A
-        LD	A,(IX)
+        LD	A,(IX+0)
         AND	A
-        LD	(IX),0FFH
+        LD	(IX+0),0FFH
         EI	
         JR	NZ,J7599
         PUSH	HL
@@ -329,7 +349,7 @@ J75B7:	OUT	(0D1H),A
         EX	(SP),HL
 J75BB:	IN	A,(0D1H)
         CP	C
-        CALL	NZ,C798E
+        CALL	NZ,C798E                ; nope, seek to cylinder
         POP	HL
         RET	
 
@@ -337,7 +357,7 @@ INIHRD:
 C75C3:	NOP
         NOP
         NOP				; ???
-        LD	(D.6205),A		; debug ??
+        LD	(D.6205),A		; enable I/O ports
         LD	A,0D0H
         OUT	(0D0H),A
         EX	(SP),HL
@@ -347,13 +367,13 @@ C75C3:	NOP
         LD	A,22H	; """
         CALL	C75E5
         XOR	A
-        OUT	(0D4H),A
-        LD	(D.7114),A		; debug ??
+        OUT	(0D4H),A                ; motor off
+        LD	(D.7114),A		; disable I/O ports
         RET	
 
 MTOFF:
         XOR	A
-        LD	(D$5C93),A		; ???
+        LD	(D$5C93),A		; motor off
         RET	
 
 ;	  Subroutine __________________________
@@ -378,7 +398,7 @@ J75F3:	IN	A,(0D0H)
         RET	
 
 DRIVES:
-        LD	(D.6205),A		; debug ??
+        LD	(D.6205),A		; enable I/O ports
         PUSH	BC
         PUSH	AF
         CALL	GETWRK
@@ -390,12 +410,12 @@ DRIVES:
 J760F:	LD	L,2
         LD	(IX+9),L
         XOR	A
-        OUT	(0D4H),A
+        OUT	(0D4H),A                ; motor off
         POP	AF
         JR	Z,J761C
         LD	L,02H	; 2 
 J761C:	POP	BC
-        LD	(D.7114),A		; debug ??
+        LD	(D.7114),A		; disable I/O ports
         RET	
 
 INIENV:
@@ -420,7 +440,7 @@ I7636:	PUSH	AF
         DEC	A
         LD	(HL),A
         JR	NZ,J7649
-        JP	J$41C8			; ?? non standard code ??
+        JP	J41C8			; motor off
 
 J7649:	INC	HL
         LD	A,(HL)
@@ -436,7 +456,7 @@ J7655:	POP	AF
         JP	PRVINT
 
 DSKCHG:
-        LD	(D.6205),A		; debug ??
+        LD	(D.6205),A		; enable I/O ports
         CALL	C7663
         JP	J79BF
 
@@ -523,7 +543,7 @@ I76C2:	DEFB	13,10
         DEFB	"1) 5",0ACH," face simples",13,10
         DEFB	"2) 5",0ACH," face dupla",13,10
         DEFB	"3) 3",0ABH," face simples",13,10
-        DEFB	"4) 3",0ABH," face dupla",13,10
+        DEFB	"4) 3",0ABH," face dupla ",13,10
         DEFB	13,10
         DEFB	0
 
@@ -550,8 +570,8 @@ J7731:	POP	HL
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C7734:	LD	HL,PROCNM
-J7735	EQU	$-2
 J7737:	LD	A,(DE)
         AND	A
         JR	Z,J7741
@@ -565,9 +585,8 @@ J7741:	LD	A,(HL)
         AND	A
 J7743:	RET	Z
         INC	HL
-J7745:	CP	20H	; " "
+J7745:	CP	" "
         JR	Z,J7741
-J7748	EQU	$-1
         RET	
 
 I774A:	DEFB	"VERIFY ON"
@@ -582,7 +601,7 @@ J775F:	PUSH	HL
         PUSH	IX
         LD	HL,I77EE
         LD	DE,($SECBUF)
-J776B:	LD	BC,01CBH
+J776B:	LD	BC,S77EE
 J776E:	LDIR	
         LD	HL,($SECBUF)
         OR	A
@@ -621,63 +640,66 @@ J77A1:	LD	HL,($SECBUF)
         EX	(SP),HL
         RET	
 
-I77A6:	DEFW	77F4H
-        DEFW	7804H
-        DEFW	781FH
-        DEFW	7822H
-        DEFW	7838H
-        DEFW	784EH
-        DEFW	7855H
-        DEFW	785AH
-        DEFW	7869H
-        DEFW	7870H
-        DEFW	787AH
-        DEFW	7881H
-        DEFW	7886H
-        DEFW	788AH
-        DEFW	7893H
-        DEFW	78B6H
-        DEFW	78B9H
-        DEFW	78BCH
-        DEFW	78BFH
-        DEFW	78C3H
-        DEFW	78C8H
-        DEFW	78D0H
-        DEFW	78DDH
-        DEFW	78F1H
-        DEFW	7901H
-        DEFW	791EH
-        DEFW	7921H
-        DEFW	7924H
-        DEFW	792CH
-        DEFW	7951H
-        DEFW	797DH
-        DEFW	798BH
-        DEFW	7999H
-        DEFW	79B2H
+I77A6:	DEFW	X77F4
+        DEFW	X7804
+        DEFW	X781F
+        DEFW	X7822
+        DEFW	X7838
+        DEFW	X784E
+        DEFW	X7855
+        DEFW	X785A
+        DEFW    X785E
+        DEFW	X7869
+        DEFW	X7870
+        DEFW	X787A
+        DEFW	X7881
+        DEFW	X7886
+        DEFW	X788A
+        DEFW	X7893
+        DEFW	X78B6
+        DEFW	X78B9
+        DEFW	X78BC
+        DEFW	X78BF
+        DEFW	X78C3
+        DEFW	X78C8
+        DEFW	X78D0
+        DEFW	X78DD
+        DEFW	X78F1
+        DEFW	X7901
+        DEFW	X791E
+        DEFW	X7921
+        DEFW	X7924
+        DEFW	X792C
+        DEFW	X7951
+        DEFW	X797D
+        DEFW	X798B
+        DEFW	X7999
+        DEFW	X79B2
         DEFW	0
+
+; relocatable read/write sector routine
 
 I77EE:	PUSH	HL
         PUSH	DE
         PUSH	BC
         CALL	GETSLT
-        LD	(D$780C+1),A
+X77F4:  LD	(D$780C+1),A
         EI	
         LD	A,(RAMAD1)
-        LD	H,40H	; "@"
+        LD	H,HIGH 4000H
         CALL	ENASLT
         EI	
         POP	BC
         POP	DE
         POP	HL
-        CALL	C7819			; read/verify sector
+X7804:  CALL	C7819			; read/verify sectors
         PUSH	HL
         PUSH	DE
         PUSH	BC
         PUSH	AF
         EI	
-D$780C:	LD	A,00H
-        LD	H,40H
+D$780C:	LD	A,0
+        LD	H,HIGH 4000H
         CALL	ENASLT
         EI	
         POP	AF
@@ -686,26 +708,26 @@ D$780C:	LD	A,00H
         POP	HL
         RET	
 
-;	  Subroutine read/verify sector
+;	  Subroutine read/verify/write sectors
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C7819:	LD	E,11
-        BIT	0,(IX+8)
-        JP	NZ,J78DD
-J7822:	CALL	C79AC			; wait for FDC ready
+        BIT	0,(IX+8)                ; write sectors ?
+X781F:  JP	NZ,X78DD                ; yep,
+X7822:	CALL	C79AC			; wait for FDC ready
         LD	A,80H
         BIT	6,D
         JR	Z,J7833
-        OR	02H	; 2 
+        OR	02H
         BIT	4,D
         JR	Z,J7833
-        OR	08H	; 8 
+        OR	08H
 J7833:	PUSH	HL
         PUSH	DE
         PUSH	BC
         LD	C,0D3H
-        LD	DE,I78A8
+X7838:  LD	DE,I78A8
         PUSH	DE
         CALL	DISINT
         DI	
@@ -715,49 +737,49 @@ J7833:	PUSH	HL
         JR	NZ,J7877		; yep,
 J784B:	IN	A,(0D4H)
         ADD	A,A
-        JP	P,J7873
+X784E:  JP	P,J7873
         RET	C
         IN	A,(0D4H)
         ADD	A,A
-        JP	P,J7873
+X7855:  JP	P,J7873
         RET	C
         DEC	E
-        JP	NZ,J784B
+X785A:  JP	NZ,J784B
         DEC	D
-        JP	NZ,J784B
+X785E:  JP	NZ,J784B
 J7861:	POP	BC
         POP	BC
         POP	DE
         POP	HL
         EI	
         CALL	ENAINT
-        JP	J794D
+X7869:  JP	J794D                   ; quit with not ready error
 
 J786C:	IN	A,(0D4H)
         ADD	A,A
         RET	C
-        JP	M,J786C
+X7870:  JP	M,J786C
 J7873:	INI	
         JR	J786C
 
 J7877:	IN	A,(0D4H)
         ADD	A,A
-        JP	P,J7896
+X787A:  JP	P,J7896
         RET	C
         IN	A,(0D4H)
         ADD	A,A
-        JP	P,J7896
+X7881:  JP	P,J7896
         RET	C
         DEC	E
-        JP	NZ,J7877
+X7886:  JP	NZ,J7877
         DEC	D
-        JP	NZ,J7877
+X788A:  JP	NZ,J7877
         JR	J7861
 
 J788F:	IN	A,(0D4H)
         ADD	A,A
         RET	C
-        JP	M,J788F
+X7893:  JP	M,J788F
 J7896:	IN	A,(0D3H)
         CPI	
         JR	Z,J788F
@@ -767,7 +789,7 @@ J7896:	IN	A,(0D3H)
         POP	HL
         EI	
         CALL	ENAINT
-        LD	A,08H	; 8 
+        LD	A,8
         JR	J78C2
 
 I78A8:	POP	BC
@@ -777,40 +799,40 @@ I78A8:	POP	BC
         CALL	ENAINT
         IN	A,(0D0H)
         AND	9CH
-        JR	NZ,J78BF
+        JR	NZ,X78BF
         DEC	B
-        JP	Z,J7950
-        CALL	C7951
-        JP	C7819			; read/verify sector
+X78B6:  JP	Z,J7950
+X78B9:  CALL	X7951                   ; prepare for next sector
+X78BC:  JP	C7819			; read/verify/write sectors
 
-J78BF:	JP	M,J794D
+X78BF:	JP	M,J794D                 ; quit with not ready error
 J78C2:	PUSH	AF
-        CALL	C7988
+X78C3:  CALL	C7988                   ; reseek
         POP	AF
         DEC	E
-        JP	NZ,J7822
+X78C8:  JP	NZ,X7822
         LD	E,A
         BIT	4,E
-        LD	A,08H	; 8 
-        JP	NZ,J794F
+        LD	A,8
+X78D0:  JP	NZ,J794F
         BIT	3,E
-        LD	A,04H	; 4 
+        LD	A,4
         JR	NZ,J794F
-        LD	A,0CH	; 12 
+        LD	A,12
         JR	J794F
 
-J78DD:	CALL	C79AC			; wait for FDC ready
+X78DD:	CALL	C79AC			; wait for FDC ready
         LD	A,0A0H
         BIT	6,D
         JR	Z,J78EE
-        OR	02H	; 2 
+        OR	02H
         BIT	4,D
         JR	Z,J78EE
-        OR	08H	; 8 
+        OR	08H
 J78EE:	PUSH	HL
         PUSH	DE
         PUSH	BC
-        LD	DE,I7908
+X78F1:  LD	DE,I7908
         PUSH	DE
         CALL	DISINT
         DI	
@@ -819,11 +841,11 @@ J78EE:	PUSH	HL
 J78FD:	IN	A,(0D4H)
         ADD	A,A
         RET	C
-        JP	M,J78FD
+X7901:  JP	M,J78FD
         OUTI	
         JR	J78FD
 
-I7908:	LD	B,6AH	; "j"
+I7908:	LD	B,6AH
 J790A:	EX	(SP),HL
         EX	(SP),HL
         DJNZ	J790A
@@ -834,45 +856,45 @@ J790A:	EX	(SP),HL
         CALL	ENAINT
         IN	A,(0D0H)
         AND	0FCH
-        JR	NZ,J7924
+        JR	NZ,X7924
         DEC	B
         JR	Z,J7950
-        CALL	C7951
-        JP	C7819			; read/verify sector
+X791E:  CALL	X7951                   ; prepare for next sector
+X7921:  JP	C7819			; read/verify/write sectors
 
-J7924:	JP	M,J794D
+X7924:	JP	M,J794D                 ; quit with not ready error
         BIT	6,A
-        JR	NZ,J794A
+        JR	NZ,J794A                ; quit with write protect error
         PUSH	AF
-        CALL	C7988
+X792C:  CALL	C7988                   ; reseek
         POP	AF
         DEC	E
-        JR	NZ,J78DD
+        JR	NZ,X78DD
         LD	E,A
         BIT	5,E
-        LD	A,0AH	; 10 
+        LD	A,10
         JR	NZ,J794F
         BIT	4,E
-        LD	A,08H	; 8 
+        LD	A,8
         JR	NZ,J794F
         BIT	3,E
-        LD	A,04H	; 4 
+        LD	A,4
         JR	NZ,J794F
-        LD	A,0CH	; 12 
+        LD	A,12
         JR	J794F
 
 J794A:	XOR	A
         JR	J794F
 
-J794D:	LD	A,02H	; 2 
+J794D:	LD	A,2
 J794F:	SCF	
 J7950:	RET	
 
-;	  Subroutine __________________________
+;	  Subroutine prepare for next sector
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7951:	CALL	C79AC			; wait for FDC ready
+X7951:	CALL	C79AC			; wait for FDC ready
         INC	H
         INC	H
         IN	A,(0D2H)
@@ -880,11 +902,11 @@ C7951:	CALL	C79AC			; wait for FDC ready
         OUT	(0D2H),A
         BIT	7,D
         JR	NZ,J7962
-        CP	0AH	; 10 
+        CP	9+1
         RET	C
-J7962:	CP	09H	; 9 
+J7962:	CP	8+1
         RET	C
-        LD	A,01H	; 1 
+        LD	A,1
         OUT	(0D2H),A
         BIT	6,D
         JR	Z,J7977
@@ -899,41 +921,45 @@ J7977:	RES	4,D
         LD	A,D
         OUT	(0D4H),A
         INC	C
-        CALL	C79AC			; wait for FDC ready
-        LD	A,50H	; "P"
-        OUT	(0D0H),A
+X797D:  CALL	C79AC			; wait for FDC ready
+        LD	A,50H
+        OUT	(0D0H),A                ; seek to next cylinder
         EX	(SP),HL
         EX	(SP),HL
-        JR	J7999
+        JR	X7999
 
-;	  Subroutine __________________________
+;	  Subroutine reseek
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C7988:	BIT	0,E
         RET	NZ
-        CALL	C79B2
-;
-;	  Subroutine __________________________
+X798B:  CALL	X79B2                   ; seek to cylinder 0
+
+;	  Subroutine seek to cylinder
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C798E:	LD	A,C
         OUT	(0D3H),A
         EX	(SP),HL
         EX	(SP),HL
-        LD	A,10H	; 16 
+        LD	A,10H
+
 J7995:	OUT	(0D0H),A
         EX	(SP),HL
         EX	(SP),HL
-J7999:	CALL	C79AC			; wait for FDC ready
-        BIT	0,(IX+8)
-        RET	Z
+
+X7999:	CALL	C79AC			; wait for FDC ready
+        BIT	0,(IX+8)                ; write sectors ?
+        RET	Z                       ; nope, quit
         PUSH	BC
         LD	BC,0DFCH
 J79A5:	DEC	BC
         LD	A,B
         OR	C
         JR	NZ,J79A5
-        POP	BC
+        POP	BC                      ; wait head settle time
         RET	
 
 ;	  Subroutine wait for FDC ready
@@ -945,16 +971,19 @@ C79AC:	IN	A,(0D0H)
         JR	C,C79AC
         RET	
 
-;	  Subroutine __________________________
+;	  Subroutine seek to cylinder 0
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C79B2:	CALL	C79AC			; wait for FDC ready
-        LD	A,01H	; 1 
+X79B2:	CALL	C79AC			; wait for FDC ready
+        LD	A,01H
         JR	J7995
 
+S77EE   EQU     $-I77EE
+
+
 DSKFMT:
-        LD	(D.6205),A		; debug ??
+        LD	(D.6205),A		; enable I/O ports
         CALL	C79CF
 J79BF:	PUSH	HL
         PUSH	AF
@@ -962,7 +991,7 @@ J79BF:	PUSH	HL
         LD	A,H
         OR	L
         JP	Z,J79CC
-        LD	(D.7114),A		; debug ??
+        LD	(D.7114),A		; disable I/O ports
 J79CC:	POP	AF
         POP	HL
         RET	
@@ -970,28 +999,29 @@ J79CC:	POP	AF
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C79CF:	PUSH	HL
         POP	IY
         DEC	A
         LD	E,A
-        LD	A,03H	; 3 
+        LD	A,3
         CP	E
-        LD	A,0CH	; 12 
+        LD	A,12
         RET	C
         LD	A,B
-        CP	18H
-        LD	A,0EH	; 14 
+        CP	HIGH 1800H
+        LD	A,14
         RET	C
         LD	A,D
-        AND	01H	; 1 
+        AND	01H
         LD	(IY+9),A
         PUSH	HL
         LD	BC,32
         ADD	HL,BC
         LD	(IY+5),L
         LD	(IY+6),H
-        LD	D,00H
-        LD	B,05H	; 5 
+        LD	D,0
+        LD	B,5
         LD	HL,I7B2D
 J79F8:	ADD	HL,DE
         DJNZ	J79F8
@@ -999,7 +1029,7 @@ J79F8:	ADD	HL,DE
         LD	BC,5
         LDIR	
         CALL	C75C3
-        LD	(D.6205),A		; debug ??
+        LD	(D.6205),A		; enable I/O ports
         PUSH	HL
         CALL	GETWRK
         POP	HL
@@ -1009,7 +1039,7 @@ J79F8:	ADD	HL,DE
         LD	A,(IY+9)
         LD	DE,0
         LD	BC,00FFH
-        CALL	C7510
+        CALL	C7510                   ; prepare for disk i/o
         RET	C
         CALL	DISINT
         DI	
@@ -1025,7 +1055,7 @@ J79F8:	ADD	HL,DE
 J7A38:	PUSH	DE
         PUSH	BC
         LD	A,(IY+9)
-        CALL	C7510
+        CALL	C7510                   ; prepare for disk i/o
         LD	A,06H	; 6 
         JR	C,J7A52
         LD	(IY+7),D
@@ -1042,7 +1072,7 @@ J7A52:	POP	BC
         LD	D,A
         POP	AF
         PUSH	DE
-        JP	J74B6
+        JP	J74B6                   ; DSKIO finish
 
 J7A60:	PUSH	DE
         PUSH	BC
@@ -1121,7 +1151,7 @@ J7AD1:	LD	(HL),00H
         PUSH	DE
         LD	BC,30
         LDIR	
-        LD	HL,I7E88
+        LD	HL,I7E88                ; bootloader
         LD	BC,00B0H
         LDIR	
         POP	HL
@@ -1183,7 +1213,7 @@ I7B2D:	DEFW	I7B41
         DEFW	05A0H
 
 I7B41:	DEFB	0EBH,0FEH,090H
-        DEFB	"MSX-01  "
+        DEFB	"MSX_01  "
         DEFW	512
         DEFB	1
         DEFW	1
@@ -1197,7 +1227,7 @@ I7B41:	DEFB	0EBH,0FEH,090H
         DEFW	0
 
 I7B5F:	DEFB	0EBH,0FEH,090H
-        DEFB	"MSX-02  "
+        DEFB	"MSX_02  "
         DEFW	512
         DEFB	2
         DEFW	1
@@ -1211,7 +1241,7 @@ I7B5F:	DEFB	0EBH,0FEH,090H
         DEFW	0
 
 I7B7D:	DEFB	0EBH,0FEH,090H
-        DEFB	"MSX-03  "
+        DEFB	"MSX_03  "
         DEFW	512
         DEFB	2
         DEFW	1
@@ -1225,7 +1255,7 @@ I7B7D:	DEFB	0EBH,0FEH,090H
         DEFW	0
 
 I7B9B:	DEFB	0EBH,0FEH,090H
-        DEFB	"MSX-04  "
+        DEFB	"MSX_04  "
         DEFW	512
         DEFB	2
         DEFW	1
@@ -1248,7 +1278,6 @@ C7BB9:	LD	D,01H	; 1
         CALL	C7CA3
         CALL	C7CA0
         LD	A,0F6H
-J7BC6	EQU	$-1
         LD	B,03H	; 3 
         CALL	C7CA3
         LD	(HL),0FCH
@@ -1257,7 +1286,6 @@ J7BC6	EQU	$-1
         LD	B,32H	; "2"
         CALL	C7CA3
 J7BD6:	CALL	C7CA0
-J7BD8	EQU	$-1
         LD	A,0F5H
         LD	B,03H	; 3 
         CALL	C7CA3
@@ -1363,6 +1391,7 @@ J7C83:	PUSH	AF
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C7C8E:	LD	BC,0FFFFH
 J7C91:	IN	A,(0D0H)
         AND	02H	; 2 
@@ -1378,15 +1407,23 @@ J7C91:	IN	A,(0D0H)
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C7CA0:	XOR	A
         LD	B,0CH	; 12 
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C7CA3:	LD	(HL),A
         INC	HL
         DJNZ	C7CA3
         RET	
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;            Remark  unused
 
 ?7CA8:	DI	
         LD	B,15H
@@ -1407,35 +1444,37 @@ J7CAB:	PUSH	BC
 
         DEFS	07E88H-$,0
 
+; bootloader
+
 I7E88:
         .PHASE	0C01EH
         
-        RET	NC
-        LD	(IC06F+1),DE
-        LD	(IC0CB),A
+        RET	NC                      ; disk system start, quit
+        LD	(IC06F+1),DE            ; $DOSON
+        LD	(IC0CB),A               ; store bootflag
         LD	(HL),LOW IC06D
         INC	HL
-        LD	(HL),HIGH IC06D
-J7E95:	LD	SP,KBUF+256
+        LD	(HL),HIGH IC06D         ; install disk error handler
+J7E95:	LD	SP,KBUF+256             ; temporary stack in page 3
         LD	DE,IC0A6
         LD	C,0FH
-        CALL	BDOS
-        INC	A
-        JP	NZ,JC051
+        CALL	BDOS                    ; open MSXDOS.SYS
+        INC	A                       ; error ?
+        JP	NZ,JC051                ; nope, load and start
         LD	HL,IC0CC
         LD	DE,IC0A6+1
         LD	BC,2
-        LDIR	
+        LDIR	                        ; DDXDOS.SYS
         LD	DE,IC0A6
         LD	C,0FH
-        CALL	BDOS
-        INC	A
-        JP	Z,J$C07A
+        CALL	BDOS                    ; open DDXDOS.SYS
+        INC	A                       ; error ?
+        JP	Z,J$C07A                ; yep, handle error
 JC051:	LD	DE,0100H
         LD	C,1AH
         CALL	BDOS
         LD	HL,1
-        LD	(D$C0B4),HL
+        LD	(IC0A6+14),HL
         LD	HL,4000H-0100H
         LD	DE,IC0A6
         LD	C,27H
@@ -1443,20 +1482,23 @@ JC051:	LD	DE,0100H
         JP	0100H
 
 IC06D:	DEFW	IC06F
-IC06F:	CALL	0
-        LD	A,C
-        AND	0FEH
-        CP	02H	; 2 
-        JP	NZ,J$C081
-        LD	A,(IC0CB)
-        AND	A
-        JP	Z,J$4022
-        LD	DE,IC090
+
+IC06F:	CALL	0                       ; enable DOS kernel on page 1
+        LD	A,C                     ; errorcode
+        AND	0FEH                    ; ignore read/write flag
+        CP	2                       ; not ready error ?
+        JP	NZ,J$C081               ; nope, retry
+
+J$C07A: LD	A,(IC0CB)
+        AND	A                       ; cold boot ?
+        JP	Z,BASENT                ; yep, start DiskBASIC
+
+J$C081: LD	DE,IC090
         LD	C,09H
-        CALL	BDOS
+        CALL	BDOS                    ; print string
         LD	C,07H
-        CALL	BDOS
-        JR	J7E95
+        CALL	BDOS                    ; wait for key
+        JR	J7E95                   ; try again
 
 IC090:	DEFB	"Erro! Tecle Algo...",13,10
         DEFB	"$"
@@ -1478,52 +1520,58 @@ IC0A6:	DEFB	0
 IC0CB:	DEFB	0
 IC0CC:	DEFB	"DD"
         
-        DEPHASE
+        .DEPHASE
+
+S7E88   EQU     I7E88-$
 
 
-        LD	A,(0F340H)
-        LD	(D.6205),A		; debug ??
+C7F38:  LD	A,(0F340H)
+        LD	(D.6205),A		; enable I/O ports
         RET	
 
 J7F3F:	PUSH	IX
         PUSH	IY
         PUSH	HL
         PUSH	BC
-        LD	DE,0
-J7F48:	XOR	A
+        LD	DE,0                    ; sector
+J7F48:	XOR	A                       ; first drive, read
         CALL	PHYDIO
         POP	BC
         POP	HL
         POP	IX
         POP	IY
-        RET	NC
-        CP	02H
-        JR	Z,J7FAA
+        RET	NC                      ; no error, quit
+        CP	2                       ; not ready ?
+        JR	Z,J7FAA                 ; yep,
 J7F57:	SCF	
         RET	
 
-?7F59:	LD	BC,4C02H
-        INC	B
-        CALL	C.5F81
+?7F59:  DEFB    1,2,4CH,4
+
+; read bootsector routine (replace A5AE2)
+
+C7F5D:  CALL	A5F86                   ; print embedded string
         DEFB	13,10
         DEFB	"DDX-DRIVE Interface 3",0ABH,"-5",0ACH," V3.0f",13,10
         DEFB	"Digital Design Eletr",093H,"nica Ltda.",13,10,10
         DEFB	0
         LD	H,D
-        JP	J$5AE2
+        JP	A5AE7                   ; read bootsector
+
+; read error boot sector
 
 J7FAA:	PUSH	IX
         PUSH	IY
         PUSH	HL
         PUSH	BC
-        CALL	C.5F81
+        CALL	A5F86                   ; print embedded string
         DEFB	13,10,10
         DEFB	"Insira DISCO e tecle ALGO!",13,10
         DEFB	"(ESC p/DISK BASIC) "
         DEFB	0
-        CALL	CHGET
+        CALL	CHGET                   ; get key
         PUSH	AF
-        CALL	C.5F81
+        CALL	A5F86                   ; print embedded string
         DEFB	13,10,10
         DEFB	0
         POP	AF
@@ -1531,8 +1579,82 @@ J7FAA:	PUSH	IX
         POP	HL
         POP	IY
         POP	IX
-        CP	1BH
-        JP	Z,J7F57
-        JP	J7F3F
+        CP	1BH                     ; ESC pressed ?
+        JP	Z,J7F57                 ; yep, quit with error
+        JP	J7F3F                   ; read bootsector and quit
+
+        DEFS    8000H-$,0FFH
+
+
+        ORG     41C1H
+
+; in a unused string area of the DOS1 kernel
+
+        DEFB    0C2H
+
+J41C2:  LD      A,R
+        LD      L,A
+        JR      J41E0
+
+        DEFB    0C2H
+
+; extended timer interrupt handler, motor off
+
+J41C8:  PUSH    HL
+        LD      H,HIGH 8038H
+        PUSH    BC
+        DEC     C
+        LD      L,LOW 8038H
+        LD      (D$5C93),A              ; motor off
+        LD      B,L                     ; 38H
+        DEC     H                       ; 7FH
+        SLA     L                       ; 70H
+J41D6:  ADD     A,(HL)
+        INC     HL
+        DJNZ    J41D6                   ; calculate checksum 7F70H-7FA7H
+        LD      H,0F3H
+        LD      C,A
+        JR      J41C2
+
+        DEFB    0C3H
+
+J41E0:  LD      A,0D4H
+        ADD     A,C
+        POP     BC
+        ADD     A,(HL)
+        LD      (HL),A
+        POP     HL
+        JP      J7649                   ; continue timer interrupt handler
+
+        ORG     59F3H
+
+; load and start bootloader, patched
+
+A59F3:  ld      hl,A5B3A
+        push    hl                      ; if quit anywhere start diskbasic
+        call    C7F5D                   ; read bootsector patch routine
+        ret     c                       ; failed, start diskbasic
+        call    A5ADB                   ; start bootcode with Cx reset (some disk can take control from here)
+        ld      hl,(BOTTOM)
+        ld      de,08000H
+        rst     020H                    ; check if ram on both page 3 and 2
+        ret     nz                      ; nope, start diskbasic
+        ld      hl,RAMAD0
+        ld      a,(EXPTBL+0)
+        cp      (hl)
+        ret     z                       ; no ram available on page 0, start diskbasic
+        inc     hl
+        cp      (hl)
+        ret     z                       ; no ram available on page 1, start diskbasic
+
+        ORG     5ADBH
+
+; start bootloader, patched
+
+C5ADB:  LD      HL,YF323                ; disk error handler pointer
+        LD      DE,XF368                ; $DOSON
+        CALL    C7F38                   ; patch routine
+        JP      YC000+0001EH            ; start bootloader
+
 
         END
