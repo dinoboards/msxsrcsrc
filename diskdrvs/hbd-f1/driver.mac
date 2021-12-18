@@ -18,6 +18,15 @@
 MYSIZE		equ	9
 SECLEN		equ	512
 
+D7FF8	EQU	07FF8H			; WD2793
+D7FF9	EQU	D7FF8+1			; WD2793
+D7FFA	EQU	D7FF8+2			; WD2793
+D7FFB	EQU	D7FF8+3			; WD2793
+
+D7FFC	EQU	07FFCH			; side select
+D7FFD	EQU	07FFDH			; motor/in use/DC/drive select
+D7FFF	EQU	07FFFH			; INT,DRQ
+
 ; driver version
 ; 205,206 or 207
 
@@ -211,7 +220,7 @@ J752C:	LD	A,H
         PUSH	BC
         LD	DE,($SECBUF)
         PUSH	DE
-        LD	BC,512
+        LD	BC,SECLEN
         CALL	XFER			; first transfer to SECBUF
         POP	HL
         POP	BC
@@ -323,7 +332,7 @@ J75DC:	LD	A,H
         PUSH	BC
         EX	DE,HL
         LD	HL,($SECBUF)
-        LD	BC,512
+        LD	BC,SECLEN
         CALL	XFER			; transfer from SECBUF
         POP	BC
         POP	DE
@@ -1179,13 +1188,11 @@ C7B95:	CALL	GETWRK
         LD	(IX+7),A		; track 0
         LD	(D7FFC),A		; select side 0
         RET	
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C7BA0:	LD	A,(D7FFC)
         RRA				; current side = 1 ?
         JP	C,C7BAD			; yep, select side 0
@@ -1226,13 +1233,11 @@ C7BC0:	CALL	C77C0			; select next track
         JP	M,J7C07
         LD	A,06H	; 6 
         JP	J7C07
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C7BD4:	LD	HL,I7405
         LD	DE,($SECBUF)
         LD	BC,I74D6-I7405
@@ -1548,12 +1553,12 @@ J7DD6:
         RET	Z
         SCF	
         LD	E,A
-        LD	A,02H
+        LD	A,2
         JP	M,J7C07
         BIT	6,E
-        LD	A,00H
+        LD	A,0
         JP	NZ,J7C07
-        LD	A,10H
+        LD	A,16
         JP	J7C07
 
 
@@ -1573,15 +1578,5 @@ C7DE2:	LD	A,3CH
         LD	A,3FH
         LD	(D7FFD),A		; motor off, not in use, leave disk change, deselect drive
         RET	
-
-
-D7FF8	EQU	07FF8H			; WD2793
-D7FF9	EQU	07FF9H			; WD2793
-D7FFA	EQU	07FFAH			; WD2793
-D7FFB	EQU	07FFBH			; WD2793
-
-D7FFC	EQU	07FFCH			; side select
-D7FFD	EQU	07FFDH			; motor/in use/DC/drive select
-D7FFF	EQU	07FFFH			; INT,DRQ
 
         END
