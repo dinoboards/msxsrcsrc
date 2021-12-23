@@ -12,15 +12,26 @@
 
 SECLEN  EQU     512
 MYSIZE  EQU     8
+
+; offset	function
+; 0		motor off timer
+; 1		disk change drive 0 timer
+; 2		disk change drive 1 timer
+; 3		last used drive
+; 4		current cylinder drive 0
+; 5		current cylinder drive 1
+; 6		last used drive (phantom)
+; 7		number of physical drives
+
 BASENT  EQU     4022H
 
 D7FF8	EQU	07FF8H			; WD2793
 D7FF9	EQU	D7FF8+1			; WD2793
 D7FFA	EQU	D7FF8+2			; WD2793
 D7FFB	EQU	D7FF8+3			; WD2793
-D7FFC	EQU	07FFCH			; side select
-D7FFD	EQU	D7FFC+1			; motor/in use/drive select
-D7FFF	EQU	D7FFC+3			; IRQ,DRQ
+D7FFC	EQU	07FFCH			; b0 = side select
+D7FFD	EQU	D7FFC+1			; b7 = motor on/b6 = in use/b1-b0 = drive select
+D7FFF	EQU	D7FFC+3			; b7 = IRQ, b6 = DRQ
 
 
 I$7405:
@@ -99,19 +110,19 @@ C.744D:	JP	NC,C.75A3
 ; DSKIO finish
 
 J.7453:	EI
-        CALL	ENAINT
+        CALL	ENAINT                  ; broadcast enable interrupts
         PUSH	AF
         LD	C,60
         JR	NC,J$745E
         LD	C,0
 J$745E:	LD	A,0D0H
-        LD	(D7FF8),A
+        LD	(D7FF8),A               ; force interrupt (reset FDC)
         EX	(SP),HL
         EX	(SP),HL
         EX	(SP),HL
         EX	(SP),HL
-        LD	A,(D7FFB)
-        LD	A,(D7FF8)
+        LD	A,(D7FFB)               ; reset IRQ
+        LD	A,(D7FF8)               ; reset DRQ
         LD	(IX+0),120
         LD	A,(IX+3)
         AND	A
@@ -128,11 +139,11 @@ J$747C:	LD	(IX+2),C
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$7481:	CALL	C$7D0F
-        RET	C
+C$7481:	CALL	C$7D0F                  ; check if drive double sided (when double sided media descriptor)
+        RET	C                       ; error, quit
         CALL	C.766A                  ; prepare for disk operation
         RET	C
-        CALL	DISINT
+        CALL	DISINT                  ; broadcast disable interrupts
         DI
 J$748D:	LD	A,L
         ADD	A,LOW (SECLEN-1)
@@ -171,15 +182,15 @@ J$74BE:	RET	C
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.74C7:	LD	E,15H
-J$74C9:	CALL	C.77A4
+C.74C7:	LD	E,21
+J$74C9:	CALL	C.77A4                  ; wait for FDC
         LD	A,0A0H
         BIT	6,D
         JR	Z,J.74DA
-        OR	02H	; 2 
+        OR	02H
         BIT	0,D
         JR	Z,J.74DA
-        OR	08H	; 8 
+        OR	08H
 J.74DA:	PUSH	HL
         PUSH	DE
         PUSH	BC
@@ -257,7 +268,7 @@ I$7544:	POP	BC
         JR	NZ,J$757B
         PUSH	AF
         LD	A,(IX+3)
-        OR	0C4H
+        OR	0C4H                    ; motor on, in use on, b2=1 (no function)
         LD	(D7FFD),A
         CALL	C.7789                  ; reseek
         POP	AF
@@ -281,7 +292,7 @@ I$7544:	POP	BC
         RET
 
 J$757B:	LD	A,0D0H
-        LD	(D7FF8),A
+        LD	(D7FF8),A               ; force interrupt (reset FDC)
         EX	(SP),HL
         EX	(SP),HL
         LD	A,80H
@@ -325,7 +336,7 @@ C$75A9:	CALL	C.766A                  ; prepare for disk operation
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$75AD:	CALL	DISINT
+C$75AD:	CALL	DISINT                  ; broadcast disable interrupts
         DI
 J$75B1:	LD	A,L
         ADD	A,LOW (SECLEN-1)
@@ -366,8 +377,8 @@ J$75E2:	DEC	B
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.75EA:	LD	E,15H
-J$75EC:	CALL	C.77A4
+C.75EA:	LD	E,21
+J$75EC:	CALL	C.77A4                  ; wait for FDC
         LD	A,80H
         BIT	6,D
         JR	Z,J.75FD
@@ -421,7 +432,7 @@ I$7639:	POP	BC
         RET	Z
         PUSH	AF
         LD	A,(IX+3)
-        OR	0C4H
+        OR	0C4H                    ; motor on, in use on, b2=1 (no function)
         LD	(D7FFD),A
         CALL	C.7789                  ; reseek
         POP	AF
@@ -481,7 +492,7 @@ J$7687:	POP	AF
 J$768A:	EX	(SP),HL
         PUSH	HL
         PUSH	BC
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
         BIT	1,C
         LD	C,E
         LD	B,D
@@ -512,20 +523,20 @@ J.76B0:	LD	(D7FFC),A
         NOP
         NOP
         NOP                             ; ??
-J$76BF:	OR	0C4H
-        CALL	DISINT
+J$76BF:	OR	0C4H                    ; motor on, in use on, b2=1 (no function)
+        CALL	DISINT                  ; broadcast disable interrupts
         DI
         LD	(D7FFD),A
-        LD	A,(IX)
+        LD	A,(IX+0)
         AND	A		        ; motor still turning ?
-        LD	(IX),0FFH	        ; disable motor off
+        LD	(IX+0),0FFH	        ; disable motor off
         EI
-        CALL	ENAINT
+        CALL	ENAINT                  ; broadcast enable interrupts
         JR	NZ,J$76E2	        ; yep, skip motor startup
-        CALL	C.77BC
-        CALL	C.77BC
-        CALL	C.77BC
-        CALL	C.77BC
+        CALL	C.77BC                  ; wait motor spin up time (1/4)
+        CALL	C.77BC                  ; wait motor spin up time (2/4)
+        CALL	C.77BC                  ; wait motor spin up time (3/4)
+        CALL	C.77BC                  ; wait motor spin up time (4/4)
 J$76E2:	LD	A,C
         RRCA
         RRCA
@@ -555,13 +566,13 @@ J$770E:	LD	(D7FF9),A
         JR	J$7738
 
 J$7715:	LD	A,(IX+6)
-        AND	03H
-        CP	H
-        JR	Z,J.7735
+        AND	03H                     ; ignore flags
+        CP	H                       ; same logical drive as last operation ?
+        JR	Z,J.7735                ; yep, skip swap
         LD	A,(IX+6)
         AND	0FCH
         OR	H
-        LD	(IX+6),A
+        LD	(IX+6),A                ; update phantom drive
         PUSH	IX
         PUSH	HL
         PUSH	DE
@@ -583,14 +594,14 @@ J$7738:	CP	C
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.773E:	CALL	C.77A4
+C.773E:	CALL	C.77A4                  ; wait for FDC
         JP	J$775A
 
 ;	  Subroutine prepare for next sector
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.7744:	CALL	C.77A4
+C.7744:	CALL	C.77A4                  ; wait for FDC
         INC	H
         INC	H
         LD	A,(D7FFA)
@@ -617,15 +628,15 @@ J.7770:	RES	0,D
         LD	A,00H
         LD	(D7FFC),A
         INC	C
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
         LD	A,50H
         LD	(D7FF8),A
         EX	(SP),HL
         EX	(SP),HL
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
 J$7785:	SCF
         CCF
-        JR	J.77C8
+        JR	J.77C8                  ; wait head settle time
 
 ;	  Subroutine reseek
 ;	     Inputs  ________________________
@@ -639,7 +650,7 @@ C.7789:	BIT	0,E
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$778F:	CALL	C.77A4
+C$778F:	CALL	C.77A4                  ; wait for FDC
         LD	A,C
         LD	(D7FFB),A
         EX	(SP),HL
@@ -648,10 +659,10 @@ C$778F:	CALL	C.77A4
 J$779A:	LD	(D7FF8),A
         EX	(SP),HL
         EX	(SP),HL
-        CALL	C.77A4
-        JR	J.77C8
+        CALL	C.77A4                  ; wait for FDC
+        JR	J.77C8                  ; wait head settle time
 
-;	  Subroutine __________________________
+;	  Subroutine wait for FDC
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -671,11 +682,11 @@ J$77B3:	POP	DE
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.77B5:	CALL	C.77A4
+C.77B5:	CALL	C.77A4                  ; wait for FDC
         LD	A,02H
         JR	J$779A
 
-;	  Subroutine __________________________
+;	  Subroutine wait motor spin up time (1/4)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -683,17 +694,33 @@ C.77BC:	PUSH	HL
         LD	HL,99E1H
         JR	J.77D8
 
+;	  Subroutine unused
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 ?.77C2:	PUSH	HL
         LD	HL,1D23H
         JR	J.77D8
+
+;	  Subroutine wait head settle time
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J.77C8:	PUSH	HL
         LD	HL,117BH
         JR	J.77D8
 
+;	  Subroutine unused
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 ?.77CE:	PUSH	HL
         LD	HL,0BA6H
         JR	J.77D8
+
+;	  Subroutine unused
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 ?.77D4:	PUSH	HL
         LD	HL,012CH
@@ -711,13 +738,13 @@ J.77D8:	DEC	HL
 
 INIHRD:
 	LD	A,0D0H
-        LD	(D7FF8),A
+        LD	(D7FF8),A               ; force interrupt (reset FDC)
         EX	(SP),HL
         EX	(SP),HL
-        LD	A,0C0H                  ; drive 0
-        CALL	C.77F7                  ; initialize drive
-        LD	A,0C1H                  ; drive 1
-        CALL	C.77F7                  ; initialize drive
+        LD	A,0C0H                  ; motor on, in use on, drive 0
+        CALL	C.77F7                  ; initialize FDD
+        LD	A,0C1H                  ; motor on, in use on, drive 1
+        CALL	C.77F7                  ; initialize FDD
 
 ;	  Subroutine MTOFF
 ;	     Inputs  ________________________
@@ -725,15 +752,15 @@ INIHRD:
 
 MTOFF:
         LD	A,03H
-        LD	(D7FFD),A
+        LD	(D7FFD),A                    ; motor off, in use off, select drive 3 (unselect drive)
         RET
 
-;	  Subroutine initialize drive
+;	  Subroutine initialize FDD
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.77F7:	LD	(D7FFD),A
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
         LD	A,02H
         LD	(D7FF8),A
         EX	(SP),HL
@@ -750,13 +777,13 @@ J$7812:	LD	A,05H
         LD	(D7FFB),A
         EX	(SP),HL
         EX	(SP),HL
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
         LD	A,10H
         LD	(D7FF8),A
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
         LD	A,02H
         LD	(D7FF8),A
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
         RET
 
 ;	  Subroutine DRIVES
@@ -767,9 +794,9 @@ DRIVES:
 	PUSH	BC
         PUSH	AF
         CALL	GETWRK
-        LD	A,0C1H
+        LD	A,0C1H                  ; motor on, in use on, drive 1
         LD	(D7FFD),A
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
         LD	A,02H
         LD	(D7FF8),A
         EX	(SP),HL
@@ -787,7 +814,7 @@ J$7844:	LD	A,(D7FF8)
 J$7851:	LD      L,2
         LD	(IX+7),L
         LD	A,03H
-        LD	(D7FFD),A
+        LD	(D7FFD),A               ; motor off, in use off, select drive 3 (unselect drive)
         POP	AF
         JR	Z,J$7860
         LD	L,2
@@ -823,7 +850,7 @@ I$7872:	PUSH	AF
         LD	(HL),A
         JR	NZ,J.7887
         LD	A,03H
-        LD	(D7FFD),A
+        LD	(D7FFD),A               ; motor off, in use off, drive 3 (unselect drive)
 J.7887:	INC	HL
         LD	A,(HL)
         AND	A
@@ -1130,7 +1157,7 @@ C$7A7B:	RET	C
         LD	B,08H	; 8 
 J$7A8D:	LD	A,01H	; 1 
         LD	(D7FFA),A
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
         CALL	C$75AD
         POP	HL
         POP	HL
@@ -1143,14 +1170,14 @@ J$7A8D:	LD	A,01H	; 1
 ;	     Outputs ________________________
 
 C.7A9D:	LD	E,21
-J$7A9F:	CALL	C.77A4
+J$7A9F:	CALL	C.77A4                  ; wait for FDC
         LD	A,0F0H
         PUSH	HL
         PUSH	DE
         PUSH	BC
         LD	DE,I$7AE6
         PUSH	DE
-        CALL	DISINT
+        CALL	DISINT                  ; broadcast disable interrupts
         DI
         EX	(SP),IY
         EX	(SP),IY
@@ -1190,7 +1217,7 @@ I$7AE6:	POP	BC
         POP	DE
         POP	HL
         EI
-        CALL	ENAINT
+        CALL	ENAINT                  ; broadcast enable interrupts
         LD	A,(D7FF8)
         AND	0FCH
         RET	Z
@@ -1198,7 +1225,7 @@ I$7AE6:	POP	BC
         JR	NZ,J$7B21
         PUSH	AF
         LD	A,(IX+3)
-        OR	0C4H
+        OR	0C4H                    ; motor on, in use on, b2=1 (no function)
         LD	(D7FFD),A
         CALL	C.7789                  ; reseek
         POP	AF
@@ -1222,7 +1249,7 @@ I$7AE6:	POP	BC
         RET
 
 J$7B21:	LD	A,0D0H
-        LD	(D7FF8),A
+        LD	(D7FF8),A               ; force interrupt (reset FDC)
         EX	(SP),IY
         EX	(SP),IY
         LD	A,80H
@@ -1254,7 +1281,7 @@ C.7B4B:	RET	C
         PUSH	HL
         PUSH	DE
         PUSH	BC
-        CALL	C.77A4
+        CALL	C.77A4                  ; wait for FDC
         LD	A,80H
         BIT	6,D
         JR	Z,J.7B65
@@ -1555,7 +1582,7 @@ J$7CF9:	LD	(HL),00H
 OEMSTA: SCF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine check if drive double sided (when double sided media descriptor)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1570,37 +1597,37 @@ C$7D0F:	PUSH	HL
         PUSH	AF
         BIT	0,C		        ; single sided media ?
         JR	Z,J.7D67	        ; yep, skip check
-        LD	B,1
-        LD	DE,10
+        LD	B,1                     ; 1 sector
+        LD	DE,10                   ; sector 10 (a sector on side 1)
         LD	HL,($SECBUF)
         OR	A		        ; drive 0 ?
         JR	NZ,J$7D46	        ; no, drive 1
-        BIT	6,(IX+6)
-        SET	6,(IX+6)
-        JR	Z,J$7D3B
-        BIT	4,(IX+6)
-        JR	NZ,J.7D67
-        JR	J.7D61
+        BIT	6,(IX+6)                ; double sided drive 0 tested ?
+        SET	6,(IX+6)                ; double sided drive 0 tested
+        JR	Z,J$7D3B                ; nope,
+        BIT	4,(IX+6)                ; double sided drive 0 ?
+        JR	NZ,J.7D67               ; yep, skip check
+        JR	J.7D61                  ; quit with record not found
 
 J$7D3B:	CALL	C.75A3		        ; DSKIO read
-        JR	C,J.7D61	        ; error,
-        SET	4,(IX+6)
-        JR	J.7D67
+        JR	C,J.7D61	        ; error, quit with record not found
+        SET	4,(IX+6)                ; double sided drive 0
+        JR	J.7D67                  ; quit
 
-J$7D46:	BIT	7,(IX+6)
-        SET	7,(IX+6)
-        JR	Z,J$7D58
-        BIT	5,(IX+6)
-        JR	NZ,J.7D67
-        JR	J.7D61
+J$7D46:	BIT	7,(IX+6)                ; double sided drive 1 tested ?
+        SET	7,(IX+6)                ; double sided drive 1 tested
+        JR	Z,J$7D58                ; nope,
+        BIT	5,(IX+6)                ; double sided drive 1 ?
+        JR	NZ,J.7D67               ; yep, skip check
+        JR	J.7D61                  ; quit with record not found
 
 J$7D58:	CALL	C.75A3	        	; DSKIO read
-        SET	5,(IX+6)
-        JR	NC,J.7D67
+        SET	5,(IX+6)                ; double sided drive 1  BUG: should be set only when succesfull
+        JR	NC,J.7D67               ; no error, quit
 J.7D61:	POP	AF
-        LD	A,8	        	; record not found
+        LD	A,8
         SCF
-        JR	J$7D6A
+        JR	J$7D6A                  ; quit with record not found
 
 J.7D67:	POP	AF
         SCF
