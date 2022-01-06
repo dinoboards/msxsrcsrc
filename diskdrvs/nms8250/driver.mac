@@ -31,6 +31,8 @@ D7FFC	EQU	07FFCH			; side select
 D7FFD	EQU	D7FFC+1			; motor/in use/drive select
 D7FFF	EQU	D7FFC+3			; IRQ,DRQ
 
+DBFF8	EQU	D7FF8+4000H		; FDC mirror in page 2
+
 ?.7405:	DEFB	7
 
 I$7406:	DEFB	0F8h		; Media F8
@@ -908,29 +910,29 @@ DRIVES:
         JR	Z,J$7887		; CTRL pressed, skip drive 1 check
         LD	A,0C5H
         LD	(D7FFD),A		; motor on, in use, set b2, select drive 1
-        RES	5,D
+        RES	5,D                     ; ?? left over
         CALL	C.7835			; seek to 5 cylinders futher
         CALL	C.781B			; seek to cylinder 0
         LD	HL,076CAH		; wait max. 0.5 s (loop is 60T cycles)
 J$787B:	LD	A,(D7FF8)
-        AND	04H
-        JR	NZ,J$788B
+        AND	04H                     ; on cylinder 0 ?
+        JR	NZ,J$788B               ; yep, initialize drive 1
         DEC	HL
         LD	A,H
         OR	L
         JR	NZ,J$787B
-J$7887:	LD	L,1
+J$7887:	LD	L,1                     ; 1 physical drive
         JR	J$7893
 
-J$788B:	LD	L,2
-        CALL	C.78B4			; recalibrate two times
+J$788B:	LD	L,2                     ; 2 physical drives
+        CALL	C.78B4			; initialize FDD
         CALL	C.780E			; wait 18 ms (head settle)
 J$7893:	LD	A,0C4H
         LD	(D7FFD),A		; motor on, in use, set b2, select drive 0
-        RES	5,D
+        RES	5,D                     ; ?? left over
         CALL	C.7835			; seek to 5 cylinders futher
         CALL	C.781B			; seek to cylinder 0
-        CALL	C.78B4			; recalibrate two times
+        CALL	C.78B4			; initialize FDD
         LD	(IX+7),L
         CALL	C.780E			; wait 18 ms (head settle)
         CALL	C.784B			; stop motor
@@ -941,12 +943,12 @@ J$78B1:	POP	DE
         POP	BC
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize FDD
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.78B4:	PUSH	DE
-        RES	5,D
+        RES	5,D                     ; ?? left over
         CALL	C.7814			; recalibrate
         CALL	C.7814			; recalibrate
         POP	DE
@@ -1194,7 +1196,7 @@ J$7A2B:	RES	7,C			; side 0
         CALL	C$7AA2			; adjust track data for side
         CALL	C.7BEE			; format track
         JP	C,J.79AE		; error,
-J$7A48:	RES	5,D
+J$7A48:	RES	5,D                     ; ?? left over
         CALL	C.77DE			; seek to next cylinder
         DJNZ	J$7A2B			; next
         CALL	C.7814			; recalibrate
@@ -1711,7 +1713,7 @@ I$7D52:	PUSH	HL
         PUSH	BC
         CALL	GETSLT
         LD	HL,($SECBUF)
-        LD	DE,I$004F+1-I$7D52
+        LD	DE,I004F+1-I$7D52
         ADD	HL,DE
         LD	(HL),A
         LD	H,HIGH 8000H
@@ -1735,7 +1737,7 @@ I0026:  DEC	HL
         JR	NC,J$7D8E               ; yep, quit
         LD	IY,($SECBUF)
         PUSH	DE
-        LD	DE,I$005F-I$7D52
+        LD	DE,I005F-I$7D52
         ADD	IY,DE
         POP	DE
         JP	(IY)                    ; write/read/verify sectors
@@ -1751,7 +1753,7 @@ J$7D8E:	PUSH	HL
         CALL	$DOSON
         EI
         CALL	ENAINT
-I$004F: LD	A,0
+I004F:  LD	A,0
         LD	H,HIGH 4000H
         CALL	ENASLT
         EI
@@ -1762,7 +1764,7 @@ I$004F: LD	A,0
         POP	HL
         RET
 
-I$005F:
+I005F:
 
 S7D52   EQU     $-I$7D52
 
@@ -1861,7 +1863,7 @@ J$7E3A:	LD	E,(IY+0)
         ADD	HL,DE
         INC	HL
         INC	HL
-        LD	(HL),HIGH (D7FF8+4000H)
+        LD	(HL),HIGH DBFF8
 J$7E4C:	INC	IY
         INC	IY
         JR	J$7E3A

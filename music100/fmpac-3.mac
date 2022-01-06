@@ -164,7 +164,7 @@ I$4076:	EX	AF,AF'
         DEFS	04080H-$,0
 
 I$4080:	DEFW	I4084			; pattern
-        DEFW	I575E			; routine
+I$4082: DEFW	I575E			; routine
 
 I4084:	DEFB	18H,18H,18H,18H,18H,18H,10H,10H
         DEFB	10H,10H,10H,00H,00H,10H,10H,10H
@@ -616,6 +616,7 @@ I$4301:	DEFB	0EEH,00H,00H,00H,38H,10H,10H,10H
         DEFB	00H,00H,30H,48H,48H,30H,00H,00H
         DEFB	00H,00H,00H,00H,00H,00H,00H,00H
         DEFB	19H,0BH
+
 I$4E76:	DEFB	0FFH,80H,80H,80H,80H,80H
         DEFB	80H,80H,0FFH,20H,20H,20H,20H,20H
         DEFB	20H,20H,0FFH,7FH,7FH,7FH,7FH,7FH
@@ -910,7 +911,7 @@ I575E:	LD	(D.8420),HL
         LD	SP,HL
         LD	HL,(D.8420)
         PUSH	HL
-        CALL	C$5E82
+        CALL	C$5E82			; initialize patterntables
         POP	HL
         PUSH	HL
         LD	E,(HL)
@@ -949,7 +950,7 @@ I575E:	LD	(D.8420),HL
         ADD	HL,SP
         LD	A,L
         AND	0FEH
-        LD	L,A
+        LD	L,A                     ; force even address
         CALL	C$5F29			; initialize OPLL
         LD	E,20H
         LD	A,14
@@ -986,45 +987,41 @@ I575E:	LD	(D.8420),HL
         OR	L
         PUSH	HL
         CALL	C.6068
-;
         POP	BC
         POP	DE
         LD	E,D
         LD	HL,(D.8422)
         CALL	C.5AA8
-;
         XOR	A
-J$57FA:	CP	09H	; 9 
+J$57FA:	CP	8+1
         JP	NC,J.580D
-;
         LD	C,A
-        LD	B,00H
+        LD	B,0
         LD	HL,265
         ADD	HL,SP
         ADD	HL,BC
         LD	(HL),00H
         INC	A
         JP	J$57FA
-;
-;	-----------------
+
 J.580D:	LD	HL,272
         ADD	HL,SP
         LD	A,(HL)
         AND	04H	; 4 
         JP	NZ,J$59AF
-        LD	A,7
-        CALL	SNSMAT
+        LD	A,7                     ; keyboard row = 7
+        CALL	SNSMAT                  ; read keyboard row
         CPL	
-        AND	03H	; 3 
+        AND	03H                     ; F5,F4
         PUSH	AF
-        LD	A,6
-        CALL	SNSMAT
+        LD	A,6                     ; keyboard row = 6
+        CALL	SNSMAT                  ; read keyboard row
         CPL	
         RLCA	
         RLCA	
         RLCA	
-        AND	07H	; 7 
-        AND	07H	; 7 
+        AND	07H
+        AND	07H                     ; F3,F2,F1
         LD	H,A
         POP	AF
         ADD	A,A
@@ -1035,41 +1032,41 @@ J.580D:	LD	HL,272
         LD	E,A
         LD	A,14
         CALL	C.5F33			; write OPLL register
-        LD	C,00H
+        LD	C,0                     ; keyboard row = 0
 J$583D:	LD	A,C
-        CP	9
-        JP	NC,J$5897
+        CP	8+1                     ; done all rows ?
+        JP	NC,J$5897               ; yep,
         LD	A,C
         PUSH	BC
-        CALL	SNSMAT
+        CALL	SNSMAT                  ; read keyboard row
         CPL	
         POP	BC
         LD	B,00H
         LD	HL,256
         ADD	HL,SP
         ADD	HL,BC
-        LD	(HL),A
+        LD	(HL),A                  ; save keyboard row status
         LD	B,0
         LD	HL,265
         ADD	HL,SP
         ADD	HL,BC
         XOR	(HL)
-        LD	B,00H
+        LD	B,0
         LD	HL,274
         ADD	HL,SP
         ADD	HL,BC
         LD	(HL),A
-        LD	B,00H
+        LD	B,0
         LD	HL,256
         ADD	HL,SP
         ADD	HL,BC
         LD	A,(HL)
-        LD	B,00H
+        LD	B,0
         LD	HL,274
         ADD	HL,SP
         ADD	HL,BC
         AND	(HL)
-        LD	B,00H
+        LD	B,0
         LD	HL,283
         ADD	HL,SP
         ADD	HL,BC
@@ -1080,7 +1077,7 @@ J$583D:	LD	A,C
         ADD	HL,BC
         LD	A,(HL)
         CPL	
-        LD	B,00H
+        LD	B,0
         LD	HL,274
         ADD	HL,SP
         ADD	HL,BC
@@ -1090,14 +1087,12 @@ J$583D:	LD	A,C
         ADD	HL,SP
         ADD	HL,BC
         LD	(HL),A
-        INC	C
-        JP	J$583D
-;
-;	-----------------
+        INC	C                       ; update row
+        JP	J$583D                  ; next row
+
 J$5897:	XOR	A
 J$5898:	CP	48H	; "H"
         JP	NC,J$58D5
-;
         LD	(D.8424),A
         PUSH	AF
         AND	07H	; 7 
@@ -1125,22 +1120,18 @@ J$5898:	CP	48H	; "H"
         PUSH	HL
         OR	A
         JP	Z,J$58D0
-;
         LD	H,00H
         LD	BC,I.570E
         ADD	HL,BC
         LD	A,(HL)
         CALL	C.602A
-;
 J$58D0:	POP	AF
         INC	A
         JP	J$5898
-;
-;	-----------------
+
 J$58D5:	XOR	A
 J$58D6:	CP	48H	; "H"
         JP	NC,J$5913
-;
         LD	(D.8424),A
         PUSH	AF
         AND	07H	; 7 
@@ -1168,23 +1159,19 @@ J$58D6:	CP	48H	; "H"
         PUSH	HL
         OR	A
         JP	Z,J$590E
-;
         LD	H,00H
         LD	BC,I.570E
         ADD	HL,BC
         LD	A,(HL)
         CALL	C$5FB0
-;
 J$590E:	POP	AF
         INC	A
         JP	J$58D6
-;
-;	-----------------
+
 J$5913:	LD	C,00H
 J$5915:	LD	A,C
         CP	09H	; 9 
         JP	NC,J$592F
-;
         LD	B,00H
         LD	HL,256
         ADD	HL,SP
@@ -1197,37 +1184,31 @@ J$5915:	LD	A,C
         LD	(HL),A
         INC	C
         JP	J$5915
-;
-;	-----------------
+
 J$592F:	LD	HL,291
         ADD	HL,SP
         LD	L,(HL)
         LD	A,L
         AND	0F0H
         JP	Z,J.580D
-;
         LD	A,L
         AND	40H	; "@"
         JP	Z,J.5951
-;
         LD	A,(D.8425)
         INC	A
         LD	(D.8425),A
         CP	10H	; 16 
         JP	C,J.5951
-;
         LD	A,0FH	; 15 
         LD	(D.8425),A
 J.5951:	LD	A,L
         AND	20H	; " "
         JP	Z,J.5967
-;
         LD	A,(D.8425)
         DEC	A
         LD	(D.8425),A
         OR	A
         JP	NZ,J.5967
-;
         LD	A,01H	; 1 
         LD	(D.8425),A
 J.5967:	LD	A,L
@@ -2110,11 +2091,11 @@ J$5E51:	CALL	C.60B1			; write vram
 ;	     Outputs ________________________
 
 C$5E82:	LD	HL,(D.0004)
-        LD	(D.8449),HL
+        LD	(D.8449),HL		; address patterntable in ROM-BIOS
         LD	E,3			; bank 3
         LD	HL,I$4080
         CALL	C$402C			; read word from fmpac bank
-        LD	(D.844B),HL
+        LD	(D.844B),HL		; address patterntable in FM-PAC
         RET	
 
 ;	  Subroutine __________________________
@@ -2529,7 +2510,7 @@ C.60B1:	EX	DE,HL
         JP	WRTVRM
 
 ?.60B5:	CALL	CHSNS
-        LD	A,00H
+        LD	A,0
         RET	Z
         INC	A
         RET	

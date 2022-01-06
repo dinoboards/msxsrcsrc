@@ -239,7 +239,7 @@ C$F8F8	EQU	0F8F8H	; -C---
 C.F8FC	EQU	0F8FCH	; JC---
 C.F9FC	EQU	0F9FCH	; -C---
 D$FC4A	EQU	0FC4AH	; ---L-
-I.FCC1	EQU	0FCC1H	; ----I
+EXPTBL	EQU	0FCC1H	; ----I
 C$FCFC	EQU	0FCFCH	; -C---
 H.TIMI	EQU	0FD9FH	; ----I
 H.STKE	EQU	0FEDAH	; ----I
@@ -386,7 +386,7 @@ J$40A5:	PUSH	BC
 J$40C0:	LD	A,1
 J$40C2:	LD	(D.8200),A
         CALL	C$61D9			; install diskerror handler
-        CALL	C$5817			; search PAC SRAM�s
+        CALL	C$5817			; search PAC SRAMs
         CALL	INIGRP			; screen in graphic mode
         LD	A,5
         CALL	C$67AE			; change border color
@@ -3849,53 +3849,53 @@ J$57F5:	DEC	C
         POP	BC
         JP	J$57F5
 
-;	  Subroutine __________________________
+;	  Subroutine search PAC SRAMs
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$5817:	CALL	C$66DB			; install PAC routines
-        LD	E,0			; primairy slot 0
+        LD	E,0			; current slot = primairy slot 0
         LD	HL,I.82E9
-        LD	(HL),E
+        LD	(HL),E                  ; store current primairy slot
         LD	A,E
-        LD	(D.82EB),A		; no PAC SRAM�s found yet
+        LD	(D.82EB),A		; current entry = 0
 J$5824:	LD	A,E
-        CP	4
-        JP	NC,J$58DA
+        CP	4                       ; all primairy slots done ?
+        JP	NC,J$58DA               ; yep,
         LD	L,E
         LD	H,0
-        LD	BC,I.FCC1
+        LD	BC,EXPTBL
         ADD	HL,BC
         LD	A,(HL)
         AND	80H			; is slot expanded ?
         PUSH	DE
         OR	A
         JP	NZ,J$587A		; yep, handle
-        LD	A,E
+        LD	A,E                     ; current primairy slot
         PUSH	DE
-        CALL	C.5927			; check if PAC SRAM
+        CALL	C.5927			; check if slot has PAC SRAM
         POP	DE
         OR	A
         JP	Z,J.58D1		; nope, next slot
-        LD	A,E
+        LD	A,E                     ; current primairy slot
         PUSH	DE
-        CALL	C.58EA			; check if PAC2 indentifier
+        CALL	C.58EA			; check if slot has PAC2 indentifier
         OR	A
-        JP	Z,J$5852		; nope,
+        JP	Z,J$5852		; nope, PAC SRAM
         LD	HL,1			; FMPAC SRAM
         JP	J$5855
 
 J$5852:	LD	HL,0			; PAC SRAM
 J$5855:	LD	H,L
-        PUSH	HL
+        PUSH	HL                      ; store SRAM type
         LD	A,(D.82EB)
         LD	L,A
         LD	H,0
         LD	BC,I.82D9
         ADD	HL,BC
-        LD	(D.82EB),A
-        POP	AF
-        LD	(HL),A			; SRAM type
+        LD	(D.82EB),A              ; ??
+        POP	AF                      ; restore SRAM type
+        LD	(HL),A			; store SRAM type
         LD	A,(D.82EB)
         INC	A
         LD	(D.82EB),A		; increase number of PAC SRAM found
@@ -3905,30 +3905,30 @@ J$5855:	LD	H,L
         LD	BC,D.82C9
         ADD	HL,BC
         POP	DE
-        LD	(HL),E			; slotid
+        LD	(HL),E			; store slotid
         JP	J.58D1			; next slot
 
-J$587A:	XOR	A			; secundairy slot 0
-J$587B:	CP	4
-        JP	NC,J.58D1
+J$587A:	XOR	A			; current secundairy slot = 0
+J$587B:	CP	4                       ; all secundairy slots done ?
+        JP	NC,J.58D1               ; yep, next primairy slot
         PUSH	AF
         ADD	A,A
         ADD	A,A
-        LD	B,A
-        LD	A,80H
+        LD	B,A                     ; secundairy slot in b3,b2
+        LD	A,80H                   ; expanded slot
         LD	HL,I.82E9
-        LD	E,(HL)
+        LD	E,(HL)                  ; current primairy slot
         OR	E
         OR	B
-        LD	(D.82EA),A
-        CALL	C.5927			; check if PAC SRAM
+        LD	(D.82EA),A              ; update current slotid
+        CALL	C.5927			; check if slot has PAC SRAM
         OR	A
-        JP	Z,J$58CC		; nope, next slot
-        LD	A,(D.82EA)
+        JP	Z,J$58CC		; nope, next secundairy slot
+        LD	A,(D.82EA)              ; current slotid
         PUSH	AF
-        CALL	C.58EA			; check if PAC2 indentifier
+        CALL	C.58EA			; check if slot has PAC2 indentifier
         OR	A
-        JP	Z,J$58A7		; nope,
+        JP	Z,J$58A7		; nope, PAC SRAM
         LD	HL,1			; FMPAC SRAM
         JP	J$58AA
 
@@ -3937,30 +3937,30 @@ J$58AA:	LD	H,L
         PUSH	HL
         LD	A,(D.82EB)
         LD	L,A
-        LD	H,00H
+        LD	H,0
         LD	BC,I.82D9
         ADD	HL,BC
-        LD	(D.82EB),A
+        LD	(D.82EB),A              ; ??
         POP	AF
-        LD	(HL),A			; SRAM type
+        LD	(HL),A			; store SRAM type
         LD	A,(D.82EB)
         INC	A
         LD	(D.82EB),A		; increase number of PAC SRAM found
         DEC	A
         LD	L,A
-        LD	H,00H
+        LD	H,0
         LD	BC,D.82C9
         ADD	HL,BC
         POP	AF
-        LD	(HL),A			; slotid
+        LD	(HL),A			; store slotid
 J$58CC:	POP	AF
         INC	A
         JP	J$587B			; next secundair slot
 
 J.58D1:	POP	DE
-        INC	E
+        INC	E                       ; next slot
         LD	HL,I.82E9
-        LD	(HL),E
+        LD	(HL),E                  ; update current primairy slot
         JP	J$5824			; next primair slot
 
 J$58DA:	LD	A,(D.82EB)
@@ -3972,7 +3972,7 @@ J$58DA:	LD	A,(D.82EB)
         LD	(HL),0FFH		; endmarker
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine check if slot has PAC2 indentifier
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4002,7 +4002,7 @@ C.58EA:	LD	(D.82EC),A
 J.5925:	XOR	A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine check if slot has PAC SRAM
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4010,10 +4010,10 @@ C.5927:	PUSH	AF
         CALL	C.74C8			; get current slotid in page 1
         POP	HL
         LD	L,H
-        CP	L
-        JP	NZ,J$593E		; check if PAC SRAM
+        CP	L                       ; this FMPAC slot ?
+        JP	NZ,J$593E		; nope, check if PAC SRAM
         LD	A,L
-        CALL	C.58EA			; check if PAC2 indentifier
+        CALL	C.58EA			; check if slot has PAC2 indentifier
         OR	A
         JP	Z,J$593C		; nope, FMPAC without PAC SRAM
         LD	A,1			; FMPAC with PAC SRAM
@@ -4026,13 +4026,13 @@ J$593E:	LD	A,L
         LD	DE,I.4000
         PUSH	AF
         LD	A,L
-        LD	(D.82ED),A
+        LD	(D.82ED),A              ; store slotid
         POP	AF
         CALL	C.8085			; read from slot
         PUSH	AF			; save current value
         CPL
         LD	C,A			; invert value
-        LD	A,(D.82ED)
+        LD	A,(D.82ED)              ; restore slotid
         LD	DE,I.4000
         PUSH	AF
         CALL	C.808B			; write to slot
@@ -4041,12 +4041,12 @@ J$593E:	LD	A,L
         CALL	C.8085			; read from slot
         LD	H,A			; current value
         POP	BC
-        LD	C,B
+        LD	C,B                     ; restore orginal value
         LD	A,C
         CPL
         CP	H			; writeable memory ?
-        JP	NZ,J$5973		; nope,
-        LD	A,(D.82ED)
+        JP	NZ,J$5973		; nope (SRAM is not writable when not enabled), could be SRAM
+        LD	A,(D.82ED)              ; restore slotid
         LD	DE,I.4000
         CALL	C.808B			; write to slot
         XOR	A			; no PAC SRAM
@@ -4055,27 +4055,27 @@ J$593E:	LD	A,L
 J$5973:	LD	A,(D.82ED)
         LD	DE,I.4000
         LD	(D.82ED),A
-        CALL	C.8030			; read byte from SRAM
-        PUSH	AF
+        CALL	C.8030			; read byte with (possible) SRAM enabled
+        PUSH	AF                      ; store current value
         CPL
-        LD	C,A
+        LD	C,A                     ; inverted
         LD	A,(D.82ED)
         LD	DE,I.4000
-        PUSH	AF
-        CALL	C.8043			; write byte to SRAM
-        POP	AF
+        PUSH	AF                      ; store slotid
+        CALL	C.8043			; write byte with (possible) SRAM enabled
+        POP	AF                      ; restore slotid
         LD	DE,I.4000
-        CALL	C.8030			; read byte from SRAM
-        LD	H,A
+        CALL	C.8030			; read byte with (possible) SRAM enabled
+        LD	H,A                     ; byte read
         POP	BC
-        LD	C,B
+        LD	C,B                     ; restore orginal value
         LD	A,C
         CPL
-        CP	H
-        JP	NZ,J$59A8
+        CP	H                       ; same as orginal ?
+        JP	NZ,J$59A8               ; nope, no PAC SRAM
         LD	A,(D.82ED)
         LD	DE,I.4000
-        CALL	C.8043			; write byte to SRAM
+        CALL	C.8043			; write byte with (possible) SRAM enabled
         LD	A,1			; PAC SRAM found
         RET
 
@@ -5885,6 +5885,10 @@ I$66E7:
 
         .PHASE	08030H
 
+;	  Subroutine read byte with SRAM enabled
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.8030:	LD	(D.80F1),A
         PUSH	DE
         PUSH	AF
@@ -5896,6 +5900,10 @@ C.8030:	LD	(D.80F1),A
         CALL	C.806E			; disable SRAM
         POP	AF
         RET
+
+;	  Subroutine write byte with SRAM enabled
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.8043:	LD	(D.80F1),A
         PUSH	DE
@@ -5910,6 +5918,10 @@ C.8043:	LD	(D.80F1),A
         CALL	C.806E			; disable SRAM
         RET
 
+;	  Subroutine enable SRAM
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.8057:	LD	A,(D.80F1)
         LD	E,4DH
         LD	HL,D.5FFE+0
@@ -5919,6 +5931,10 @@ C.8057:	LD	A,(D.80F1)
         LD	HL,D.5FFE+1
         CALL	WRSLT
         RET
+
+;	  Subroutine disable SRAM
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.806E:	LD	A,(D.80F1)
         LD	E,0
@@ -7986,7 +8002,7 @@ J$749C:	EX	DE,HL
         LD	(HL),0C9H
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine _FMPAC
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -8020,7 +8036,7 @@ C.74CF:	LD	B,14
         LD	C,E
         LD	B,0
         PUSH	HL
-        LD	HL,I.FCC1
+        LD	HL,EXPTBL
         ADD	HL,BC
         LD	A,(HL)
         AND	80H
