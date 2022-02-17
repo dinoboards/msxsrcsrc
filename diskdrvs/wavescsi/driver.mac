@@ -1,0 +1,1931 @@
+; Diskdriver ESE WAVESCSI (external sram + konami SCC megarom controller + scsi controller)
+; HDC   Fujitsu MB89352
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ESE and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+MYSIZE	EQU	4
+
+; +0	driver bank lock
+; +1,3	transfer routine (normally LDIR)
+
+SECLEN		equ	512		; Size of biggest sector supported
+
+SCSIIC		equ	0		; SCSI controller installed
+SCSIADR		equ	05FF0H		; SCSI controller address (5FF0H-5FFFH)
+SCSIDAT		equ	04000H		; SCSI controller data port address (4000H-4FFFH)
+
+SEL4000		equ	05000H		; SCC Megarom bank select 04000-05FFFH, MA18-MA13
+SEL6000		equ	07000H		; SCC Megarom bank select 06000-07FFFH, MA18-MA13
+SEL8000		equ	09000H		; SCC Megarom bank select 08000-09FFFH, MA18-MA13
+SELA000		equ	0B000H		; SCC Megarom bank select 0A000-0BFFFH, MA18-MA13
+D.7FFE		equ	07FFEH		; b6 = MA19, b4 = write enable
+
+BNKSRAM		equ	32		; number of SRAM banks
+BNK4000		equ	0		; bank number DOS kernel
+BNKNDRV		equ	1		; bank number disk driver
+
+                IF	DOS2 EQ 1
+
+BNKADRV		equ	3*2+1		; bank number DOS1 disk driver (DOS2 segment 3)
+
+                ELSE
+
+BNKADRV		equ	0*2+1		; bank number DOS1 disk driver
+
+                ENDIF
+
+BNKSCSI		equ	040H		; bank number SCSI controller
+
+DEFDPB	EQU	$-1
+
+I$7405:	DEFB	0F9H			; media descriptor byte
+        DEFW	512			; sector size
+        DEFB	00FH			; directory mask
+        DEFB	4			; directory shift
+        DEFB	001H			; cluster mask
+        DEFB	2			; cluster shift
+        DEFW	1			; first FAT sector
+        DEFB	2			; number of FATs
+        DEFB	112			; number of directory entries
+        DEFW	14			; first data sector
+        DEFW	714			; number of clusters
+        DEFB	3			; number of FAT sectors (per FAT)
+        DEFW	7			; first directory sector
+
+;	  Subroutine get partitioninfo (with FD emulation)
+;	     Inputs  A = driveid (0-3)
+;	     Outputs ________________________
+
+C.7417:	CALL	C.7432			; FD emulation handler
+
+;	  Subroutine get partitioninfo
+;	     Inputs  A = DOS drive (x0xxxddd) / extended partition number (x1xxpppp)
+;	     Outputs HL = IX = pointer to drive info table, A = device id
+
+C.741A:	EXX
+	LD	L,A
+	EX	AF,AF'
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL
+	BIT	2,H			; DOS drive ?
+	LD	H,HIGH I$7F00		; DOS drive info table
+	JR	Z,J$7428		; yep,
+	DEC	H			; extended drive info table
+J$7428:	LD	A,(HL)
+	PUSH	HL
+	POP	IX
+	EXX
+	SUB	0FFH
+	RET	NC			; deviceid 0FFH (ramdisk), Cx reset, Zx set
+	DEC	A			; deviceid 000H (unassigned), Cx set, Zx set, SCSI deviceid, Cx set, Zx reset
+	RET
+
+;	  Subroutine FD emulation handler
+;	     Inputs  A = driveid (0-3)
+;	     Outputs A = extend partition
+
+C.7432:	EXX
+	LD	C,A			; store driveid
+	EX	AF,AF'
+	LD	A,C
+	ADD	A,LOW D$7F8C
+	LD	C,A
+J$7439:	LD	HL,(D$7FAA)		; emul fd chg
+	CALL	C.74A4			; check if key combination pressed
+	JR	Z,J$744A		; yep,
+	EX	AF,AF'
+	LD	B,HIGH D$7F8C
+	LD	A,(BC)
+	SET	6,A			; b6 set (extended partition)
+	EXX
+	EI
+	RET
+
+J$744A:	IN	A,(0AAH)
+	LD	L,A			; store current row
+J$744D:	CALL	C.745C
+	JR	Z,J$744D
+J$7452:	CALL	C.745C
+	JR	NZ,J$7452
+	LD	A,L
+	OUT	(0AAH),A		; restore current row
+	JR	J$7439
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.745C:	PUSH	HL
+	LD	H,16
+	LD	DE,I$7FB0
+J$7462:	DJNZ	J$7462
+J$7464:	PUSH	HL
+	LD	A,(DE)
+	LD	L,A			; virtual disk file key definition
+	CALL	C$74C5			; check if key pressed, wait until released
+	JR	NZ,J$7482		; not pressed, skip update
+	CALL	C.7545			; driver bank on 4000-5FFF
+	LD	A,40H+16
+	SUB	H
+	LD	B,HIGH (D$7F8C-2000H)
+	LD	(BC),A			; set b6 + virtual file number
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	LD	L,A
+	LD	H,HIGH (I$7E00-2000H)	; to virtual file entry
+	INC	HL
+	RES	7,(HL)			; reset b7
+	CALL	C.79BD			; synch driver banks
+J$7482:	POP	HL
+	INC	DE
+	DEC	H
+	JR	NZ,J$7464		; next virtual disk file
+	POP	HL
+	INC	H
+	LD	A,H
+	AND	40H			; CAPS led
+	XOR	L
+	OUT	(0AAH),A
+	BIT	6,B
+	RET
+
+;	  Subroutine free/lock bank
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7492:	PUSH	HL
+I.7493:	LD	HL,I$7CE6
+	JR	C,J$749C
+	LD	(HL),1
+	POP	HL
+	RET
+
+J$749C:	SRA	(HL)
+	POP	HL
+	CCF
+	RET	NC
+	LD	A,6			; SEEK error
+	RET
+
+;	  Subroutine check if key combination pressed
+;	     Inputs  H = key2, L = key1
+;	     Outputs ________________________
+
+C.74A4:	CALL	C.74A9			; check if key pressed
+	RET	NZ			; nope, quit
+	LD	L,H
+
+;	  Subroutine check if key pressed
+;	     Inputs  L b3-b0=row, L b7-b4=col
+;	     Outputs ________________________
+
+C.74A9:	PUSH	HL
+	LD	A,L
+	AND	0FH
+	LD	H,A
+	IN	A,(0AAH)
+	AND	0F0H
+	OR	H
+	OUT	(0AAH),A
+	IN	A,(0A9H)
+	LD	H,A
+	LD	A,L
+	RLCA
+J$74BA:	RLC	H
+	ADD	A,20H
+	JR	NC,J$74BA
+	XOR	H
+	RRA
+	SBC	A,A
+	POP	HL
+	RET
+
+;	  Subroutine check if key pressed, wait until released
+;	     Inputs  L b3-b0=row, L b7-b4=col
+;	     Outputs ________________________
+
+C$74C5:	CALL	C.74A9			; check if key pressed
+	RET	NZ			; nope, quit
+J$74C9:	CALL	C.74A9			; check if key pressed
+	JR	Z,J$74C9		; yep, wait until released
+	XOR	A
+	RET
+
+;	  Subroutine select SCSI target (from partition)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.74D0:	LD	A,(IX+0)		; SCSI target ID (bit mapped)
+
+;	  Subroutine select SCSI target
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$74D3:	LD	(IY+4),0FFH		; reset interrupt
+	LD	(IY+8),00H		; phase control MSG = 0, C/D = 0, I/O = 0
+	OR	(IY+0)			; bus device id = SCSI host ID + SCSI target ID
+	LD	(IY+11),A		; update temp
+	LD	(IY+12),0FH
+	LD	(IY+13),43H
+	LD	(IY+14),04H		; transfer counter
+	LD	(IY+2),20H		; command = SELECT
+J$74F1:	LD	A,(IY+4)		; interrupt sense
+	AND	14H			; command complete or time out ?
+	JR	Z,J$74F1		; nope, wait
+	LD	(IY+4),0FFH		; reset interrupt
+	CP	10H			; command complete ?
+	JR	NZ,J$750A		; nope, handle time out
+J$7500:	LD	A,(IY+5)		; phase sense
+	RLA				; REQ ?
+	JR	NC,J$7500		; nope, wait
+	RRA
+	AND	07H
+	RET
+
+J$750A:	XOR	A
+	LD	(IY+2),A		; command = BUS RELEASE
+	LD	(IY+11),A		; update temp
+	LD	A,2
+	SCF				; NOT READY error
+	RET
+
+;	  Subroutine SCSI bus release
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7515:	XOR	A
+J$7516:	BIT	3,(IY+5)		; phase sense BSY ?
+	JR	NZ,J$7516		; yep, wait
+	BIT	5,(IY+4)		; interrupt sense, disconnect ?
+	LD	(IY+4),0FFH		; reset interrupt
+	RET	NZ			; yep, quit
+	LD	(IY+11),A		; update temp
+	LD	(IY+2),A		; command = BUS RELEASE
+	LD	A,12
+	SCF				; OTHER error
+	RET
+
+;	  Subroutine scsi bank on 4000-5FFF with lock
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.752F:	SCF				; lock
+	CALL	C.7492			; free/lock bank
+	RET	C			; error, quit
+
+;	  Subroutine scsi bank on 4000-5FFF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7534:	PUSH	AF
+	LD	A,40H			; MA19=1, write disabled -> select SPC
+	LD	(D.7FFE),A
+	POP	AF
+	LD	IY,SCSIADR
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7540:	SCF				; lock
+	CALL	C.7492			; free/lock bank
+	RET	C			; error, quit
+
+;	  Subroutine driver bank on 4000-5FFF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7545:	PUSH	AF
+	LD	A,1
+	LD	(SEL4000),A
+	LD	A,10H			; MA19=0, write enabled
+	DI
+	LD	(D.7FFE),A
+	POP	AF
+	RET
+
+;	  Subroutine check block size and adjust
+;	     Inputs  CDE = sector number, B = number of sectors
+;	     Outputs CDE = sector number, DE' = number of sectors
+
+C.7553:	LD	A,B
+	EXX
+	LD	E,A
+	LD	B,(IX+8)
+	LD	C,(IX+9)		; block size
+	LD	A,B
+	SUB	HIGH 512
+	OR	C			; block size = 512 ?
+	LD	D,A
+	EXX
+	RET	Z			; yep, quit
+	EXX
+	LD	A,B
+	OR	C			; block size = 0 ?
+	EXX
+	LD	A,2
+	SCF
+	RET	Z			; yep, quit with NOT READY error
+	EXX
+	LD	D,0
+	LD	A,B
+	DEC	A
+	OR	C			; block size = 256 ?
+	EXX
+	LD	A,10
+	SCF
+	RET	NZ			; nope, quit with WRITE FAULT error
+	SLA	E
+	RL	D
+	RL	C			; block number = block number *2
+	EXX
+	SLA	E			; number of blocks = number of blocks *2
+	XOR	A
+	EXX
+	RET
+
+;	  Subroutine validate sector parameters, calculate absolute logical block number
+;	     Inputs  CDE = sector, DE' = number of sectors
+;	     Outputs ________________________
+
+C$7582:	LD	A,C
+	PUSH	DE
+	EXX
+	POP	HL
+	ADD	HL,DE
+	ADC	A,D
+	LD	D,A			; DHL = sector + number of sectors
+	LD	A,(IX+7)
+	SUB	L
+	LD	A,(IX+6)
+	SBC	A,H
+	LD	A,(IX+5)
+	SBC	A,D			; sectors in range ?
+	EXX
+	LD	A,12
+	RET	C			; nope, quit with OTHER error
+	LD	A,E
+	ADD	A,(IX+4)
+	LD	E,A
+	LD	A,D
+	ADC	A,(IX+3)
+	LD	D,A
+	LD	A,C
+	ADC	A,(IX+2)
+	LD	C,A			; CDE = absolute logical block number
+	XOR	A
+	RET
+
+;	  Subroutine SCSI bus reset
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.75AA:	XOR	A
+	LD	(IY+4),0FFH		; reset interrupt
+	LD	(IY+1),A		; SPC control
+	LD	(IY+2),10H		; command = BUS RESET
+J$75B6:	EX	(SP),HL
+	EX	(SP),HL
+	DEC	A
+	JR	NZ,J$75B6
+	LD	(IY+2),A		; command = BUS RELEASE
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$75BE:	LD	(IY+1),0D8H		; SPC control
+	LD	A,(D$7F90)		; host controller scsi id
+	LD	(IY+0),A		; bus device id
+	XOR	A
+	LD	(IY+2),A		; command = BUS RELEASE
+	LD	(IY+3),A		; open = 0
+	LD	(IY+8),A		; phase control MSG = 0, C/D = 0, I/O = 0
+	LD	(IY+11),A		; temp = 0
+	LD	(IY+12),A
+	LD	(IY+13),A
+	LD	(IY+14),A		; transfer counter = 0
+	LD	(IY+5),A		; SPC diagnostic control
+	LD	(IY+1),18H		; SPC control
+	RET
+
+;	  Subroutine read RAM disk sectors
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.75E6:	BIT	7,D			; transfer to page 2 or 3 ?
+	JR	NZ,C.7619		; yep, read RAM disk sectors (direct transfer)
+	EX	AF,AF'
+	DEC	DE
+	LD	A,D
+	INC	DE
+	CP	HIGH 4000H-SECLEN	; transfer to page 0 ?
+	PUSH	BC
+	LD	B,1			; number of sectors = 1
+	JR	NC,J$75FD
+	EX	AF,AF'
+	CALL	C.7619			; read RAM disk sectors (direct transfer)
+J$75F9:	POP	BC
+	DJNZ	C.75E6			; next sector
+	RET
+
+J$75FD:	EX	AF,AF'
+	PUSH	DE
+	LD	DE,($SECBUF)
+	CALL	C.7619			; read RAM disk sectors (direct transfer)
+	POP	DE
+	PUSH	HL
+	LD	B,HIGH SECLEN
+	LD	HL,($SECBUF)
+	CALL	C.79AD			; normal kernel bank on 4000-5FFF
+	CALL	XFER
+	LD	(SEL4000),A
+	POP	HL
+	JR	J$75F9
+
+;	  Subroutine read RAM disk sectors (direct transfer)
+;	     Inputs  A = bank, B = number of sectors
+;	     Outputs ________________________
+
+C.7619:	EX	AF,AF'
+	LD	A,B			; number of sectors
+	EX	AF,AF'
+	BIT	6,A
+	JR	Z,J$7627		; nope, skip
+	LD	B,A			; store bank
+	LD	A,50H			; MA19=1, write enabled
+	LD	(D.7FFE),A
+	LD	A,B
+J$7627:	EX	AF,AF'
+	LD	B,HIGH SECLEN
+I.762A:	CALL	C.7DC8			; LDIR
+	LD	B,A
+	XOR	A			; MA19=0, write disabled
+	LD	(D.7FFE),A
+	EX	AF,AF'
+	BIT	5,H			; still in 4000H-5FFFH range ?
+	JR	Z,J$763D		; yep, skip bank update
+	LD	H,HIGH 4000H
+	INC	A
+	LD	(SEL4000),A
+J$763D:	DJNZ	C.7619			; next sector
+	RET
+
+;	  Subroutine write RAM disk sectors
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7640:	BIT	7,H			; transfer from page 2 or 3 ?
+	JR	NZ,C.7674		; yep, write RAM disk sectors (direct transfer)
+	EX	AF,AF'
+	DEC	HL
+	LD	A,H
+	INC	HL
+	CP	HIGH 4000H-SECLEN	; transfer from page 0 ?
+	PUSH	BC
+	JR	NC,J$7657		; nope,
+	EX	AF,AF'
+	LD	B,1			; number of sectors = 1
+	CALL	C.7674			; write RAM disk sectors (direct transfer)
+J$7653:	POP	BC
+	DJNZ	C.7640			; next sector
+	RET
+
+J$7657:	EX	AF,AF'
+	PUSH	DE
+	LD	B,HIGH SECLEN
+	LD	DE,($SECBUF)
+	CALL	C.79AD			; normal kernel bank on 4000-5FFF
+	CALL	XFER
+	LD	(SEL4000),A
+	POP	DE
+	PUSH	HL
+	INC	B			; number of sectors = 1
+	LD	HL,($SECBUF)
+	CALL	C.7674			; write RAM disk sectors (direct transfer)
+	POP	HL
+	JR	J$7653			; continue
+
+;	  Subroutine write RAM disk sectors (direct transfer)
+;	     Inputs  A = bank, B = number of sectors
+;	     Outputs ________________________
+
+C.7674:	EX	AF,AF'
+	LD	A,B			; number of sectors
+	EX	AF,AF'
+	LD	B,A			; bank
+	AND	40H			; MA19
+	OR	10H			; write enabled
+	DI
+	LD	(D.7FFE),A
+	LD	A,B			; bank
+	EX	AF,AF'
+	LD	B,HIGH SECLEN
+I.7684:	CALL	C.7DC8			; LDIR
+	LD	B,A			; restore number of sectors
+	XOR	A			; MA19=0, write disabled
+	LD	(D.7FFE),A
+	EX	AF,AF'
+	BIT	5,D			; still in 4000H-5FFFH range ?
+	JR	Z,J$7697		; yep, skip bank update
+	LD	D,HIGH 4000H
+	INC	A
+	LD	(SEL4000),A		; update bank
+J$7697:	DJNZ	C.7674			; next sector
+	RET
+
+;	  Subroutine read or write controller
+;	     Inputs  HL = buffer, BC = size, D = phase
+;	     Outputs ________________________
+
+C.769A:	OR	A
+J$769B:	LD	E,(HL)
+	CALL	C.76A8			; read or write byte controller
+	RET	NC
+	LD	(HL),E
+	INC	HL
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J$769B
+	RET
+
+;	  Subroutine read or write byte controller
+;	     Inputs  D = phase, E = byte
+;	     Outputs E = byte
+
+C.76A8:	LD	A,(IY+5)		; phase sense
+	BIT	3,A			; BSY ?
+	RET	Z			; nope, quit
+	RLA				; REQ ?
+	JR	NC,C.76A8		; nope, wait
+	RRA
+	AND	07H			; MSG, C/D, I/O
+	XOR	D			; correct phase ?
+	RET	NZ			; nope, quit
+	LD	(IY+8),D		; phase control
+	BIT	0,D			; phase with data input ?
+	JR	NZ,J$76C6		; yep,
+	LD	(IY+11),E		; temp = data
+	LD	(IY+2),0E0H		; command = ACKREQ_S
+	JR	J.76CD
+
+J$76C6:	LD	(IY+2),0E0H		; command = ACKREQ_S
+	LD	E,(IY+11)		; data = temp
+J.76CD:	BIT	7,(IY+5)		; phase sense REQ ?
+	JR	NZ,J.76CD		; yep, wait
+	LD	(IY+2),0C0H		; command = ACKREQ_C
+	SCF
+	RET
+
+;	  Subroutine SCSI sector transfer
+;	     Inputs  HL = transfer address, D = phase, BC = number of bytes per block, E = number of blocks
+;	     Outputs ________________________
+
+C.76D9:	LD	A,(IY+5)		; phase sense
+	RLA				; REQ ?
+	JR	NC,C.76D9		; nope, wait
+	RRA
+	AND	07H			; phase
+	CP	D			; correct phase ?
+	RET	NZ			; nope, quit
+	LD	(IY+4),0FFH		; reset interrupt
+	LD	A,B
+	SUB	HIGH 512
+	OR	C			; block size = 512 bytes ?
+	JR	Z,J$7703		; yep, skip adjust
+	PUSH	HL			; store transfer address
+	LD	A,E			; number of blocks
+	LD	HL,0
+J$76F3:	ADD	HL,BC
+	DEC	A
+	JR	NZ,J$76F3		; calculate number of bytes
+	LD	(IY+12),A		; MSB = 0
+	LD	(IY+13),H
+	LD	(IY+14),L		; transfer counter
+	POP	HL			; restore transfer address
+	JR	J$770E
+
+J$7703:	LD	(IY+12),A		; MSB = 0
+	LD	(IY+14),A		; LSB = 0
+	LD	A,E
+	ADD	A,A
+	LD	(IY+13),A		; transfer counter
+J$770E:	LD	(IY+8),D		; phase control
+	LD	(IY+2),80H		; command = XFER
+	BIT	0,D			; phase with data input ?
+	LD	D,HIGH SCSIDAT		; destination (SPC data register) in 4000H-4FFFH range
+	JR	Z,J$7731		; nope,
+	EX	DE,HL			; flip transfer address/SCSI data port
+	CALL	C.7736			; read blocks
+	EX	DE,HL			; flip transfer address/SCSI data port
+J$7720:	RET	C			; error, quit
+J$7721:	BIT	4,(IY+4)		; interrupt sense, command completed ?
+	JR	Z,J$7721		; nope, wait
+J$7727:	LD	A,(IY+5)		; phase sense
+	RLA				; REQ ?
+	JR	NC,J$7727		; nope, wait
+	RRA
+	AND	07H			; MSG, C/D, I/O
+	RET
+
+J$7731:	CALL	C.77A5			; write blocks
+	JR	J$7720			; continue
+
+;	  Subroutine read blocks
+;	     Inputs  DE = transfer address, BC = block size, L = number of blocks
+;	     Outputs ________________________
+
+C.7736:	BIT	7,D			; transfer address to page 2 or 3 ?
+	JR	NZ,C.7786		; yep, direct transfer
+	PUSH	HL
+	LD	L,E
+	LD	H,D
+	ADD	HL,BC
+	DEC	HL
+	LD	A,H
+	CP	HIGH 4000H		; transfer complety in page 0 ?
+	JR	NC,J$7750		; nope,
+	LD	HL,SCSIDAT+1		; source (SPC data register) in 4000H-4FFFH range, 1 block
+	CALL	C.7786			; direct transfer
+J$774A:	POP	HL
+	DEC	L			; update number of blocks
+	RET	C			; error, quit
+	JR	NZ,C.7736		; next block
+	RET
+
+J$7750:	CALL	C.7755
+	JR	J$774A			; continue
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7755:	DEC	BC
+	LD	A,B
+	INC	BC
+	CP	HIGH 512
+	JR	C,C.776C
+	DEC	B
+	DEC	B
+	CALL	C.7755
+	PUSH	BC
+	LD	BC,512
+	CALL	NC,C.776C
+	POP	BC
+	INC	B
+	INC	B
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.776C:	PUSH	DE
+	LD	DE,($SECBUF)
+	LD	HL,SCSIDAT+1		; source (SPC data register) in 4000H-4FFFH range, 1 block
+	CALL	C.7786
+	POP	DE
+	CALL	C.79AD			; normal kernel bank on 4000-5FFF
+	PUSH	BC
+	LD	HL,($SECBUF)
+	CALL	XFER
+	POP	BC
+	JP	C.7534			; scsi bank on 4000-5FFF
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7786:	BIT	0,(IY+6)		; SPC status DREG empty
+	JR	Z,J$7797		; not empty,
+	LD	A,(IY+4)		; interrupt sense
+	AND	18H			; command completed or service required ?
+	JR	Z,C.7786		; nop, wait
+	LD	A,4
+	SCF				; DATA (CRC) error
+	RET
+
+J$7797:	LD	A,L
+	PUSH	BC
+I.7799:	CALL	C.7DC8			; LDIR
+	POP	BC
+	DEC	A
+	LD	L,A			; update number of blocks
+	LD	H,HIGH SCSIDAT		; source (SPC data register) in 4000H-4FFFH range
+	JR	NZ,C.7786		; next block
+	XOR	A
+	RET
+
+;	  Subroutine write blocks
+;	     Inputs  HL = transfer address, BC = block size, E = number of blocks
+;	     Outputs ________________________
+
+C.77A5:	BIT	7,H			; transfer from page 2 or 3 ?
+	JR	NZ,C.7807		; yep, direct transfer
+	PUSH	HL
+	ADD	HL,BC
+	DEC	HL
+	LD	A,H
+	CP	40H
+	POP	HL
+	PUSH	DE
+	JR	NC,J$77BE
+	LD	E,1
+	CALL	C.7807
+J$77B8:	POP	DE
+	DEC	E
+	RET	C
+	JR	NZ,C.77A5
+	RET
+
+J$77BE:	CALL	C.77C3
+	JR	J$77B8
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.77C3:	DEC	BC
+	LD	A,B
+	INC	BC
+	CP	HIGH 512
+	JR	C,C.77DA
+	DEC	B
+	DEC	B
+	CALL	C.77C3
+	PUSH	BC
+	LD	BC,512
+	CALL	NC,C.77DA
+	POP	BC
+	INC	B
+	INC	B
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.77DA:	CALL	C.79AD			; normal kernel bank on 4000-5FFF
+	PUSH	BC			; store block size
+	LD	DE,($SECBUF)
+	CALL	XFER
+	POP	BC			; restore block size
+	CALL	C.7534			; scsi bank on 4000-5FFF
+	PUSH	HL
+	LD	HL,-9
+	ADD	HL,BC
+	LD	DE,SCSIDAT+1		; destination (SPC data register) in 4000H-4FFFH range, 1 block
+	LD	HL,($SECBUF)
+	JR	NC,J.77FB
+	CALL	C.7807
+	POP	HL
+	RET
+
+J.77FB:	BIT	1,(IY+6)		; SPC status DREG full
+	JR	NZ,J.77FB		; full, wait
+	LD	A,C
+	LDIR
+	LD	C,A
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  E = number of blocks
+;	     Outputs ________________________
+
+C.7807:	BIT	1,(IY+6)		; SPC status DREG full
+	JR	Z,J$7818		; not full,
+	LD	A,(IY+4)		; interrupt sense
+	AND	18H			; command completed or service required ?
+	JR	Z,C.7807		; nope, wait
+	LD	A,4
+	SCF				; DATA (CRC) error
+	RET
+
+J$7818:	LD	A,E			; number of blocks
+	PUSH	BC			; store block size
+	LDI
+	LDI
+	LDI
+	LDI
+	LDI
+	LDI
+	LDI
+	LDI				; fill FIFO (8 bytes)
+J$782A:	BIT	1,(IY+6)		; SPC status DREG full
+	JR	Z,J$783D		; not full, transfer the rest of the block
+	LD	E,A
+	LD	A,(IY+4)		; interrupt sense
+	AND	18H			; command completed or service required ?
+	LD	A,E
+	JR	Z,J$782A		; nope, wait
+	LD	A,4
+	SCF				; DATA (CRC) ERROR
+	RET
+
+J$783D:	CALL	C.7DC8			; LDIR
+	POP	BC			; restore block size
+	DEC	A
+	LD	E,A			; update number of blocks
+	LD	D,HIGH SCSIDAT		; destination (SPC data register) in 4000H-4FFFH range
+	JR	NZ,C.7807		; next block
+	XOR	A
+	RET
+
+;	  Subroutine DSKIO
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+DSKIO:
+?.7849:	EI
+	CALL	C.7417			; get partitioninfo (with FD emulation)
+
+;	  Subroutine DSKIO (with drive flags)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$784D:	JR	NZ,J$78A3		; SCSI partition, DSKIO SCSI partition
+	JR	NC,J.7874		; RAM disk, DSKIO RAM disk
+	EX	AF,AF'
+	LD	IX,I$4010		; DSKIO
+
+;	  Subroutine execute DSK routine of real FD
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$7856:	EX	AF,AF'
+	PUSH	AF
+	LD	A,(D.7F88)
+	DEC	A
+	CP	8FH			; valid slotid ?
+	JR	C,J$7866		; yep,
+	POP	AF
+	EX	AF,AF'
+	LD	A,2
+	SCF				; NOT READY error
+	RET
+
+J$7866:	EX	AF,AF'
+	LD	A,0
+	LD	IY,(D$7F88-1)
+	CALL	CALSLT
+	EX	AF,AF'
+	POP	AF
+	EX	AF,AF'
+	RET
+
+; DSKIO RAM disk
+
+J.7874:	SCF				; lock
+	CALL	C.7492			; free/lock bank
+	RET	C			; error, quit
+	PUSH	HL			; store transfer address
+	EX	DE,HL
+	ADD	HL,HL
+	LD	A,L
+	OR	HIGH 4000H		; page 1 based
+	AND	5FH			; mask off bank (4000H-5FFFH)
+	LD	E,0
+	LD	D,A			; address 'sector'
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL			; bank (in H)
+	LD	A,(D$7F9A)		; first data bank
+	ADD	A,H
+	LD	C,E			; C = 0
+	LD	(SEL4000),A		; select bank of 'sector'
+	POP	HL			; restore transfer address
+	EX	AF,AF'
+	JR	NC,J$7899		; DSKIO read RAM disk
+
+; DSKIO write RAM disk
+
+	EX	AF,AF'
+	CALL	C.7640			; write RAM disk sectors
+	JR	J$789F			; continue
+
+; DSKIO read RAM disk
+
+J$7899:	EX	AF,AF'
+	EX	DE,HL
+	CALL	C.75E6			; read RAM disk sectors
+	EX	DE,HL
+J$789F:	XOR	A
+	JP	C.799E			; normal kernel bank on 4000-5FFF and unlock
+
+; DSKIO SCSI partition
+
+J$78A3:	BIT	7,C			; media descriptor ?
+	JR	Z,J$78A9		; nope, use as sector number b23-b16
+	LD	C,0			; sector number b23-b16 = 0
+J$78A9:	CALL	C.7553			; check block size and adjust
+	RET	C			; error, quit
+J$78AD:	CALL	C$7582			; validate sector parameters, calculate absolute logical block number
+	RET	C			; error, quit
+	CALL	C.752F			; scsi bank on 4000-5FFF with lock
+	RET	C			; error, quit
+	EX	AF,AF'
+	LD	A,(D$7F91)		; number of retries
+	EXX
+	LD	D,1			; asssume read
+	JR	NC,J.78CB		; read,
+	DEC	D			; write
+	BIT	6,(IX+1)		; write protected ?
+	JR	Z,J.78CB		; nope, continue
+	EXX
+	LD	A,0			; WRITE PROTECT
+J$78C8:	JP	C.799E			; normal kernel bank on 4000-5FFF and unlock
+
+J.78CB:	EXX
+J$78CC:	EX	AF,AF'
+	CALL	C.74D0			; select SCSI target (from partition)
+	JR	C,J$78C8
+	XOR	A
+	XOR	A			; ??
+	LD	(IY+12),A
+	LD	(IY+13),A
+	LD	(IY+14),0AH		; transfer counter = 10
+	LD	(IY+8),02H		; phase control MSG = 0, C/D = 1, I/O = 0
+	LD	(IY+2),84H		; command = XFER + PRG XFER
+	EX	AF,AF'
+	JR	NC,J$78EF
+	LD	(IY+10),2AH		; data = SCSI command WRITE(10)
+	JR	J$78F3
+
+J$78EF:	LD	(IY+10),28H		; data = SCSI command READ(10)
+J$78F3:	EX	AF,AF'
+	LD	(IY+10),A
+	LD	(IY+10),A		; MSB LBA = 0
+	LD	(IY+10),C
+	LD	(IY+10),D
+	LD	(IY+10),E		; LBA
+	LD	(IY+10),A
+	PUSH	HL
+	EXX
+	POP	HL
+	PUSH	DE
+	LD	(IY+10),A		; MSB transfer length
+J$790D:	BIT	0,(IY+6)		; SPC status DREG empty
+	JR	Z,J$790D		; not empty, wait
+	LD	(IY+10),E		; LSB transfer length
+	LD	(IY+10),A		; control
+J$7919:	BIT	4,(IY+4)		; interrupt sense, command completed
+	JR	Z,J$7919		; nope, wait
+	CALL	C.76D9			; SCSI sector transfer
+	LD	D,3			; phase STATUS
+	CALL	C.76A8			; read or write byte controller
+	LD	L,E
+	LD	D,7			; phase MESSAGE IN
+	CALL	C.76A8			; read or write byte controller
+	CALL	C.7515			; SCSI bus release
+	POP	DE
+	LD	A,L
+	OR	A
+	EXX
+	JR	NZ,J$7939
+	LD	B,A
+	JR	C.799E			; normal kernel bank on 4000-5FFF and unlock
+
+J$7939:	CP	18H
+	LD	A,8
+	SCF				; RECORD NOT FOUND error
+	JR	Z,C.799E		; normal kernel bank on 4000-5FFF and unlock
+	EX	AF,AF'
+	DEC	A
+	JP	P,J$78CC
+	CALL	C.74D0			; select SCSI target (from partition)
+	JR	C,C.799E		; normal kernel bank on 4000-5FFF and unlock
+	XOR	A
+	LD	(IY+12),A
+	LD	(IY+13),A
+	LD	(IY+14),06H		; transfer counter = 6
+	LD	(IY+8),02H		; phase control MSG = 0, C/D = 1, I/O = 0
+	LD	(IY+2),84H		; command = XFER + PRG XFER
+	LD	(IY+10),03H		; SCSI command REQUEST SENSE
+	LD	(IY+10),A		; reserved
+	LD	(IY+10),A		; reserved
+	LD	(IY+10),A		; reserved
+	LD	(IY+10),04H		; allocation length = 4
+	LD	(IY+10),A		; control
+J$7971:	BIT	4,(IY+4)		; interrupt sense, command completed ?
+	JR	Z,J$7971		; nope, wait
+	LD	D,1			; phase DATA IN
+	CALL	C.76A8			; read or write byte controller
+	CALL	C.76A8			; read or write byte controller
+	CALL	C.76A8			; read or write byte controller
+	LD	A,E
+	PUSH	AF			; store sense key
+	CALL	C.76A8			; read or write byte controller
+	LD	D,3			; phase STATUS
+	CALL	C.76A8			; read or write byte controller
+	LD	D,7			; phase MESSAGE IN
+	CALL	C.76A8			; read or write byte controller
+	CALL	C.7515			; SCSI bus release
+	POP	AF			; restore sense key
+	CP	07H			; DATA PROTECT ?
+	LD	A,0			; WRITE PROTECT ERROR
+	SCF				; error flag
+	JR	Z,C.799E		; yep, normal kernel bank on 4000-5FFF and unlock
+	LD	A,2			; NOT READY ERROR
+
+;	  Subroutine normal kernel bank on 4000-5FFF and unlock
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.799E:	PUSH	AF
+	XOR	A			; MA19=0, write disabled
+	LD	(D.7FFE),A
+	LD	A,0			; free / bank 0
+	LD	(SEL4000),A		; select bank
+	CALL	C.7492			; free/lock bank
+	POP	AF
+	RET
+
+;	  Subroutine normal kernel bank on 4000-5FFF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.79AD:	PUSH	AF
+	LD	A,0			; MA19=0, write disabled / bank 0
+	LD	(D.7FFE),A
+	LD	(SEL4000),A		; select bank
+	POP	AF
+	RET
+
+;	  Subroutine synch driver banks and unlock
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.79B8:	CALL	C.79BD			; synch driver banks
+	JR	C.799E			; normal kernel bank on 4000-5FFF and unlock
+
+;	  Subroutine synch driver banks
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.79BD:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	A,07H
+	LD	(D.7FFE),A		; MA19=0, write disabled
+	LD	(SEL4000),A
+	LD	A,10H			; MA19=0, write enabled
+	DI
+	LD	(D.7FFE),A
+	LD	BC,01CDH
+	LD	DE,I$7E00-2000H
+	LD	HL,I$7E00
+	NOP
+	NOP				; LDIR when DOS2
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+	JR	C.79AD			; normal kernel bank on 4000-5FFF
+
+DSKCHG:
+?.79E0:	EI
+	CALL	C.7417			; get partitioninfo (with FD emulation)
+
+J$79E4:	PUSH	HL
+	CALL	C,C$7A23		; SCSI or unassigned, update diskchange flag
+	POP	DE
+	LD	B,0			; assume DISK CHANGE UNKNOWN
+	RET	C			; error, quit
+	INC	B			; assume DISK UNCHANGED
+	BIT	7,(IX+1)		; media changed ?
+	RET	NZ			; nope, quit with DISK UNCHANGED
+	LD	A,(IX+0)
+	DEC	A
+	CP	0FEH
+	JR	NC,J$7A01
+	INC	A
+J$79FB:	RRCA
+	JR	NC,J$79FB
+	ADD	A,A
+	JR	NZ,J$7A11
+J$7A01:	CALL	C.7540
+	DEC	B			; DISK CHANGE UNKNOWN
+	RET	C			; error, quit
+	PUSH	IX
+	POP	HL
+	INC	HL
+	RES	5,H			; to 4000H-5FFFH
+	SET	7,(HL)			; media not changed
+	CALL	C.79B8			; synch driver banks and unlock
+J$7A11:	EX	AF,AF'
+	EX	DE,HL
+	OR	A
+	CALL	C.741A			; get partitioninfo
+	CALL	C$7A92			; get drive parameter block (with drive flags)
+	LD	B,0FFH
+	RET	NC			; no error, quit with DISK CHANGED
+	CP	10			; WRITE FAULT ?
+	RET	Z			; yep, quit with DISK CHANGED
+	SCF				; set error flag
+	INC	B			; DISK CHANGE UNKNOWN
+	RET
+
+;	  Subroutine update diskchange flag
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7A23:	JR	NZ,J$7A2C		; SCSI partition,
+	LD	IX,I$4013		; DSKCHG
+	JP	J$7856			; execute DSK routine of real FD
+
+J$7A2C:	CALL	C.752F			; scsi bank on 4000-5FFF with lock
+	RET	C
+	CALL	C.74D0			; select SCSI target (from partition)
+	JP	C,C.799E		; error, normal kernel bank on 4000-5FFF, unlock and quit
+	LD	HL,SCSIDAT
+	LD	(IY+12),L
+	LD	(IY+13),L
+	LD	(IY+14),06H		; transfer counter = 6
+	LD	(IY+8),02H		; phase control MSG = 0, C/D = 1, I/O = 0
+	LD	(IY+2),80H		; command = XFER
+	LD	(HL),L
+	LD	(HL),L
+	LD	(HL),L
+	LD	(HL),L
+	LD	(HL),L
+	LD	(HL),L			; 6x data = 0
+J$7A51:	BIT	4,(IY+4)		; interrupt sense, command completed ?
+	JR	Z,J$7A51		; nope, wait
+	LD	D,3			; phase STATUS
+	CALL	C.76A8			; read or write byte controller
+	LD	H,E
+	LD	D,7			; phase MESSAGE IN
+	CALL	C.76A8			; read or write byte controller
+	CALL	C.7515			; SCSI bus release
+	CALL	C.799E			; normal kernel bank on 4000-5FFF and unlock
+	LD	A,H
+	OR	A
+	RET	Z
+	CP	18H
+	LD	A,8
+	SCF				; RECORD NOT FOUND error
+	RET	Z
+	CALL	C.7540
+	RET	C
+	LD	B,16+8
+	LD	DE,16-1
+	LD	HL,I$7E00-2000H
+	LD	A,(IX+0)
+J$7A80:	CP	(HL)
+	INC	HL
+	JR	NZ,J$7A86
+	RES	7,(HL)			; media changed
+J$7A86:	ADD	HL,DE
+	DJNZ	J$7A80
+	XOR	A
+	JP	C.79B8			; synch driver banks, unlock and quit
+
+GETDPB:
+?.7A8D:	EI
+	OR	A
+	CALL	C.7417			; get partitioninfo (with FD emulation)
+
+;	  Subroutine get drive parameter block (with drive flags)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7A92:	PUSH	HL
+	LD	HL,($SECBUF)
+	LD	DE,0			; sector 0
+	LD	BC,1*256+0FFH		; 1 sector, mediadescriptor 0FFH
+	CALL	C$784D			; DSKIO (with drive flags)
+	POP	HL
+	RET	C			; error, quit
+	LD	IY,($SECBUF)
+	INC	HL
+	PUSH	HL
+	LD	BC,18
+	EX	DE,HL
+	LD	HL,I$7405
+	LDIR				; initialize drive parameter block with defaults
+	POP	HL
+	LD	A,(IY+21)		; media descriptor byte from BPB
+	CP	0F9H			; double sided 3.5" ?
+	RET	Z			; yep, keep DPB defaults
+	LD	(HL),A			; update DPB media descriptor byte
+	INC	HL
+	LD	A,(IY+11)
+	LD	(HL),A
+	INC	HL
+	LD	A,(IY+12)
+	LD	(HL),A			; update DPB sector size with BPB sector size
+	INC	HL
+	LD	(HL),0FH		; update directory mask (always 16 entries per sector, assumes 512 bytes sector)
+	INC	HL
+	LD	(HL),4			; update directory shift
+	INC	HL
+	LD	A,(IY+13)		; sectors per cluster from BPB
+	DEC	A
+	LD	(HL),A			; update cluster mask
+	INC	HL
+	ADD	A,1
+	LD	B,0
+J$7AD3:	INC	B
+	RRA
+	JR	NC,J$7AD3		; calculate cluster shift
+	LD	(HL),B			; update cluster shift
+	INC	HL
+	PUSH	BC			; store cluster shift
+	LD	A,(IY+14)
+	LD	(HL),A
+	INC	HL
+	LD	D,(IY+15)
+	LD	(HL),D			; update first FAT sector with reserved sectors
+	INC	HL
+	LD	B,(IY+16)
+	LD	(HL),B			; update number of FATs
+	INC	HL
+J$7AE9:	ADD	A,(IY+22)
+	JR	NC,J$7AEF
+	INC	D
+J$7AEF:	DJNZ	J$7AE9
+	LD	C,A
+	LD	B,D			; calculate first directory sector
+	LD	E,(IY+17)
+	LD	D,(IY+18)		; number of root directory entries
+	LD	A,D
+	OR	A			; high byte = 0 ?
+	LD	A,254
+	JR	NZ,J$7B00		; nope, use 254
+	LD	A,E			; yep, use 
+J$7B00:	LD	(HL),A			; update number of directory entries
+	INC	HL
+	DEC	DE
+	LD	A,4
+J$7B05:	SRL	D
+	RR	E
+	DEC	A
+	JR	NZ,J$7B05		; calculate number of directory sectors
+	INC	DE
+	EX	DE,HL
+	ADD	HL,BC			; + first directory sector
+	EX	DE,HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D			; update first data sector
+	INC	HL
+	LD	A,(IY+19)
+	SUB	E
+	LD	E,A
+	LD	A,(IY+20)
+	SBC	A,D
+	LD	D,A
+	POP	AF			; restore cluster shift
+J$7B1F:	DEC	A
+	JR	Z,J$7B28
+	SRL	D
+	RR	E
+	JR	J$7B1F
+
+J$7B28:	INC	DE
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D			; update number of clusters
+	INC	HL
+	LD	A,(IY+22)
+	LD	(HL),A			; update number of FAT sectors (per FAT)
+	INC	HL
+	LD	(HL),C
+	INC	HL
+	LD	(HL),B			; update first directory sector
+	XOR	A
+	RET
+
+CHOICE:
+?.7B37:	CALL	C.7417			; get partitioninfo (with FD emulation)
+	LD	HL,0
+	RET	NC
+	LD	HL,I$7B43
+
+MTOFF:
+?.7B41:	XOR	A
+	RET
+
+I$7B43:	DEFB	0
+
+        DEFB	"SCSI5FF0"
+        DEFB	0
+
+DSKFMT:
+J$7B4D:	LD	A,16
+	SCF				; OTHER error
+	RET
+
+INIHRD:
+?.7B51:	LD	HL,(D$7FA2)
+	CALL	C.74A4			; check if key combination pressed
+	JR	NZ,J$7B5B		; not pressed, continue
+	POP	AF
+	RET				; quit DOS kernel initialization
+
+J$7B5B:	CALL	C.7534			; scsi bank on 4000-5FFF
+	CALL	C$75BE
+	LD	HL,(D$7FA4)
+	CALL	C.74A4			; check if key combination pressed
+	CALL	Z,C.75AA		; yep, SCSI bus reset
+	CALL	C.79AD			; normal kernel bank on 4000-5FFF
+	CALL	C.7545			; driver bank on 4000-5FFF
+	LD	HL,(D$7FA0)
+	CALL	C.74A4			; check if key combination pressed
+	JR	NZ,J$7B94		; nope, skip reinitialize
+	LD	HL,I$7E00-2000H
+	LD	DE,I$7E00-2000H+1
+	LD	BC,0198H-1
+	LD	(HL),L
+	LDIR
+	LD	A,0FFH
+	LD	(I$7F00+0*16+0-2000H),A	; device = RAM disk
+	LD	A,1
+	LD	(I$7F80-2000H),A	; number of drives = 1
+	LD	HL,3*256+7
+	LD	(D$7F90-2000H),HL	; host scsi id = 7, number of retries = 3
+J$7B94:	LD	B,16+8
+	LD	DE,16-1
+	LD	HL,I$7E00-2000H
+J$7B9C:	LD	A,(HL)			; device id
+	INC	HL
+	OR	A			; entry in use ?
+	JR	Z,J$7BA3		; nope, skip
+	SET	7,(HL)			; media not changed
+J$7BA3:	ADD	HL,DE
+	DJNZ	J$7B9C
+	LD	HL,(D$7FA8)
+	CALL	C.74A4			; check if key combination pressed
+	JR	NZ,J$7BB1		; nope,
+	LD	(D$7F88-2000H),A	; disable virtual FD mode
+J$7BB1:	LD	A,(D.7F88)
+	CP	0FEH
+	JR	NZ,J$7BB9
+	POP	AF
+J$7BB9:	JP	C.79BD			; synch driver banks and quit
+
+DRIVES:
+?.7BBC:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	CALL	GETWRK
+	LD	A,0*2+1			; driver bank
+	CALL	C$7C08			; patch driver
+	LD	A,3*2+1			; alternate driver bank
+	NOP
+	NOP
+	NOP				; patch driver (disabled)
+	LD	(HL),1			; driver bank not locked
+	INC	HL
+	LD	(HL),0EDH
+	INC	HL
+	LD	(HL),0B0H
+	INC	HL
+	LD	(HL),0C9H		; install LDIR routine
+	CALL	GETSLT
+	LD	DE,(D$7F99)
+	LD	H,HIGH SEL8000
+	CALL	WRSLT			; initialize bank on 8000H-9FFFH
+	INC	E
+	LD	H,HIGH SELA000
+	CALL	WRSLT			; initialize bank on A000H-BFFFH
+	LD	A,(D.7F88)
+	OR	A			; virtual FD mode enabled ?
+	JR	NZ,J$7BFC		; yep,
+	LD	HL,(D$7FA6)
+	CALL	C.74A4			; check if key combination pressed
+	AND	02H
+	LD	(D$F33F),A
+	JR	J$7C01
+
+J$7BFC:	LD	HL,DEVICE
+	INC	(HL)			; extra disk controller
+	POP	DE
+J$7C01:	LD	HL,(D$7F80)		; number of drives
+	POP	DE
+	POP	BC
+	POP	AF
+
+INIENV:
+?.7C07:	RET
+
+;	  Subroutine patch driver
+;	     Inputs  A = bank driver
+;	     Outputs ________________________
+
+C$7C08:	LD	(SEL4000),A		; select driver bank on 4000-5FFF
+	LD	A,10H			; MA19=0, write enabled
+	LD	(D.7FFE),A
+	PUSH	HL
+	LD	(I.7493+1),HL		; patch with lock addres in driver workarea
+	INC	HL
+	LD	(I.762A+1),HL		; patch with LDIR routine in driver workarea
+	LD	(I.7684+1),HL		; patch with LDIR routine in driver workarea
+	LD	(I.7799+1),HL		; patch with LDIR routine in driver workarea
+	LD	(J$783D+1),HL		; patch with LDIR routine in driver workarea
+	LD	A,(D.7F88)
+	OR	A			; virtual FD mode enabled ?
+	LD	HL,256*(LOW C.7432)+0CDH
+	JR	NZ,J$7C38		; yep, patch with CALL C.7432
+	LD	C,16*16-1
+	LD	DE,I$7E00-2000H+1
+	LD	HL,I$7E00-2000H
+	LD	(HL),L
+	LDIR				; clear extended drive info table
+	LD	HL,256*1+18H		; JR +1 (disable virtual drive routine)
+J$7C38:	LD	(I.7417),HL
+	POP	HL
+	JP	C.79AD			; normal kernel bank on 4000-5FFF
+
+;	  Subroutine MEGASCSI RUNC interceptor
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.7C3F:	LD	A,(D.7F88)
+	OR	A			; virtual FD mode enabled ?
+	JR	Z,J$7C62		; nope,
+	CALL	C.7545			; driver bank on 4000-5FFF
+	LD	A,(YFB21+0*2+1)		; slotid first disk controller
+	LD	(D$7F88-2000H),A
+	CALL	C.79BD			; synch driver banks
+	CALL	GETSLT
+	LD	(YFB21+0*2+1),A		; update slotid first disk controller
+	LD	(YFB29+1*3+0),A		; update slotid
+	LD	HL,I$7FDA
+	LD	(YFB29+1*3+1),HL	; update timer interrupt handler with dummy handler
+	JR	J.7C6B
+
+J$7C62:	LD	A,(D$7F81)
+	OR	A			; boot drive specfied ?
+	JR	Z,J.7C6B		; nope, skip
+	LD	(D$F2FD),A		; update DOS2 boot drive
+J.7C6B:	JP	A5897			; continue with default RUNC interceptor
+
+;	  Subroutine MEGASCSI BIOS handler
+;	     Inputs  A = BIOS function
+;	     Outputs ________________________
+
+J$7C6E:	PUSH	HL			; store HL parameter
+	PUSH	AF			; store BIOS function and flags
+	LD	HL,I$7C86
+J$7C73:	SUB	(HL)
+	INC	HL
+	JR	C,J$7C7B
+	INC	HL
+	INC	HL
+	JR	J$7C73
+
+J$7C7B:	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A			; address handler
+	POP	AF			; restore BIOS function and flags
+J$7C80:	EX	(SP),HL			; restore HL parameter, store handler
+	LD	IY,SCSIADR
+	RET
+
+I$7C86:	DEFB	8
+        DEFW	C.7CEC			; 00H-07H sector read/write dos drive
+        DEFB	8
+        DEFW	C.7CE9			; 08H-0FH invalid function
+        DEFB	8
+        DEFW	C.7CF8			; 10H-17H check disk change dos drive
+        DEFB	028H
+        DEFW	C.7CE9			; 18H-3FH invalid function
+        DEFB	16
+        DEFW	C.7CEC			; 40H-4FH sector read/write extended partition
+        DEFB	16
+        DEFW	C.7CF8			; 50H-5FH check disk change extended partition
+        DEFB	020H
+        DEFW	C.7CE9			; 60H-7FH invalid function
+        DEFB	4
+        DEFW	C.7CFE			; 80H-83H create/free partition
+        DEFB	4
+        DEFW	C.7D2B			; 84H-87H read/write partition table
+        DEFB	018H
+        DEFW	C.7CE9			; 88H-9FH invalid function
+        DEFB	1
+        DEFW	C.7D4C			; A0H get ESE info
+        DEFB	1
+        DEFW	C.7CE9			; A1H invalid function
+        DEFB	2
+        DEFW	C.7D53			; A2H-A3H get/set host scsi id, number of retries
+        DEFB	2
+        DEFW	C.7D5A			; A4H-A5H get/set SRAM capacity
+        DEFB	2
+        DEFW	C.7D61			; A6H-A7H get/set drive config
+        DEFB	2
+        DEFW	C.7D68			; A8H-A9H get/set fd emulator config
+        DEFB	2
+        DEFW	C.7D6F			; AAH-ABH get/set key config
+        DEFB	014H
+        DEFW	C.7CE9			; ACH-BFH invalid function
+        DEFB	1
+        DEFW	C.7D76			; C0H SCSI command handler
+        DEFB	1
+        DEFW	C.75AA			; C1H SCSI bus reset
+        DEFB	1
+        DEFW	C.7CE9			; C2H invalid function
+        DEFB	1
+        DEFW	C.7492			; C3H (free/lock bank)
+        DEFB	1
+        DEFW	C.799E			; C4H (normal kernel bank on 4000-5FFF and unlock)
+        DEFB	1
+        DEFW	C.79AD			; C5H (normal kernel bank on 4000-5FFF)
+        DEFB	1
+        DEFW	C.752F			; C6H (scsi bank on 4000-5FFF with lock)
+        DEFB	1
+        DEFW	C.7534			; C7H (scsi bank on 4000-5FFF)
+        DEFB	1
+        DEFW	C.7DB8			; C8H SCSI device select
+        DEFB	1
+        DEFW	C.7515			; C9H SCSI bus release
+        DEFB	1
+        DEFW	C.7DBC			; CAH SCSI ATN start
+        DEFB	1
+        DEFW	C.7DC2			; CBH SCSI ATN cancel
+        DEFB	1
+        DEFW	C.769A			; CCH SCSI read/write controller
+        DEFB	1
+        DEFW	C.76D9			; CDH SCSI sector transfer
+I$7CE6:	DEFB	0FFH
+        DEFW	C.7CE9			; CEH-FFH invalid function
+
+C.7CE9:	SCF
+	SBC	A,A
+	RET
+
+;	  Subroutine MEGASCSI sector read/write
+;	     Inputs  A = DOS drive (x0xxxddd) / extended partion number (x1xxpppp)
+;	     Outputs ________________________
+
+C.7CEC:	CALL	C.741A			; get partitioninfo
+	JP	NC,J.7874		; RAM disk, DSKIO RAM disk
+	CALL	C.7553			; check block size and adjust
+	JP	J$78AD			; continue with SCSI partition
+
+;	  Subroutine MEGASCSI check diskchange
+;	     Inputs  A = DOS drive (x0xxxddd) / extended partion number (x1xxpppp)
+;	     Outputs ________________________
+
+C.7CF8:	CALL	C.741A			; get partitioninfo
+	JP	J$79E4			; continue with check diskchange
+
+;	  Subroutine MEGASCSI create/free partition
+;	     Inputs  A = (xxxxxx00 = create DOS partition, xxxxxx01 = free DOS partition, xxxxxx10 = create extended partition, xxxxxx11 = free extended partition), C = partition (when free)
+;	     Outputs C = partition number
+
+C.7CFE:	RRA
+	JR	C,J$7D27
+	PUSH	HL
+	RRA
+	LD	BC,I$0800
+	LD	DE,I$0010
+	LD	HL,I$7F00
+	JR	NC,J.7D11
+	SLA	B
+	DEC	H
+J.7D11:	LD	A,(HL)
+	OR	A
+	JR	Z,J$7D1E
+	ADD	HL,DE
+	INC	C
+	DJNZ	J.7D11
+	POP	HL
+	LD	A,0CH	; 12 
+	SCF
+	RET
+
+J$7D1E:	POP	DE
+	RES	5,H
+	PUSH	BC
+	CALL	C$7D3A
+	POP	BC
+	RET
+
+J$7D27:	LD	HL,I$7FC0
+	RLA
+
+;	  Subroutine MEGASCSI read/write partition
+;	     Inputs  A = (xxxxxx00 = read DOS partition, xxxxxx01 = write DOS partition, xxxxxx10 = read extended partition, xxxxxx11 = write extended partition) , C = partition number
+;	     Outputs ________________________
+
+C.7D2B:	LD	D,HIGH (I$7F00-2000H)	; DOS partition info
+	BIT	1,A
+	JR	Z,J$7D32
+	DEC	D
+J$7D32:	LD	B,A
+	LD	A,C
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	LD	E,A
+	LD	A,B
+
+;	  Subroutine read/write partition entry
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7D3A:	LD	C,16
+J.7D3C:	LD	B,00H
+	RRA
+	JR	C,J$7D42
+	EX	DE,HL
+J$7D42:	CALL	C.7540
+	RET	C
+	LDIR
+	XOR	A
+	JP	C.79B8			; synch driver banks, unlock and quit
+
+;	  Subroutine get ESE info
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7D4C:	XOR	A
+	LD	A,1+2*SCSIIC		; ESE type (1 for SCC RAM, 3 for WAVESCSI)
+	LD	BC,0215H		; BIOS version
+	RET
+
+;	  Subroutine get/set host scsi id, number of retries
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7D53:	LD	C,2
+	LD	DE,D$7F90-2000H
+	JR	J.7D3C
+
+;	  Subroutine get/set SRAM capacity
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7D5A:	LD	C,4
+	LD	DE,D$7F98-2000H
+	JR	J.7D3C
+
+;	  Subroutine get/set drive config
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7D61:	LD	C,8
+	LD	DE,D$7F80-2000H
+	JR	J.7D3C
+
+;	  Subroutine get/set fd emulator config
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7D68:	LD	C,8
+	LD	DE,D$7F88-2000H
+	JR	J.7D3C
+
+;	  Subroutine get/set key config
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7D6F:	LD	C,12
+	LD	DE,D$7FA0-2000H
+	JR	J.7D3C
+
+;	  Subroutine MEGASCSI SCSI command handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7D76:	PUSH	HL
+	POP	IX
+	CALL	C.752F			; scsi bank on 4000-5FFF with lock
+	RET	C
+	CALL	C.74D0			; select SCSI target (from partition)
+	JR	C,J$7DB5
+	LD	BC,0
+	LD	D,2			; phase COMMAND
+	LD	L,(IX+2)
+	LD	H,(IX+3)
+	CALL	C.769A			; SCSI read/write controller
+	AND	01H
+	LD	D,A
+	LD	L,(IX+4)
+	LD	H,(IX+5)
+	CALL	C.769A			; SCSI read/write controller
+	LD	D,3			; phase STATUS
+	LD	L,(IX+6)
+	LD	H,(IX+7)
+	CALL	C.769A			; SCSI read/write controller
+	LD	D,7			; phase MESSAGE IN
+	LD	L,(IX+8)
+	LD	H,(IX+9)
+	CALL	C.769A			; SCSI read/write controller
+	CALL	C.7515			; SCSI bus release
+J$7DB5:	JP	C.799E
+
+I$7DB8:	LD	A,C			; SCSI target ID (bit mapped)
+	JP	J$74D3			; select SCSI target
+
+;	  Subroutine SCSI ATN start
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$7DBC:	LD	(IY+2),60H		; command = ATN_S
+	XOR	A
+	RET
+
+;	  Subroutine SCSI ATN cancel
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$7DC2:	LD	(IY+2),40H		; command = ATN_C
+	XOR	A
+	RET
+
+C.7DC8:	LDIR
+	RET
+
+
+        DEFS	07E00H-$,0
+
+; extended drive info table (0-15)
+; +0	drive type
+; +1	flags
+; +2,3	start logical block number
+; +5,3	number of logical blocks
+; +8,2	block size
+; +10,6	reserved
+
+I$7E00:	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+; DOS drive info table (0-7)
+; +0	drive type
+; +1	flags
+; +2,3	start logical block number
+; +5,3	number of logical blocks
+; +8,2	block size
+; +10,6	reserved
+
+I$7F00:	DEFB	255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+D$7F80:	DEFB	1			; number of drives
+D$7F81:	DEFB	0			; bootdrive (0 = default bootdrive)
+
+        DEFS	2,0
+
+D$7F84:	DEFB	0,0,0,0			; drive sorting data
+
+D$7F88:	DEFB	0			; virtual FD mode enabled
+
+	DEFS	3,0
+
+D$7F8C:	DEFB	0,0,0,0			; virtual FD mode translation (extended partition)
+
+D$7F90:	DEFB	7			; host controller scsi id
+D$7F91:	DEFB	3			; number of retries
+
+        DEFS	6,0
+
+D$7F98:	DEFB	BNKSRAM			; number of banks
+D$7F99:	DEFB	BNKADRV+1		; number of system banks
+D$7F9A:	DEFB	BNKADRV+1		; first data bank
+        DEFB	BNKSRAM-(BNKADRV+1)	; number of data banks
+
+        DEFS	4,0
+
+D$7FA0:	DEFB	026H,027H		; reset config  = GRAPH+ESC
+D$7FA2:	DEFB	026H,038H		; skip megascsi = GRAPH+DEL
+D$7FA4:	DEFB	026H,037H		; reset scsibus = GRAPH+TAB
+D$7FA6:	DEFB	016H,016H		; phantom drive = CTRL
+D$7FA8:	DEFB	026H,028H		; emul fd dis   = GRAPH+INS
+D$7FAA:	DEFB	046H,046H		; emul fd chg   = CODE
+
+        DEFB	0,0,0,0
+
+I$7FB0:	DEFB	039H			; bit 3, row 9  = numeric pad 0, select virtual disk file 0
+        DEFB	049H			; bit 4, row 9  = numeric pad 1, select virtual disk file 1
+        DEFB	059H			; bit 5, row 9  = numeric pad 2, select virtual disk file 2
+        DEFB	069H			; bit 6, row 9  = numeric pad 3, select virtual disk file 3
+        DEFB	079H			; bit 7, row 9  = numeric pad 4, select virtual disk file 4
+        DEFB	00AH			; bit 0, row 10 = numeric pad 5, select virtual disk file 5
+        DEFB	01AH			; bit 1, row 10 = numeric pad 6, select virtual disk file 6
+        DEFB	02AH			; bit 2, row 10 = numeric pad 7, select virtual disk file 7
+        DEFB	03AH			; bit 3, row 10 = numeric pad 8, select virtual disk file 8
+        DEFB	04AH			; bit 4, row 10 = numeric pad 9, select virtual disk file 9
+        DEFB	07AH			; bit 7, row 10 = numeric pad ., select virtual disk file 10
+        DEFB	06AH			; bit 6, row 10 = numeric pad ,, select virtual disk file 11
+        DEFB	019H			; bit 1, row 9  = numeric pad +, select virtual disk file 12
+        DEFB	05AH			; bit 5, row 10 = numeric pad -, select virtual disk file 13
+        DEFB	009H			; bit 0, row 9  = numeric pad *, select virtual disk file 14
+        DEFB	029H			; bit 2, row 9  = numeric pad /, select virtual disk file 15
+
+        DEFS	07FC0H-$,0
+
+; empty partition entry
+
+I$7FC0:	DEFB	0,0,0,0,0,0,0,0
+
+	DEFS	07FCCH-$,0
+
+;	  Subroutine MEGASCSI BIOS entrypoint
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.7FCC:	EI
+	JP	J$7C6E
+
+;	  Subroutine MSXDOS2 bank selector
+;	     Inputs  A = MSXDOS2 bank number (0-3)
+;	     Outputs ________________________
+
+?.7FD0:	PUSH	AF
+	ADD	A,A
+	LD	(SEL4000),A
+	INC	A
+	LD	(SEL6000),A
+	POP	AF
+I$7FDA:	RET
+
+;	  Subroutine reserved entry
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.7FDB:	RET
+        RET
+        RET
+        RET
+        RET
+
+?.7FE0:	DEFB	"MEGASCSI ver2.15 by K.Tsujikawa."
+
+; patch area
+
+        ORG     04002H
+
+        DEFW    I.41C1
+
+
+        ORG     041C1H
+
+I.41C1: XOR     A
+        LD      (SEL4000),A
+        INC     A
+        LD      (SEL6000),A
+        JP      A576F
+
+
+        ORG     04C10H
+
+        NOP
+
+
+        ORG     05809H
+
+        DEFW    C$7C37
+
+
+        ORG     05D37H
+
+        LD      HL,(YF355)
+        INC     HL
+        LD      A,(HL)
+        RET
+
+
+        ORG     065AEH
+
+        SCF
+        RET
+        RET
