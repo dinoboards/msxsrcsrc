@@ -18,7 +18,8 @@
 
         INCLUDE MSX.INC
 
-
+RIGHTC  EQU     00FCH
+LEFTC   EQU     00FFH
 DOWNC	EQU     0108H
 SCALXY  EQU     010EH
 MAPXYC  EQU     0111H
@@ -47,13 +48,13 @@ H.DOGR  EQU     0FEF3H
         PUBLIC  POINT
         PUBLIC  PSET
         PUBLIC  PRESET
-        PUBLIC  GETGCC
-        PUBLIC  GETGCS
+        PUBLIC  SCAN1
+        PUBLIC  SCAND
         PUBLIC  GLINE
-	PUBLIC	C584D
-	PUBLIC	C587B
-	PUBLIC	C593C
-	PUBLIC	C59B4
+	PUBLIC	ATRSCN
+	PUBLIC	NEGHL
+	PUBLIC	DOGRPH
+	PUBLIC	HLFDE
 
         EXTRN   CHRGTR
         EXTRN   CHRGT2
@@ -91,53 +92,53 @@ _RST    MACRO   X
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-GETGCC:
+SCAN1:
 C579C:  LD      A,(HL)
         CP      "@"
         CALL    Z,CHRGTR                ; yep, get next BASIC character
-        LD      BC,0
+        LD      BC,0                    ; assume X = 0
         LD      D,B
-        LD      E,C
-        CP      0F2H
-        JR      Z,J57C1
+        LD      E,C                     ; assume Y = 0
+        CP      0F2H                    ; - token ?
+        JR      Z,J57C1                 ; yep,
 
 ;       Subroutine      evaluate simple graphic coordinatepair
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-GETGCS:
+SCAND:
 C57AB:  LD      A,(HL)
-        CP      0DCH
-        PUSH    AF
+        CP      0DCH                    ; STEP token ?
+        PUSH    AF                      ; store STEP flag
         CALL    Z,CHRGTR                ; yep, get next BASIC character
         _RST    SYNCHR
         DEFB    "("                     ; check for (
         CALL    GETIN2                  ; evaluate integer operand
-        PUSH    DE
+        PUSH    DE                      ; store X
         _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    GETIN2                  ; evaluate integer operand
         _RST    SYNCHR
         DEFB    ")"                     ; check for )
-        POP     BC
-        POP     AF
-J57C1:  PUSH    HL
+        POP     BC                      ; restore X
+        POP     AF                      ; restore STEP flag
+J57C1:  PUSH    HL                      ; store BASIC pointer
         LD      HL,(GRPACX)
-        JR      Z,J57CA
-        LD      HL,0
+        JR      Z,J57CA                 ; STEP, relative from current X
+        LD      HL,0                    ; absolut X
 J57CA:  ADD     HL,BC
-        LD      (GRPACX),HL
+        LD      (GRPACX),HL             ; update current X
         LD      (GXPOS),HL
         LD      B,H
-        LD      C,L
+        LD      C,L                     ; BC = X
         LD      HL,(GRPACY)
-        JR      Z,J57DB
-        LD      HL,0
+        JR      Z,J57DB                 ; STEP, relative from current Y
+        LD      HL,0                    ; absolut Y
 J57DB:  ADD     HL,DE
         LD      (GRPACY),HL
         LD      (GYPOS),HL
-        EX      DE,HL
-        POP     HL
+        EX      DE,HL                   ; DE = Y
+        POP     HL                      ; restore BASIC pointer
         RET
 
 ;       Subroutine      PRESET statement
@@ -155,9 +156,9 @@ C57E5:  LD      A,(BAKCLR)
 PSET:
 C57EA:  LD      A,(FORCLR)
 J57ED:  PUSH    AF
-        CALL    GETGCS                  ; evaluate simple graphic coordinatepair
+        CALL    SCAND                   ; evaluate simple graphic coordinatepair
 J57F1:  POP     AF
-        CALL    C5850
+        CALL    ATRENT
         PUSH    HL
         CALL    SCALXY
         JR      NC,J5801
@@ -165,8 +166,6 @@ J57F1:  POP     AF
         CALL    SETC
 J5801:  POP     HL
         RET
-; End of change
-
 
 ;       Subroutine      POINT function
 ;       Inputs          ________________________
@@ -188,7 +187,7 @@ J5803:  _RST    CHRGTR                  ; get next BASIC character
         LD      HL,(GRPACX)
         PUSH    HL
         EX      DE,HL
-        CALL    GETGCS                  ; evaluate simple graphic coordinatepair
+        CALL    SCAND                   ; evaluate simple graphic coordinatepair
         PUSH    HL
         CALL    SCALXY
         LD      HL,0FFFFH
@@ -218,12 +217,14 @@ J5831:  CALL    MAKINT                  ; put HL in DAC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+ATRSCN:
 C584D:  LD      A,(FORCLR)
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+ATRENT:
 C5850:  PUSH    BC
         PUSH    DE
         LD      E,A
@@ -249,6 +250,7 @@ J5863:  LD      A,E
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+XDELT:
 C5871:  LD      HL,(GXPOS)
         LD      A,L
         SUB     C
@@ -262,6 +264,7 @@ J587A:  RET     NC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+NEGHL:
 C587B:  XOR     A
         SUB     L
         LD      L,A
@@ -275,6 +278,7 @@ C587B:  XOR     A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+YDELT:
 C5883:  LD      HL,(GYPOS)
         LD      A,L
         SUB     E
@@ -288,6 +292,7 @@ C5883:  LD      HL,(GYPOS)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+XCHGY:
 C588E:  PUSH    HL
         LD      HL,(GYPOS)
         EX      DE,HL
@@ -299,12 +304,14 @@ C588E:  PUSH    HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+XCHGAC:
 C5898:  CALL    C588E
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+XCHGX:
 C589B:  PUSH    HL
         PUSH    BC
         LD      HL,(GXPOS)
@@ -319,13 +326,13 @@ C589B:  PUSH    HL
 ;       Outputs         ________________________
 
 GLINE:
-J58A7:  CALL    GETGCC                  ; evaluate complex graphic coordinatepair
+J58A7:  CALL    SCAN1                   ; evaluate complex graphic coordinatepair
 J58AA:  PUSH    BC
         PUSH    DE
         _RST    SYNCHR
         DEFB    0F2H                    ; check for -
-        CALL    GETGCS                  ; evaluate simple graphic coordinatepair
-        CALL    C584D
+        CALL    SCAND                   ; evaluate simple graphic coordinatepair
+        CALL    ATRSCN
         POP     DE
         POP     BC
         JR      Z,C58FC
@@ -381,7 +388,7 @@ J58E2:  CALL    FETCHC
 C58FC:  PUSH    BC
         PUSH    DE
         PUSH    HL
-        CALL    C593C
+        CALL    DOGRPH
         LD      HL,(GRPACX)
         LD      (GXPOS),HL
         LD      HL,(GRPACY)
@@ -420,6 +427,7 @@ J5912:  PUSH    HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+DOGRPH:
 C593C:  CALL    H.DOGR
         CALL    SCALXY
 J5942:  CALL    C5898
@@ -430,35 +438,35 @@ J5942:  CALL    C5898
         PUSH    HL
         CALL    C5871
         EX      DE,HL
-        LD      HL,00FCH
+        LD      HL,RIGHTC
         JR      NC,J595C
-        LD      HL,00FFH
+        LD      HL,LEFTC
 J595C:  EX      (SP),HL
         _RST    DCOMPR
         JR      NC,J5970
         LD      (MINDEL),HL
         POP     HL
         LD      (MAXUPD+1),HL
-        LD      HL,0108H
+        LD      HL,DOWNC
         LD      (MINUPD+1),HL
         EX      DE,HL
         JR      J597F
 
 J5970:  EX      (SP),HL
         LD      (MINUPD+1),HL
-        LD      HL,0108H
+        LD      HL,DOWNC
         LD      (MAXUPD+1),HL
         EX      DE,HL
         LD      (MINDEL),HL
         POP     HL
 J597F:  POP     DE
         PUSH    HL
-        CALL    C587B
+        CALL    NEGHL
         LD      (MAXDEL),HL
         CALL    MAPXYC
         POP     DE
         PUSH    DE
-        CALL    C59B4
+        CALL    HLFDE
         POP     BC
         INC     BC
         JR      J599A
@@ -489,6 +497,7 @@ J599A:  CALL    SETC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+HLFDE:
 C59B4:  LD      A,D
         OR      A
         RRA

@@ -17,7 +17,8 @@
         ASEG
         ORG	4000H
 
-M0D0C	EQU	0D0CH	; bios: pop af, pop bc, pop de, pop hl, ret
+INTRET  EQU     0D02H
+
 D0004	EQU	0004H	; address pattern generator
 D0006	EQU	0006H	; address vdp dataport (read)
 CALSLT	EQU	001CH
@@ -970,7 +971,7 @@ J4527:	ADD	HL,SP
 
 A452E:	EI
         NOP
-        LD	DE,M0D0C+1
+        LD	DE,INTRET+11
         CALL	C451A			; replace return address with other routine
         CALL	C4099			; get my SLTWRK entry
         XOR	A
@@ -1273,7 +1274,7 @@ A4746:	EI
         CALL	C4099			; get my SLTWRK entry
         CALL	C456D			; setup kanji screenmode if needed
         LD	C,A
-        LD	DE,M0D0C
+        LD	DE,INTRET+10
         CALL	C451A			; replace return address with other routine
         LD	A,C
 
@@ -3736,6 +3737,10 @@ I550E:  DEFB	0,0,0,0,0,0,0,0
         DEFB	" ",00CH,012H,07FH,01DH,01EH,01FH,01CH
         DEFB    "+/*0123456789-,."
 
+;	Subroutine	KEYCOD
+;	Inputs		C = scancode
+;	Outputs		________________________
+
 C5536:  LD      A,C
         CP	0FFH
         RET	Z
@@ -3764,6 +3769,10 @@ J555C:	RET	C
         POP	DE
         JR	J5555
 
+;	Subroutine	handler keys 0,1,2,3,4,5,6,7,8,9
+;	Inputs		A = C = scancode (000H-009H)
+;	Outputs		________________________
+
 C5560:	ADD	A,30H	; "0"
         LD	B,A
         LD	A,(NEWKEY+6)
@@ -3776,7 +3785,16 @@ J556C:	LD	HL,I54C4
         LD	A,(HL)
         CP	0FFH
         RET	Z
+
+;         Subroutine put in keyboardbuffer
+;            Inputs  ________________________
+;            Outputs ________________________
+
 J5574:	JP	C5658
+
+;	Subroutine	handler keys a-z
+;	Inputs		C = scancode (016H-02FH)
+;	Outputs		________________________
 
 C5577:	LD	A,(NEWKEY+6)
         AND	03H	; 3 
@@ -3793,7 +3811,16 @@ C5577:	LD	A,(NEWKEY+6)
         SUB	15H
         JP	(HL)
 
+;	Subroutine	handler keys a-z, SHIFT pressed, CTRL not pressed
+;	Inputs		A = lettercode (001H-01AH)
+;	Outputs		________________________
+
 C558C:	ADD	A,20H	; " "
+
+;	Subroutine	handler keys a-z, SHIFT and CTRL not pressed
+;	Inputs		A = lettercode (001H-01AH)
+;	Outputs		________________________
+
 C558E:  LD	B,A
         LD	A,(CAPST)
         CPL
@@ -3801,6 +3828,10 @@ C558E:  LD	B,A
         XOR	B
         ADD	A,40H	; "@"
         JR	J5574
+
+;	Subroutine	handler keys -,^,yen,@,[,;,:,],komma,.,/,_
+;	Inputs		C = scancode (00AH-015H)
+;	Outputs		________________________
 
 C559A:	LD	HL,I54D6
         LD	A,(NEWKEY+6)
@@ -3819,6 +3850,10 @@ C559A:	LD	HL,I54D6
         CP	0FFH
         JP	NZ,C5658
         RET
+
+;	Subroutine	handler functionkeys
+;	Inputs		C = scancode (035H-039H)
+;	Outputs		________________________
 
 C55B4:	LD	A,(NEWKEY+6)
         RRCA
@@ -3865,9 +3900,9 @@ J55D5:	LD	A,(DE)
 J55F4:	CALL	C55F9
         JR	J55D5
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;         Subroutine put in keyboardbuffer
+;            Inputs  ________________________
+;            Outputs ________________________
 
 C55F9:	CALL	C5658
 I55FC:	RET
@@ -3881,30 +3916,39 @@ J55FD:	LD	HL,(CURLIN)
         ADD	HL,DE
         ADD	HL,DE
         ADD	HL,DE
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+
+;         Subroutine raise trap
+;            Inputs  ________________________
+;            Outputs ________________________
 
 C560B:	LD	A,(HL)
-        AND	01H	; 1 
+        AND	01H
         RET	Z
         LD	A,(HL)
-        OR	04H	; 4 
+        OR	04H
         CP	(HL)
         RET	Z
         LD	(HL),A
-        XOR	05H	; 5 
+        XOR	05H
         RET	NZ
         LD	A,(ONGSBF)
         INC	A
         LD	(ONGSBF),A
         RET
 
+;	Subroutine	handler HOME key
+;	Inputs		-
+;	Outputs		________________________
+
 C5620:	LD	A,(NEWKEY+6)
         RRCA
         LD	A,0CH	; 12 
         SBC	A,00H
         JR	C5658
+
+;	Subroutine	handler easily converted keys
+;	Inputs		A = scancode (030H-015H)
+;	Outputs		________________________
 
 C562A:	CALL	H.KEYA
         LD	E,A
@@ -3915,6 +3959,10 @@ C562A:	CALL	H.KEYA
         AND	A
         RET	Z
         JR	C5658
+
+;	Subroutine	handler CAPS key
+;	Inputs		-
+;	Outputs		________________________
 
 C5639:	LD	HL,CAPST
         LD	A,(HL)
@@ -3928,6 +3976,10 @@ C5639:	LD	HL,CAPST
 J5646:	OUT	(0ABH),A
         RET
 
+;	Subroutine	handler STOP key
+;	Inputs		-
+;	Outputs		________________________
+
 C5649:	LD	A,(NEWKEY+6)
         RRCA
         RRCA
@@ -3936,9 +3988,10 @@ C5649:	LD	A,(NEWKEY+6)
         INC	A
 J5653:	LD	(INTFLG),A
         JR	C,C5666
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+
+;         Subroutine put in keyboardbuffer
+;            Inputs  ________________________
+;            Outputs ________________________
 
 C5658:	POP	HL
         PUSH	HL
@@ -3950,9 +4003,9 @@ C5658:	POP	HL
         POP	DE
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;         Subroutine keyboard click
+;            Inputs  ________________________
+;            Outputs ________________________
 
 C5666:	LD	A,(CLIKSW)
         AND	A
@@ -3960,18 +4013,22 @@ C5666:	LD	A,(CLIKSW)
         LD	A,(CLIKFL)
         AND	A
         RET	NZ
-        LD	A,0FH	; 15 
+        LD	A,0FH
         LD	(CLIKFL),A
         OUT	(0ABH),A
-        LD	A,0AH	; 10 
+        LD	A,10
 J5679:	DEC	A
         JR	NZ,J5679
         AND	A
-        LD	A,0EH	; 14 
+        LD	A,0EH
         JR	Z,J5682
         INC	A
 J5682:	OUT	(0ABH),A
         RET
+
+;	Subroutine	handle scancodes when KANA is on (and GRAPH and CTRL are not pressed)
+;	Inputs		C = scancode (000H-02FH)
+;	Outputs		________________________
 
 J5685:	LD	A,(KANAMD)
         AND	A

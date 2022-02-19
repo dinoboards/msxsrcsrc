@@ -44,9 +44,9 @@ KILBUF  EQU     0156H
 CALBAS  EQU     0159H
 EXTROM  EQU     015FH
 
-M0D0C   EQU     0D0CH                   ; BIOS routine pop af,bc,de,hl ret
-M0D0D   EQU     0D0DH                   ; BIOS routine pop bc,de,hl ret
-M0DE3   EQU     0DE3H                   ;
+INTRET  EQU     0D02H
+M0DE3   EQU     0DE3H                   ; Table		keycodes for keys -,^,yen,@,[,;,:,],komma,.,/,_
+
 
 C4092   EQU     4092H                   ; DOS2 bankswitch
 
@@ -928,7 +928,7 @@ C4561:  LD      IY,(EXPTBL-1)
 C456A:  IN      A,(0A8H)
         RRCA
         RRCA
-        AND     03H     ; 3 
+        AND     03H
         LD      HL,EXPTBL
         LD      B,0
         LD      C,A
@@ -992,7 +992,7 @@ J45A6:  ADD     HL,SP
 
 
 J45AD:  EI
-        LD      DE,M0D0D
+        LD      DE,INTRET+11
         CALL    C4599                   ; replace return address
         CALL    C41F9                   ; get KANJI workspace
         XOR     A
@@ -1307,7 +1307,7 @@ J47C3:  EI
         CALL    C41F9                   ; get KANJI workspace
         CALL    C45EA
         LD      C,A
-        LD      DE,M0D0C
+        LD      DE,INTRET+10
         CALL    C4599                   ; replace return address
         LD      A,C
 
@@ -3638,11 +3638,9 @@ J5407:  LD      A,(SLTWRK+4)
 J5419:  POP     AF
         RET
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C541B:  LD      HL,SCNCNT
         DEC     (HL)
@@ -3684,19 +3682,19 @@ C541B:  LD      HL,SCNCNT
         LD      C,A
         RRCA
         LD      HL,TRPTBL+36
-        CALL    C,C5674
+        CALL    C,C5674                 ; raise trap
         RL      C
         LD      HL,TRPTBL+48
-        CALL    C,C5674
+        CALL    C,C5674                 ; raise trap
         RL      C
         LD      HL,TRPTBL+42
-        CALL    C,C5674
+        CALL    C,C5674                 ; raise trap
         RL      C
         LD      HL,TRPTBL+45
-        CALL    C,C5674
+        CALL    C,C5674                 ; raise trap
         RL      C
         LD      HL,TRPTBL+39
-        CALL    C,C5674
+        CALL    C,C5674                 ; raise trap
 J5482:  XOR     A
         LD      (CLIKFL),A
         CALL    C54A1
@@ -3712,11 +3710,9 @@ J5482:  XOR     A
         LDIR
         JP      J54DD
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C54A1:  IN      A,(0AAH)
         AND     0F0H
@@ -3767,11 +3763,9 @@ J54E5:  LD      A,(DE)
         SUB     L
         RET
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C54F9:  PUSH    HL
         PUSH    DE
@@ -3828,8 +3822,8 @@ I5516:  DEFB    00AH
 I553D:  DEFB    0FFH
         DEFB    "!",022H,"#$%&'()"
  
-I5547:  DEFW    C56D0
-        DEFW    C56D0
+I5547:  DEFW    C56D0                   ; put in keyboardbuffer
+        DEFW    C56D0                   ; put in keyboardbuffer
         DEFW    C55F5
         DEFW    C55F7
 
@@ -3858,9 +3852,9 @@ I5587:  DEFB	0,0,0,0,0,0,0,0
         DEFB	0,0,01BH,009H,0,008H,018H,00DH
         DEFB	" ",00CH,012H,07FH,01DH,01EH,01FH,01CH
 
-;         Subroutine __________________________
-;            Inputs  ________________________
-;            Outputs ________________________
+;	Subroutine	KEYCOD
+;	Inputs		C = scancode
+;	Outputs		________________________
 
 C559F:  LD      A,C
         CP      0FFH
@@ -3890,12 +3884,16 @@ J55BE:  CP      (HL)
         POP     DE
         JR      J55BE
 
+;	Subroutine	handler keys 0,1,2,3,4,5,6,7,8,9
+;	Inputs		A = C = scancode (000H-009H)
+;	Outputs		________________________
+
 C55C9:  ADD     A,30H
         LD      B,A
         LD      A,(NEWKEY+6)
         RRCA
         LD      A,B
-        JR      C,C55DD
+        JR      C,C55DD                 ; put in keyboardbuffer and quit
         LD      B,0
         LD      HL,I553D
         ADD     HL,BC
@@ -3903,14 +3901,18 @@ C55C9:  ADD     A,30H
         CP      0FFH
         RET     Z
 
-;         Subroutine __________________________
+;         Subroutine put in keyboardbuffer
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C55DD:  JP      C56D0
+C55DD:  JP      C56D0                   ; put in keyboardbuffer and quit
+
+;	Subroutine	handler keys a-z
+;	Inputs		C = scancode (016H-02FH)
+;	Outputs		________________________
 
 C55E0:  LD      A,(NEWKEY+6)
-        AND     03H     ; 3 
+        AND     03H
         ADD     A,A
         LD      E,A
         LD      D,00H
@@ -3924,21 +3926,34 @@ C55E0:  LD      A,(NEWKEY+6)
         SUB     15H
         JP      (HL)
 
+;	Subroutine	handler keys a-z, SHIFT pressed, CTRL not pressed
+;	Inputs		A = lettercode (001H-01AH)
+;	Outputs		________________________
+
 C55F5:  ADD     A,20H
+
+;	Subroutine	handler keys a-z, SHIFT and CTRL not pressed
+;	Inputs		A = lettercode (001H-01AH)
+;	Outputs		________________________
+
 C55F7:  LD      B,A
         LD      A,(CAPST)
         CPL
         AND     20H     ; " "
         XOR     B
         ADD     A,40H   ; "@"
-        JR      C55DD
+        JR      C55DD                   ; put in keyboardbuffer and quit
+
+;	Subroutine	handler keys -,^,yen,@,[,;,:,],komma,.,/,_
+;	Inputs		C = scancode (00AH-015H)
+;	Outputs		________________________
 
 C5603:  LD      HL,I554F
         LD      A,(NEWKEY+6)
-        AND     03H     ; 3 
+        AND     03H
         ADD     A,A
         LD      E,A
-        LD      D,00H
+        LD      D,0
         ADD     HL,DE
         LD      A,(HL)
         INC     HL
@@ -3948,8 +3963,12 @@ C5603:  LD      HL,I554F
         ADD     HL,DE
         LD      A,(HL)
         CP      0FFH
-        JP      NZ,C56D0
+        JP      NZ,C56D0                ; put in keyboardbuffer and quit
         RET
+
+;	Subroutine	handler functionkeys
+;	Inputs		C = scancode (035H-039H)
+;	Outputs		________________________
 
 C561D:  LD      A,(NEWKEY+6)
         RRCA
@@ -3990,19 +4009,18 @@ J563E:  LD      A,(DE)
         BIT     5,A
         JR      NZ,J563D
         LD      A,B
-        CALL    C5662
+        CALL    C5662                   ; put in keyboardbuffer
         LD      A,(DE)
         INC     DE
-J565D:  CALL    C5662
+J565D:  CALL    C5662                   ; put in keyboardbuffer
         JR      J563E
 
 
-;         Subroutine __________________________
+;         Subroutine put in keyboardbuffer
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
-C5662:  CALL    C56D0
+C5662:  CALL    C56D0                   ; put in keyboardbuffer
         RET
 
 J5666:  LD      HL,(CURLIN)
@@ -4015,32 +4033,38 @@ J5666:  LD      HL,(CURLIN)
         ADD     HL,DE
         ADD     HL,DE
 
-
-;         Subroutine __________________________
+;         Subroutine raise trap
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
 C5674:  LD      A,(HL)
-        AND     01H     ; 1 
+        AND     01H
         RET     Z
         LD      A,(HL)
-        OR      04H     ; 4 
+        OR      04H
         CP      (HL)
         RET     Z
         LD      (HL),A
-        XOR     05H     ; 5 
+        XOR     05H
         RET     NZ
         LD      A,(ONGSBF)
         INC     A
         LD      (ONGSBF),A
         RET
 
+;	Subroutine	handler HOME key
+;	Inputs		-
+;	Outputs		________________________
+
 C5689:  LD      A,(NEWKEY+6)
         RRCA
-        LD      A,0CH   ; 12 
-        SBC     A,00H
-        JR      C56D0
+        LD      A,0CH
+        SBC     A,0
+        JR      C56D0                   ; put in keyboardbuffer and quit
+
+;	Subroutine	handler easily converted keys
+;	Inputs		A = scancode (030H-015H)
+;	Outputs		________________________
 
 C5693:  CALL    H.KEYA
         LD      E,A
@@ -4050,15 +4074,23 @@ C5693:  CALL    H.KEYA
         LD      A,(HL)
 J569E:  AND     A
         RET     Z
-        JR      C56D0
+        JR      C56D0                   ; put in keyboardbuffer and quit
+
+;	Subroutine	handler easily converted keys
+;	Inputs		A = scancode
+;	Outputs		________________________
 
 C56A2:  LD      E,A
-        LD      D,00H
+        LD      D,0
         LD      HL,M0DE3
         ADD     HL,DE
-        LD      A,(EXPTBL)
+        LD      A,(EXPTBL+0)
         CALL    RDSLT
         JR      J569E
+
+;	Subroutine	handler CAPS key
+;	Inputs		-
+;	Outputs		________________________
 
 C56B1:  LD      HL,CAPST
         LD      A,(HL)
@@ -4066,11 +4098,15 @@ C56B1:  LD      HL,CAPST
         LD      (HL),A
         CPL
         AND     A
-        LD      A,0CH   ; 12 
+        LD      A,0CH
         JR      Z,J56BE
         INC     A
 J56BE:  OUT     (0ABH),A
         RET
+
+;	Subroutine	handler STOP key
+;	Inputs		-
+;	Outputs		________________________
 
 C56C1:  LD      A,(NEWKEY+6)
         RRCA
@@ -4079,10 +4115,9 @@ C56C1:  LD      A,(NEWKEY+6)
         JR      NC,J56CB
         INC     A
 J56CB:  LD      (INTFLG),A
-        JR      C,C56DE
-;
+        JR      C,C56DE                 ; keyboard click and quit
 
-;         Subroutine __________________________
+;         Subroutine put in keyboardbuffer
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -4090,13 +4125,13 @@ C56D0:  POP     HL
         PUSH    HL
         LD      BC,C5662+3
         OR      A
-        SBC     HL,BC
+        SBC     HL,BC                   ; called from C5662 ?
         PUSH    DE
         CALL    C585E
         POP     DE
         RET
 
-;         Subroutine __________________________
+;         Subroutine keyboard click
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -4106,18 +4141,23 @@ C56DE:  LD      A,(CLIKSW)
         LD      A,(CLIKFL)
         AND     A
         RET     NZ
-        LD      A,0FH   ; 15 
+        LD      A,0FH
         LD      (CLIKFL),A
         OUT     (0ABH),A
-        LD      A,0AH   ; 10 
+        LD      A,10
 J56F1:  DEC     A
         JR      NZ,J56F1
         AND     A
-        LD      A,0EH   ; 14 
+        LD      A,0EH
         JR      Z,J56FA
         INC     A
 J56FA:  OUT     (0ABH),A
         RET
+
+;	Subroutine	handle scancodes when KANA is on (and GRAPH and CTRL are not pressed)
+;	Inputs		C = scancode (000H-02FH)
+;	Outputs		________________________
+
 J56FD:  LD      A,(KANAMD)
         AND     A
         LD      A,(NEWKEY+6)
@@ -4133,7 +4173,7 @@ J5711:  LD      HL,I5732
 J5719:  LD      B,00H
         ADD     HL,BC
         LD      BC,C56D0
-        PUSH    BC
+        PUSH    BC                      ; put in keyboardbuffer
         LD      A,(CAPST)
         AND     A
         LD      A,(HL)
@@ -4144,7 +4184,7 @@ J5719:  LD      B,00H
         RET     Z
         CP      0DEH
         RET     NC
-        XOR     20H     ; " "
+        XOR     20H
         RET
 
 
@@ -4234,11 +4274,9 @@ J583C:  OR      B
         OUT     (0A1H),A
         RET
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-
 
 C5840:  LD      B,A
         LD      A,0FH   ; 15 
@@ -4258,26 +4296,24 @@ J5854:  OUT     (0A1H),A
         IN      A,(0A2H)
         RET
 
-
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-
-C585E:  PUSH    AF
+C585E:  PUSH    AF                      ; store flag
         LD      A,(MODE)
-        AND     01H     ; 1 
+        AND     01H
         JR      Z,J58A7
-        POP     AF
-        PUSH    AF
+        POP     AF                      ; restore flag
+        PUSH    AF                      ; store flag
         LD      HL,(PUTPNT)
         PUSH    HL
         LD      IX,PUTCHR
         CALL    EXTROM
         POP     HL
-        POP     AF
+        POP     AF                      ; restore flag
         RET     Z
-        LD      B,00H
+        LD      B,0
         LD      DE,(PUTPNT)
         LD      (PUTPNT),HL
 J587F:  LD      A,L
@@ -4311,7 +4347,7 @@ J5896:  LD      A,(HL)
 J58A3:  POP     AF
         DJNZ    J58A3
         RET
-J58A7:  CALL    C56DE
+J58A7:  CALL    C56DE                   ; keyboard click
         POP     AF
         JR      Z,C58C3
 

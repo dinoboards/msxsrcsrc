@@ -76,7 +76,7 @@ H.STKE  EQU     0FEDAH
         PUBLIC  SCRTCH
         PUBLIC  RUNC
         PUBLIC  CLEARC
-        PUBLIC  C62A7
+        PUBLIC  CLEAR2
         PUBLIC  STKINI
         PUBLIC  STKERR
         PUBLIC  ISLET
@@ -145,6 +145,28 @@ H.STKE  EQU     0FEDAH
         EXTRN   ALCFIL
 
 
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+
 ; START	SUBTTL	BIMISC
 
 	SUBTTL	BIMISC
@@ -165,7 +187,7 @@ BLTUC:
 C6253:  PUSH    BC
         EX      (SP),HL
         POP     BC
-J6256:  RST     DCOMPR
+J6256:  _RST    DCOMPR
         LD      A,(HL)
         LD      (BC),A
         RET     Z
@@ -253,7 +275,9 @@ C62A1:  CALL    H.CLEA
 ;       Subroutine      initialize interpreter, basicpointer from TEMP
 ;       Inputs          ________________________
 ;       Outputs         ________________________
+;       Remark          CLEAR2 is not the offical name
 
+CLEAR2:
 C62A7:  CALL    C636E                   ; clear trap variables
         LD      B,26
         LD      HL,DEFTBL
@@ -619,21 +643,21 @@ C643E:  CALL    PTRGET                  ; locate variable
         CALL    VMOVE                   ; HL = DE (valtyp), save 1st var in SWPTMP
         LD      HL,(ARYTAB)
         EX      (SP),HL                 ; save (ARYTAB), restore BASIC pointer
-        RST     GETYPR                  ; get DAC type
+        _RST    GETYPR                  ; get DAC type
         PUSH    AF                      ; save type
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    PTRGET                  ; locate variable
         POP     AF
         LD      B,A
-        RST     GETYPR
+        _RST    GETYPR
         CP      B
         JP      NZ,TMERR                ; not the same type, type mismatch error
         EX      (SP),HL
         EX      DE,HL
         PUSH    HL
         LD      HL,(ARYTAB)             ; has (ARYTAB) changed (2nd variable does not exists) ?
-        RST     DCOMPR
+        _RST    DCOMPR
         JR      NZ,J6474                ; yep, illegal function call
         POP     DE                      ; pointer to 2nd variable
         POP     HL
@@ -668,7 +692,7 @@ C6477:  LD      A,1
         ADD     HL,DE
         EX      DE,HL
         LD      HL,(STREND)
-J648F:  RST     DCOMPR
+J648F:  _RST    DCOMPR
         LD      A,(DE)
         LD      (BC),A
         INC     DE
@@ -682,7 +706,7 @@ J648F:  RST     DCOMPR
         LD      A,(HL)
         CP      ","
         RET     NZ
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         JR      C6477
 
 ;       Subroutine      
@@ -720,7 +744,7 @@ CLEAR:
 C64AF:  JP      Z,CLEARC                ; end of statement, initialize interpreter and quit
         CALL    INTID2                  ; evaluate word operand and check for 0-32767 range
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         PUSH    HL
         LD      HL,(HIMEM)
         LD      B,H
@@ -728,12 +752,12 @@ C64AF:  JP      Z,CLEARC                ; end of statement, initialize interpret
         LD      HL,(MEMSIZ)             ; current top of string heap
         JR      Z,J64EC                 ; end of statement (no new top specified), use current
         POP     HL
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         PUSH    DE
         CALL    GETUIN                  ; evaluate address operand
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         JP      NZ,SNERR                ; nope, syntax error
         EX      (SP),HL
         EX      DE,HL
@@ -742,7 +766,7 @@ C64AF:  JP      Z,CLEARC                ; end of statement, initialize interpret
         JP      P,FCERR                 ; nope, illegal function call
         PUSH    DE
         LD      DE,VARWRK+1
-        RST     DCOMPR                  ; top BASIC memory <= VARWRK ?
+        _RST    DCOMPR                  ; top BASIC memory <= VARWRK ?
         JP      NC,FCERR                ; nope, illegal function call
         POP     DE                      ; size of string heap
         PUSH    HL
@@ -766,7 +790,7 @@ J64EC:  LD      A,L
         LD      BC,160
         ADD     HL,BC
         POP     BC
-        RST     DCOMPR                  ; enough space for stack ?
+        _RST    DCOMPR                  ; enough space for stack ?
         JP      NC,OMERR                ; nope, out of memory
         EX      DE,HL
         LD      (STKTOP),HL             ; new start Z80 stack
@@ -831,7 +855,7 @@ J6549:  ADD     A,4
         EX      DE,HL
         EX      (SP),HL
         PUSH    HL
-        RST     GETYPR                  ; get DAC type
+        _RST    GETYPR                  ; get DAC type
         JR      NC,J65A5                ; double real,
         CALL    MOVRMI                  ; load from HL
         CALL    SGNADD                  ; single real addition
@@ -900,7 +924,7 @@ J65B6:  LD      SP,HL
         LD      A,(HL)
         CP      ","
         JP      NZ,NEWSTT               ; nope, execute new statement
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         CALL    C652A
 
 ; END	SUBTTL	BIMISC

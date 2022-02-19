@@ -123,7 +123,29 @@ RNDX    EQU     0F857H
         EXTRN   FRQINT			; convert address to integer
         EXTRN   STROUT			; message to interpreter output
         EXTRN   FCERR			; illegal function call error
-        EXTRN   J66A7			; pop af, ret
+        EXTRN   PPSWRT			; pop af, ret
+
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
 
 
 ; START SUBTTL	F4
@@ -1417,7 +1439,7 @@ C2E82:  CALL    VSIGN                   ; get sign DAC
 ;       Outputs         ________________________
 
 VNEG:
-C2E86:  RST     GETYPR                  ; get DAC type
+C2E86:  _RST    GETYPR                  ; get DAC type
         JP      M,J322B                 ; integer, negate integer in DAC and quit
         JP      Z,TMERR                 ; string, type mismatch error
 
@@ -1457,7 +1479,7 @@ C2E9A:  LD      L,A
 ;       Outputs         ________________________
 
 VSIGN:
-C2EA1:  RST     GETYPR                  ; get DAC type
+C2EA1:  _RST    GETYPR                  ; get DAC type
         JP      Z,TMERR                 ; string, type mismatch error
         JP      P,SIGN                  ; single or double real, get sign DAC and quit
         LD      HL,(DAC+2)              ; integer value
@@ -1763,7 +1785,7 @@ C2F83:  CALL    XDCOMP                  ; compare double real
 ;       Outputs         ________________________
 
 FRCINT:
-C2F8A:  RST     GETYPR                  ; get DAC type
+C2F8A:  _RST    GETYPR                  ; get DAC type
         LD      HL,(DAC+2)
         RET     M                       ; already integer, quit
         JP      Z,TMERR                 ; string, type mismatch error
@@ -1813,7 +1835,7 @@ J2FAF:  POP     DE                      ; remove return address
 ;       Outputs         ________________________
 
 FRCSNG:
-C2FB2:  RST     GETYPR                  ; get DAC type
+C2FB2:  _RST    GETYPR                  ; get DAC type
         RET     PO                      ; already single real, quit
         JP      M,C2FC8                 ; integer, convert integer (DAC) to single real and quit
         JP      Z,TMERR                 ; string, type mismatch
@@ -1854,7 +1876,7 @@ J2FCC:  OR      A
         LD      (DAC+2),HL              ; DAC = 0.0
         LD      A,D
         OR      E                       ; integer is zero ?
-        JP      Z,J66A7                 ; yep, clean up stack and quit
+        JP      Z,PPSWRT                ; yep, clean up stack and quit
         LD      BC,5*256+0              ; number of table entries = 5, clear ? flag
         LD      HL,DAC+1
         PUSH    HL                      ; store pointer in mantissa
@@ -1926,7 +1948,7 @@ J3030:  DEFW    -10000
 ;       Outputs         ________________________
 
 FRCDBL:
-C303A:  RST     GETYPR                  ; get DAC type
+C303A:  _RST    GETYPR                  ; get DAC type
         RET     NC                      ; already double real, quit
         JP      Z,TMERR                 ; string, type mismatch error
         CALL    M,C2FC8                 ; integer, convert integer (DAC) to single real
@@ -1961,7 +1983,7 @@ J3055:  JP      J2F9E
 ;       Outputs         ________________________
 
 CHKSTR:
-C3058:  RST     GETYPR                  ; get DAC type
+C3058:  _RST    GETYPR                  ; get DAC type
         RET     Z                       ; already string, quit
         JP      TMERR                   ; not a string, type mismatch error
 
@@ -2020,7 +2042,7 @@ J3088:  AND     0FH
         LD      HL,(DECTMP)
         DJNZ    J307B
         LD      HL,08000H
-        RST     DCOMPR
+        _RST    DCOMPR
         LD      A,(DAC+0)
         RET     C
         JR      Z,J30B6
@@ -2054,7 +2076,7 @@ C30BA:  SCF
 ;       Outputs         ________________________
 
 FIXER:
-C30BE:  RST     GETYPR                  ; get DAC type
+C30BE:  _RST    GETYPR                  ; get DAC type
         RET     M                       ; integer, quit doing nothing
         CALL    SIGN                    ; get sign DAC
         JP      P,VINT                  ; DAC is postive, just do a INT
@@ -2067,7 +2089,7 @@ C30BE:  RST     GETYPR                  ; get DAC type
 ;       Outputs         ________________________
 
 VINT:
-C30CF:  RST     GETYPR                  ; get DAC type
+C30CF:  _RST    GETYPR                  ; get DAC type
         RET     M                       ; integer, quit doing nothing
         LD      HL,DAC+7+1
         LD      C,14                    ; 14 BCD digits
@@ -2490,7 +2512,7 @@ C3299:  EX      DE,HL                   ; store pointer to text
         JR      Z,J32B3                 ; yep, start FIN
         DEC     HL
 
-J32B3:  RST     CHRGTR                  ; get next BASIC character
+J32B3:  _RST    CHRGTR                  ; get next BASIC character
         JP      C,J3386                 ; numeric,
         CP      '.'                     ; decimal point ?
         JP      Z,J334F                 ; yep, handle floating point notation
@@ -2499,7 +2521,7 @@ J32B3:  RST     CHRGTR                  ; get next BASIC character
         CP      'E'                     ; possible exponent ?
 J32C2:  JR      NZ,J32DE                ; nope, check if type indicator
         PUSH    HL
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         CP      'l'                     ; is it a EL(SE) ?
         JR      Z,J32D4                 ; yep, no exponent
         CP      'L'                     ; is it a EL(SE) ?
@@ -2509,7 +2531,7 @@ J32C2:  JR      NZ,J32DE                ; nope, check if type indicator
         CP      'Q'                     ; is it a EQ(V) ?
 J32D4:  POP     HL
         JR      Z,J32DD                 ; no exponent, check if type indicator
-        RST     GETYPR                  ; get DAC type
+        _RST    GETYPR                  ; get DAC type
         JR      NC,J32F5                ; double real, convert to double real and continue
         XOR     A                       ; single real
         JR      J32F6                   ; convert to single real and continue
@@ -2530,13 +2552,13 @@ J32F5:  OR      A                       ; double real
 ;  handle exponent
 
 J32F6:  CALL    C3377                   ; convert DAC to real
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         PUSH    DE                      ; store exponent and flag
         LD      D,0                     ; initialize flag
         CALL    MINPLS                  ; minus or plus character (including token) ?
         LD      C,D                     ; store flag
         POP     DE                      ; restore exponent and flag
-J3302:  RST     CHRGTR                  ; get next BASIC character
+J3302:  _RST    CHRGTR                  ; get next BASIC character
         JR      NC,J3318                ; not numeric,
         LD      A,E
         CP      12                      ; exponent becomes overflowed ?
@@ -2562,7 +2584,7 @@ J3318:  INC     C                       ; minus character ?
         LD      E,A                     ; negate exponent
 
 FINE:
-J331E:  RST     GETYPR                  ; get DAC type
+J331E:  _RST    GETYPR                  ; get DAC type
         JP      M,J3334                 ; integer,
         LD      A,(DAC+0)
         OR      A                       ; DAC zero ?
@@ -2577,7 +2599,7 @@ J331E:  RST     GETYPR                  ; get DAC type
 J3334:  POP     AF                      ; restore sign flag
         PUSH    HL                      ; store pointer
         CALL    Z,VNEG                  ; negate
-        RST     GETYPR                  ; get DAC type
+        _RST    GETYPR                  ; get DAC type
         JR      NC,J3347                ; double real,
         POP     HL
         RET     PE                      ; no single real, quit
@@ -2599,7 +2621,7 @@ C334C:  JP      OVERR                   ; overflow error
 
 ; FIN, handle floating point notation
 
-J334F:  RST     GETYPR                  ; get DAC type
+J334F:  _RST    GETYPR                  ; get DAC type
         INC     C                       ; first point character ?
         JR      NZ,J331E                ; nope, finish FIN
         JR      NC,J335F                ; DAC = real,
@@ -2610,7 +2632,7 @@ J334F:  RST     GETYPR                  ; get DAC type
         LD      D,A
 J335F:  JP      J32B3                   ; continue FIN
 
-J3362:  RST     CHRGTR                  ; get next BASIC character
+J3362:  _RST    CHRGTR                  ; get next BASIC character
         POP     AF                      ; restore minus flag
         PUSH    HL                      ; store pointer
         LD      HL,POPHRT
@@ -2622,7 +2644,7 @@ J3362:  RST     CHRGTR                  ; get next BASIC character
 
 J3370:  OR      A                       ; double real
 J3371:  CALL    C3377                   ; convert DAC to real
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         JR      J331E                   ; finish FIN
 
 ;       Subroutine      convert DAC to real
@@ -2665,11 +2687,11 @@ J339D:  PUSH    DE                      ; store number of digits, store exponent
         LD      A,(HL)
         SUB     '0'
         PUSH    AF                      ; store value
-        RST     GETYPR                  ; get DAC type
+        _RST    GETYPR                  ; get DAC type
         JP      P,J33D1                 ; not a integer,
         LD      HL,(DAC+2)
-        LD      DE,0+(32768/10)+1
-        RST     DCOMPR                  ; can mutiply by 10 without overflow ?
+        LD      DE,0+(32767/10)+1
+        _RST    DCOMPR                  ; can mutiply by 10 without overflow ?
         JR      NC,J33CE                ; nope, convert to single real
         LD      D,H
         LD      E,L
@@ -2822,7 +2844,7 @@ C345D:  LD      HL,FBUFFR+1
         JR      NZ,J3477                ; yep,
         LD      B,C
 J3477:  LD      (HL),C                  ; fill character
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         JR      Z,J348F                 ; end of statement or line,
         CP      'E'
         JR      Z,J348F
@@ -2948,7 +2970,7 @@ J352B:  LD      A,(TEMP2)               ; pointer to decimal point
 I353C:  PUSH    AF
         LD      BC,I353C
         PUSH    BC
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         CP      '-'
         RET     Z
         CP      '+'
@@ -2959,7 +2981,7 @@ I353C:  PUSH    AF
         CP      '0'
         JR      NZ,J355F
         INC     HL
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         JR      NC,J355F                ; not numeric,
         DEC     HL
         JR      J3559
@@ -3370,7 +3392,7 @@ J374A:  LD      (DE),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C3752:  RST     GETYPR                  ; get DAC type
+C3752:  _RST    GETYPR                  ; get DAC type
         LD      HL,DAC+7
         LD      B,14                    ; 14 BCD digits
         RET     NC                      ; double real, quit

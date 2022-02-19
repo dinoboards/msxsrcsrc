@@ -27,14 +27,14 @@ MCLLEN  EQU     0FB3BH
 MCLPTR  EQU     0FB3CH
 
 
-        PUBLIC  MCLPAR
-        PUBLIC  MCLGCH
-        PUBLIC  MCLBAK
-        PUBLIC  MCLNUM
-        PUBLIC  MCLMAC
-	PUBLIC	J566C
-	PUBLIC	C56E8
-	PUBLIC	C5719
+        PUBLIC  MCLSCN
+        PUBLIC  FETCHR
+        PUBLIC  DECFET
+        PUBLIC  VALSC2
+        PUBLIC  MCLXEQ
+	PUBLIC	MACLNG
+	PUBLIC	FETCHZ
+	PUBLIC	VALSCN
 
         EXTRN   FCERR
         EXTRN   FRMEVL
@@ -71,6 +71,7 @@ _RST    MACRO   X
 
 ; START	SUBTTL	MACLNG
 
+MACLNG:
 J566C:  LD      (MCLTAB),DE
         CALL    FRMEVL                  ; evaluate expression
         PUSH    HL
@@ -103,8 +104,8 @@ J568C:  POP     AF
 
 J569F:  LD      (MCLPTR),HL
 
-MCLPAR:
-J56A2:  CALL    MCLGCH
+MCLSCN:
+J56A2:  CALL    FETCHR
         JR      Z,J568C
         ADD     A,A
         LD      C,A
@@ -119,7 +120,7 @@ J56AE:  CALL    Z,FCERR                 ; illegal function call
         INC     HL
         JR      J56AC
 
-J56B9:  LD      BC,MCLPAR
+J56B9:  LD      BC,MCLSCN
         PUSH    BC
         LD      A,(HL)
         LD      C,A
@@ -130,7 +131,7 @@ J56B9:  LD      BC,MCLPAR
         LD      C,A
         PUSH    BC
         PUSH    HL
-        CALL    MCLGCH
+        CALL    FETCHR
         LD      DE,1
         JP      Z,J56DF
         CALL    ISLET2                  ; is upcase letter character ?
@@ -139,7 +140,7 @@ J56B9:  LD      BC,MCLPAR
         SCF
         JR      J56E0
 
-J56DC:  CALL    MCLBAK
+J56DC:  CALL    DECFET
 J56DF:  OR      A
 J56E0:  POP     HL
         POP     BC
@@ -154,7 +155,8 @@ J56E2:  INC     HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C56E8:  CALL    MCLGCH
+FETCHZ:
+C56E8:  CALL    FETCHR
         JR      Z,J56AE
         RET
 
@@ -162,7 +164,7 @@ C56E8:  CALL    MCLGCH
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-MCLGCH:
+FETCHR:
 C56EE:  PUSH    HL
 J56EF:  LD      HL,MCLLEN
         LD      A,(HL)
@@ -185,7 +187,7 @@ J5709:  POP     HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-MCLBAK:
+DECFET:
 C570B:  PUSH    HL
         LD      HL,MCLLEN
         INC     (HL)
@@ -199,36 +201,38 @@ C570B:  PUSH    HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C5719:  CALL    C56E8
+VALSCN:
+C5719:  CALL    FETCHZ
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+VALSC3:
 C571C:  CP      "="
         JP      Z,J577A
         CP      "+"
-        JR      Z,C5719
+        JR      Z,VALSCN
         CP      "-"
         JR      NZ,C572F
-        LD      DE,I5795
+        LD      DE,C5795
         PUSH    DE
-        JR      C5719
+        JR      VALSCN
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-MCLNUM:
+VALSC2:
 C572F:  LD      DE,0
 J5732:  CP      ","
-        JR      Z,MCLBAK
+        JR      Z,DECFET
         CP      ";"
         RET     Z
         CP      "9"+1
-        JR      NC,MCLBAK
+        JR      NC,DECFET
         CP      "0"
-        JR      C,MCLBAK
+        JR      C,DECFET
         LD      HL,0
         LD      B,10
 J5746:  ADD     HL,DE
@@ -240,7 +244,7 @@ J5746:  ADD     HL,DE
         ADD     HL,DE
         JR      C,J5773
         EX      DE,HL
-        CALL    MCLGCH
+        CALL    FETCHR
         JR      NZ,J5732
         RET
 
@@ -248,7 +252,8 @@ J5746:  ADD     HL,DE
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C575A:  CALL    C56E8
+SCNVR2:
+C575A:  CALL    FETCHZ
         LD      DE,BUF
         PUSH    DE
         LD      B,40
@@ -258,7 +263,7 @@ J5768:  LD      (DE),A
         INC     DE
         CP      ";"                     ; end of variablename ?
         JR      Z,J5776                 ; yep,
-        CALL    C56E8
+        CALL    FETCHZ
         DJNZ    J5768
 J5773:  CALL    FCERR                   ; illegal function call
 
@@ -270,7 +275,7 @@ J577A:  CALL    C575A
         EX      DE,HL
         RET
 
-MCLMAC:
+MCLXEQ:
 C5782:  CALL    C575A
         LD      A,(MCLLEN)
         LD      HL,(MCLPTR)
@@ -280,7 +285,8 @@ C5782:  CALL    C575A
         CALL    GETSTK                  ; check if enough stackspace for 2 words
         JP      J5679
 
-I5795:  XOR     A
+NEGD:
+C5795:  XOR     A
         SUB     E
         LD      E,A
         SBC     A,D

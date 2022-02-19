@@ -67,14 +67,36 @@ H.PTRG  EQU     0FFA2H
         EXTRN   INTIDX
 
 
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+
 ; START	SUBTTL	BIPTRG
 
 	SUBTTL	BIPTRG
 
 I5E9A:  DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         RET     Z                       ; yep, quit
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
 
 ;       Subroutine      DIM statement
@@ -105,12 +127,12 @@ J5EA9:  CALL    H.PTRG
         JP      C,SNERR                 ; nope, syntax error
         XOR     A
         LD      B,A                     ; assume no 2nd variablename character
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         JR      C,J5EBC                 ; digit, use as 2nd variablename character
         CALL    ISLET2                  ; is upcase letter character ?
         JR      C,J5EC5                 ; nope, may be a variabletype indicator
 J5EBC:  LD      B,A                     ; 2nd variablename character
-J5EBD:  RST     CHRGTR                  ; get next BASIC character
+J5EBD:  _RST    CHRGTR                  ; get next BASIC character
         JR      C,J5EBD                 ; digit, skip
         CALL    ISLET2                  ; is upcase letter character ?
         JR      NC,J5EBD                ; yep, skip
@@ -143,7 +165,7 @@ J5EE0:  LD      A,C
         DEC     HL                      ; BASIC pointer back to compensate upcoming CHRGTR
 I5EEE:  LD      A,D
         LD      (VALTYP),A              ; set DAC type
-        RST     CHRGTR                  ; get next BASIC character (type indicator)
+        _RST    CHRGTR                  ; get next BASIC character (type indicator)
         LD      A,(SUBFLG)
         DEC     A                       ; variable search flags
         JP      Z,J5FE8                 ; search for ERASE statement,
@@ -219,10 +241,10 @@ J5F66:  POP     HL
         EX      (SP),HL                 ; call address
         PUSH    DE
         LD      DE,PTRGTV+3
-        RST     DCOMPR                  ; called from VARPTR ?
+        _RST    DCOMPR                  ; called from VARPTR ?
         JR      Z,J5F61                 ; yep, return without creating a variable
         LD      DE,ISVAR+3
-        RST     DCOMPR                  ; called from factor evaluator ?
+        _RST    DCOMPR                  ; called from factor evaluator ?
         POP     DE
         JR      Z,J5FA7                 ; yep, return value 0
         EX      (SP),HL
@@ -248,7 +270,7 @@ J5F66:  POP     HL
         LD      (ARYTAB),HL
 J5F96:  DEC     HL
         LD      (HL),0
-        RST     DCOMPR
+        _RST    DCOMPR
         JR      NZ,J5F96                ; clear variable
         POP     DE
         LD      (HL),E                  ; variable type
@@ -266,7 +288,7 @@ J5FA7:  LD      (DAC+0),A               ; if single real or double real, DAC = 0
         LD      H,A
         LD      L,A
         LD      (DAC+2),HL              ; if integer, DAC = 0
-        RST     GETYPR                  ; get DAC type
+        _RST    GETYPR                  ; get DAC type
         JR      NZ,J5FB8                ; not a string, quit
         LD      HL,NULSTR
         LD      (DAC+2),HL              ; empty string
@@ -299,7 +321,7 @@ J5FC0:  PUSH    DE
         JR      Z,J5FDC
         CP      "]"
         JP      NZ,SNERR                ; nope, syntax error
-J5FDC:  RST     CHRGTR                  ; get next BASIC character
+J5FDC:  _RST    CHRGTR                  ; get next BASIC character
         LD      (TEMP2),HL              ; save BASIC pointer
         POP     HL
         LD      (DIMFLG),HL             ; restore DIMFLG
@@ -312,7 +334,7 @@ J5FE8:  PUSH    HL
         DEFB    03EH                    ; LD A,xx, trick to skip next instruction
 J5FEE:  ADD     HL,DE
         LD      DE,(STREND)
-        RST     DCOMPR                  ; end of the array variable area ?
+        _RST    DCOMPR                  ; end of the array variable area ?
         JR      Z,J6023                 ; yep, create array
         LD      E,(HL)                  ; arraytype
         INC     HL
@@ -389,7 +411,7 @@ J604A:  LD      (HL),C
         LD      (STREND),HL             ; new end of array area
 J6064:  DEC     HL
         LD      (HL),0
-        RST     DCOMPR
+        _RST    DCOMPR
         JR      NZ,J6064                ; clear array
         INC     BC
         LD      D,A
@@ -419,7 +441,7 @@ J6082:  POP     HL
         INC     HL
         EX      (SP),HL
         PUSH    AF
-        RST     DCOMPR
+        _RST    DCOMPR
         JP      NC,J601D                ; subscript out of range
         CALL    UMULT                   ; unsigned integer multiply
         ADD     HL,DE

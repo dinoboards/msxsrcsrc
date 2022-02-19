@@ -59,8 +59,8 @@ H.GEND  equ     0FEC6H
         PUBLIC  PARDEV
         PUBLIC  CBSAVE
         PUBLIC  CBLOAD
-        PUBLIC  J72FF
-        PUBLIC  J7300
+        PUBLIC  POPAL2
+        PUBLIC  POPAL3
 
         EXTRN   DERNMF
         EXTRN   FCERR
@@ -82,6 +82,28 @@ H.GEND  equ     0FEC6H
         EXTRN   DIOERR
         EXTRN   EXTDEV
         EXTRN   EXTDFN
+
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
 
 
 ; START SUBTTL  SPCDEV
@@ -217,9 +239,9 @@ C6F8F:  CALL    H.GEND
 CSAVE:
 C6FB7:  call    A7098
         dec     hl
-        rst     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         jr      z,A6FC3			; yep,
-        rst     SYNCHR
+        _RST    SYNCHR
         db      ','			; check for ,
         call    GETCSP
 A6FC3:  push    hl
@@ -249,7 +271,7 @@ J6FD7:  ld      a,0D0H			; header type = BSAVE file
         pop     hl
 A6FF4:  ld      a,(hl)
         call    C72DE
-        rst     DCOMPR
+        _RST    DCOMPR
         jr      nc,A6FFE
         inc     hl
         jr      A6FF4
@@ -286,7 +308,7 @@ J7014:  ld      c,0D0H			; header type = BSAVE file
         pop     de
 A702F:  call    C72D4
         ld      (hl),a
-        rst     DCOMPR
+        _RST    DCOMPR
         jr      z,A7039
         inc     hl
         jr      A702F
@@ -329,13 +351,13 @@ A7071:
 A707E:  inc     hl
         ex      de,hl
         ld      hl,(VARTAB)
-        rst     DCOMPR                  ; difference in programarea ?
+        _RST    DCOMPR                  ; difference in programarea ?
         jp      c,A7071                 ; nop, then it is ok
         ld      e,014H
         jp      ERROR                   ; Verify error
 
 A708C:  dec     hl
-        rst     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         jr      nz,A7098		; nope,
         push    hl
         ld      hl,FILNAM
@@ -418,7 +440,7 @@ A710D:  ld      de,(CURLIN)
         ld      b,6
 A711D:  ld      a,(hl)
         inc     hl
-        rst     OUTDO
+        _RST    OUTDO
         djnz    A711D
         jp      CRDO                    ; OUTDO next line
 ;
@@ -443,7 +465,7 @@ A713E:  push    hl
 A714A:  ld      a,(de)
         inc     de
         call    C72DE
-        rst     DCOMPR
+        _RST    DCOMPR
         jr      nz,A714A
         ld      l,007H
 A7154:  call    C72DE
@@ -747,7 +769,7 @@ C72D4:  PUSH    HL
         PUSH    DE
         PUSH    BC
         CALL    TAPIN
-        JR      NC,J7300		; no error, pop registers and quit
+        JR      NC,POPAL3		; no error, pop registers and quit
         JR      J72F2			; stop tape and quit with device I/O error
 
 ;       Subroutine      write character to cassette
@@ -759,7 +781,7 @@ C72DE:  PUSH    HL
         PUSH    BC
         PUSH    AF
         CALL    TAPOUT
-        JR      NC,J72FF		; no error, pop registers and quit
+        JR      NC,POPAL2		; no error, pop registers and quit
         JR      J72F2			; stop tape and quit with device I/O error
 
 ;       Subroutine      start cassette input
@@ -771,7 +793,7 @@ C72E9:  PUSH    HL
         PUSH    BC
         PUSH    AF
         CALL    TAPION			; start tape for input
-        JR      NC,J72FF		; no error, pop registers and quit
+        JR      NC,POPAL2		; no error, pop registers and quit
 J72F2:  CALL    TAPIOF			; stop tape
         JP      DIOERR                  ; quit with device I/O error
 
@@ -784,8 +806,8 @@ C72F8:  PUSH    HL
         PUSH    BC
         PUSH    AF
         CALL    TAPOON
-J72FF:  POP     AF
-J7300:  POP     BC
+POPAL2: POP     AF
+POPAL3: POP     BC
         POP     DE
         POP     HL
         RET
