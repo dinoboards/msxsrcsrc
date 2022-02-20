@@ -42,37 +42,16 @@ D.FFFF  equ     0FFFFH
 	PUBLIC	EXTROM
 	PUBLIC	CHKSLZ
 	
-	EXTRN	C7FBE		; helper routine RDSLT in basicrom
-	EXTRN	C7FC4		; helper routine WRSLT in basicrom
-	EXTRN	J1472
-	EXTRN	RDWEXP
+	EXTRN	C7FBE			; helper routine RDSLT in basicrom
+	EXTRN	C7FC4			; helper routine WRSLT in basicrom
+	EXTRN	RDWEXP          	; read word from slot
+
+	EXTRN	J1472           	; MSX2+ patch handle extension ROM
 
 	IF	INTHZ EQ 50
-	PUBLIC	PTCPAL
-	EXTRN	J0431
+	PUBLIC	PTCPAL          	; patch VDP in PAL mode
+	EXTRN	J0431           	; resume after PAL patch
 	ENDIF
-
-
-_RST    MACRO   X
-        IFIDN   <X>,<SYNCHR>
-        RST     08H
-        ENDIF
-        IFIDN   <X>,<CHRGTR>
-        RST     10H
-        ENDIF
-        IFIDN   <X>,<OUTDO>
-        RST     18H
-        ENDIF
-        IFIDN   <X>,<DCOMPR>
-        RST     20H
-        ENDIF
-        IFIDN   <X>,<GETYPR>
-        RST     28H
-        ENDIF
-        IFIDN   <X>,<CALLF>
-        RST     30H
-        ENDIF
-        ENDM
 
 
 ; START SUBTTL 	SLOT
@@ -542,44 +521,44 @@ J0390:  ADD     A,55H
 
 CHKSLZ:
 J03AC:  DI
-        LD      C,0
+        LD      C,0                     ; primairy slot 0
 	LD      DE,EXPTBL
         LD      HL,SLTATR
 J03B5:  LD      A,(DE)
         OR      C
-        LD      C,A
+        LD      C,A                     ; set expanded slot flag, if slot is expanded
         PUSH    DE
 J03B9:  PUSH    HL
         LD      HL,0
         CALL    RDWEXP
         PUSH    HL
-        LD      HL,04443H
+        LD      HL,04443H               ; subrom identifier
         RST     20H
         POP     HL
-        LD      B,0
-        JR      NZ,J03EF
+        LD      B,0                     ; reset extension flags
+        JR      NZ,J03EF                ; not a subrom, skip init and flags
         CALL    RDWEXP
-        PUSH    HL
-        PUSH    BC
+        PUSH    HL                      ; store address
+        PUSH    BC                      ; store extension flags, slotid
         PUSH    DE
-        POP     IX
+        POP     IX                      ; IX = address INIT
         LD      A,C
-I03D3:  PUSH    AF
-        POP     IY
-        CALL    NZ,C0217
-        POP     BC
-        POP     HL
+        PUSH    AF
+        POP     IY                      ; IYH = slotid
+        CALL    NZ,C0217                ; extension has a INIT, CALSLT
+        POP     BC                      ; restore extension flags, slotid
+        POP     HL                      ; restore address
         CALL    RDWEXP
         ADD     A,0FFH
-        RR      B
+        RR      B                       ; extension statement handler flag
         CALL    RDWEXP
         ADD     A,0FFH
-        RR      B
-        SRL     B
+        RR      B                       ; extension device handler flag
+        SRL     B                       ; extension basic program flag (no basic program)
         LD      DE,-8
         ADD     HL,DE
 J03EF:  EX      (SP),HL
-        LD      (HL),B
+        LD      (HL),B                  ; store extension flags
         EX      (SP),HL
         POP     HL
         INC     HL
@@ -587,24 +566,24 @@ J03EF:  EX      (SP),HL
         INC     HL
         INC     HL
         LD      A,C
-        AND     A
+        AND     A                       ; expanded slot ?
         LD      DE,12
-        JP      P,J040A
-        ADD     A,4
+        JP      P,J040A                 ; nope, next primairy slot
+        ADD     A,4                     ; next secundairy slot
         LD      C,A
-        CP      90H
-        JR      C,J03B9
+        CP      90H                     ; all secundairy slots done ?
+        JR      C,J03B9                 ; nope, next
         AND     03H
         LD      C,A
-        DEFB    03EH
+        DEFB    03EH                    ; next primairy slot
 J040A:  ADD     HL,DE
         POP     DE
         INC     DE
-        INC     C
+        INC     C                       ; next primairy slot
         LD      A,C
-        CP      04H
-        JR      C,J03B5
-        JP      J1472
+        CP      04H                     ; all primairy slots done ?
+        JR      C,J03B5                 ; nope, next
+        JP      J1472                   ; handle extension ROM
 
 
         IF      INTHZ EQ 50

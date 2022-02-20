@@ -1,6 +1,6 @@
 ; ADVGRP.MAC
 
-; BASIC advanced graphic statements, MSX 1 version (version 1.0)
+; BASIC advanced graphic statements, MSX 2 version (version 2.0)
 
 ; Source re-created by Z80DIS 2.2
 ; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
@@ -75,18 +75,19 @@ DRWANG  EQU     0FCBDH
         PUBLIC  CIRCLE
         PUBLIC  DRAW
         PUBLIC  PAINT
+        PUBLIC  J59C8
 
         EXTRN   FCERR
-	EXTRN	GETGCC
-	EXTRN	J566C
-	EXTRN	C56E8
-	EXTRN	C5719
-	EXTRN	C584D
-	EXTRN	C587B
-	EXTRN	C593C
-	EXTRN	C59B4
-	EXTRN	MCLMAC
-	EXTRN	MCLBAK
+	EXTRN	SCAN1
+	EXTRN	MACLNG
+	EXTRN	FETCHZ
+	EXTRN	VALSCN
+	EXTRN	ATRSCN
+	EXTRN	NEGHL
+	EXTRN	DOGRPH
+	EXTRN	HLFDE
+	EXTRN	MCLXEQ
+	EXTRN	DECFET
         EXTRN   SIGN
         EXTRN   MAKINT
         EXTRN   FRCINT
@@ -99,7 +100,7 @@ DRWANG  EQU     0FCBDH
         EXTRN   FCOMP
         EXTRN   GETSTK
         EXTRN   GETIN2
-
+        EXTRN   J79FB			; MSX2 PAINT expansion code
 
 _RST    MACRO   X
         IFIDN   <X>,<SYNCHR>
@@ -131,10 +132,11 @@ _RST    MACRO   X
 ;       Outputs         ________________________
 
 PAINT:
-C59C5:  CALL    GETGCC                  ; evaluate complex graphic coordinatepair
+C59C5:  JP	J79FB			; MSX2 PAINT expansion code
+
 J59C8:  PUSH    BC
         PUSH    DE
-        CALL    C584D
+        CALL    ATRSCN
         LD      A,(ATRBYT)
         LD      E,A
         DEC     HL
@@ -244,10 +246,10 @@ J5A7A:  LD      HL,(SKPCNT)
         LD      C,A
         LD      A,(PDIREC)
         LD      B,A
-        CALL    C5AD3
+        CALL    C5AD3                   ; push on stack
         JR      J5A7A
 
-J5AA4:  CALL    C587B
+J5AA4:  CALL    NEGHL
         DEC     HL
         DEC     HL
         LD      A,H
@@ -270,6 +272,7 @@ J5ABF:  JP      J5A0A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+ENTSLR:
 C5AC2:  LD      A,(LFPROG)
         LD      C,A
         LD      A,(RTPROG)
@@ -281,11 +284,12 @@ C5AC2:  LD      A,(LFPROG)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+ENTST1:
 C5ACE:  LD      B,A
         CALL    FETCHC
         LD      C,A
 
-;       Subroutine      __________________________
+;       Subroutine      push on stack
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -300,6 +304,7 @@ C5AD3:  EX      (SP),HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+SCANR1:
 C5ADC:  CALL    SCANR
         LD      (SKPCNT),DE
         LD      (MOVCNT),HL
@@ -313,6 +318,7 @@ C5ADC:  CALL    SCANR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+SCANL1:
 C5AED:  CALL    FETCHC
         PUSH    HL
         PUSH    AF
@@ -328,12 +334,13 @@ C5AED:  CALL    FETCHC
         LD      (LFPROG),A
         RET
 
-;       Subroutine      __________________________
+;       Subroutine      negate DE
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+NEGDE:
 C5B0B:  EX      DE,HL
-        CALL    C587B
+        CALL    NEGHL
         EX      DE,HL
         RET
 
@@ -342,7 +349,7 @@ C5B0B:  EX      DE,HL
 ;       Outputs         ________________________
 
 CIRCLE:
-C5B11:  CALL    GETGCC                  ; evaluate complex graphic coordinatepair
+C5B11:  CALL    SCAN1                   ; evaluate complex graphic coordinatepair
         _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    GETIN2                  ; evaluate integer operand
@@ -360,7 +367,7 @@ C5B11:  CALL    GETGCC                  ; evaluate complex graphic coordinatepai
         LD      (CLINEF),A
         LD      (CSCLXY),A
         POP     HL
-        CALL    C584D
+        CALL    ATRSCN
         LD      C,01H
         LD      DE,0
         CALL    C5D17
@@ -432,10 +439,10 @@ J5BBD:  CALL    CKCNTC
         PUSH    HL
         INC     HL
         EX      DE,HL
-        CALL    C59B4
+        CALL    HLFDE
         EX      DE,HL
         INC     DE
-        CALL    C59B4
+        CALL    HLFDE
         CALL    C5C06
         POP     DE
         POP     HL
@@ -472,6 +479,7 @@ J5BF2:  LD      (CRCSUM),HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CPLSCX:
 C5BFA:  PUSH    DE
         CALL    C5CEB
         POP     HL
@@ -485,6 +493,7 @@ C5BFA:  PUSH    DE
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CPLOT8:
 C5C06:  LD      (CPCNT),DE
         PUSH    HL
         LD      HL,0
@@ -497,7 +506,7 @@ C5C06:  LD      (CPCNT),DE
         CALL    C5BFA
         LD      (CYOFF),DE
         POP     DE
-        CALL    C5B0B
+        CALL    C5B0B                   ; negate DE
         CALL    C5C48
         PUSH    HL
         PUSH    DE
@@ -508,16 +517,17 @@ C5C06:  LD      (CPCNT),DE
         SBC     HL,DE
         LD      (CPCNT),HL
         LD      HL,(CXOFF)
-        CALL    C587B
+        CALL    NEGHL
         LD      (CXOFF),HL
         POP     DE
         POP     HL
-        CALL    C5B0B
+        CALL    C5B0B                   ; negate DE
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CPLOT4:
 C5C48:  LD      A,04H
 J5C4A:  PUSH    AF
         PUSH    HL
@@ -581,7 +591,7 @@ J5CAA:  POP     DE
         PUSH    AF
         PUSH    DE
         LD      DE,(CXOFF)
-        CALL    C5B0B
+        CALL    C5B0B                   ; negate DE
         LD      (CXOFF),HL
         EX      DE,HL
         POP     DE
@@ -589,7 +599,7 @@ J5CAA:  POP     DE
         LD      HL,(CYOFF)
         EX      DE,HL
         LD      (CYOFF),HL
-        CALL    C5B0B
+        CALL    C5B0B                   ; negate DE
         POP     HL
         POP     AF
         JP      J5C4A
@@ -598,16 +608,18 @@ J5CAA:  POP     DE
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CLINE2:
 C5CCD:  LD      HL,(GRPACX)
         LD      (GXPOS),HL
         LD      HL,(GRPACY)
         LD      (GYPOS),HL
-        JP      C593C
+        JP      DOGRPH
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+GTABSC:
 C5CDC:  PUSH    DE
         LD      DE,(GRPACX)
         ADD     HL,DE
@@ -623,6 +635,7 @@ C5CDC:  PUSH    DE
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+SCALEY:
 C5CEB:  LD      HL,(ASPECT)
         LD      A,L
         OR      A
@@ -651,7 +664,8 @@ J5CF6:  LD      C,D
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C5D0A:  LD      B,08H
+SCAL2:
+C5D0A:  LD      B,8
         LD      HL,0
 J5D0F:  ADD     HL,HL
         ADD     A,A
@@ -664,6 +678,7 @@ J5D14:  DJNZ    J5D0F
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CGTCNT:
 C5D17:  DEC     HL
         _RST    CHRGTR                  ; end of statement ?
         RET     Z			; yep, quit
@@ -711,6 +726,7 @@ J5D3A:  LD      BC,1540H
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CMPONE:
 C5D63:  LD      BC,1041H
         LD      DE,0000H
         CALL    FCOMP                   ; single real compare
@@ -728,8 +744,8 @@ C5D6E:  LD      A,(SCRMOD)
         LD      DE,I5D83
         XOR     A
         LD      (DRWFLG),A
-        LD      (MCLFLG),A
-        JP      J566C
+        LD      (MCLFLG),A              ; graphic MCL
+        JP      MACLNG
 
 I5D83:  DEFB    "U"+128
         DEFW    C5DB1
@@ -756,14 +772,17 @@ I5D83:  DEFB    "U"+128
         DEFB    "N"
         DEFW    C5E42
         DEFB    "X"
-        DEFW    MCLMAC
+        DEFW    MCLXEQ
         DEFB    "C"+128
         DEFW    C5E87
         DEFB    "S"+128
         DEFW    C5E59
         DEFB    0
 
-C5DB1:  CALL    C5B0B
+DRUP:
+C5DB1:  CALL    C5B0B                   ; negate DE
+
+DRDOWN:
 C5DB4:  LD      BC,0
         JR      J5DFF
 
@@ -771,28 +790,37 @@ C5DB4:  LD      BC,0
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C5DB9:  CALL    C5B0B
+DRLEFT:
+C5DB9:  CALL    C5B0B                   ; negate DE
+
+DRIGHT:
 C5DBC:  LD      B,D
         LD      C,E
         LD      DE,0
         JR      J5DFF
 
-C5DC3:  CALL    C5B0B
+DRWHHH:
+C5DC3:  CALL    C5B0B                   ; negate DE
+
+DRWFFF:
 C5DC6:  LD      B,D
         LD      C,E
         JR      J5DFF
 
+DRWEEE:
 C5DCA:  LD      B,D
         LD      C,E
-J5DCC:  CALL    C5B0B
+J5DCC:  CALL    C5B0B                   ; negate DE
         JR      J5DFF
 
-C5DD1:  CALL    C5B0B
+DRWGGG:
+C5DD1:  CALL    C5B0B                   ; negate DE
         LD      B,D
         LD      C,E
         JR      J5DCC
 
-C5DD8:  CALL    C56E8
+DMOVE:
+C5DD8:  CALL    FETCHZ
         LD      B,00H
         CP      "+"
         JR      Z,J5DE6
@@ -801,13 +829,13 @@ C5DD8:  CALL    C56E8
         INC     B
 J5DE6:  LD      A,B
         PUSH    AF
-        CALL    MCLBAK
-        CALL    C5719
+        CALL    DECFET
+        CALL    VALSCN
         PUSH    DE
-        CALL    C56E8
+        CALL    FETCHZ
         CP      ","
         JP      NZ,FCERR                ; illegal function call
-        CALL    C5719
+        CALL    VALSCN
         POP     BC
         POP     AF
         OR      A
@@ -823,13 +851,13 @@ J5DFF:  CALL    C5E66
         RRA
         JR      NC,J5E16
         PUSH    AF
-        CALL    C587B
+        CALL    NEGHL
         EX      DE,HL
         POP     AF
 J5E16:  RRA
         JR      NC,J5E1F
-        CALL    C587B
-        CALL    C5B0B
+        CALL    NEGHL
+        CALL    C5B0B                   ; negate DE
 J5E1F:  CALL    C5CDC
 J5E22:  LD      A,(DRWFLG)
         ADD     A,A
@@ -851,15 +879,18 @@ J5E3D:  XOR     A
         LD      (DRWFLG),A
         RET
 
+DNOMOV:
 C5E42:  LD      A,40H
         JR      J5E48
 
+DNOPLT:
 C5E46:  LD      A,80H
 J5E48:  LD      HL,DRWFLG
         OR      (HL)
         LD      (HL),A
         RET
 
+DANGLE:
 C5E4E:  JR      NC,C5E59
         LD      A,E
         CP      04H
@@ -867,6 +898,7 @@ C5E4E:  JR      NC,C5E59
         LD      (DRWANG),A
         RET
 
+NCFCER:
 C5E59:  JP      NC,FCERR                ; illegal function call
         LD      A,D
         OR      A
@@ -879,6 +911,7 @@ C5E59:  JP      NC,FCERR                ; illegal function call
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+DSCLDE:
 C5E66:  LD      A,(DRWSCL)
         OR      A
         RET     Z
@@ -892,8 +925,8 @@ J5E6E:  ADD     HL,DE
         PUSH    AF
         JR      NC,J5E79
         DEC     DE
-J5E79:  CALL    C59B4
-        CALL    C59B4
+J5E79:  CALL    HLFDE
+        CALL    HLFDE
         POP     AF
         RET     NC
         LD      A,D
@@ -902,6 +935,7 @@ J5E79:  CALL    C59B4
         INC     DE
         RET
 
+DCOLR:
 C5E87:  JR      NC,C5E59
         LD      A,E
         CALL    SETATR
@@ -912,6 +946,7 @@ C5E87:  JR      NC,C5E59
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CHKRNG:
 C5E91:  PUSH    HL
         CALL    SCALXY
         JP      NC,FCERR                ; illegal function call

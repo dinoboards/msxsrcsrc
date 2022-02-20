@@ -173,17 +173,17 @@ D.FFFF  EQU     0FFFFH
         PUBLIC  SCREEN
         PUBLIC  VPOKE
         PUBLIC  VPEEK
-	PUBLIC	C7987
-	PUBLIC	C79A1
-	PUBLIC	J79D6
-	PUBLIC	J79E9
-	PUBLIC	J79FB
-	PUBLIC	J7A0D
-	PUBLIC	J7A1F
-	PUBLIC	J7AB6
-	PUBLIC	J7B61
-	PUBLIC	C7BE8
-	PUBLIC	C7BEE
+	PUBLIC	C7987                   ; patch stop VDP command
+	PUBLIC	C79A1                   ; patch VARTAB
+	PUBLIC	J79D6                   ; PSET expansion routine
+	PUBLIC	J79E9                   ; LINE expansion routine
+	PUBLIC	J79FB                   ; PAINT expansion routine
+	PUBLIC	J7A0D                   ; draw line expansion routine
+	PUBLIC	J7A1F                   ; patch CLEAR
+	PUBLIC	J7AB6                   ; resume PUT SPRITE routine
+	PUBLIC	J7B61                   ; system initialization, part2
+	PUBLIC	C7BE8                   ; patch prompt
+	PUBLIC	C7BEE                   ; patch BASIC welcome screen
 
         EXTRN   DECDIV
         EXTRN   MOVFM
@@ -207,41 +207,64 @@ D.FFFF  EQU     0FFFFH
         EXTRN   SNGFLT
         EXTRN   PUTNEW
         EXTRN   CRDO
-        EXTRN   MCLPAR
-        EXTRN   MCLGCH
-        EXTRN   MCLBAK
-        EXTRN   MCLNUM
-        EXTRN   MCLMAC
+        EXTRN   MCLSCN
+        EXTRN   FETCHR
+        EXTRN   DECFET
+        EXTRN   VALSC2
+        EXTRN   MCLXEQ
         EXTRN   CONIA
         EXTRN   CONSUI
         EXTRN   CONSIH
         EXTRN   GETPUT
         EXTRN   NEWSTN
-        EXTRN   GETGCC
 
+	EXTRN	SCAN1
 	EXTRN	CHEAD
 	EXTRN	FCERR
-	EXTRN	GETGCC
-	EXTRN	GETGCS
-	EXTRN	J57F1
-	EXTRN	J58AA
-	EXTRN	J59C8
-	EXTRN	J64E5
-	EXTRN	J64EA
-	EXTRN	J7CE3
-	EXTRN	J7CF4
-	EXTRN	J7D03
-	EXTRN	INIT
-	EXTRN	J5942
+	EXTRN	SCAND
+	EXTRN	J57F1                   ; resume orginal PSET routine
+	EXTRN	J58AA                   ; resume orginal LINE routine
+	EXTRN	J59C8                   ; resume orginal PAINT routine
+	EXTRN	J64E5                   ; CLEAR loop label
+	EXTRN	J64EA                   ; resume orginal CLEAR routine
+	EXTRN	J7CE3                   ; SET statement
+	EXTRN	J7CF4                   ; PUT SPRITE statement
+	EXTRN	J7D03                   ; COPY statement
+	EXTRN	INIT                    ; start BASIC interpreter
+	EXTRN	J5942                   ; resume orginal draw line routine
 
 	IF	INTHZ EQ 50
 	PUBLIC	PTCPAL
 	EXTRN	J0431
 	ENDIF
 
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+
 ; START SUBTTL  MSXSTS
 
         SUBTTL  MSXSTS
+
 
 ;       Subroutine      MOTOR statement
 ;       Inputs          ________________________
@@ -253,11 +276,11 @@ C73B7:  ld      e,0FFH
         sub     0EBH
         ld      e,a                     ; OFF token ?
         jr      z,A73C5                 ; yep, off
-        RST     SYNCHR
+        _RST    SYNCHR
         db      095H                    ; check for ON token
         ld      e,1                     ; on
         db      03EH
-A73C5:  RST     CHRGTR
+A73C5:  _RST    CHRGTR
 A73C6:  ld      a,e
         jp      STMOTR
 
@@ -270,7 +293,7 @@ C73CA:  CALL    GETBYT                  ; evaluate byte operand
         CP      14                      ; register 0-13 ?
         JP      NC,FCERR                ; nope, illegal function call
         PUSH    AF
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    GETBYT                  ; evaluate byte operand
         POP     AF
@@ -334,10 +357,10 @@ J7413:  POP     AF
         CP      03H
         JR      NC,J7446
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         JR      Z,J7439			; yep,
         PUSH    BC
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         JR      J73FD
 
@@ -349,7 +372,7 @@ J7439:  LD      A,B
         CP      03H
         JR      C,J7439
 J7446:  DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         JP      NZ,SNERR                ; nope, syntax error
         PUSH    HL
 J744C:  XOR     A
@@ -390,7 +413,7 @@ J744D:  PUSH    AF
         EI
         LD      A,0FFH
         LD      (MCLFLG),A
-        JP      MCLPAR
+        JP      MCLSCN
 
 J748E:  LD      A,(MCLLEN)
         OR      A
@@ -535,7 +558,7 @@ I752E:  DEFB    "A"
         DEFB    "L"+128
         DEFW    C75C8
         DEFB    "X"
-        DEFW    MCLMAC
+        DEFW    MCLXEQ
         DEFB    0
 
 I755F:  DEFB    010H,012H,014H,016H,000H,000H,002H,004H
@@ -588,7 +611,7 @@ J75A4:  OR      D
         INC     HL
         LD      H,(HL)
         LD      L,A
-        RST     DCOMPR
+        _RST    DCOMPR
         POP     HL
         RET     Z
         LD      (HL),E
@@ -696,7 +719,7 @@ C763E:  LD      B,C
         SUB     40H
         ADD     A,A
         LD      C,A
-        CALL    MCLGCH
+        CALL    FETCHR
         JR      Z,J7665
         CP      "#"
         JR      Z,J7666
@@ -704,7 +727,7 @@ C763E:  LD      B,C
         JR      Z,J7666
         CP      "-"
         JR      Z,J765A
-        CALL    MCLBAK
+        CALL    DECFET
         JR      J7665
 
 J765A:  DEC     C
@@ -745,9 +768,9 @@ J7687:  ADC     A,E
         CALL    GETVC2
         LD      C,(HL)
         PUSH    HL
-        CALL    MCLGCH
+        CALL    FETCHR
         JR      Z,J76A9
-        CALL    MCLNUM
+        CALL    VALSC2
 J769C:  LD      A,40H
         CP      E
         JR      C,J7684
@@ -773,7 +796,7 @@ J76A9:  POP     HL
         CALL    FRCINT                  ; convert DAC to integer
         LD      D,H
         LD      E,L
-J76C8:  CALL    MCLGCH
+J76C8:  CALL    FETCHR
         JR      Z,J76E3
         CP      "."
         JR      NZ,J76E0
@@ -787,9 +810,9 @@ J76C8:  CALL    MCLGCH
         LD      H,A
         JR      J76E3
 
-J76E0:  CALL    MCLBAK
+J76E0:  CALL    DECFET
 J76E3:  LD      DE,5
-        RST     DCOMPR
+        _RST    DCOMPR
         JR      C,J76EA
         EX      DE,HL
 J76EA:  LD      BC,-9
@@ -870,7 +893,7 @@ J7744:  LD      E,(HL)
         DJNZ    J7744
         CALL    C7521
         JP      C,J748E
-        JP      MCLPAR
+        JP      MCLSCN
 
 
         IF INTHZ EQ 60
@@ -918,9 +941,9 @@ C7766:  LD      DE,(CSRY)
         LD      D,A
         PUSH    DE
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         JR      Z,J779F                 ; yep, set cursor position and quit
-J777A:  RST     SYNCHR
+J777A:  _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CP      ","                     ; y coordinate not specified ?
         JR      Z,J778B                 ; yep, use current
@@ -930,9 +953,9 @@ J777A:  RST     SYNCHR
         LD      E,A
         PUSH    DE                      ; save coordinates
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         JR      Z,J779F                 ; yep, set cursor position and quit
-J778B:  RST     SYNCHR
+J778B:  _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    GETBYT                  ; evaluate byte operand
         AND     A
@@ -941,11 +964,11 @@ J778B:  RST     SYNCHR
         DEC     A                       ; =0, cursor off (ESC x 5)
 J7796:  PUSH    AF
         LD      A,1BH
-        RST     OUTDO                   ; ESC to interpreter output
+        _RST    OUTDO                   ; ESC to interpreter output
         POP     AF
-        RST     OUTDO                   ; "x" or "y" to interpreter output
+        _RST    OUTDO                   ; "x" or "y" to interpreter output
         LD      A,"5"
-        RST     OUTDO                   ; "5" to interpreter output
+        _RST    OUTDO                   ; "5" to interpreter output
 J779F:  EX      (SP),HL
         CALL    POSIT                   ; set cursor position
         POP     HL
@@ -974,13 +997,13 @@ J77AB:  PUSH    HL
 ;       Outputs         ________________________
 
 INTS:
-J77B1:  RST     SYNCHR
+J77B1:  _RST    SYNCHR
         DEFB    "E"
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    "R"
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    0FFH
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    094H                    ; check for ERVAL
         PUSH    HL
         LD      HL,TRPTBL+17*3
@@ -994,7 +1017,7 @@ STRIGS:
 J77BF:  LD      A,4                     ; max is 4 
         CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
         DEC     HL
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         PUSH    HL
         LD      D,00H
         LD      HL,TRPTBL+12*3
@@ -1018,7 +1041,7 @@ J77D4:  CALL    GETBYT                  ; evaluate byte operand
         CALL    C77E8                   ; set trapentry of functionkey
 J77E2:  POP     HL
         POP     AF
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         JP      NEWSTN                  ; new statement without CTRL-STOP and trap check
 
 ;       Subroutine      set trapentry of functionkey
@@ -1070,7 +1093,7 @@ C7810:  CALL    H.ONGO
         CP      0FFH
         RET     C
         PUSH    HL
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         CP      0A3H
         JR      Z,J7833
         CP      85H
@@ -1083,18 +1106,18 @@ J7833:  POP     BC
         LD      BC,0C05H
         RET
 
-J7838:  RST     CHRGTR                  ; get next BASIC character
+J7838:  _RST    CHRGTR                  ; get next BASIC character
         CP      "E"
         JR      NZ,J7830
         POP     BC
-        RST     CHRGTR                  ; get next BASIC character
-        RST     SYNCHR
+        _RST    CHRGTR                  ; get next BASIC character
+        _RST    SYNCHR
         DEFB    "R"
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    0FFH
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    094H
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    0EFH                    ; check for RVAL=
         CALL    GETUIN                  ; evaluate address operand
         LD      A,D
@@ -1134,7 +1157,7 @@ C785C:  PUSH    HL
 KEYS:
 C786C:  CP      93H                     ; LIST token ?
         JR      NZ,J78AE                ; nope, other KEY statement variant
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         PUSH    HL
         LD      HL,FNKSTR
         LD      C,0AH
@@ -1151,7 +1174,7 @@ J7879:  LD      A,(HL)
         CALL    CNVCHR
         JR      Z,J7891
         LD      A,1
-        RST     OUTDO                   ; MSX to interpreter output
+        _RST    OUTDO                   ; MSX to interpreter output
         LD      A,E
         JR      J789B
 
@@ -1160,7 +1183,7 @@ J7891:  CP      7FH
         CP      20H
         JR      NC,J789B
 J7899:  LD      A," "
-J789B:  RST     OUTDO                   ; char to interpreter output
+J789B:  _RST    OUTDO                   ; char to interpreter output
         DJNZ    J7879
 J789E:  CALL    CRDO                    ; newline to interpreter output
         DEC     C
@@ -1168,10 +1191,10 @@ J789E:  CALL    CRDO                    ; newline to interpreter output
         POP     HL
         RET
 
-J78A6:  RST     CHRGTR                  ; get next BASIC character
+J78A6:  _RST    CHRGTR                  ; get next BASIC character
         JP      DSPFNK
 
-J78AA:  RST     CHRGTR                  ; get next BASIC character
+J78AA:  _RST    CHRGTR                  ; get next BASIC character
         JP      ERAFNK
 
 J78AE:  CP      "("
@@ -1195,7 +1218,7 @@ J78AE:  CP      "("
         ADD     HL,BC
         PUSH    HL
         EX      DE,HL
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    FRMEVL                  ; evaluate expression
         PUSH    HL
@@ -1234,7 +1257,7 @@ J78FA:  LD      (HL),C
 ;       Outputs         ________________________
 
 TIME$:
-J7900:  RST     CHRGTR                  ; get next BASIC character
+J7900:  _RST    CHRGTR                  ; get next BASIC character
         PUSH    HL
         LD      HL,(JIFFY)
         CALL    CONSUI                  ; convert unsigned integer to single real
@@ -1246,7 +1269,7 @@ J7900:  RST     CHRGTR                  ; get next BASIC character
 ;       Outputs         ________________________
 
 CSRLIN:
-J790A:  RST     CHRGTR                  ; get next BASIC character
+J790A:  _RST    CHRGTR                  ; get next BASIC character
         PUSH    HL
         LD      A,(CSRY)
         JR      J7932
@@ -1256,7 +1279,7 @@ J790A:  RST     CHRGTR                  ; get next BASIC character
 ;       Outputs         ________________________
 
 TIME:
-C7911:  RST     SYNCHR
+C7911:  _RST    SYNCHR
         DEFB    0EFH                    ; check for =
         CALL    GETUIN                  ; evaluate address operand
         LD      (JIFFY),DE
@@ -1267,7 +1290,7 @@ C7911:  RST     SYNCHR
 ;       Outputs         ________________________
 
 PLAY$:
-J791B:  RST     CHRGTR                  ; get next BASIC character
+J791B:  _RST    CHRGTR                  ; get next BASIC character
         LD      A,3                     ; max is 3
         CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
         PUSH    HL
@@ -1447,13 +1470,13 @@ J7A84:  CALL    C7A9F
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C7A9F:  RST     CHRGTR                  ; get next BASIC character
+C7A9F:  _RST    CHRGTR                  ; get next BASIC character
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C7AA0:  RST     SYNCHR
+C7AA0:  _RST    SYNCHR
         DEFB    "$"                     ; check for $
         LD      A,255                   ; max is 255
         CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
@@ -1473,18 +1496,18 @@ J7AAF:  DEC     B                       ; PUT ?
         JP      J7CF4			; MSX2 patch PUT SPRITE statement
 J7AB6:  AND     A
         JP      Z,FCERR                 ; illegal function call
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         CALL    GETBYT                  ; evaluate byte operand
         CP      32                      ; planenumber 0-31 ?
         JP      NC,FCERR                ; nope, illegal function call
         PUSH    HL
         CALL    CALATR
         EX      (SP),HL
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CP      ","
         JR      Z,J7AF9
-        CALL    GETGCC                  ; evaluate complex graphic coordinatepair
+        CALL    SCAN1                   ; evaluate complex graphic coordinatepair
         EX      (SP),HL
         LD      A,E
         CALL    WRTVRM
@@ -1508,11 +1531,11 @@ J7AE1:  INC     HL
         DEC     HL
         EX      (SP),HL
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         POP     BC
         RET     Z			; yep, quit
         PUSH    BC
-J7AF9:  RST     SYNCHR
+J7AF9:  _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CP      ","
         JR      Z,J7B1D
@@ -1532,11 +1555,11 @@ J7AF9:  RST     SYNCHR
         DEC     HL
         EX      (SP),HL
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         POP     BC
         RET     Z			; yep, quit
         PUSH    BC
-J7B1D:  RST     SYNCHR
+J7B1D:  _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    GETBYT                  ; evaluate byte operand
         CALL    GSPSIZ
@@ -1620,13 +1643,13 @@ C7BF5:  LD      IX,S.VPEEK
 ;       Outputs         A = value, E = value
 
 C7C08:  PUSH    AF
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    "("                     ; check for (
         CALL    GETBYT                  ; evaluate byte operand
         POP     AF
         CP      E
         JR      C,J7C73
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ")"                     ; check for )
         LD      A,E
         RET
@@ -1836,8 +1859,8 @@ J79D6:  CALL    CHKNEW
         JP      EXTROM
 
 J79E2:  PUSH    AF
-        CALL    GETGCS                  ; evaluate simple graphic coordinatepair
-        JP      J57F1
+        CALL    SCAND                   ; evaluate simple graphic coordinatepair
+        JP      J57F1                   ; resume orginal PSET routine
 ; #####################
 
 ; #####################
@@ -1848,8 +1871,8 @@ J79E9:  CALL    CHKNEW
         LD      IX,S.GLINE
         JP      EXTROM
 
-J79F5:  CALL    GETGCC                  ; evaluate complex graphic coordinatepair
-        JP      J58AA
+J79F5:  CALL    SCAN1                   ; evaluate complex graphic coordinatepair
+        JP      J58AA                   ; resume orginal LINE routine
 
 ; #####################
 ;       patch   extend PAINT statement for MSX2 screens
@@ -1859,8 +1882,8 @@ J79FB:  CALL    CHKNEW
         LD      IX,S.PAINT
         JP      EXTROM
 
-J7A07:  CALL    GETGCC                  ; evaluate complex graphic coordinatepair
-        JP      J59C8
+J7A07:  CALL    SCAN1                   ; evaluate complex graphic coordinatepair
+        JP      J59C8                   ; resume orginal PAINT routine
 
 ; #####################
 ;       patch   extend draw line for MSX2 screens
@@ -1871,7 +1894,7 @@ J7A0D:  CALL    CHKNEW
         JP      EXTROM
 
 J7A19:  CALL    SCALXY
-        JP      J5942
+        JP      J5942                   ; resume orginal draw line routine
 
 ; #####################
 ;       bugfix  CLEAR statement
@@ -1952,7 +1975,7 @@ J7B80:  RR      C
         EX      DE,HL
         LD      (SLTTBL+2),HL                   ; save secundiary slotregisters
         IM      1                               ; switch to interrupt mode 1 (Z80 defaults to mode 0)
-        JP      INIT                            ; continue with system initialization
+        JP      INIT                            ; start BASIC interpreter
 
 
         IF      INTHZ EQ 50

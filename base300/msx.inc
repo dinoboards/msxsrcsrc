@@ -12,6 +12,12 @@ OPTENT	EQU	07A00H			; optrom entrypoint
 
 OPTM	EQU	0
 
+;	CALLFIX
+;		0 = orginal CALL statement code
+;		1 = Use CALL statement bugfix
+
+CALLFIX	EQU	1
+
 
 ;	CNTRY	Country
 ;		0 = Japan

@@ -45,7 +45,7 @@ H.BAKU  EQU     0FEADH
         PUBLIC  DERIER
         PUBLIC  DERSOO
         PUBLIC  DERRPE
-        PUBLIC  C6D7B
+        PUBLIC  PRGFIN
         PUBLIC  BLDFIN
         PUBLIC  DLINE
         PUBLIC  FILINP
@@ -73,8 +73,30 @@ H.BAKU  EQU     0FEADH
         EXTRN   DOASIG
         EXTRN   LETCON
         EXTRN   ISDDEV
-        EXTRN   J6CF3
+        EXTRN   POPHR2
         EXTRN   FRQINT
+
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
 
 
 ; START SUBTTL	DSKCOM
@@ -98,7 +120,7 @@ C6D57:  CP      "#"
         RET     NZ
         PUSH    BC
         CALL    GTBYTC                  ; skip basic char and evaluate byte operand
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         LD      A,E
         PUSH    HL
@@ -122,13 +144,14 @@ J6D79:  LD      A,(HL)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+PRGFIN:
 C6D7B:  LD      BC,GTMPRT               ; load BASIC pointer from (TEMP)
         PUSH    BC
         XOR     A
         JP      CLSFIL                  ; close i/o channel 0
 
 FILIND:
-J6D83:  RST     GETYPR                  ; get DAC type
+J6D83:  _RST    GETYPR                  ; get DAC type
         LD      BC,DOASIG
         LD      DE,2C20H
         JR      NZ,J6DA3                ; not a string,
@@ -241,9 +264,9 @@ J6E42:  LD      (HL),00H
         POP     HL
         RET
 
-J6E53:  RST     GETYPR                  ; get DAC type
+J6E53:  _RST    GETYPR                  ; get DAC type
         PUSH    AF
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         POP     AF
         PUSH    AF
         CALL    C,FIN                   ; not a double real, convert text to number
@@ -315,23 +338,23 @@ J6E86:  LD      E,58
 BSAVE:
 C6E92:  CALL    FILEVL                  ; evaluate filespecification
         PUSH    DE                      ; save devicecode
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    C6F0B                   ; evaluate BLOAD/BSAVE address operand
         EX      DE,HL
         LD      (SAVENT),HL
         EX      DE,HL                   ; assume start address = execute address
         PUSH    DE                      ; save start address
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    C6F0B                   ; evaluate BLOAD/BSAVE address operand
         EX      DE,HL
         LD      (SAVEND),HL
         EX      DE,HL                   ; save end address
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         JR      Z,J6EB9                 ; yep, skip execute address
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    C6F0B                   ; evaluate BLOAD/BSAVE address operand
         EX      DE,HL
@@ -356,17 +379,17 @@ C6EC6:  CALL    FILEVL                  ; evaluate filespecification
         XOR     A
         LD      (RUNBNF),A              ; assume no execute after load
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         LD      BC,0                    ; assume offset 0
         JR      Z,J6EE8                 ; yep, go
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CP      "R"                     ; run option ?
         JR      NZ,J6EE3                ; nope, offset option
         LD      (RUNBNF),A              ; execute after load
-        RST     CHRGTR                  ; get next BASIC character
+        _RST    CHRGTR                  ; get next BASIC character
         JR      Z,J6EE8                 ; end of statement, go
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
 J6EE3:  CALL    C6F0B                   ; evaluate BLOAD/BSAVE address operand (offset)
         LD      B,D
@@ -389,7 +412,7 @@ J6EF4:  LD      A,(RUNBNF)
         JR      Z,J6F06                 ; nope, close channel and quit
         XOR     A
         CALL    CLSFIL                  ; close i/o channel 0
-        LD      HL,J6CF3
+        LD      HL,POPHR2
         PUSH    HL                      ; after this, retore BASIC pointer and continue
         LD      HL,(SAVENT)
         JP      (HL)                    ; start code

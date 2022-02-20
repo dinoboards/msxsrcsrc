@@ -80,13 +80,13 @@ D.FFFF  EQU     0FFFFH
         PUBLIC  ATRSLI
         PUBLIC  ATRSL2
         PUBLIC  CHKZDN
-	PUBLIC	J7CE3
-	PUBLIC	J7CF4
-	PUBLIC	J7D03
-	PUBLIC	C7D75
-	PUBLIC	C7FF5
-	PUBLIC	C7FBE
-	PUBLIC	C7FC4
+	PUBLIC	J7CE3                   ; patch SET statement
+	PUBLIC	J7CF4                   ; patch PUT SPRITE statement
+	PUBLIC	J7D03                   ; patch COPY statement
+	PUBLIC	C7D75                   ; extension ROM handler
+	PUBLIC	C7FF5                   ; CALST after vertical retrace
+	PUBLIC	C7FBE                   ; RDSLT helper
+	PUBLIC	C7FC4                   ; WRSLT helper
 
         EXTRN   SNERR
         EXTRN   FCERR
@@ -95,20 +95,43 @@ D.FFFF  EQU     0FFFFH
         EXTRN   OMERR
         EXTRN   SCRTCH
         EXTRN   RUNC
-        EXTRN   C62A7
+        EXTRN   CLEAR2
         EXTRN   STKINI
         EXTRN   CLSALL
         EXTRN   NEWSTT
         EXTRN   READY
         EXTRN   LINPRT
 
-	EXTRN	J7AB6
-	EXTRN	C7BEE
+	EXTRN	J7AB6                   ; PUT SPRITE MSX1
+	EXTRN	C7BEE                   ; BASIC interpreter welcome screen
+
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
 
 
 ; START SUBTTL	INIT
 
         SUBTTL	INIT
+
 
 ;       Subroutine      System initialization routine
 ;       Remark          RAM is invoked, EXPTBL and SLTTBL are initialized
@@ -250,7 +273,7 @@ J7D82:  INC     HL
 J7D87:  CALL    RDWEXP
         PUSH    HL
         LD      HL,04241H
-        RST     DCOMPR
+        _RST    DCOMPR
         POP     HL                      ; expansion ROM ?
         LD      B,0                     ; reset extension flags
         JR      NZ,J7DBE                ; nope, next slot
@@ -322,7 +345,7 @@ J7DF6:  CALL    ATRSL2                  ; translate SLTATR loopvar to address an
         CALL    ENASLT                  ; enable slot on page 2
         LD      HL,(VARTAB)
         LD      DE,0C000H
-        RST     DCOMPR
+        _RST    DCOMPR
         JR      NC,J7E09                ; VARTAB is already in page 3, leave it alone
         EX      DE,HL
         LD      (VARTAB),HL             ; VARTAB = 0C000H (otherwise VARTAB would point into ROM)
@@ -396,9 +419,9 @@ C7E2D:  LD      B,A
 ;       Outputs         ________________________
 
 MAXS:
-C7E4B:  RST     SYNCHR
+C7E4B:  _RST    SYNCHR
         DEFB    0B7H
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    0EFH                    ; check for FILES=
         CALL    GETBYT                  ; evaluate byte operand
         JP      NZ,SNERR                ; not end of statement, syntax error
@@ -409,7 +432,7 @@ C7E4B:  RST     SYNCHR
         CALL    CLSALL                  ; close all i/o channels
         POP     AF
         CALL    ALCFIL                  ; allocate i/o channels
-        CALL    C62A7                   ; initialize interpreter, BASIC pointer from TEMP
+        CALL    CLEAR2                  ; initialize interpreter, BASIC pointer from TEMP
         JP      NEWSTT                  ; execute new statement
 
 ;       Subroutine      allocate i/o channels
@@ -443,7 +466,7 @@ J7E72:  ADD     HL,DE
         LD      C,L                     ; size of the string heap +140
         LD      HL,(VARTAB)             ; start of the simple variables
         ADD     HL,BC                   ; + size
-        RST     DCOMPR                  ; does this fit ?
+        _RST    DCOMPR                  ; does this fit ?
         JP      NC,OMERR                ; nope, out of memory
         POP     AF
         LD      (MAXFIL),A              ; set number of i/o channels (excluding i/o channel 0)

@@ -57,7 +57,29 @@ H.DSKC  EQU     0FEEEH
         EXTRN   NULSTR
         EXTRN   STRIN1
         EXTRN   SETSTR
-        EXTRN   C6D7B
+        EXTRN   PRGFIN
+
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
 
 
 ; START SUBTTL 	BIO
@@ -106,9 +128,9 @@ C7323:  LD      A,(TTYPOS)
 CRDO:
 C7328:  CALL    H.CRDO
         LD      A,0DH
-        RST     OUTDO
+        _RST    OUTDO
         LD      A,0AH
-        RST     OUTDO
+        _RST    OUTDO
 
 ;       Subroutine      interpreter output pos = 0
 ;       Inputs          ________________________
@@ -135,7 +157,7 @@ J7343:  LD      (TTYPOS),A
 ;       Outputs         ________________________
 
 INKEY:
-J7347:  RST     CHRGTR                  ; get next BASIC character
+J7347:  _RST    CHRGTR                  ; get next BASIC character
         PUSH    HL
         CALL    CHSNS			; keyboard input available ?
         JR      Z,J735A			; nope, return empty string
@@ -157,11 +179,11 @@ J735A:  LD      HL,NULSTR
 ;       Outputs         ________________________
 
 OUTCH1:
-C7367:  RST     OUTDO
+C7367:  _RST    OUTDO
         CP      0AH
         RET     NZ
         LD      A,0DH
-        RST     OUTDO
+        _RST    OUTDO
         CALL    CRFIN                   ; interpreter output pos = 0
         LD      A,0AH
         RET
@@ -195,7 +217,7 @@ J7397:  INC     B                       ; empty line ?
 C739A:  LD      A,(NLONLY)
         AND     80H
         LD      (NLONLY),A              ; basic program not loading
-        CALL    C6D7B                   ; close i/o channel 0 and load HL from (TEMP)
+        CALL    PRGFIN                  ; close i/o channel 0 and load HL from (TEMP)
         LD      A,(FILNAM+0)
         AND     A                       ; RUN after LOAD ?
         JP      Z,STPRDY                ; nope, ok and mainloop (+POP)

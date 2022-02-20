@@ -213,7 +213,6 @@ H.LPTS  EQU     0FFBBH
 	PUBLIC	WSLREG
 	PUBLIC	PHYDIO
 	PUBLIC	FORMAT
-	PUBLIC	C12B4
 	PUBLIC	POPALL
 	PUBLIC	GETPAT
         PUBLIC  TERMIN
@@ -230,7 +229,7 @@ H.LPTS  EQU     0FFBBH
         PUBLIC  ADVCUR
         PUBLIC  BS
         PUBLIC  INDJMP
-	PUBLIC	J0431
+	PUBLIC	J0431                   ; resume from PAL patch
 
         EXTRN   PUTQ
         EXTRN   LFTQ
@@ -241,9 +240,9 @@ H.LPTS  EQU     0FFBBH
 	EXTRN	CALBAS
 	EXTRN	SUBROM
         EXTRN   EXTROM
-	EXTRN	J7B61
 	EXTRN	STOP
-	EXTRN	J409B
+	EXTRN	READYR
+	EXTRN	J7B61			; hardware intialization, part 2
 
 	IF	INTHZ EQ 50
 	EXTRN	PTCPAL
@@ -276,8 +275,6 @@ _RST    MACRO   X
 
         SUBTTL	MSXIO
 
-
-; orginal init MSX2 and above
 
 CHKRAM:
 J0416:  XOR     A
@@ -424,7 +421,7 @@ J04DB:  LD      A,B
 J04E7:  IN      A,(0A8H)
         ADD     A,40H                   ; next primairy slot page 3
         JR      NC,J04A2                ; all primary slots done ? nope, next
-        JP      J7B61                   ; continue rest init code (moved elsewhere)
+        JP      J7B61                   ; continue with hardware intialization, part 2
 
 ;       Subroutine      ISCNTC
 ;       Inputs          ________________________
@@ -2158,7 +2155,7 @@ J0C3C:  PUSH    HL
         PUSH    IY
         PUSH    IX
 	CALL    H.KEYI
-        CALL    C1479                   ; patch code
+        CALL    C1479                   ; MSX2 patch handle lightpen hardware
 	JP      P,J0D02
         CALL    H.TIMI
         EI
@@ -2289,7 +2286,7 @@ J0D1C:  LD      A,C
         LD      A,(NEWKEY+6)
         CP      0E8H
         JR      NZ,J0D3A
-        LD      IX,J409B
+        LD      IX,READYR
         JP      CALBAS                  ; CALBAS
 
 J0D3A:  LD      DE,OLDKEY+11
@@ -2315,7 +2312,7 @@ J0D49:
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C0D4E:  LD      B,0BH
+C0D4E:  LD      B,11
         LD      HL,OLDKEY
         LD      DE,NEWKEY
 J0D56:  LD      A,(DE)
@@ -2890,12 +2887,7 @@ J12A2:  CP      8
 
 J12AF:  CP      4
         LD      DE,0CECH
-
-;       Subroutine      __________________________
-;       Inputs          ________________________
-;       Outputs         ________________________
-
-C12B4:  JR      C,J12BB
+        JR      C,J12BB
         LD      DE,03D3H
         SUB     4
 J12BB:  DEC     A
@@ -3158,7 +3150,7 @@ J1418:  CALL    H.FORM
 
 	DEFS	1479H-$,0
 
-;         Subroutine __________________________
+;         Subroutine patch handle lightpen hardware
 ;            Inputs  ________________________
 ;            Outputs ________________________
 

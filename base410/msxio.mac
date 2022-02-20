@@ -118,7 +118,7 @@ CASPRV  EQU     0FCB1H
 EXPTBL  equ     0FCC1H
 RG8SAV  EQU     0FFE7H
 RG25SA  EQU     0FFFAH
-D.FFFD  EQU     0FFFDH  ; used to store SP register during CPU change
+D.FFFD  EQU     0FFFDH                  ; used to store SP register during CPU change
 D.FFFF	EQU	0FFFFH
 
 H.KEYI  EQU     0FD9AH
@@ -215,12 +215,6 @@ H.LPTS  EQU     0FFBBH
 	PUBLIC	WSLREG
 	PUBLIC	PHYDIO
 	PUBLIC	FORMAT
-	PUBLIC	RDBTST
-	PUBLIC	WRBTST
-	PUBLIC	C12B4
-	PUBLIC	C141C
-	PUBLIC	C1428
-	PUBLIC	J1472
 	PUBLIC	POPALL
 	PUBLIC	GETPAT
         PUBLIC  TERMIN
@@ -237,12 +231,18 @@ H.LPTS  EQU     0FFBBH
         PUBLIC  ADVCUR
         PUBLIC  BS
         PUBLIC  INDJMP
-	PUBLIC	J0431
-	PUBLIC	J0C4A
-	PUBLIC	J0C50
+	PUBLIC	RDBTST
+	PUBLIC	WRBTST
 	PUBLIC	CHGCPU
 	PUBLIC	GETCPU
 	PUBLIC	INICPU
+	PUBLIC	J0431                   ; resume from PAL patch
+	PUBLIC	C141C                   ; expansion code screen Y size
+	PUBLIC	C1428                   ; expansion code screen 11
+	PUBLIC	J1472                   ; expansion code handle extension ROMs
+	PUBLIC	J0C4A                   ; resume interrupt handler after MIDI hardware interrupt
+	PUBLIC	J0C50                   ; resume interrupt handler after PAUSE key
+	PUBLIC	C12B4                   ; resume GTPAD routine
 
         EXTRN   PUTQ
         EXTRN   LFTQ
@@ -253,14 +253,14 @@ H.LPTS  EQU     0FFBBH
 	EXTRN	CALBAS
 	EXTRN	SUBROM
         EXTRN   EXTROM
-	EXTRN	J7B61
 	EXTRN	STOP
-	EXTRN	J409B
-        EXTRN   J16DE
-        EXTRN   C7D75
-	EXTRN	J19EE
-	EXTRN	J1A0B
-	EXTRN	J1A70
+	EXTRN	READYR
+	EXTRN	J7B61			; hardware intialization, part 2
+        EXTRN   J16DE			; SETC
+        EXTRN   C7D75			; handle extension ROMs
+	EXTRN	J19EE			; Turbo-R GTPAD patch
+	EXTRN	J1A0B			; Turbo-R MIDI hardware interrupt patch
+	EXTRN	J1A70			; Turbo-R PAUSE key patch
 
 	IF	INTHZ EQ 50
 	EXTRN	PTCPAL
@@ -2096,13 +2096,13 @@ J0C3C:  PUSH    HL
 
 	ELSE
 
-        JP      J1A70                   ; expansion code
+        JP      J1A70                   ; Turbo-R patch PAUSE key
         NOP
 
 	ENDIF
 
 J0C4A:	CALL    H.KEYI
-        JP      J1A0B                   ; expansion code
+        JP      J1A0B                   ; Turbo-R patch MIDI hardware interrupt
 J0C50:	JP      P,J0D02
         CALL    H.TIMI
         EI
@@ -2233,7 +2233,7 @@ J0D1C:  LD      A,C
         LD      A,(NEWKEY+6)
         CP      0E8H
         JR      NZ,J0D3A
-        LD      IX,J409B
+        LD      IX,READYR
         JP      CALBAS                  ; CALBAS
 
 J0D3A:  LD      DE,OLDKEY+11
@@ -2803,7 +2803,7 @@ J12A2:  CP      8
         LD      IX,S.NEWPAD
         JP      SUBROM                  ; new style pads handled by SUBROM
 
-J12AF:  JP      J19EE                   ; patch routine for old style pads (use Z80)
+J12AF:  JP      J19EE                   ; Turbo-R patch routine for old style pads (use Z80)
 
         DEFS    12B4H-$,0               ; unused space
 

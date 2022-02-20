@@ -196,8 +196,8 @@ H.ERRO  EQU     0FFB1H
         PUBLIC  GETIN2
         PUBLIC  LIST
         PUBLIC  SNGFLT
+	PUBLIC	READYR
 	PUBLIC	CHEAD
-	PUBLIC	J409B
 
         EXTRN   DECSUB
         EXTRN   DECADD
@@ -253,7 +253,7 @@ H.ERRO  EQU     0FFB1H
         EXTRN   STKERR
         EXTRN   LINPRT
         EXTRN   INPRT
-        EXTRN   C6D7B
+        EXTRN   PRGFIN
         EXTRN   FINLPT
         EXTRN   PTRGET
         EXTRN   PTRGT2
@@ -274,7 +274,7 @@ H.ERRO  EQU     0FFB1H
         EXTRN   STRLTI
         EXTRN   STRLT3
         EXTRN   STRLT2
-        EXTRN   J3297
+        EXTRN   POPHRT
         EXTRN   FONE
         EXTRN   ISIGN
         EXTRN   VSIGN
@@ -300,7 +300,7 @@ H.ERRO  EQU     0FFB1H
         EXTRN   STRCMP
         EXTRN   PUTTMP
         EXTRN   FREDAC
-        EXTRN   J66A7
+        EXTRN   PPSWRT
         EXTRN   PRINUS
         EXTRN   GLINE
         EXTRN   DLINE
@@ -413,9 +413,10 @@ H.ERRO  EQU     0FFB1H
         EXTRN   BSAVE
         EXTRN   STRIGS
 	
-	EXTRN	C7987
-	EXTRN	C79A1
-	EXTRN	C7BE8
+	EXTRN	C7987                   ; patch stop vdp command
+	EXTRN	C79A1                   ; bugfix VARTAB
+	EXTRN	C7BE8                   ; patch prompt
+
 
 _RST    MACRO   X
         IFIDN   <X>,<SYNCHR>
@@ -438,7 +439,6 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
-
 KEYWRD  MACRO   X,Y
 G       ASET    0
 Q       ASET    0
@@ -455,7 +455,6 @@ Q       ASET    "&D"
         DEFB    Q+128
         DEFB    Y
         ENDM
-
 
 TOKEN   MACRO   X,Y
         DEFB    "&X"+128
@@ -1183,6 +1182,7 @@ J4096:  LD      BC,I40A4
 ;       Inputs          -
 ;       Outputs         -
 
+READYR:
 J409B:  LD      BC,STPRDY               ; ok and mainloop (+POP)
 J409E:  LD      HL,(SAVSTK)
         JP      STKERR                  ; reinitialize stack
@@ -1274,7 +1274,7 @@ J411E:  POP     BC
 READY:
 J411F:  CALL    TOTEXT                  ; force text screenmode
         CALL    FINLPT                  ; end printeroutput
-        CALL    C6D7B                   ; close i/o channel 0 and load HL from (TEMP)
+        CALL    PRGFIN                  ; close i/o channel 0 and load HL from (TEMP)
         CALL    H.READ                  ; hook prompt ready
 	CALL    C7BE8                   ; MSX2 patch: display prompt
 	DEFS	4134H-$,0		; keep code aligned
@@ -3931,7 +3931,7 @@ J4FD5:  CALL    C4FF4                   ; get usernumber and USRTAB entry
         LD      E,(HL)
         INC     HL
         LD      D,(HL)
-        LD      HL,J3297
+        LD      HL,POPHRT
         PUSH    HL                      ; return here to restore basictext pointer after user subroutine
         PUSH    DE
         LD      A,(VALTYP)
@@ -4550,7 +4550,7 @@ J5350:  LD      E,A
         LD      (BC),A
         INC     BC
         DEC     D
-        JP      Z,J66A7			; pop af, ret
+        JP      Z,PPSWRT		; pop af, ret
         OR      E
         JP      P,J534E
         POP     HL

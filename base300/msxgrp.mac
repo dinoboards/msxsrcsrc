@@ -19,20 +19,20 @@
         INCLUDE MSX.INC
 
 
-DCOMPR	EQU	0020H
+DCOMPR		EQU	0020H
 
 S.GRPPRT        EQU     0089h
 S.MAPXYC        EQU     0091h
 S.READC         EQU     0095h
-S.SETC          EQU     009Dh
+S.SETC  	EQU     009Dh
 S.TRIGHT        EQU     00A1h
 S.RIGHTC        EQU     00A5h
 S.TLEFTC        EQU     00A9h
 S.LEFTC         EQU     00ADh
 S.TDOWNC        EQU     00B1h
 S.DOWNC         EQU     00B5h
-S.TUPC          EQU     00B9h
-S.UPC           EQU     00BDh
+S.TUPC  	EQU     00B9h
+S.UPC   	EQU     00BDh
 S.SCANR         EQU     00C1h
 S.SCANL         EQU     00C5h
 
@@ -59,31 +59,31 @@ GRPACY  equ     0FCB9H
 	PUBLIC	MAPXYC
 	PUBLIC	FETCHC
 	PUBLIC	STOREC
-	PUBLIC	READC
 	PUBLIC	SETATR
+	PUBLIC	READC
 	PUBLIC	SETC
-	PUBLIC	RIGHTC
-	PUBLIC	LEFTC
-	PUBLIC	TDOWNC
-	PUBLIC	DOWNC
-	PUBLIC	TUPC
-	PUBLIC	UPC
 	PUBLIC	NSETCX
 	PUBLIC	GTASPC
 	PUBLIC	PNTINI
 	PUBLIC	SCANR
 	PUBLIC	SCANL
+	PUBLIC	RIGHTC
+	PUBLIC	LEFTC
+	PUBLIC	UPC
+	PUBLIC	DOWNC
+	PUBLIC	TUPC
+	PUBLIC	TDOWNC
 	PUBLIC	J16DE
 
 	EXTRN	CNVCHR
 	EXTRN	RDVRM
 	EXTRN	WRTVRM
-	EXTRN	SUBROM
-	EXTRN	CHKNEW
 	EXTRN	GETPAT
 	EXTRN	POPALL
-	EXTRN	C141C
-	EXTRN	C1428
+	EXTRN	SUBROM
+	EXTRN	CHKNEW
+	EXTRN	C141C                   ; expansion code screen Y size
+	EXTRN	C1428                   ; expansion code screen 11
 
 
 _RST    MACRO   X
@@ -141,19 +141,19 @@ J152F:  CALL    GETPAT                  ; copy charpattern to PATWRK
         LD      HL,(GRPACY)
         EX      DE,HL
         LD      BC,(GRPACX)
-        CALL    C15A5                   ; SCALXY
+        CALL    SCALXY                  ; SCALXY
         JR      NC,J1587
-        CALL    C1604                   ; MAPXYC
+        CALL    MAPXYC                  ; MAPXYC
         LD      DE,PATWRK
         LD      C,8                     ; 8 pixels vertical
 J154D:  LD      B,8                     ; 8 pixels horizontal
-        CALL    C1651                   ; FETCHC
+        CALL    FETCHC                  ; FETCHC
         PUSH    HL
         PUSH    AF
         LD      A,(DE)
 J1555:  ADD     A,A
         PUSH    AF
-        CALL    C,C16C3                 ; has dot, SETC
+        CALL    C,SETC                  ; has dot, SETC
         CALL    C1735                   ; pixel pos right if possible
         POP     HL
         JR      C,J1564                 ; not possible, quit with this row
@@ -162,8 +162,8 @@ J1555:  ADD     A,A
         DJNZ    J1555
 J1564:  POP     AF
         POP     HL
-        CALL    C1658                   ; STOREC
-        CALL    C17B4                   ; TDOWNC (pixel pos down if possible)
+        CALL    STOREC                  ; STOREC
+        CALL    TDOWNC                  ; TDOWNC (pixel pos down if possible)
         JR      C,J1572                 ; not possible, quit
         INC     DE
         DEC     C
@@ -212,9 +212,9 @@ C15A5:  PUSH    HL
 J15B3:  LD      DE,192                  ; msx1 style screenmodes have ymax=192
         LD      A,(SCRMOD)
         CP      5
-        CALL    NC,C141C                ; new style screenmode, determine y-size
-        NOP                             ; ??
-        _RST    DCOMPR
+        CALL    NC,C141C                ; patch MSX2+, determine y-size
+        NOP                             ; align
+J15BF:  _RST    DCOMPR
         JR      C,J15C6                 ; y-coordinate in range
         EX      DE,HL
         DEC     HL                      ; use max y-coordinate
@@ -300,7 +300,14 @@ C1604:  LD      A,(SCRMOD)
         POP     BC
         RET
 
-I1636:  DEFB    080H,040H,020H,010H,008H,004H,002H,001H
+I1636:  defb    10000000b
+        defb    01000000b
+        defb    00100000b
+        defb    00010000b
+        defb    00001000b
+        defb    00000100b
+        defb    00000010b
+        defb    00000001b
 
 J163E:  LD      H,B
         LD      L,C
@@ -346,7 +353,7 @@ J166D:  CALL    C15FB                   ; check if screenmode 2 or 4
         JR      NZ,J1664                ; nope, use subrom version of READC
         PUSH    BC
         PUSH    HL
-        CALL    C1651                   ; FETCHC
+        CALL    FETCHC                  ; FETCHC
         LD      B,A
         CALL    RDVRM                   ; RDVRM
         AND     B
@@ -420,9 +427,9 @@ J16BA:  AND     03H
 
 SETC:
 C16C3:  LD      A,(SCRMOD)
-        CP      05H
+        CP      5
         JR      NC,J16E7                ; new style screenmode, use VDP command
-        CP      03H
+        CP      3
         JR      Z,J16DE                 ; screenmode 3 SETC handled by SUBROM
         PUSH    HL
         PUSH    BC
@@ -439,11 +446,11 @@ J16DE:  PUSH    IX
         LD      IX,S.SETC
         JP      SUBROM                  ; SUBROM
 
-J16E7:  CALL    C1428
+J16E7:  CALL    C1428                   ; patch MSX2+, handle screen 11
         LD      A,(CMASK)
         PUSH    AF
 J16EE:  DI
-        LD      A,02H
+        LD      A,2
         OUT     (99H),A
         LD      A,8FH
         OUT     (99H),A
@@ -496,7 +503,7 @@ C1735:  CALL    C15FB                   ; check if screenmode 2 or 4
         JP      SUBROM                  ; SUBROM
 
 J1743:  PUSH    HL
-        CALL    C1651                   ; FETCHC
+        CALL    FETCHC                  ; FETCHC
         RRCA
         JR      NC,J17AE
         LD      A,L
@@ -518,7 +525,7 @@ C1756:  CALL    C15FB                   ; check if screenmode 2 or 4
         JP      SUBROM                  ; SUBROM
 
 J1764:  PUSH    HL
-        CALL    C1651                   ; FETCHC
+        CALL    FETCHC                  ; FETCHC
         RRCA
         JR      NC,J17AE
 J176B:  PUSH    DE
@@ -536,7 +543,7 @@ C1771:  CALL    C15FB                   ; check if screenmode 2 or 4
         JP      SUBROM                  ; SUBROM
 
 J177F:  PUSH    HL
-        CALL    C1651                   ; FETCHC
+        CALL    FETCHC                  ; FETCHC
         RLCA
         JR      NC,J17AE
         LD      A,L
@@ -557,7 +564,7 @@ J1790:  CALL    C15FB                   ; check if screenmode 2 or 4
         JP      SUBROM                  ; SUBROM
 
 J179E:  PUSH    HL
-        CALL    C1651                   ; FETCHC
+        CALL    FETCHC                  ; FETCHC
         RLCA
         JR      NC,J17AE
 J17A5:  PUSH    DE
@@ -681,7 +688,7 @@ NSETCX:
 C1843:  CALL    C15FB                   ; check if screenmode 2 or 4
         JP      NZ,J18F5
         PUSH    HL
-        CALL    C1651                   ; FETCHC
+        CALL    FETCHC                  ; FETCHC
         EX      (SP),HL
         ADD     A,A
         JR      C,J1869
@@ -731,7 +738,13 @@ J188D:  DEC     C
         LD      A,(HL)
         JR      J18A5
 
-I1897:  DEFB    080H,0C0H,0E0H,0F0H,0F8H,0FCH,0FEH
+I1897:  defb    10000000b
+        defb    11000000b
+        defb    11100000b
+        defb    11110000b
+        defb    11111000b
+        defb    11111100b
+        defb    11111110b
 
 J189E:  ADD     A,A
         DEC     A
@@ -809,8 +822,8 @@ J18E4:  POP     AF
 J18F2:  JP      WRTVRM                  ; WRTVRM
 
 J18F5:  PUSH    HL
-        CALL    C16C3                   ; SETC
-        CALL    C1756                   ; RIGHTC
+        CALL    SETC                    ; SETC
+        CALL    RIGHTC                  ; RIGHTC
         POP     HL
         DEC     L
         JR      NZ,J18F5
@@ -864,7 +877,7 @@ J1930:  LD      A,B
         LD      (FILNAM+3),A
         LD      A,(BRDATR)
         LD      B,A
-J193C:  CALL    C165F                   ; READC
+J193C:  CALL    READC                   ; READC
         CP      B
         JR      NZ,J194F
         DEC     DE
@@ -878,34 +891,34 @@ J193C:  CALL    C165F                   ; READC
 
 J194F:  CALL    C19D1
         PUSH    DE
-        CALL    C1651                   ; FETCHC
+        CALL    FETCHC                  ; FETCHC
         LD      (CSAVEA),HL
         LD      (CSAVEM),A
         LD      DE,0
 J195F:  INC     DE
         CALL    C1735                   ; pixel pos right if possible
         JR      C,J1970                 ; not possible,
-        CALL    C165F                   ; READC
+        CALL    READC                   ; READC
         CP      B
         JR      Z,J1970
         CALL    C19D1
         JR      J195F
 
 J1970:  PUSH    DE
-        CALL    C1651                   ; FETCHC
+        CALL    FETCHC                  ; FETCHC
         PUSH    HL
         PUSH    AF
         LD      HL,(CSAVEA)
         LD      A,(CSAVEM)
-        CALL    C1658                   ; STOREC
+        CALL    STOREC                  ; STOREC
         EX      DE,HL
         LD      (FILNAM+1),HL
         LD      A,(FILNAM+0)
         AND     A
-        CALL    NZ,C1843                ; NSETCX
+        CALL    NZ,NSETCX               ; NSETCX
         POP     AF
         POP     HL
-        CALL    C1658                   ; STOREC
+        CALL    STOREC                  ; STOREC
         POP     HL
         POP     DE
         JP      J19CC
@@ -929,18 +942,18 @@ J19A6:  XOR     A
         LD      B,A
 J19AE:  CALL    C1771                   ; pixel pos left if possible
         JR      C,J19C2                 ; not possible,
-        CALL    C165F                   ; READC
+        CALL    READC                   ; READC
         CP      B
         JR      Z,J19BF
         CALL    C19D1
         INC     HL
         JR      J19AE
 
-J19BF:  CALL    C1756                   ; RIGHTC
+J19BF:  CALL    RIGHTC                  ; RIGHTC
 J19C2:  PUSH    HL
         LD      DE,(FILNAM+1)
         ADD     HL,DE
-        CALL    C1843                   ; NSETCX
+        CALL    NSETCX                  ; NSETCX
         POP     HL
 J19CC:  LD      A,(FILNAM+3)
         LD      C,A

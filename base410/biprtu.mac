@@ -44,12 +44,35 @@ DAC     EQU     0F7F6H
         EXTRN   LEFTUS
         EXTRN   STRPRT
         EXTRN   FRMCHK
-	EXTRN	J01BB
+	EXTRN	J01BB                   ; patch kanji (double byte) characters PRINT USING
+
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
 
 
 ; START	SUBTTL	BIPRTU
 
 	SUBTTL	BIPRTU
+
 
 ;       Subroutine      PRINT USING statement
 ;       Inputs          ________________________
@@ -58,7 +81,7 @@ DAC     EQU     0F7F6H
 PRINUS:
 J60B1:  CALL    FRMCHK                  ; skip character and evaluate expression
         CALL    CHKSTR                  ; check if string
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ";"                     ; check for ";"
         EX      DE,HL
         LD      HL,(DAC+2)              ; formatstring descriptor
@@ -258,16 +281,16 @@ J61AE:  POP     HL
         CALL    STROUT                  ; message to interpreter output
 J61CC:  POP     HL
         DEC     HL
-        RST     CHRGTR                  ; end of statement ?
+        _RST    CHRGTR                  ; end of statement ?
         SCF
         JR      Z,J61DD			; yep,
         LD      (FLGINP),A
         CP      ";"
         JR      Z,J61DC
-        RST     SYNCHR
+        _RST    SYNCHR
         DEFB    ","                     ; check for ,
         DEFB    006H                    ; LD B,xx, trick to skip next instruction
-J61DC:  RST     CHRGTR                  ; get next BASIC character
+J61DC:  _RST    CHRGTR                  ; get next BASIC character
 J61DD:  POP     BC
         EX      DE,HL
         POP     HL
@@ -290,7 +313,7 @@ J61DD:  POP     BC
         JR      FINUSI
 
 J61F5:  CALL    PLSPRT
-        RST     OUTDO                   ; char to interpreter output
+        _RST    OUTDO                   ; char to interpreter output
 FINUSI:
 J61F9:  POP     HL
         POP     AF
@@ -340,7 +363,7 @@ J6211:  DEC     B
         INC     B
 J623F:  DEC     B
         JP      Z,J61CC
-        RST     OUTDO                   ; space to interpreter output
+        _RST    OUTDO                   ; space to interpreter output
         JR      J623F
 
 ;       Subroutine      __________________________

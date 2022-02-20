@@ -118,7 +118,6 @@ CASPRV  EQU     0FCB1H
 EXPTBL  equ     0FCC1H
 RG8SAV  EQU     0FFE7H
 RG25SA  EQU     0FFFAH
-D.FFFD  EQU     0FFFDH  ; used to store SP register during CPU change
 D.FFFF	EQU	0FFFFH
 
 H.KEYI  EQU     0FD9AH
@@ -139,6 +138,7 @@ H.PHYD  equ     0FFA7H
 H.FORM  equ     0FFACH
 H.LPTO  EQU     0FFB6H
 H.LPTS  EQU     0FFBBH
+
 
 	PUBLIC	CHKRAM
 	PUBLIC	ISCNTC
@@ -214,12 +214,6 @@ H.LPTS  EQU     0FFBBH
 	PUBLIC	WSLREG
 	PUBLIC	PHYDIO
 	PUBLIC	FORMAT
-	PUBLIC	RDBTST
-	PUBLIC	WRBTST
-	PUBLIC	C12B4
-	PUBLIC	C141C
-	PUBLIC	C1428
-	PUBLIC	J1472
 	PUBLIC	POPALL
 	PUBLIC	GETPAT
         PUBLIC  TERMIN
@@ -236,7 +230,12 @@ H.LPTS  EQU     0FFBBH
         PUBLIC  ADVCUR
         PUBLIC  BS
         PUBLIC  INDJMP
-	PUBLIC	J0431
+	PUBLIC	RDBTST
+	PUBLIC	WRBTST
+	PUBLIC	J0431                   ; resume from PAL patch
+	PUBLIC	C141C                   ; expansion code screen Y size
+	PUBLIC	C1428                   ; expansion code screen 11
+	PUBLIC	J1472                   ; expansion code handle extension ROMs
 
         EXTRN   PUTQ
         EXTRN   LFTQ
@@ -247,11 +246,11 @@ H.LPTS  EQU     0FFBBH
 	EXTRN	CALBAS
 	EXTRN	SUBROM
         EXTRN   EXTROM
-	EXTRN	J7B61
 	EXTRN	STOP
-	EXTRN	J409B
-        EXTRN   J16DE
-        EXTRN   C7D75
+	EXTRN	READYR
+	EXTRN	J7B61			; hardware intialization, part 2
+        EXTRN   J16DE			; SETC
+        EXTRN   C7D75			; handle extension ROMs
 
 	IF	INTHZ EQ 50
 	EXTRN	PTCPAL
@@ -284,8 +283,6 @@ _RST    MACRO   X
 
         SUBTTL	MSXIO
 
-
-; orginal init MSX2 and above
 
 CHKRAM:
 J0416:  XOR     A
@@ -432,7 +429,7 @@ J04DB:  LD      A,B
 J04E7:  IN      A,(0A8H)
         ADD     A,40H                   ; next primairy slot page 3
         JR      NC,J04A2                ; all primary slots done ? nope, next
-        JP      J7B61                   ; continue rest init code (moved elsewhere)
+        JP      J7B61                   ; continue with hardware intialization, part 2
 
 ;       Subroutine      ISCNTC
 ;       Inputs          ________________________
@@ -683,7 +680,7 @@ J0629:  LD      A,B
         LD      B,0
         LD      HL,RG0SAV
         ADD     HL,BC
-        JP      J1440                   ; patch routine for V9958 digitize hardware
+        JP      J1440                   ; MSX2+ initialize digitize hardware
 
 ;       Subroutine      INITXT
 ;       Inputs          ________________________
@@ -2164,7 +2161,7 @@ J0C3C:  PUSH    HL
         PUSH    IY
         PUSH    IX
 	CALL    H.KEYI
-        CALL    J1479                   ; patch code
+        CALL    C1479                   ; MSX2 patch handle lightpen hardware
 	JP      P,J0D02
         CALL    H.TIMI
         EI
@@ -2295,7 +2292,7 @@ J0D1C:  LD      A,C
         LD      A,(NEWKEY+6)
         CP      0E8H
         JR      NZ,J0D3A
-        LD      IX,J409B
+        LD      IX,READYR
         JP      CALBAS                  ; CALBAS
 
 J0D3A:  LD      DE,OLDKEY+11
@@ -2896,12 +2893,7 @@ J12A2:  CP      8
 
 J12AF:  CP      4
         LD      DE,0CECH
-
-;       Subroutine      __________________________
-;       Inputs          ________________________
-;       Outputs         ________________________
-
-C12B4:  JR      C,J12BB
+        JR      C,J12BB
         LD      DE,03D3H
         SUB     4
 J12BB:  DEC     A
@@ -3166,7 +3158,7 @@ J1418:  CALL    H.FORM
 ; MSX2 has unused space at 141CH-1479H
 
 
-;       Subroutine      __________________________
+;       Subroutine      expansion code screen Y size
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -3177,24 +3169,24 @@ C141C:  LD      A,(MODE)
         LD      DE,256
         RET
 
-;       Subroutine      __________________________
+;       Subroutine      expansion code screen 11
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 C1428:  LD      HL,(CLOC)
         LD      A,(RG25SA)
         AND     18H
-        CP      18H
-        RET     NZ
+        CP      18H                     ; screen 11 ?
+        RET     NZ                      ; nope, quit
         LD      A,(MODE)
-        AND     20H
-        RET     NZ
+        AND     20H                     ; bit set ?
+        RET     NZ                      ; yep, quit
         LD      (LOGOPR),A
-        POP     HL
-        JP      J16DE
+        POP     HL                      ; remove return address
+        JP      J16DE                   ; continue with SETC in subrom
 
 
-; patchcode, use for initializing digitize hardware
+; patchcode, use for initializing MSX2+ digitize hardware
 
 J1440:  LD      (HL),A                  ; update RGSAV
         LD      H,A
@@ -3221,7 +3213,8 @@ J1440:  LD      (HL),A                  ; update RGSAV
         POP     HL
         RET
 
-        DEFS    146AH-$,0               ; unused space, align to MSX2+ code
+
+        DEFS    146AH-$,0               ; unused space
 
 
 ;       Subroutine      RDBTST
@@ -3254,17 +3247,21 @@ J146E:
         OUT     (0F4H),A
         RET
 
-J1472:  NOP
-        NOP
-        NOP
-        NOP
-        JP      C7D75
-
-;         Subroutine __________________________
+;         Subroutine handle extension ROMs
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-J1479:  IN      A,(0BAH)
+J1472:  NOP                             ; possible expansion code MSX2+ ?
+        NOP
+        NOP
+        NOP
+        JP      C7D75			; handle extension ROMs
+
+;         Subroutine patch lightpen hardware
+;            Inputs  ________________________
+;            Outputs ________________________
+
+C1479:  IN      A,(0BAH)
         AND     010H
         JR      NZ,J148C
         LD      HL,XSAVE+1

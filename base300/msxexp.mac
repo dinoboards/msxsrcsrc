@@ -1,6 +1,6 @@
 ; MSXEXP.MAC
 
-; BASIC expansion functions, MSX 2 version (version 2.0)
+; BASIC expansion functions, MSX 2+ version (version 3.0)
 
 ; Source re-created by Z80DIS 2.2
 ; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
@@ -34,12 +34,14 @@ DEVICE  EQU     0FD99H
 
         EXTRN   SNERR
         EXTRN   DERNMF
-        EXTRN   CHKZDN
         EXTRN   ATRSL2
         EXTRN   ATRSLI
         EXTRN   RDWEXP
         EXTRN   MAKUPL
-
+        EXTRN   CHKZDN
+	IF	CALLFIX EQ 1
+        EXTRN   C79C2                   ; MSX2+ patch call statement handler
+        ENDIF
 
 _RST    MACRO   X
         IFIDN   <X>,<SYNCHR>
@@ -118,7 +120,13 @@ J55DB:  PUSH    BC
         POP     HL
         DEC     HL
         _RST    CHRGTR                  ; end of statement ?
-        CALL    CALSLT                  ; call statement handler
+
+	IF	CALLFIX EQ 0
+        CALL    CALSLT
+        ELSE
+        CALL    C79C2                   ; MSX2+ patch call statement handler
+        ENDIF
+
         POP     DE
         POP     BC
         JR      C,J55D5                 ; statement not recognized, try next

@@ -61,18 +61,18 @@ H.GEND  equ     0FEC6H
         PUBLIC  PARDEV
         PUBLIC  CBSAVE
         PUBLIC  CBLOAD
-        PUBLIC  J72FF
-        PUBLIC  J7300
-	PUBLIC	C71DB
-	PUBLIC	C7042
+        PUBLIC  POPAL2
+        PUBLIC  POPAL3
+	PUBLIC	C71DB                   ; PCMPLY
+	PUBLIC	C7042                   ; PCMREC
 
         EXTRN   DERNMF
-	EXTRN	SNERR
         EXTRN   FCERR
         EXTRN   DERSOO
         EXTRN   MAKUPL
         EXTRN   EXTDEV
         EXTRN   EXTDFN
+	EXTRN	SNERR
 
 
 ; START SUBTTL  SPCDEV
@@ -280,8 +280,8 @@ J71C3:  LD      A,C
 C71C7:	DEFW	DERNMF			; open,
         DEFW	FCERR			; close,
         DEFW    DERSOO                  ; random i/o, sequential i/o only error
-        DEFW	FCERR			; output,
-        DEFW	FCERR			; input,
+        DEFW	FCERR			; sequential output, illegal function call
+        DEFW	FCERR			; sequential input, illegal function call
         DEFW    FCERR                   ; loc, illegal function call
         DEFW    FCERR                   ; lof, illegal function call
         DEFW	FCERR			; eof
@@ -328,8 +328,8 @@ C72CD:  LD      A,E
 
 	DEFS	72FFH-$,0
 
-J72FF:  POP     AF
-J7300:  POP     BC
+POPAL2: POP     AF
+POPAL3: POP     BC
         POP     DE
         POP     HL
         RET
@@ -416,7 +416,7 @@ C7017:  EXX
         LD      D,H
         LD      B,04H 
 D7024:  DEFB    0DDH
-        LD      L,00H                   ; LD IXL,00H
+        LD      L,0                     ; LD    IXL,0
 J7027:  CALL    C70F1
         LD      E,A
         ADD     HL,DE
@@ -430,7 +430,7 @@ J7027:  CALL    C70F1
         LD      A,L
         SUB     80H
         DEFB    0DDH
-        LD      L,A                     ; LD IXL,A
+        LD      L,A                     ; LD    IXL,A
         RET
 
 
@@ -459,7 +459,7 @@ C7042:  EX      AF,AF'
         PUSH    AF
         AND     78H
         DEFB    0FDH
-        LD      L,A                     ; LD IYL,A
+        LD      L,A                     ; LD    IYL,A
         POP     AF
         PUSH    AF
         AND     83H
@@ -482,7 +482,7 @@ J7078:  CALL    C7017
 
 J7080:  LD      D,00H
         DEFB    0FDH
-        LD      H,D                     ; LD IYH,D
+        LD      H,D                     ; LD    IYH,D
 J7084:  EX      AF,AF'
         JR      Z,J70E0
 J7087:  IN      A,(0A9H)
@@ -490,7 +490,7 @@ J7087:  IN      A,(0A9H)
         JR      Z,J70E4
         CALL    C70F1
 J7090:  DEFB    0DDH
-        LD      H,A                     ; LD IXH,A
+        LD      H,A                     ; LD    IXH,A
         SUB     7FH
         CP      03H
         JR      NC,J709E
@@ -500,19 +500,19 @@ J7090:  DEFB    0DDH
         OR      D
         JR      NZ,J70A8
 J709E:  DEFB    0DDH
-        LD      A,H                     ; LD A,IXH
+        LD      A,H                     ; LD    A,IXH
 J70A0:  CALL    C7270
         JR      NC,J7087
 J70A5:  JP      J720B
 
 J70A8:  DEFB    0FDH
-        LD      L,01H                   ; LD IYL,01H
+        LD      L,1                     ; LD    IYL,1
 J70AB:  CALL    C70F1
         SUB     7FH
         CP      03H
         JR      NC,J70C6
         DEFB    0FDH
-        INC     L                       ; INC IYL
+        INC     L                       ; INC   IYL
         JR      NZ,J70AB
         XOR     A
         CALL    C7270
@@ -524,20 +524,20 @@ J70AB:  CALL    C70F1
 
 J70C6:  ADD     A,7FH
         DEFB    0DDH
-        LD      H,A                     ; LD IXH,A
+        LD      H,A                     ; LD    IXH,A
         DEFB    0FDH
-        LD      A,L                     ; LD A,IYL
+        LD      A,L                     ; LD    A,IYL
         DEC     A
         LD      A,80H
         JR      Z,J70D7
         XOR     A
         CALL    C7270
         DEFB    0FDH
-        LD      A,L                     ; LD A,IYL
+        LD      A,L                     ; LD    A,IYL
 J70D7:  CALL    C7270
         JR      C,J70A5
         DEFB    0DDH
-        LD      A,H                     ; LD A,IXH
+        LD      A,H                     ; LD    A,IXH
         JR      J70A0
 
 J70E0:  IN      A,(0A9H)
@@ -572,46 +572,46 @@ J70FD:  IN      A,(0A4H)
         OUT     (C),A
         LD      A,80H
         OUT     (0A4H),A
-        DEFB    0EDH,070H               ; ED 70 Opcode
+        DEFB    0EDH,070H               ; IN    (C)
         JP      M,J7118
         AND     7FH
 J7118:  OR      40H
         OUT     (0A4H),A
-        DEFB    0EDH,070H               ; ED 70 Opcode
+        DEFB    0EDH,070H               ; IN    (C)
         JP      M,J7123
         AND     0BFH
 J7123:  OR      20H
         OUT     (0A4H),A
-        DEFB    0EDH,070H               ; ED 70 Opcode
+        DEFB    0EDH,070H               ; IN    (C)
         JP      M,J712E
         AND     0DFH
 J712E:  OR      10H
         OUT     (0A4H),A
-        DEFB    0EDH,070H               ; ED 70 Opcode
+        DEFB    0EDH,070H               ; IN    (C)
         JP      M,J7139
         AND     0EFH
 J7139:  OR      08H
         OUT     (0A4H),A
-        DEFB    0EDH,070H               ; ED 70 Opcode
+        DEFB    0EDH,070H               ; IN    (C)
         JP      M,J7144
         AND     0F7H
 J7144:  OR      04H
         OUT     (0A4H),A
-        DEFB    0EDH,070H               ; ED 70 Opcode
+        DEFB    0EDH,070H               ; IN    (C)
         JP      M,J714F
         AND     0FBH
 J714F:  OR      02H
         OUT     (0A4H),A
-        DEFB    0EDH,070H               ; ED 70 Opcode
+        DEFB    0EDH,070H               ; IN    (C)
         JP      M,J715A
         AND     0FDH
 J715A:  OR      01H
         OUT     (0A4H),A
-        DEFB    0EDH,070H               ; ED 70 Opcode
+        DEFB    0EDH,070H               ; IN    (C)
         JP      M,J7165
         AND     0FEH
 J7165:  OUT     (C),H
-        DEFB    0DDH,04DH               ; LD C,IXL
+        DEFB    0DDH,04DH               ; LD    C,IXL
         BIT     7,C
         JR      NZ,J7174
         SUB     C
@@ -746,13 +746,13 @@ C7262:  INC     HL
 J726B:  CALL    C728E
         JR      J727B
 
-C7270:  DEFB    0FDH            ; << Illegal Op Code Byte >>
-        INC     H
-        DEFB    0FDH            ; << Illegal Op Code Byte >>
-        DEC     H
+C7270:  DEFB    0FDH
+        INC     H                       ; INC   IYH
+        DEFB    0FDH
+        DEC     H                       ; INC   IYH
         JR      NZ,J7278
         LD      (HL),A
-        DEFB    0C2H            ; JP NZ,xxxx, skip next instruction
+        DEFB    0C2H                    ; JP    NZ,xxxx, skip next instruction
 J7278:  OUT     (098H),A
         INC     HL
 J727B:  DEC     D
