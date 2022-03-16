@@ -20,27 +20,27 @@ ENASLT	EQU	0024H	; -C---
 IDBYT0	EQU	002BH	; ----I
 GICINI	EQU	0090H	; ----I
 
-M268C	EQU	268CH	; double real subtract
-M289F	EQU	289FH	; double real divide
-M2F8A	EQU	2F8AH	; convert to integer
-M3042	EQU	3042H	; convert single real to double real
-M30D1	EQU	30D1H	; convert single real or double real to integer
-M325C	EQU	325CH	; single real multiply
-M406F	EQU	406FH	; BASIC error
-M4601	EQU	4601H	; execute new statement
-M4666	EQU	4666H	; CHRGTR (get next BASIC character)
-M46FF	EQU	46FFH	; convert unsigned integer to single real
-M4C64	EQU	4C64H	; evaluate expression
-M4E9B	EQU	4E9BH	; get variable value
-M517A	EQU	517AH	; convert DAC to other type
-M521C	EQU	521CH	; evaluate byte operand
-M542F	EQU	542FH	; evaluate address operand
+DECSUB	EQU	268CH	; double real subtract
+DECDIV	EQU	289FH	; double real divide
+FRCINT	EQU	2F8AH	; convert to integer
+CONDS	EQU	3042H	; convert single real to double real
+INT	EQU	30D1H	; convert single real or double real to integer
+SGNMUL	EQU	325CH	; single real multiply
+ERROR	EQU	406FH	; BASIC error
+NEWSTT	EQU	4601H	; execute new statement
+CHRGTR	EQU	4666H	; CHRGTR (get next BASIC character)
+FLTLIN	EQU	46FFH	; convert unsigned integer to single real
+FRMEVL	EQU	4C64H	; evaluate expression
+ISVAR	EQU	4E9BH	; get variable value
+DOCNVF	EQU	517AH	; convert DAC to other type
+GETBYT	EQU	521CH	; evaluate byte operand
+GETUIN	EQU	542FH	; evaluate address operand
 M5432	EQU	5432H	; convert address to integer
-M5EA4	EQU	5EA4H	; locate variable
-M67D0	EQU	67D0H	; free temporary string
-M6A0E	EQU	6A0EH	; evaluate filespecification
-M6C1C	EQU	6C1CH	; close all i/o channels
-M73E5	EQU	73E5H	; start of the PLAY statement handler
+PTRGET	EQU	5EA4H	; locate variable
+FRESTR	EQU	67D0H	; free temporary string
+FILEVL	EQU	6A0EH	; evaluate filespecification
+CLSALL	EQU	6C1CH	; close all i/o channels
+PLAY	EQU	73E5H	; start of the PLAY statement handler
 
 D7FF6	EQU	07FF6H
 
@@ -2430,7 +2430,7 @@ C5721:	CALL	C70E9			; type in DAC
         LD	BC,(DAC+2)
         LD	HL,0
         RET	M			; integer, quit
-        JP	Z,J6F8C		; string,
+        JP	Z,J6F8C	        	; string,
         LD	HL,DAC
         LD	DE,I.FABC
         LD	BC,8
@@ -2439,17 +2439,17 @@ C5721:	CALL	C70E9			; type in DAC
         LD	DE,ARG
         LD	C,8
         LDIR				; ARG = 65536
-        CALL	M289F			; divide
+        CALL	DECDIV			; divide
         AND	A
-        CALL	M30D1			; convert DBL to INT
+        CALL	INT			; convert DBL to INT
         CALL	C6FE0			; convert to adres
         PUSH	DE
         EX	DE,HL
         CALL	C6FC0			; convert to SGN
-        CALL	M3042			; convert to DBL
+        CALL	CONDS			; convert to DBL
         LD	BC,06545H
         LD	DE,06053H		; 65536
-        CALL	M325C			; multiply
+        CALL	SGNMUL			; multiply
         LD	HL,DAC
         LD	DE,ARG
         LD	BC,8
@@ -2458,13 +2458,15 @@ C5721:	CALL	C70E9			; type in DAC
         LD	DE,DAC
         LD	C,8
         LDIR				; DAC = orginal
-        CALL	M268C			; subtract
+        CALL	DECSUB			; subtract
         CALL	C6FE0			; convert to adres
         LD	C,E
         LD	B,D
         POP	HL
         RET
+
 ;	65536
+
 I577E:	DEFB 045H,065H,053H,060H,0,0,0,0
 
 
@@ -3055,7 +3057,7 @@ I5A78:	LD	A,(D.F97C)
         POP	HL
         POP	DE
         POP	BC
-        CALL	M2F8A			; convert DAC to integer
+        CALL	FRCINT			; convert DAC to integer
         POP	AF
         PUSH	AF
         PUSH	BC
@@ -3091,7 +3093,7 @@ J5AB1:	ADD	HL,SP
         LD	E,(HL)
         INC	HL
         LD	D,(HL)			; return adres
-        LD	HL,M73E5+3
+        LD	HL,PLAY+3
         OR	A
         SBC	HL,DE			; called from the PLAY statement ?
         JP	NZ,J6F7D		; nope, error
@@ -6880,7 +6882,7 @@ J6F92:	LD	E,07H
         PUSH	DE
         CALL	NZ,C6BCF		; yep, stop background music
         POP	DE
-        LD	IX,M406F
+        LD	IX,ERROR
         JR	J6FFC
 
 
@@ -6892,12 +6894,12 @@ J6F92:	LD	E,07H
 C6FA2:	LD	IX,GICINI
         JR	J6FFC
 
-J6FA8:	LD	IX,M4E9B
+J6FA8:	LD	IX,ISVAR
         JR	J6FFC
 
 ;	  Unused code
 
-?6FAE:	LD	IX,M6A0E
+?6FAE:	LD	IX,FILEVL
         JR	J6FFC
 
 
@@ -6906,7 +6908,7 @@ J6FA8:	LD	IX,M4E9B
 ;	     Outputs ________________________
 
 
-C6FB4:	LD	IX,M5EA4
+C6FB4:	LD	IX,PTRGET
         JR	J6FFC
 
 
@@ -6915,7 +6917,7 @@ C6FB4:	LD	IX,M5EA4
 ;	     Outputs ________________________
 
 
-C6FBA:	LD	IX,M517A
+C6FBA:	LD	IX,DOCNVF
         JR	J6FFC
 
 
@@ -6924,7 +6926,7 @@ C6FBA:	LD	IX,M517A
 ;	     Outputs ________________________
 
 
-C6FC0:	LD	IX,M46FF
+C6FC0:	LD	IX,FLTLIN
         JR	J6FFC
 
 ;	  Subroutine check for
@@ -6945,7 +6947,7 @@ C6FC6:	LD	A,(HL)
 ;	     Outputs ________________________
 
 
-C6FCE:	LD	IX,M4666
+C6FCE:	LD	IX,CHRGTR
         JR	J6FFC
 
 ;	  Subroutine evaluate expression
@@ -6953,7 +6955,7 @@ C6FCE:	LD	IX,M4666
 ;	     Outputs ________________________
 
 
-C6FD4:	LD	IX,M4C64
+C6FD4:	LD	IX,FRMEVL
         JR	J6FFC
 
 
@@ -6962,7 +6964,7 @@ C6FD4:	LD	IX,M4C64
 ;	     Outputs ________________________
 
 
-C6FDA:	LD	IX,M542F
+C6FDA:	LD	IX,GETUIN
         JR	J6FFC
 
 
@@ -6979,18 +6981,17 @@ C6FE0:	LD	IX,M5432
 ;	     Outputs ________________________
 
 
-C6FE6:	LD	IX,M521C
+C6FE6:	LD	IX,GETBYT
         JR	J6FFC
 
-J6FEC:	LD	IX,M4601
+J6FEC:	LD	IX,NEWSTT
         JR	J6FFC
 
 ;	  Subroutine close all i/o channels
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-
-C6FF2:	LD	IX,M6C1C
+C6FF2:	LD	IX,CLSALL
         JR	J6FFC
 
 
@@ -6999,7 +7000,7 @@ C6FF2:	LD	IX,M6C1C
 ;	     Outputs ________________________
 
 
-C6FF8:	LD	IX,M67D0
+C6FF8:	LD	IX,FRESTR
 J6FFC:	LD	IY,(EXPTBL+0-1)
         CALL	CALSLT
         EI

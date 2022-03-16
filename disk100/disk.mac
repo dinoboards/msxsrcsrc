@@ -342,22 +342,22 @@ VMOVE   equ     02EF3H          ; copy variable content
 VMOVFM  equ     02F08H          ; copy variable content to DAC
 VMOVMF  equ     02F10H          ; copy variable content from DAC
 MAKINT  equ     02F99H          ; integer to DAC
-M3042   equ     03042H          ; convert DAC from sgn to dbl
-M30D1   equ     030D1H          ; dbl to integer
+CONDS   equ     03042H          ; convert DAC from sgn to dbl
+INT     equ     030D1H          ; dbl to integer
 SGNMUL  equ     0325CH          ; sgn multiply
-M3FD6   equ     03FD6H          ; empty string
+NULSTR  equ     03FD6H          ; empty string
 ERROR   equ     0406FH          ; BASIC error
 READYR  equ     0409BH          ; restart BASIC
 M4173   equ     04173H          ; execute statement
 LINKER  equ     04253H          ; recalculate linepointers
 NEWSTT  equ     04601H          ; execution loop
 CHRGTR  equ     04666H          ; CHRGTR
-M46FF   equ     046FFH          ; convert to SNG
+FLTLIN  equ     046FFH          ; convert to SNG
 INTID2  equ     04756H          ; evaluate word operand and check for 0-32767 range
 FINPRT  equ     04AFFH          ; output back to screen
 FRMEQL  equ     04C5FH          ; evaluate =expression
 FRMEVL  equ     04C64H          ; evaluate expression
-M517A   equ     0517AH          ; convert DAC to other type
+DOCNVF  equ     0517AH          ; convert DAC to other type
 GTBYTC  equ     0521BH          ; evaluate next byte operand
 GETBYT  equ     0521CH          ; evaluate byte operand
 CONINT  equ     0521FH          ; convert to byte
@@ -371,10 +371,10 @@ GETSPA  equ     0668EH          ; allocate stringspace
 FRESTR  equ     067D0H          ; free temporary string
 FILEVL  equ     06A0EH          ; evaluate filespecification
 FILIDX  equ     06A6DH          ; get i/o channel pointer
-M6AFA   equ     06AFAH          ; open i/o channel
+OPNFIL  equ     06AFAH          ; open i/o channel
 CLSFIL  equ     06B24H          ; close i/o channel
 CLSALL  equ     06C1CH          ; close all i/o channels
-M6E41   equ     06E41H          ; resume character putback routine
+NOSKCR  equ     06E41H          ; resume character putback routine
 BSAVE   equ     06E92H          ; start of BSAVE routine
 BLOAD   equ     06EC6H          ; start of BLOAD routine
 BLDFIN  equ     06EF4H          ; finish BLOAD
@@ -7004,9 +7004,9 @@ A6875:  ei
         jr      nc,A6882
         ld      l,8+8
 A6882:  add     hl,sp
-        ld      (hl),LOW M6E41
+        ld      (hl),LOW NOSKCR
         inc     hl
-        ld      (hl),HIGH M6E41         ; resume character putback
+        ld      (hl),HIGH NOSKCR        ; resume character putback
         pop     hl
         inc     hl
         inc     hl
@@ -7258,7 +7258,7 @@ A6A23:  pop     de
         push    af
         xor     a                       ; i/o channel 0
         ld      e,2                     ; output mode
-        ld      ix,M6AFA
+        ld      ix,OPNFIL
         call    A731E                   ; open i/o channel
         ld      a,0FEH
         call    A69C7                   ; write byte to FCB (bsave file id)
@@ -7353,7 +7353,7 @@ A6AD0:  pop     de
         ld      (FLBMEM),a              ; raw mode
         xor     a                       ; i/o channel 0
         ld      e,1                     ; input mode
-        ld      ix,M6AFA
+        ld      ix,OPNFIL
         call    A731E                   ; open i/o channel
         ld      de,(YF353)		; FCB for i/o channel 0
         call    A69D0                   ; read byte from FCB
@@ -7444,7 +7444,7 @@ A6B75:  call    A7380                   ; take control from caller
         call    A72D0
         defb    ")"                     ; check for ")"
         push    hl
-        ld      hl,M3FD6
+        ld      hl,NULSTR
         ld      (DAC+2),hl
         pop     hl
         ld      a,3
@@ -7811,7 +7811,7 @@ A6DB2:  ld      a,4
 A6DB5:  ld      a,8
         call    A7380                   ; take control from caller
         push    af
-        ld      ix,M517A
+        ld      ix,DOCNVF
         call    A731E                   ; convert DAC
         pop     af
         ld      ix,STRINI
@@ -7877,15 +7877,15 @@ A6DFB:  ld      ix,GETYPR
         ld      c,8
         ldir
         call    DECDIV                  ; dbl divide
-        and     a
-        call    M30D1                   ; dbl to integer
+        and     a                       ; double real flag
+        call    INT                     ; dbl to integer
         ld      ix,M5432
         call    A731E                   ; convert address to integer
         push    de
         ex      de,hl
-        ld      ix,M46FF
+        ld      ix,FLTLIN
         call    A731E                   ; convert integer to sgn in DAC
-        call    M3042                   ; convert DAC from sgn to dbl
+        call    CONDS                   ; convert DAC from sgn to dbl
         ld      bc,06545H
         ld      de,06053H
         call    SGNMUL                  ; sgn multiply
@@ -8176,7 +8176,7 @@ A700D:  ld      bc,00021H
         ld      d,(hl)
         ex      de,hl
         push    bc
-        ld      ix,M46FF
+        ld      ix,FLTLIN
         call    A731E                   ; convert integer to sgn in DAC
         ld      bc,06545H
         ld      de,06053H
@@ -8186,9 +8186,9 @@ A700D:  ld      bc,00021H
         ld      bc,8
         ldir
         pop     hl
-        ld      ix,M46FF
+        ld      ix,FLTLIN
         call    A731E                   ; convert integer to sgn in DAC
-        call    M3042                   ; convert DAC from sgn to dbl
+        call    CONDS                   ; convert DAC from sgn to dbl
         jp      DECADD                  ; dbl add
 
 ;       Subroutine      DSKF function (H.DSKF)

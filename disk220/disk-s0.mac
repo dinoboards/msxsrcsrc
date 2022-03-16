@@ -89,48 +89,51 @@ I$3F00  EQU     3F00H   ; ----I
 I$3F1E  EQU     3F1EH   ; ----I
 I$3FD6  EQU     3FD6H   ; ----I
 
-M406F   EQU     406FH
-M409B   EQU     409BH
-M4173   EQU     4173H
-M4253   EQU     4253H
-M4601   EQU     4601H
-M4666   EQU     4666H
-M46FF   EQU     46FFH
-M4756   EQU     4756H
-M4AFF   EQU     4AFFH
-M4C5F   EQU     4C5FH
-M4C64   EQU     4C64H
-M517A   EQU     517AH
-M520F   EQU     520FH
-M521B   EQU     521BH
-M521C   EQU     521CH
-M521F   EQU     521FH
-M537B   EQU     537BH
-M542F   EQU     542FH
-M5432   EQU     5432H
-M54F7   EQU     54F7H
-M5597   EQU     5597H
-M5EA4   EQU     5EA4H
-M6627   EQU     6627H
-M668E   EQU     668EH
-M67D0   EQU     67D0H
-M6A0E   EQU     6A0EH
-M6A6D   EQU     6A6DH
-M6AFA   EQU     6AFAH
-M6B24   EQU     6B24H
-M6C1C   EQU     6C1CH
-M6E95   EQU     6E95H
-M6EC9   EQU     6EC9H
-M6EF4   EQU     6EF4H
-M6F0B   EQU     6F0BH
-M6F1D   EQU     6F1DH
-M7323   EQU     7323H   ; ----I
-M7328   EQU     7328H   ; ----I
-M739A   EQU     739AH   ; ----I
-M7D17   EQU     7D17H   ; ----I
-M7D30   EQU     7D30H   ; ----I
-M7D31   EQU     7D31H   ; ----I
-M7DE9   EQU     7DE9H   ; ----I
+
+ERROR   equ     0406FH          ; BASIC error
+READYR  equ     0409BH          ; restart BASIC
+M4173   equ     04173H          ; execute statement
+LINKER  equ     04253H          ; recalculate linepointers
+NEWSTT  equ     04601H          ; execution loop
+CHRGTR  equ     04666H          ; CHRGTR
+FLTLIN  equ     046FFH          ; convert to SNG
+INTID2  equ     04756H          ; evaluate word operand and check for 0-32767 range
+FINPRT  equ     04AFFH          ; output back to screen
+FRMEQL  equ     04C5FH          ; evaluate =expression
+FRMEVL  equ     04C64H          ; evaluate expression
+DOCNVF  equ     0517AH          ; convert DAC to other type
+GETIN2  EQU     0520FH          ; evaluate integer operand
+GTBYTC  equ     0521BH          ; evaluate next byte operand
+GETBYT  equ     0521CH          ; evaluate byte operand
+CONINT  equ     0521FH          ; convert to byte
+M537B   EQU     537BH           ; convert DAC to text, unformatted
+GETUIN  equ     0542FH          ; evaluate address operand
+M5432   equ     05432H          ; convert address to integer
+SCCPTR  equ     054F7H          ; convert pointers to linenumbers
+GETYPR  equ     05597H          ; GETYPR
+PTRGET  equ     05EA4H          ; get address of variable
+STRINI  equ     06627H          ; allocate temp string
+GETSPA  equ     0668EH          ; allocate stringspace
+FRESTR  equ     067D0H          ; free temporary string
+FILEVL  equ     06A0EH          ; evaluate filespecification
+FILIDX  equ     06A6DH          ; get i/o channel pointer
+OPNFIL  equ     06AFAH          ; open i/o channel
+CLSFIL  equ     06B24H          ; close i/o channel
+CLSALL  equ     06C1CH          ; close all i/o channels
+NOSKCR  equ     06E41H          ; resume character putback routine
+BSAVE   equ     06E92H          ; start of BSAVE routine
+BLOAD   equ     06EC6H          ; start of BLOAD routine
+BLDFIN  equ     06EF4H          ; finish BLOAD
+M6F0B   equ     06F0BH          ; evaluate address operand (BLOAD/SAVE)
+PARDEV  equ     06F15H          ; skip strong cassette devicecheck
+CRDONZ  equ     07323H          ; newline to OUTDO if not at start of line
+CRDO    equ     07328H          ; newline to OUTDO
+M739A   equ     0739AH          ; quit loading & start (headloop/executing)
+M7D17   equ     07D17H          ; continue start of MSX-BASIC without executing BASIC programs in ROM
+M7D2F   equ     07D2FH          ; address initialize BASIC screen
+M7D31   equ     07D31H          ; BASIC initscreen (without INITXT & CNSDFG)
+M7DE9   EQU     7DE9H           ; start MSX-BASIC program in ROM
+
 
 I.8000  EQU     8000H   ; ----I
 I$803B  EQU     803BH   ; ----I
@@ -1242,7 +1245,7 @@ J4A24:  INC     C
 
         CALL    C4C73
         CALL    C56A5
-        LD      HL,M7D30
+        LD      HL,M7D2F+1
         LD      A,(EXPTBL+0)
         CALL    RDSLT
         PUSH    AF
@@ -1534,7 +1537,7 @@ I4C90:  RST     30H
         DEFB    0
         DEFW    C5DB6
         PUSH    HL
-        JP      M6EF4
+        JP      BLDFIN
 
         RST     30H
         DEFB    0
@@ -2488,7 +2491,7 @@ I5755:	DEFW	0
 
 I5757:  INC     SP
         INC     SP
-        JP      M6F1D
+        JP      PARDEV+8
 
 ;         Subroutine EXTENSION ROM CALL statement handler
 ;            Inputs  ________________________
@@ -2573,10 +2576,10 @@ C57D6:  LD      DE,BUF+10
         JR      Z,J5805
         CALL    C6654
         DEFB    "("
-        LD      IX,M4C64
+        LD      IX,FRMEVL
         CALL    C664F
         PUSH    HL
-        LD      IX,M67D0
+        LD      IX,FRESTR
         CALL    C664F
         LD      C,(HL)
         INC     HL
@@ -2596,7 +2599,7 @@ J57FF:  POP     HL
         RET     NZ
 J5805:  XOR     A
         LD      (DE),A
-        LD      IX,M6C1C
+        LD      IX,CLSALL
         CALL    C664F
         CALL    TOTEXT
         CALL    ERAFNK
@@ -2699,7 +2702,7 @@ C58AF:  CALL    C6654
         CP      ","                     ; Is it a ","
         LD      A,0FFH
         JR      Z,J58DB
-        LD      IX,M520F
+        LD      IX,GETIN2
         CALL    C664F
         INC     D
         DEC     D
@@ -2728,7 +2731,7 @@ J58DB:  PUSH    AF
         LD      DE,D.0000
         JR      NZ,J58EE
         CALL    C665F
-        LD      IX,M5EA4
+        LD      IX,PTRGET
         CALL    C664F
 J58EE:  POP     BC
         CALL    C6654
@@ -2775,7 +2778,7 @@ C591A:  PUSH    DE
         CP      08H     ; 8 
         JP      NZ,J6627
 J5932:  PUSH    BC
-        LD      IX,M517A
+        LD      IX,DOCNVF
         CALL    C664F
         POP     BC
         LD      HL,DAC
@@ -2999,7 +3002,7 @@ J5A53:  ADD     HL,SP
         DEFB	092H
         CALL    C6654
         DEFB    0EFH
-        LD      IX,M4756
+        LD      IX,INTID2
         CALL    C664F
         DEC     DE
         INC     D
@@ -3350,7 +3353,7 @@ C5C39:  PUSH    HL
 
 C5C51:  CALL    C6888
         PUSH    HL
-        LD      IX,M54F7
+        LD      IX,SCCPTR
         CALL    C664F
         LD      A,0FFH
         CALL    C5E8F
@@ -3361,7 +3364,7 @@ C5C51:  CALL    C6888
         CALL    C5EA7
         LD      (NLONLY),A
         POP     HL
-        LD      IX,M6B24
+        LD      IX,CLSFIL
         JP      C664F
 
 C5C79:  LD      IX,M739A
@@ -3369,7 +3372,7 @@ C5C79:  LD      IX,M739A
         CALL    C59E9
         POP     AF
         JP      Z,J65EA
-        LD      IX,M6C1C
+        LD      IX,CLSALL
         CALL    C664F
         LD      HL,-199
         ADD     HL,SP
@@ -3399,7 +3402,7 @@ C5C79:  LD      IX,M739A
         LD      DE,(TXTTAB)
         ADD     HL,DE
         LD      (VARTAB),HL
-        LD      IX,M4253
+        LD      IX,LINKER
         CALL    C664F
         LD      A,(FILNAM+0)
         AND     A
@@ -3411,7 +3414,7 @@ C5C79:  LD      IX,M739A
         PUSH    DE
         LDIR    
         POP     HL
-        LD      IX,M4601
+        LD      IX,NEWSTT
         JP      C664F
 
 I5CED:	DEFB	03AH,092H,0
@@ -3454,7 +3457,7 @@ J5D2E:  POP     DE
         PUSH    AF
         XOR     A
         LD      E,02H   ; 2 
-        LD      IX,M6AFA
+        LD      IX,OPNFIL
         CALL    C664F
         LD      A,0FEH
         CALL    C5E8F
@@ -3482,7 +3485,7 @@ J5D2E:  POP     DE
 J5D66:  LD      A,0FFH
         LD      (FLBMEM),A
         XOR     A
-        LD      IX,M6B24
+        LD      IX,CLSFIL
         CALL    C664F
         JP      J627A
 
@@ -3555,7 +3558,7 @@ J5DDF:  POP     DE
         LD      (FLBMEM),A
         XOR     A
         LD      E,01H   ; 1 
-        LD      IX,M6AFA
+        LD      IX,OPNFIL
         CALL    C664F
         CALL    C5E92
         CP      0FEH
@@ -3580,7 +3583,7 @@ J5DDF:  POP     DE
         CALL    C5EAF
         LD      C,48H   ; "H"
         CALL    C655D
-J5E1F:  LD      IX,M4AFF
+J5E1F:  LD      IX,FINPRT
         CALL    C664F
         POP     HL
         RET     
@@ -3752,12 +3755,12 @@ J5EE9:  PUSH    HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5F09:  LD      IX,M521C
+C5F09:  LD      IX,GETBYT
         CALL    C664F
         PUSH    DE
         CALL    C6654
         DEFB    ","
-        LD      IX,M542F
+        LD      IX,GETUIN
         CALL    C664F
         POP     BC
         RET     
@@ -3773,7 +3776,7 @@ C5F1E:  LD      IX,LF38B
         JR      Z,J5F7D
         CALL    C6654
         DEFB    ","
-        LD      IX,M4C64
+        LD      IX,FRMEVL
         CALL    C664F
         PUSH    HL
         CALL    C6147
@@ -3847,11 +3850,11 @@ J5F99:  CALL    C655D
 C5F9F:  CALL    C6888
         CP      23H     ; "#"
         CALL    Z,C665F
-        LD      IX,M521C
+        LD      IX,GETBYT
         CALL    C664F
         JP      Z,J6630
         PUSH    HL
-        LD      IX,M6A6D
+        LD      IX,FILIDX
         CALL    C664F
         LD      E,L
         LD      D,H
@@ -3877,16 +3880,16 @@ J5FDA:  EX      DE,HL
         CP      2CH     ; ","
         RET     NZ
         PUSH    DE
-        LD      IX,M521B
+        LD      IX,GTBYTC
         CALL    C664F
         PUSH    AF
         CALL    C6654
         DEFB    "A"
         CALL    C6654
         DEFB    "S"
-        LD      IX,M5EA4
+        LD      IX,PTRGET
         CALL    C664F
-        LD      IX,M5597
+        LD      IX,GETYPR
         CALL    C664F
         JP      NZ,J6627
         POP     AF
@@ -3917,19 +3920,19 @@ C6025:  DEFB	0F6H		        ; OR #37
 C6026:  SCF
         CALL    C6888
         PUSH    AF
-        LD      IX,M5EA4
+        LD      IX,PTRGET
         CALL    C664F
-        LD      IX,M5597
+        LD      IX,GETYPR
         CALL    C664F
         JP      NZ,J6627
         PUSH    DE
-        LD      IX,M4C5F
+        LD      IX,FRMEQL
         CALL    C664F
         POP     BC
         EX      (SP),HL
         PUSH    HL
         PUSH    BC
-        LD      IX,M67D0
+        LD      IX,FRESTR
         CALL    C664F
         LD      B,(HL)
         EX      (SP),HL
@@ -3961,14 +3964,14 @@ C6026:  SCF
         JR      C,J60CC
         POP     AF
 J6079:  LD      A,C
-        LD      IX,M668E
+        LD      IX,GETSPA
         CALL    C664F
         POP     HL
         POP     BC
         EX      (SP),HL
         PUSH    DE
         PUSH    BC
-        LD      IX,M67D0
+        LD      IX,FRESTR
         CALL    C664F
         POP     BC
         POP     DE
@@ -4039,7 +4042,7 @@ J60CC:  POP     AF
         JR      NZ,J60E0
         PUSH    BC
         LD      A,B
-        LD      IX,M6627
+        LD      IX,STRINI
         CALL    C664F
         CALL    C6107
         POP     BC
@@ -4055,10 +4058,10 @@ C60E9:  LD      A,4
 C60EC:  LD      A,8
         CALL    C6888
         PUSH    AF
-        LD      IX,M517A
+        LD      IX,DOCNVF
         CALL    C664F
         POP     AF
-        LD      IX,M6627
+        LD      IX,STRINI
         CALL    C664F
         LD      HL,(DSCTMP+1)
         CALL    C$2F10
@@ -4086,7 +4089,7 @@ C6126:  LD      A,3
 C6129:  LD      A,7
         CALL    C6888
         PUSH    AF
-        LD      IX,M67D0
+        LD      IX,FRESTR
         CALL    C664F
         POP     AF
         CP      (HL)
@@ -4104,7 +4107,7 @@ C6129:  LD      A,7
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C6147:  LD      IX,M5597
+C6147:  LD      IX,GETYPR
         CALL    C664F
         JP      M,J61B3
         JP      Z,J6627
@@ -4126,7 +4129,7 @@ C6147:  LD      IX,M5597
         CALL    C664F
         PUSH    DE
         EX      DE,HL
-        LD      IX,M46FF
+        LD      IX,FLTLIN
         CALL    C664F
         CALL    C.3042
         LD      BC,06545H
@@ -4198,7 +4201,7 @@ J6206:  PUSH    HL
         INC     A
         DEC     A
         PUSH    AF
-        LD      IX,M7323
+        LD      IX,CRDONZ
         CALL    C664F
         POP     AF
         PUSH    AF
@@ -4222,7 +4225,7 @@ J621C:  CALL    C599D
         LD      (HL),A
         POP     HL
         CALL    C62FC
-        LD      IX,M7328
+        LD      IX,CRDO
         CALL    C664F
 J6240:  POP     AF
         PUSH    AF
@@ -4246,7 +4249,7 @@ J625A:  AND     A
         RST     18H
         JR      J626E
 
-J6267:  LD      IX,M7328
+J6267:  LD      IX,CRDO
         CALL    C664F
 J626E:  LD      IX,BUF+10
         LD      C,41H   ; "A"
@@ -4254,7 +4257,7 @@ J626E:  LD      IX,BUF+10
         JR      Z,J6240
         POP     AF
 J627A:  POP     HL
-        LD      IX,M4AFF
+        LD      IX,FINPRT
         JP      C664F
 
 ;         Subroutine __________________________
@@ -4396,7 +4399,7 @@ C6343:  LD      B,0FFH
 
 C634C:  CALL    C6654
         DEFB    "("
-C6350:  LD      IX,M6A0E
+C6350:  LD      IX,FILEVL
         CALL    C664F
         LD      A,D
         CP      09H     ; 9 
@@ -4408,9 +4411,9 @@ C635E:  LD      A,2
 C6361:  LD      A,1
         CALL    C6888
         PUSH    AF
-        LD      IX,M521F
+        LD      IX,CONINT
         CALL    C664F
-        LD      IX,M6A6D
+        LD      IX,FILIDX
         CALL    C664F
         JP      C,J662D
         JP      Z,J6645
@@ -4493,7 +4496,7 @@ J63B7:  LD      C,L
 ;            Outputs ________________________
 
 C63BA:  PUSH    BC
-        LD      IX,M46FF
+        LD      IX,FLTLIN
         CALL    C664F
         LD      BC,06545H
         LD      DE,06053H
@@ -4503,7 +4506,7 @@ C63BA:  PUSH    BC
         LD      BC,8
         LDIR    
         POP     HL
-        LD      IX,M46FF
+        LD      IX,FLTLIN
         CALL    C664F
         CALL    C.3042
         JP      J$269A
@@ -4552,7 +4555,7 @@ J6403:  OR      A
 	ENDIF
 
 C640D:  CALL    C6888
-        LD      IX,M521F
+        LD      IX,CONINT
         CALL    C664F
         AND     A
         CALL    NZ,C5846
@@ -4762,7 +4765,7 @@ J656F:  OR      A
 
 I6571:  CALL    C656A
         JR      NZ,J65C3
-        LD      IX,M409B
+        LD      IX,READYR
         JP      C664F
 
 I657D:  DEFB	0BAH
@@ -4842,7 +4845,7 @@ J65C3:  PUSH    AF
         CP      9FH
         JR      Z,J65CE
         CP      9EH
-J65CE:  LD      IX,M409B
+J65CE:  LD      IX,READYR
         JR      Z,C664F
         LD      E,A
 J65D5:  CP      0BAH
@@ -4890,7 +4893,7 @@ J65ED:  LD      E,03EH
         XOR     A
         LD      (NLONLY),A
         PUSH    DE
-        LD      IX,M6B24
+        LD      IX,CLSFIL
         CALL    C664F
         POP     DE
 J6623:  DEFB    001H
@@ -4919,7 +4922,7 @@ J6642:  LD      E,038H
 J6645:  LD      E,03BH
         XOR     A
         LD      (FLBMEM),A
-        LD      IX,M406F
+        LD      IX,ERROR
 
 ;         Subroutine execute BASIC routine
 ;            Inputs  ________________________
@@ -4949,7 +4952,7 @@ C665E:  DEC     HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C665F:  LD      IX,M4666
+C665F:  LD      IX,CHRGTR
         JR      C664F
 
 C6665:  EI      
@@ -5054,11 +5057,11 @@ J66F7:  ADD     HL,SP
         INC     HL
         LD      D,(HL)
         PUSH    HL
-        LD      HL,M6E95
+        LD      HL,BSAVE+3
         RST     20H
         LD      BC,(D.F2F3)
         JR      Z,J671C
-        LD      HL,M6EC9
+        LD      HL,BLOAD+3
         RST     20H
         LD      BC,(D.F2F1)
         JR      Z,J671C
