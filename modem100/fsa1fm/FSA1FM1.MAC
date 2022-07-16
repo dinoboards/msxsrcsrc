@@ -47,18 +47,18 @@ I$3A1E	EQU	3A1EH	; ----I
 I$3B1E	EQU	3B1EH	; ----I
 C.6000	EQU	6000H	; -C---
 
-D$6047	EQU	6047H	; MSX modem disabled
-D.6049	EQU	6049H	; --SL-
-D.604B	EQU	604BH	; b7-b4 = trap number, b3-b0 = com number
-D.6065	EQU	6065H	; COM/NET flag
+D$6047	EQU	6047H	                ; MSX modem disabled
+D.6049	EQU	6049H                   ; b7,b6,b2 = terminal mode
+D.604B	EQU	604BH	                ; b7-b4 = trap number, b3-b0 = com number
+D.6065	EQU	6065H	                ; COM/NET flag
 D.6066	EQU	6066H	; --SL-
-D.606D	EQU	606DH	; receiver baudrate
-D.606F	EQU	606FH	; transmitter baudrate
-D$6071	EQU	6071H	; timeout value
-D.6073	EQU	6073H	; --SLI
+D.606D	EQU	606DH	                ; receiver baudrate
+D.606F	EQU	606FH	                ; transmitter baudrate
+D$6071	EQU	6071H	                ; timeout value
+D.6073	EQU	6073H                   ; literal mode
 D.6074	EQU	6074H                   ; alt1 enabled
 D.6075	EQU	6075H                   ; alt1 enabled
-D.6077	EQU	6077H	; --SLI
+D.6077	EQU	6077H                   ; duplex mode
 D.607C	EQU	607CH                   ; counter set #1, number of seconds
 D.6084	EQU	6084H	                ; mask byte (for unused bits)
 D.6085	EQU	6085H                   ; b7,b6 = dialer mode,b5, b4 = SI/SO handshake, b3 = auto LF on receive, b2 = auto LF on send, b1 = RTS/CTS handshake, b0 = XON/XOFF handshake
@@ -70,11 +70,12 @@ D.6092	EQU	6092H                   ; alt1 number of bytes in receive buffer
 D$6094	EQU	6094H                   ; alt2 number of bytes in receive buffer
 D$60A9	EQU	60A9H                   ; modem type
 D.60B0	EQU	60B0H                   ; automatic dialer detection
-D.60B6	EQU	60B6H	; --SL-
-I.60B8	EQU	60B8H	; ----I
-D.6158	EQU	6158H	; --SL-
-D.615A	EQU	615AH	; --SL-
-D.615C	EQU	615CH	; --SL-
+D.60B6	EQU	60B6H                   ; saved comterm exit code
+I.60B8	EQU	60B8H                   ; saved F1-F10 defintion
+D.6158	EQU	6158H                   ; saved FORCLR
+D.6159	EQU	6159H                   ; saved BAKCLR
+D.615A	EQU	615AH                   ; saved BDRCLR
+D.615C	EQU	615CH			; show progress char
 D.615D	EQU	615DH                   ; comterm mode (b0 = interlace, b1 = full, b2 = chinese, b3/b4 = srceen mode, b5/b6 = kanji code, b7 = DEL operation)
 D.615E	EQU	615EH	; --SL-
 D.6162	EQU	6162H	; --SL-
@@ -87,7 +88,7 @@ D.616E	EQU	616EH	; --SL-
 D.6170	EQU	6170H	; --SL-
 D.6173	EQU	6173H	; --SL-
 D.6175	EQU	6175H	; --SLI
-C.6176	EQU	6176H	; call MSX-JE
+C.6176	EQU	6176H	                ; call MSX-JE
 D.6186	EQU	6186H	; --S-I
 D.6188	EQU	6188H	; --S-I
 D.618B	EQU	618BH	; --S-I
@@ -122,10 +123,6 @@ I$635D	EQU	635DH	; ----I
 D.635E	EQU	635EH	; ---L-
 D$6361	EQU	6361H	; ---L-
 I.6380	EQU	6380H	; ----I
-I$6420	EQU	6420H	; ----I
-I$67D0	EQU	67D0H	; ----I
-I$6C1C	EQU	6C1CH	; ----I
-I$755B	EQU	755BH	; ----I
 D.7EE7	EQU	7EE7H	; --SL-
 D.7EEA	EQU	7EEAH	; --SL-
 D$7EEC	EQU	7EECH	; --S--
@@ -171,20 +168,20 @@ I.FFFF	EQU	0FFFFH	; ----I
 ?.4096:	JP	C.46BE
 ?.4099:	JP	C.434A
 ?.409C:	JP	C.4325
-?.409F:	JP	C.43BA
-?.40A2:	JP	C.40EA
+?.409F:	JP	C.43BA                  ; get received byte
+?.40A2:	JP	C.40EA                  ; send byte
 C.40A5:	JP	C.40FF
 C.40A8:	JP	C.5BC8		; MAIN BIOS
 C.40AB:	JP	C.5BC3		; MAIN BIOS (EI)
 C.40AE:	JP	C.57A6
 C.40B1:	JP	J$49C7
-C.40B4:	JP	C.4BEA
+C.40B4:	JP	C.4BEA          ; comterm
 C.40B7:	JP	J$473C
 C.40BA:	JP	J$488C
 C.40BD:	JP	J$5739
 C.40C0:	JP	J$5AAA          ; BASIC device handler
 C.40C3:	JP	C.5A82
-C.40C6:	JP	C.4EBD
+C.40C6:	JP	C.4EBD                  ; echo to screen/printer (literal)
 ?.40C9:	JP	J$43B4
 C.40CC:	JP	J$43AE
 ?.40CF:	JP	J$4362
@@ -197,7 +194,7 @@ C.40CC:	JP	J$43AE
 ?.40E4:	JP	C.4BBD                  ; store PROMPT hook and disable
 ?.40E7:	JP	C.4BD9                  ; restore PROMPT hook
 
-;	  Subroutine __________________________
+;	  Subroutine send byte
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -536,7 +533,7 @@ I.42BF:	JR	Z,J$430B
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.42C7:	LD	A,(D.615D)
+C.42C7:	LD	A,(D.615D)              ; comterm mode
         CALL	C.42F8
         JR	Z,J$42D1
         LD	A,60H
@@ -590,7 +587,7 @@ C.42F8:	PUSH	DE
 
 C.4303:	PUSH	BC
         LD	B,A
-        LD	A,(D.615D)
+        LD	A,(D.615D)              ; comterm mode
         AND	60H                     ; kanji code mode
         CP	40H                     ; shift JIS mode ?
         JR	NZ,J.4317               ; nope,
@@ -739,7 +736,7 @@ J$43B4:	LD	IX,I.6190
         JR	J.43BE
 
 
-;	  Subroutine __________________________
+;	  Subroutine get received byte
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -803,9 +800,9 @@ J$4400:	LD	HL,(D.6090)             ; number of bytes in receive buffer
         RET	M
 J.4414:	LD	B,A
         LD	A,(D.6073)
-        OR	A
+        OR	A                       ; literal mode ?
         LD	A,B
-        RET	NZ
+        RET	NZ                      ; yep, quit
         CP	7FH
         JR	Z,J$4423
         CP	20H	; " "
@@ -992,7 +989,7 @@ I$4554:	CP	40H	; "@"
 
 J$4559:	CP	29H	; ")"
         JR	NZ,J$457D
-        LD	A,(D.615D)
+        LD	A,(D.615D)              ; comterm mode
         AND	04H                     ; chinese mode ?
         RET	Z                       ; nope, quit
         LD	A,B
@@ -1142,7 +1139,7 @@ J.463D:	PUSH	AF
         LD	SP,HL
         CCF
         RET	C
-        LD	A,01H	; 1 
+        LD	A,1                     ; inquiry
         CALL	C.6176                  ; call MSX-JE
         OR	A
         RET
@@ -1153,7 +1150,7 @@ J.463D:	PUSH	AF
 ;	     Outputs ________________________
 
 C$464D:	LD	(C.6176+9),HL
-        LD	A,02H	; 2 
+        LD	A,2                     ; invoke
         CALL	C.6176                  ; call MSX-JE
         LD	HL,I.60B8
         LD	DE,FNKSTR
@@ -1162,9 +1159,8 @@ C$464D:	LD	(C.6176+9),HL
         LD	E,00H
         LD	B,01H	; 1 
         LD	A,(D.61CF)
-I$4666	EQU	$-1
         LD	C,A
-        LD	A,09H	; 9 
+        LD	A,9                     ;
         CALL	C.6176                  ; call MSX-JE
         INC	HL
         LD	A,(HL)
@@ -1173,13 +1169,12 @@ I$4666	EQU	$-1
         LD	(D.6175),A
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine release MSX-JE
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4678:	PUSH	AF
-        LD	A,03H	; 3 
+        LD	A,3                     ; release
         CALL	C.6176                  ; call MSX-JE
         POP	AF
         RET
@@ -1190,15 +1185,15 @@ C$4678:	PUSH	AF
 ;	     Outputs ________________________
 
 C.4680:	LD	A,(D.6175)
-        RLCA
-        RET	NC
-        RLCA
-        JR	C,J$46A3
+        RLCA                            ; b7 set ?
+        RET	NC                      ; nope, quit
+        RLCA                            ; b6 set ?
+        JR	C,J$46A3                ; yep,
         CALL	C.6000
         DEFB	2
         DEFW	C.409F
         RET	C
-        LD	A,04H	; 4 
+        LD	A,4                     ; clear
         CALL	C.6176                  ; call MSX-JE
         LD	HL,12
         PUSH	HL
@@ -1236,9 +1231,9 @@ C$46B2:	LD	HL,I.60B8
 C.46BE:	LD	HL,D.6175
         JR	NZ,J$46E4
         LD	A,(HL)
-        AND	0C6H
-        XOR	0C6H
-        JR	Z,J.4711
+        AND	0C6H                    ; leave b7,b6,b2,b1
+        XOR	0C6H                    ; b7,b6,b2 and b1 set ?
+        JR	Z,J.4711                ; yep,
         LD	A,6
         CALL	SNSMAT
         LD	HL,I$635D
@@ -1248,11 +1243,11 @@ C.46BE:	LD	HL,D.6175
         AND	04H			; GRAPH
         LD	B,A
         LD	A,(D.6175)
-        AND	0C4H
-        XOR	0C4H
-        RET	NZ
-        INC	B
-        DJNZ	J.4711
+        AND	0C4H                    ; leave b7,b6,b2
+        XOR	0C4H                    ; b7,b6 and b2 set ?
+        RET	NZ                      ; nope, quit
+        INC	B                       ; GRAPH key pressed ?
+        DJNZ	J.4711                  ; yep,
         RET
 
 J$46E4:	BIT	6,(HL)
@@ -1275,7 +1270,7 @@ J$46EE:	BIT	2,(HL)
         JR	NZ,J.4711
 J$4703:	INC	A
 J$4704:	PUSH	AF
-        LD	A,0AH	; 10 
+        LD	A,10                    ;
         CALL	C.6176                  ; call MSX-JE
         OR	A
         JR	Z,J$4710
@@ -1284,7 +1279,7 @@ J$4704:	PUSH	AF
         RET
 
 J$4710:	POP	AF
-J.4711:	LD	A,06H	; 6 
+J.4711:	LD	A,6                     ; dispatch
         CALL	C.6176                  ; call MSX-JE
         XOR	0C4H
         LD	(D.6175),A
@@ -1294,7 +1289,7 @@ J.4711:	LD	A,06H	; 6
         POP	AF
         RRCA
         RET	NC
-        LD	A,07H	; 7 
+        LD	A,7                     ; get result
         CALL	C.6176                  ; call MSX-JE
         SCF
         RET
@@ -1624,12 +1619,12 @@ C.4958:	CALL	C.5821                  ; evaluate comidentifier and check if this 
         RET	C
         CALL	C.6000
         DEFB	0
-        DEFW	C.40F9
-        JP	Z,J.487B                ; file not open error
+        DEFW	C.40F9                  ; port open ?
+        JP	Z,J.487B                ; nope, file not open error
         PUSH	HL
         CALL	C.6000
         DEFB	0
-        DEFW	C.4150
+        DEFW	C.4150                  ; RS232.STAT
         JP	J.5818
 
 ; _COMBREAK
@@ -1638,8 +1633,8 @@ C.496F:	CALL	C.5BD4			; evaluate comidentifier and check if this one
         CALL	C.5C3D                  ; check for empty or no string
         CALL	C.6000
         DEFB	0
-        DEFW	C.40F9
-        JP	Z,J.487B                ; file not open error
+        DEFW	C.40F9                  ; port open ?
+        JP	Z,J.487B                ; nope, file not open error
         LD	A,D
         CP	","
         JR	Z,J$4992
@@ -1662,13 +1657,13 @@ J$499C:	LD	A,E
         JP	Z,J$4884		; illegal function call error
         CALL	C.6000
         DEFB	0
-        DEFW	C.4168
+        DEFW	C.4168                  ; RS232.SNDBRK
         EI
-        LD	A,00H
+        LD	A,0
         INC	A
         CALL	C.6000
         DEFB	0
-        DEFW	C.411D
+        DEFW	C.411D                  ; update error flags
         JP	C,J.488A                ; device i/o error
         RET
 
@@ -1686,12 +1681,12 @@ C.49B8:	PUSH	HL
 
 J$49C7:	PUSH	HL
         PUSH	AF
-        LD	(D.615D),A
+        LD	(D.615D),A              ; update comterm mode
         LD	A,(D$7EF9)
         OR	A
         LD	B,00H
         JR	Z,J$49D6
-        LD	B,02H	; 2 
+        LD	B,02H                   ; set shift JIS D flag
 J$49D6:	LD	A,C
         OR	B
         LD	(D.615E),A
@@ -1714,18 +1709,22 @@ C.49E4:	PUSH	HL
         RET
 
 
-;	  Subroutine __________________________
+;	  Subroutine cursor off
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$49F3:	LD	HL,I$4A15
         JR	J.49FB
 
+;	  Subroutine cursor on
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$49F8:	LD	HL,I$4A0F
 J.49FB:	LD	A,(HL)
         AND	A
         RET	Z
-        CALL	C.4EBD
+        CALL	C.4EBD			; echo to screen/printer (literal)
         INC	HL
         JR	J.49FB
 
@@ -1763,12 +1762,12 @@ C$4A1B:	LD	C,40
 C.4A1E: LD      C,10
         CALL	C.6000
         DEFB    0
-        DEFW    C$4096
-        LD	A,00H
+        DEFW    C$4096                  ; get carry detect status
+        LD	A,0
         RET	C
         CALL	C.6000
         DEFB    0
-        DEFW    C$40AE
+        DEFW    C$40AE                  ; counter #1, clear
 J$4A2F:	CALL	C.4F02
         CALL	C.6000
         DEFB    0
@@ -1778,13 +1777,13 @@ J$4A2F:	CALL	C.4F02
         RET	C                       ; yep, quit
         CALL	C.6000
         DEFB    0
-        DEFW    C$40A9
+        DEFW    C$40B1                  ; counter #1, get number of seconds
         CP	C
         LD	A,2
         RET	NC
         CALL	C.6000
         DEFB    0
-        DEFW    C$4096
+        DEFW    C$4096                  ; get carry detect status
         JR	NC,J$4A2F
         XOR	A
         RET
@@ -1801,8 +1800,8 @@ C.4A50:	CALL	C.49B8                  ; store foreground, background and border c
         DEFB	")"
 J$4A63:	CALL	C.6000
         DEFB    0
-        DEFW    I$40F9
-        JR	Z,J$4A70
+        DEFW    I$40F9                  ; port open ?
+        JR	Z,J$4A70                ; nope,
         LD	A,0FFH
         LD	(D$635C),A
 J$4A70:	PUSH	HL
@@ -1814,16 +1813,16 @@ J$4A70:	PUSH	HL
         LD	(D.7EFC),A
         CALL	C.6000
         DEFB    0
-        DEFW    I$4177
+        DEFW    I$4177                  ; MODEM.LINSEL
         LD	A,(CNSDFG)
         LD	(D.7EFA),A
         LD	HL,(FORCLR)
         LD	(D.7EEA),HL
         LD	A,L
         LD	(D$7EEC),A
-        CALL	C.4BEA
+        CALL	C.4BEA                  ; comterm
         POP	HL
-        SUB	03H	; 3 
+        SUB	3
         RET	Z
         PUSH	AF
         LD	A,1
@@ -1836,11 +1835,11 @@ J$4A70:	PUSH	HL
         OR	A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine wait for received byte
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4AAA:	CALL	C.43BA
+C.4AAA:	CALL	C.43BA                  ; get received byte
         RET	C
         RET	NZ
         CALL	C.6000
@@ -1853,7 +1852,7 @@ C.4AAA:	CALL	C.43BA
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4AB8:	CALL	C.43BA
+C.4AB8:	CALL	C.43BA                  ; get received byte
         RET	C
         RET	NZ
         PUSH	BC
@@ -1916,7 +1915,7 @@ J$4B14:	CALL	C.6000
         JR	Z,J$4B14
         CALL	C.6000
         DEFB    0
-        DEFW    C$40A2
+        DEFW    C$40A2                  ; wait for received byte
         POP	HL
         POP	BC
         JR	C,J.4ACC
@@ -2073,7 +2072,7 @@ C.4BD9:	PUSH	AF
         POP	AF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine comterm
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2082,7 +2081,7 @@ C.4BEA:	CALL	C.4BBD                  ; store PROMPT hook and disable
         LD	(INTFLG),A              ; clear STOP status
         LD	(D.6074),A              ; alt1 disabled
         LD	(D.6075),A              ; alt1 disabled
-        LD	(D.6073),A
+        LD	(D.6073),A              ; literal mode = off
         LD	(D.6351),A              ; alt2 disabled
         LD	(D.6352),A
         LD	L,A
@@ -2091,7 +2090,7 @@ C.4BEA:	CALL	C.4BBD                  ; store PROMPT hook and disable
         CPL
         LD	(D.6173),A
         LD	A,(D.7EFC)
-        LD	(D.6077),A
+        LD	(D.6077),A              ; set duplex mode
         LD	HL,CNSDFG
         LD	DE,D.7EFA
         LD	B,(HL)
@@ -2103,7 +2102,7 @@ C.4BEA:	CALL	C.4BBD                  ; store PROMPT hook and disable
         LD	HL,FNKSTR
         LD	DE,I.60B8
         LD	BC,10*16
-        LDIR
+        LDIR                            ; store F1-F10 definition
         LD	HL,I$547B
         LD	DE,FNKSTR+5*16
         LD	B,5
@@ -2115,17 +2114,17 @@ J$4C38:	LD	(DE),A
         INC	DE
         DJNZ	J$4C38
         POP	BC
-        DJNZ	J$4C30
+        DJNZ	J$4C30                  ; define F5-F10
         LD	HL,(D.7EEA)
         LD	(FORCLR),HL
         LD	A,H
         LD	(BDRCLR),A
         LD	A,(D.615E)
         LD	C,A
-        LD	A,(D.615D)
+        LD	A,(D.615D)              ; comterm mode
         CALL	C.6000
         DEFB    2
-        DEFW    C$4090
+        DEFW    C$4090                  ; initialize comterm mode
         LD	A,(D.615D)
         RRCA
         RRCA
@@ -2134,11 +2133,10 @@ J$4C38:	LD	(DE),A
         JR	C,J$4C9B
         XOR	A
         LD	(D.616E),A
-I$4C64	EQU	$-1
         LD	(D.6170),HL
         CALL	C.4F92
         JR	NC,J.4C8B
-        LD	A,01H	; 1 
+        LD	A,01H
         LD	(D.616E),A
         LD	(D.6170),BC
         CALL	C.4F92
@@ -2147,18 +2145,18 @@ I$4C64	EQU	$-1
         LD	(D.616E),A
         LD	(D.6170),DE
         CALL	C.4F92
-        LD	A,04H	; 4 
-        JP	C,J.53F3
+        LD	A,4
+        JP	C,J.53F3                ; quit comterm
 J.4C8B:	LD	HL,I$5060
-        PUSH	HL
+        PUSH	HL                      ; release MSX-JE
         LD	HL,(D.6166)
         LD	DE,(D.6168)
         CALL	C$464D
         JR	J$4CA3
 
 J$4C9B:	CALL	C.500D
-        LD	A,04H	; 4 
-        JP	C,J.53F3
+        LD	A,4
+        JP	C,J.53F3                ; quit comterm
 J$4CA3:	LD	HL,(D.616C)
         LD	DE,9
         OR	A
@@ -2167,12 +2165,12 @@ J$4CA3:	LD	HL,(D.616C)
         RR	L
         LD	D,H
         LD	B,L
-        LD	HL,(D.616A)
-        LD	E,04H	; 4 
-        LD	C,00H
+        LD	HL,(D.616A)             ; buffer
+        LD	E,4                     ; raw mode
+        LD	C,0                     ; buffer size
         CALL	C.6000
         DEFB    0
-        DEFW    C$414D
+        DEFW    C$414D                  ; RS232.OPEN
         CALL	C.6000
         DEFB    2
         DEFW    C$40AE
@@ -2187,7 +2185,7 @@ J$4CA3:	LD	HL,(D.616C)
         DEFW    C$40B4
         CALL	C$4A1B
         OR	A
-        JP	NZ,J.53F3
+        JP	NZ,J.53F3               ; quit comterm
         LD	HL,(D.6162)
         LD	A,H
         OR	L
@@ -2223,7 +2221,7 @@ J.4D07:	CALL	C.4F02
         POP	HL
         POP	BC
         AND	A
-        JP	NZ,J.53F3
+        JP	NZ,J.53F3               ; quit comterm
         CALL	C.4B52
         JR	Z,J.4D58
         JR	NC,J$4D47
@@ -2231,31 +2229,31 @@ J.4D07:	CALL	C.4F02
         JR	NZ,J$4D27
         CALL	C.6000
         DEFB    0
-        DEFW    C$40F0
+        DEFW    C$40F0                  ;
         JR	J.4D07
 
 J$4D27:	LD	D,A
         CALL	C.6000
         DEFB    0
-        DEFW    C$40AE
+        DEFW    C$40AE                  ; counter #1, clear
 J$4D2E:	CALL	C.4F02
         CALL	C.4AB8
         CALL	C,C.4A04
         JR	C,J.4D9E
-        CALL	NZ,C.4EBD
+        CALL	NZ,C.4EBD		; echo to screen/printer (literal)
         CALL	C.6000
         DEFB    0
-        DEFW    C$40B1
+        DEFW    C$40B1                  ; counter #1, get number of seconds
         CP	D
         JR	C,J$4D2E
         JR	J.4D07
 
-J$4D47:	CALL	C.40EA
+J$4D47:	CALL	C.40EA                  ; send byte
         CALL	C,C.4A04
         JR	C,J.4D9E
         LD	A,(D.6077)
-        OR	A
-        CALL	NZ,C.4EBD
+        OR	A                       ; full duplex mode ?
+        CALL	NZ,C.4EBD               ; nope, echo to screen/printer (literal)
         JR	J.4D07
 
 J.4D58:	LD	C,(HL)
@@ -2278,12 +2276,12 @@ J.4D6C:	CALL	C.4F02
         LD	D,A
         CALL	C.4B36
         JR	NC,J$4D87
-        CP	02H	; 2 
-        JP	Z,J.53F3
+        CP	2
+        JP	Z,J.53F3                ; quit comterm
         CALL	C.4A04
         JR	J.4D9E
 
-J$4D87:	CALL	C.4EBD
+J$4D87:	CALL	C.4EBD			; echo to screen/printer (literal)
         CP	D
         JR	Z,J.4D6C
         LD	HL,(D.6162)
@@ -2299,7 +2297,7 @@ J.4D9E: LD      HL,0
 J.4DA4:	EI
         CALL	C.4A1E
         AND	A
-        JP	NZ,J.53F3
+        JP	NZ,J.53F3               ; quit comterm
         CALL	C.4F02
         LD	A,(D.6074)
         OR	A                       ; alt1 enabled ?
@@ -2318,7 +2316,7 @@ J.4DC8:	CALL	C.539A
         OR	A                       ; alt2 enabled ?
         JR	Z,J.4DEB                ; nope,
         LD	A,(D.6049)
-        AND	10H                     ; raw mode ?
+        AND	10H                     ; terminal mode = raw ?
         JR	NZ,J$4DDE               ; yep,
         LD	A,(D$6354)
         OR	A
@@ -2335,7 +2333,7 @@ J.4DEB:	CALL	C.4AB8
         CALL	C.6000
         DEFB    3
         DEFW    C$40C6
-J$4DF9:	CALL	NZ,C.4EBD
+J$4DF9:	CALL	NZ,C.4EBD		; echo to screen/printer (literal)
         CALL	C.6000
         DEFB    0
         DEFW    C$40F6
@@ -2346,8 +2344,8 @@ J$4DF9:	CALL	NZ,C.4EBD
 J$4E0A:	CALL	C.6000
         DEFB    0
         DEFW    C$4090
-        LD	A,01H	; 1 
-        JP	C,J.53F3
+        LD	A,1
+        JP	C,J.53F3                ; quit comterm
         CALL	CHSNS
         EI
         CALL	C.6000
@@ -2356,8 +2354,8 @@ J$4E0A:	CALL	C.6000
         JR	Z,J$4E69
         LD	HL,(GETPNT)
         LD	A,(HL)
-        CP	0FFH
-        JP	Z,J$5261
+        CP	0FFH                    ; comterm function defintion ?
+        JP	Z,J$5261                ; yep, handle comterm function key
         PUSH	AF
         LD	A,(D.6352)
         OR	A
@@ -2366,7 +2364,7 @@ J$4E0A:	CALL	C.6000
 J$4E34:	POP	AF
         CALL	C.6000
         DEFB    0
-        DEFW    C$415F
+        DEFW    C$415F                  ; RS232.LOC
         LD	A,L
         OR	H
         JR	NZ,J.4E5C
@@ -2417,7 +2415,7 @@ J.4E7B:	LD	A,(HL)
 ;	     Outputs ________________________
 
 C$4E87:	LD	C,A
-        LD	A,(D.615D)
+        LD	A,(D.615D)              ; comterm mode
         AND	06H                     ; chinese + full
         CP	02H	; 2 
         LD	A,C
@@ -2436,14 +2434,14 @@ J$4EA1:	XOR	20H	; " "
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4EA3:	CALL	C.40EA
+C.4EA3:	CALL	C.40EA                  ; send byte
         LD	C,A
         LD	A,(D.6077)
-        AND	A
-        RET	Z
+        AND	A                       ; full duplex mode ?
+        RET	Z                       ; yep, quit
         LD	A,C
         PUSH	AF
-        CALL	C.4EBD
+        CALL	C.4EBD			; echo to screen/printer (literal)
         POP	AF
         CP	13
         RET	NZ
@@ -2452,15 +2450,15 @@ C.4EA3:	CALL	C.40EA
         RET	Z                       ; nope, quit
         LD	A,10
 
-;	  Subroutine __________________________
+;	  Subroutine echo to screen/printer (literal)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4EBD:	PUSH	BC
         LD	B,A
         LD	A,(D.6073)
-        AND	A
-        JR	Z,J.4EE3
+        AND	A                       ; literal mode ?
+        JR	Z,J.4EE3                ; nope,
         LD	A,B
         CP	20H
         JR	NC,J.4EE3
@@ -2508,8 +2506,8 @@ C.4EF4:	LD	A,13
         LD	A,10
         JR	C.4EBD
 
-J$4EFD:	LD	A,01H	; 1 
-        JP	J.53F3
+J$4EFD:	LD	A,1
+        JP	J.53F3                  ; quit comterm
 
 
 ;	  Subroutine __________________________
@@ -2557,7 +2555,7 @@ J$4F22:	LD	DE,600
 J.4F3B:	LD	(D.61A1),HL
         CALL	C.6000
         DEFB    0
-        DEFW    C$413E
+        DEFW    C$413E                  ; receive buffer full ?
         EX	DE,HL
         LD	HL,(D.61A6)
         OR	A
@@ -2685,7 +2683,6 @@ J$5008:	LD	DE,I$0209
         RST	20H
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2734,9 +2731,8 @@ J.502D:	LD	HL,(TXTTAB)
         LD	(D.616C),HL
         JP	J$5008
 
-I$5060:	CALL	C$4678
+I$5060:	CALL	C$4678                  ; release MSX-JE
         RET
-
 
 ;	  Subroutine get next character from string
 ;	     Inputs  ________________________
@@ -2861,7 +2857,7 @@ J$511B:	CP	5                       ;
         LD	E,08H
 J.512F:	LD	A,E
         OR	D
-        LD	(D.615D),A              ; comterm mode
+        LD	(D.615D),A              ; update comterm mode
         POP	DE
         POP	HL
         RET
@@ -2871,106 +2867,104 @@ J.512F:	LD	A,E
 ;	     Outputs ________________________
 
 C$5137:	LD	A,(D.6073)
-        AND	A
-        RET	NZ
-        CALL	C$49F3
+        AND	A                       ; literal mode ?
+        RET	NZ                      ; yep, quit
+        CALL	C$49F3			; cursor off
         LD	A,0FFH
-        LD	(D.615C),A
+        LD	(D.615C),A            	; show no progress char
         JR	J$5150
 
-J.5146:	CALL	C.4AAA
+J.5146:	CALL	C.4AAA                  ; wait for received byte
         JP	C,J.51FA
-        CP	3AH	; ":"
+        CP	":"
         JR	NZ,J.5146
-J$5150:	CALL	C.5208
+J$5150:	CALL	C.5208                  ; receive byte in hexadecimal characters
         JR	C,J.516B
         AND	A
         JR	Z,J$51A4
         LD	B,A
         LD	E,A
-        CALL	C.51FE
+        CALL	C.51FE			; receive word in hexadecimal characters
         JR	C,J.516B
-        CALL	C.5208
+        CALL	C.5208                  ; receive byte in hexadecimal characters
         JR	C,J.516B
         ADD	A,L
         ADD	A,H
         ADD	A,E
         LD	E,A
-J$5168:	CALL	C.5208
+J$5168:	CALL	C.5208                  ; receive byte in hexadecimal characters
 J.516B:	JR	C,J.51C9
         LD	(HL),A
         ADD	A,E
         LD	E,A
         INC	HL
         DJNZ	J$5168
-        CALL	C.5208
+        CALL	C.5208                  ; receive byte in hexadecimal characters
         JR	C,J.51C9
         ADD	A,E
         JR	NZ,J.51C9
-I$517A	EQU	$-1
-        LD	A,47H	; "G"
-        CALL	C.40EA
+        LD	A,"G"
+        CALL	C.40EA                  ; send byte
         LD	A,(D.615C)
-        AND	A
-        JR	Z,J$518E
+        AND	A                       ; show progess char ?
+        JR	Z,J$518E                ; yep,
         INC	A
-        LD	(D.615C),A
-        LD	A,2AH	; "*"
+        LD	(D.615C),A              ; show progress char
+        LD	A,"*"
         JR	J$519E
 
 J$518E:	DEC	A
         LD	(D.615C),A
         LD	A,8
-        CALL	C.4EBD
+        CALL	C.4EBD			; echo to screen/printer (literal)
         LD	A," "
         CALL	C.4EBD
         LD	A,8
 J$519E:	CALL	C.4EBD
         JP	J.5146
 
-J$51A4:	CALL	C.51FE
+J$51A4:	CALL	C.51FE			; receive word in hexadecimal characters
         JR	C,J.51C9
         LD	A,H
         OR	L
         JR	NZ,J$51D1
-        CALL	C.5208
+        CALL	C.5208                  ; receive byte in hexadecimal characters
         JR	C,J.51C9
         CP	01H	; 1 
         JR	NZ,J.51C9
-        CALL	C.5208
+        CALL	C.5208                  ; receive byte in hexadecimal characters
         JR	C,J.51C9
         CP	0FFH
         JR	NZ,J.51C9
-        LD	A,47H	; "G"
-        CALL	C.40EA
+        LD	A,"G"
+        CALL	C.40EA                  ; send byte
         CALL	C.4EF4
         JR	J.51FA
 
-J.51C9:	LD	A,42H	; "B"
-        CALL	C.40EA
+J.51C9:	LD	A,"B"
+        CALL	C.40EA                  ; send byte
         JP	J.5146
 
-J$51D1:	CALL	C.5208
+J$51D1:	CALL	C.5208                  ; receive byte in hexadecimal characters
         JR	C,J.51C9
         CP	01H	; 1 
         JR	NZ,J.51C9
         ADD	A,L
         ADD	A,H
         LD	E,A
-        CALL	C.5208
+        CALL	C.5208                  ; receive byte in hexadecimal characters
         JR	C,J.51C9
         ADD	A,E
         JR	NZ,J.51C9
-J$51E5:	CALL	C.4AAA
+J$51E5:	CALL	C.4AAA			; wait for received byte
         JP	C,J.51FA
         CP	0AH	; 10 
         JR	NZ,J$51E5
-        LD	A,47H	; "G"
-        CALL	C.40EA
+        LD	A,"G"
+        CALL	C.40EA                  ; send byte
         CALL	C.4EF4
         CALL	C$51FD
-J.51FA:	JP	J$49F8
-
+J.51FA:	JP	J$49F8                  ; cursor on
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2978,25 +2972,23 @@ J.51FA:	JP	J$49F8
 
 C$51FD:	JP	(HL)
 
-
-;	  Subroutine __________________________
+;	  Subroutine receive word in hexadecimal characters
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.51FE:	CALL	C.5208
+C.51FE:	CALL	C.5208                  ; receive byte in hexadecimal characters
         RET	C
         LD	H,A
-        CALL	C.5208
+        CALL	C.5208                  ; receive byte in hexadecimal characters
         LD	L,A
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine receive byte in hexadecimal characters
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.5208:	PUSH	BC
-        CALL	C.4AAA
+        CALL	C.4AAA			; wait for received byte
         JR	C,J.5223
         CALL	C.5225
         JR	C,J.5223
@@ -3005,7 +2997,7 @@ C.5208:	PUSH	BC
         ADD	A,A
         ADD	A,A
         LD	B,A
-        CALL	C.4AAA
+        CALL	C.4AAA			; wait for received byte
         JR	C,J.5223
 I$521C	EQU	$-1
         CALL	C.5225
@@ -3047,7 +3039,7 @@ C$5239:	LD	H,A
         JR	Z,J$5254
         BIT	0,L			; SHIFT
         RET	NZ
-        LD	HL,J.53F3
+        LD	HL,J.53F3               ; quit comterm
         JR	J$525A
 
 J$5251:	BIT	1,L			; CTRL
@@ -3059,32 +3051,40 @@ J$525A:	EX	(SP),HL
         LD	A,03H	; 3 
         RET
 
-J$5261:	CALL	CHGET
-        CALL	CHGET
-        EI
-        SUB	06H	; 6 
-        JR	Z,J$527C
-        DEC	A
-        JR	Z,J$5281
-        DEC	A
-        JP	Z,J$530E
-        DEC	A
-        JR	Z,J$5289
-        DEC	A
-        JR	Z,J$52CC
-J.5279:	JP	J.4DA4
+; handle comterm function key
 
-J$527C:	LD	HL,D.6073
+J$5261:	CALL	CHGET                   ; get 0FFH
+        CALL	CHGET                   ; get functionkey number
+        EI
+        SUB	6                       ; zero based
+        JR	Z,J$527C                ; F5,
+        DEC	A                       ; F6 ?
+        JR	Z,J$5281
+        DEC	A                       ; F7 ?
+        JP	Z,J$530E
+        DEC	A                       ; F8 ?
+        JR	Z,J$5289
+        DEC	A                       ; F9 ?
+        JR	Z,J$52CC
+J.5279:	JP	J.4DA4                  ; F10
+
+; F5
+
+J$527C:	LD	HL,D.6073		; literal mode
         JR	J$5284
 
-J$5281:	LD	HL,D.6077
+; F6
+
+J$5281:	LD	HL,D.6077		; duplex mode
 J$5284:	LD	A,(HL)
         CPL
         LD	(HL),A
         JR	J.5279
 
-J$5289:	CALL	C.5306
-        JR	NZ,J$52A6
+; F8
+
+J$5289:	CALL	C.5306                  ; terminal mode X-modem ?
+        JR	NZ,J$52A6               ; nope,
         LD	A,(D.6075)
         OR	A                       ; alt1 enabled ?
         JR	Z,J$529E                ; nope,
@@ -3112,7 +3112,7 @@ J$52A6:	LD	A,(D.6352)
         JR	J.5303
 
 J.52BA:	LD	A,(D.6049)
-        AND	10H                     ; raw mode ?
+        AND	10H                     ; terminal mode = raw ?
         LD	A,1AH
         CALL	Z,C.4EA3                ; nope,
         CALL	C.6000
@@ -3120,8 +3120,10 @@ J.52BA:	LD	A,(D.6049)
         DEFW    C$40A2
         JR	J.5303
 
-J$52CC:	CALL	C.5306
-        JR	NZ,J$52E9
+; F9
+
+J$52CC:	CALL	C.5306                  ; terminal mode X-modem ?
+        JR	NZ,J$52E9               ; nope,
         LD	A,(D.6075)
         OR	A                       ; alt1 enabled ?
         JR	Z,J$52E1                ; nope,
@@ -3152,14 +3154,16 @@ J.52FD:	CALL	C.6000
         DEFW    C$40A5
 J.5303:	JP	J.4DA4
 
-;	  Subroutine __________________________
+;	  Subroutine terminal mode X-modem ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.5306:	LD	A,(D.6049)
         AND	0C0H
-        CP	80H                     ; X-modem ?
+        CP	80H                     ; terminal mode = X-modem ?
         RET
+
+; F7
 
 J$530E:	LD	A,(D.6074)
         OR	A                       ; alt1 enabled ?
@@ -3236,7 +3240,7 @@ C$536F:	LD	A,0DH	; 13
 C$5377:	PUSH	AF
 J$5378:	CALL	C.6000
         DEFB    0
-        DEFW    C$40AE
+        DEFW    C$40AE                  ; counter #1, clear
 J$537E:	CALL	C.4F02
         LD	A,(D.607C)
         CP	20
@@ -3312,11 +3316,13 @@ C.53E4:	DI
         EI
         RET
 
+; quit comterm
+
 J.53F3:	DEC	A
-        CP	04H	; 4 
+        CP	4
         JP	NC,J.4DA4
         INC	A
-        LD	(D.60B6),A
+        LD	(D.60B6),A		; store comterm exitcode
         CP	02H	; 2 
         JR	NZ,J$5419
         LD	E,02H	; 2 
@@ -3325,7 +3331,7 @@ J.53F3:	DEC	A
         DEFW    C$40C0
         CALL	C.6000
         DEFB    0
-        DEFW    C$40AE
+        DEFW    C$40AE                  ; counter #1, clear
 J$540F:	CALL	C.4F02
         LD	A,(D.607C)
         CP	03H	; 3 
@@ -3342,14 +3348,14 @@ J$5425:	LD	A,(D.6351)
         CALL	C.6000
         DEFB    3
         DEFW    C$40A5
-J$5431:	CALL	C$5B21
+J$5431:	CALL	C$5B21                  ; close RS232 port
         LD	A,(D.60B6)
         CP	03H	; 3 
         JR	Z,J$5443
         LD	A,01H	; 1 
         CALL	C.6000
         DEFB    0
-        DEFW    C$4177
+        DEFW    C$4177                  ; MODEM.LINSEL
 J$5443:	LD	A,(D.6075)
         OR	A
         CALL	NZ,C.534F
@@ -3357,7 +3363,7 @@ J$5443:	LD	A,(D.6075)
         LD	HL,I.60B8
         LD	DE,FNKSTR
         LD	BC,10*16
-        LDIR
+        LDIR                            ; restore F1-F10 definition
         XOR	A
         LD	(INTFLG),A              ; clear STOP status
         CALL	KILBUF
@@ -3377,30 +3383,35 @@ J$5443:	LD	A,(D.6075)
         LD	A,(D.60B6)
         RET
 
-I$547B:	RST	38H
-        LD	B,00H
-        LD	C,H
-        LD	D,H
-        RST	38H
-        RLCA
-        NOP
-        LD	B,L
-        LD	B,E
-        RST	38H
-        EX	AF,AF'
-        NOP
-        LD	D,B
-        LD	D,D
-        RST	38H
-        ADD	HL,BC
-        NOP
-        LD	D,L
-        LD	D,B
-        RST	38H
-        LD	A,(BC)
-        NOP
-        LD	B,H
-        LD	D,A
+I$547B: DEFB    0FFH
+	DEFB	6
+	DEFB	0
+	DEFB	4CH
+	DEFB	54H
+
+	DEFB	0FFH
+	DEFB	7
+	DEFB	0
+	DEFB	45H
+	DEFB	43H
+
+	DEFB	0FFH
+	DEFB	8
+	DEFB	0
+	DEFB	50H
+	DEFB	52H
+
+	DEFB	0FFH
+	DEFB	9
+	DEFB	0
+	DEFB	55H
+	DEFB	50H
+
+	DEFB	0FFH
+	DEFB	10
+	DEFB	0
+	DEFB	44H
+	DEFB	57H
 
 ; _COMHELP
 
@@ -3409,7 +3420,7 @@ C.5494:	CALL	C.5BD4			; evaluate comidentifier and check if this one
         LD	A,D
         AND	A
         JR	Z,J.54A6
-        CP	3AH	; ":"
+        CP	":"
         JR	Z,J.54A6
         CALL	C.5B6E			; check for BASIC character
         DEFB	")"
@@ -3512,8 +3523,6 @@ I$550C:	DEFB	080H
         DEFB	" CALL COMINI(",022H,"0:8N1X NNN",022H,",300,300,0"
         DEFB	0A9H
         DEFB	0FFH
-
-
 
 ; _NET
 
@@ -3627,7 +3636,6 @@ J$5718:	PUSH	HL
         AND	A
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -3637,7 +3645,7 @@ C$5725:	LD	A,(D.6065)
         JR	NZ,C.5732               ; nope, NET
         CALL	C.6000
         DEFB    0
-        DEFW    I$4093
+        DEFW    I$4093                  ; clear receive buffer
         RET
 
 ;	  Subroutine __________________________
@@ -3655,11 +3663,11 @@ J$5739:	EI
         PUSH	HL
         CALL	C.6000
         DEFB    0
-        DEFW    C$40F9
-        JR	Z,J$574E
+        DEFW    C$40F9                  ; port open ?
+        JR	Z,J$574E                ; nope,
         CALL	C.6000
         DEFB    0
-        DEFW    C$415F
+        DEFW    C$415F                  ; RS232.LOC
         LD	A,L
         OR	H
         CALL	NZ,C$5754
@@ -4103,12 +4111,12 @@ J$59C9:	POP	HL
         XOR	A
         CALL	C.6000
         DEFB    0
-        DEFW    C$4177
+        DEFW    C$4177                  ; MODEM.LINSEL
         POP	AF                      ; DIAL/DIALC
         JR	NZ,J$59DE
         CALL	C.6000
         DEFB    0
-        DEFW    C$4126
+        DEFW    C$4126                  ; wait for dial tone
 J$59DE:	LD	A,B
         OR	A
         JR	Z,J.5A19
@@ -4121,11 +4129,11 @@ J$59DE:	LD	A,B
         LD	(D.60B0),A              ; automatic dialer detection
 J.59F3:	CALL	C.6000
         DEFB    0
-        DEFW    C$40F6
+        DEFW    C$40F6                  ; STOP pressed ?
         JR	Z,J$5A03
         CALL	C.6000
         DEFB    0
-        DEFW    C$4123
+        DEFW    C$4123                  ; error
         JR	J.5A19
 
 J$5A03:	LD	A,(HL)
@@ -4225,9 +4233,9 @@ C.5A82:	PUSH	BC
         RET
 
 J.5A9B:	LD	A,(D.6049)
-        AND	2FH
+        AND	2FH                     ; clear b7,b6,b4
         OR	B
-        LD	(D.6049),A
+        LD	(D.6049),A              ; update terminal mode
         LD	(D$6164),DE             ; store timer #1 and #2 value
         POP	BC
         RET
@@ -4303,11 +4311,15 @@ I$5AF8: DEFW    C$5B0C                   ; function open
         DEFW    J$4884                   ; function fpos,illegal function call
         DEFW    C$5B67                   ; function backup
 
-C$5B0C: LD	C,80H
+;	  Subroutine open
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5B0C: LD	C,128                   ; buffer size = 128
         CALL	C.6000
         DEFB    0
         DEFW    C$414D                  ; RS232.OPEN
-        JR	C,J$5B1A
+        JR	C,J$5B1A                ; error, 
         LD	(PTRFIL),HL
         RET
 
@@ -4315,7 +4327,7 @@ J$5B1A:	DEC	A
         JP	Z,J$486F                ; bad filename error
         JP	J$4878                  ; file already open error
 
-;	  Subroutine __________________________
+;	  Subroutine close
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4323,6 +4335,10 @@ C$5B21:	CALL	C.6000
         DEFB    0
         DEFW    C$4159                  ; RS232.CLOSE
         RET
+
+;	  Subroutine sequential output
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C$5B28:	LD	A,C
         CALL	C.6000
@@ -4333,11 +4349,19 @@ C$5B28:	LD	A,C
         JP	Z,J.488A                ; timeout, device i/o error
         RET
 
+;	  Subroutine sequential input
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C$5B37:	CALL	C.6000
         DEFB    0
         DEFW    C$4153                  ; RS232.GETCHR
         JP	M,J.488A                ; error, device i/o error
         RET
+
+;	  Subroutine loc
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C$5B41:	PUSH	HL
         CALL	C.6000
@@ -4349,18 +4373,30 @@ J$5B48:	LD	(DAC+2),HL
         POP	HL
         RET
 
+;	  Subroutine lof
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C$5B52:	PUSH	HL
         CALL	C.6000
         DEFB    0
         DEFW    C$4162                  ; RS232.LOF
 J$5B59:	JR	J$5B48
 
+;	  Subroutine eof
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C$5B5B:	PUSH	HL
         CALL	C.6000
         DEFB    0
-        DEFW    C$410E                  ;
+        DEFW    C$410E                  ; eof
         JP	M,J.488A                ; error, device i/o error
         JR	J$5B59
+
+;	  Subroutine backup
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C$5B67:	CALL	C.6000
         DEFB    0

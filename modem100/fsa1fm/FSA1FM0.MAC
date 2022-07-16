@@ -1,9 +1,22 @@
-;  
-;   FSA1FM -> Source re-created by Z80DIS 2.2
-;      Z80DIS was written by Kenneth Gielow
-;                            Palo Alto, CA
+; FSA1FM-0.MAC
+;
+; MSX-MODEM Panasonic FSA1FM
+;
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+;
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+;
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+;
+
         .Z80
-        ORG	4000H
+        ASEG
+
+        org     04000H
+
 I.0000	EQU	0000H	; ----I
 I.0001	EQU	0001H	; ----I
 I.0003	EQU	0003H	; ----I
@@ -39,9 +52,9 @@ I$3332	EQU	3332H	; ----I
 I$374D	EQU	374DH	; ----I
 I$3AFF	EQU	3AFFH	; ----I
 
-D.6048	EQU	6048H	; --SL-
+D.6048	EQU	6048H                   ; modem settings
 I$604A	EQU	604AH	; ----I
-I$604B	EQU	604BH	; ----I
+I$604B	EQU	604BH	                ; b7-b4 = trap number, b3-b0 = com number
 J.604C	EQU	604CH	; J---I
 J.6051	EQU	6051H	; J---I
 J.6056	EQU	6056H	; J---I
@@ -95,7 +108,7 @@ D.60B5	EQU	60B5H	; --SL-
 D.60B6	EQU	60B6H	; --SL-
 D.60B7	EQU	60B7H	; --SL-
 D$615D	EQU	615DH	; --S--
-D.615F	EQU	615FH	; --SL-
+D.615F	EQU	615FH                   ; flags before interrupt disable
 D.6172	EQU	6172H	; --SL-
 D$6173	EQU	6173H	; ---L-
 D.619C	EQU	619CH	; --SL-
@@ -255,26 +268,26 @@ J.407F:	DI
         LD	(D.7FC4),A
         JP	J$4207
 
-?.408D:	DEFB	0,0,0
+	DEFS	4090H-$,0
 
 ; From here it's different between pages
 
 I.4090:	JP	C.4437                  ; CTRL-STOP pressed (clear STOP flag) ?
 ?.4093:	JP	J$46CD                  ; clear receive buffer
-?.4096:	JP	C.55D2                  ; CD
+?.4096:	JP	C.55D2			; get carry detect status
 ?.4099:	JP	C.49A6			; RS232.LOC
 ?.409C:	JP	C.4921			; RS232.GETCHR
 ?.409F:	JP	C.51CF			; RS232.SNDCHR
 ?.40A2:	JP	C.509D                  ; wait for received byte
-I$40A5:	JP	J$41C9
+I$40A5:	JP	J$41C9                  ; echo to screen/printer (literal)
 I$40A8:	JP	J$55D7
 I$40AB:	JP	J$55EA
-I.40AE:	JP	C.44DC                  ; clear counter set #1
-I$40B1:	JP	J$44EF
+I.40AE:	JP	C.44DC                  ; counter #1, clear
+I$40B1:	JP	J$44EF			; counter #1, get number of seconds
 I$40B4:	JP	C.4466			; get my slotid
-I$40B7:	JP	J$41B4
+I$40B7:	JP	J$41B4			; comterm
 I$40BA:	JP	J$41BB
-I$40BD:	JP	J$41C2
+I$40BD:	JP	J$41C2			; set protocol
 I$40C0:	JP	C.557C
 I.40C3:	JP	J$41EC
 I$40C6:	JP	J$41F3
@@ -300,8 +313,8 @@ I$40CC:	JP	C.5190                  ; signal sender to resume sending
 ?.4102:	JP	J.4A4C
 ?.4105:	JP	C.4BDC                  ; set dial mode
 ?.4108:	JP	J$4BD6                  ; set dialer mode
-?.410B:	JP	C.4A84                  ; to upper, translate dail character
-?.410E:	JP	J$4986
+?.410B:	JP	C.4A84                  ; translate dail character
+?.410E:	JP	J$4986                  ; eof
 ?.4111:	JP	J$5088
 ?.4114:	JP	C.5385			; enable i8251 receiver
 ?.4117:	JP	C.538D			; disable i8251 receiver
@@ -403,6 +416,10 @@ J$41AD:	CALL	C.6000			; interbank call (EI)
         DEFB	2
         DEFW	C.4096
         RET
+
+;	  Subroutine comterm
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$41B4:	CALL	C.6000			; interbank call (EI)
         DEFB	1
@@ -509,10 +526,10 @@ J$4242:	OR	C
         DEFB	8
         DEFW	C.4090
         LD	(D.6048),A
-        OR	A
-        JR	Z,J$4255
-        DEC	A
-        JR	Z,J$4264
+        OR	A                       ; modem settings ?
+        JR	Z,J$4255                ; yep,
+        DEC	A                       ; quit to MSX BASIC ?
+        JR	Z,J$4264                ; yep,
 J$4255:	LD	HL,I$4314
         LD	(H.STKE+2),HL
         CALL	C.4466			; get my slotid
@@ -645,8 +662,8 @@ J$432F:	LD	B,H
         EX	DE,HL
         LD	SP,HL
         LD	A,(D.6048)
-        OR	A
-        JR	NZ,J$4346
+        OR	A                       ; modem settings ?
+        JR	NZ,J$4346               ; nope,
         CALL	C.6000			; interbank call (EI)
         DEFB	1
         DEFW	C.40AE
@@ -747,8 +764,8 @@ J$43B1:	POP	AF
 J$43B5:	CALL	C.4457			; port open ?
         JR	Z,J$43C6                ; nope, quit
         PUSH	BC
-        LD	A,(D.6086)
-        LD	(D.615F),A              ; store flags
+        LD	A,(D.6086)              ; flags
+        LD	(D.615F),A              ; store flags before interrupt disable
         CALL	C.51A6                  ; signal sender to stop sending
         EI
         POP	BC
@@ -758,7 +775,7 @@ J$43C6:	JR	J.43F7
 
 J$43C8:	CALL	C.4457			; port open ?
         JR	Z,J$43D7                ; nope, quit
-        LD	A,(D.615F)
+        LD	A,(D.615F)              ; flags before interrupt disable
         BIT	1,A
         DI
         CALL	Z,C.5190                ; signal sender to resume sending
@@ -776,9 +793,9 @@ J$43D9:	LD	A,E
         CALL	C.4421                  ; write byte to slot
         LD	A,HIGH I.4090
         CALL	C.4421                  ; write byte to slot
-        LD	A,0
+        LD	A,0			; maker ID = ASCII
         CALL	C.4421                  ; write byte to slot
-        LD	A,0
+        LD	A,0                     ; reserved byte
         CALL	C.4421                  ; write byte to slot
 J.43F7:	JR	J.441C
 
@@ -2317,7 +2334,7 @@ J$4C8A: PUSH    AF
         RET
 
 C.4C96:	CALL	C$4CA2
-        CALL	C.55D2                  ; CD ?
+        CALL	C.55D2                  ; get carry detect status
         JP	NC,J$53BD		; nope, set b4 7FC5
         JP	J$53C6			; yep, reset b4 7FC5
 
@@ -3290,7 +3307,7 @@ J$5289:	EI
         LD	A,(D.6086)
         BIT	2,A                     ; in XOFF mode ?
         JR	Z,J.52A1                ; nope, quit
-        CALL	C.55D2                  ; CD ?
+        CALL	C.55D2                  ; get carry detect status
         CCF
         RET	C                       ; nope, quit
         CALL	C.52A4                  ; timeout occured ?
@@ -3846,7 +3863,7 @@ J$5513:	DI
         SET	2,L	                ; Break detected
         RES	4,A			; reset break detected
         LD	(D.6086),A
-J$5522:	CALL	C.55D2                  ; CD ?
+J$5522:	CALL	C.55D2                  ; get carry detect status
         JR	NC,J$5529
         SET	0,L			; yep, CD=1
 J$5529:	CALL	C.54A3                  ; read 7FCC register (2)
@@ -3977,13 +3994,13 @@ J$55C1:	CALL	C.52A4                  ; timeout occured ?
         CALL	C.4437                  ; CTRL-STOP pressed (clear STOP flag) ?
         EI
         RET	C                       ; yep, quit
-        CALL	C.55D2                  ; CD ?
+        CALL	C.55D2                  ; get carry detect status
         JR	NC,J$55C1               ; nope, wait
         XOR	A
         INC	A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine get carry detect status
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4068,13 +4085,13 @@ C$5627:	PUSH	HL
         PUSH	DE
         PUSH	BC
         LD	L,(IY+8)
-        LD	H,(IY+9)
+        LD	H,(IY+9)                ; receiver baudrate
         CALL	C.565D
         OR	A
         JR	Z,J.5656
         LD	C,A
         LD	L,(IY+10)
-        LD	H,(IY+11)
+        LD	H,(IY+11)               ; transmitter baudrate
         CALL	C.565D
         OR	A
         JR	Z,J.5656

@@ -14,12 +14,11 @@ I$000B	EQU	000BH	; ----I
 I$0011	EQU	0011H	; ----I
 X.0020	EQU	0020H	; -C-L-
 C$0028	EQU	0028H	; -C---
-I$003C	EQU	003CH	; ----I
 DBUF	EQU	0080H	; ----I
-C.009C	EQU	009CH	; -C---
-C.009F	EQU	009FH	; -C---
-C$00A5	EQU	00A5H	; -C---
-C.00A8	EQU	00A8H	; -C---
+CHSNS	EQU	009CH	; -C---
+CHGET	EQU	009FH	; -C---
+LPTOUT	EQU	00A5H	; -C---
+LPTSTT	EQU	00A8H	; -C---
 I$00B4	EQU	00B4H	; ----I
 C$00CD	EQU	00CDH	; -C---
 I$00F0	EQU	00F0H	; ----I
@@ -41,21 +40,22 @@ C$2840	EQU	2840H	; -C---
 D$2B2A	EQU	2B2AH	; --S--
 I$2E59	EQU	2E59H	; ----I
 I$3A5A	EQU	3A5AH	; ----I
+
 C.6000	EQU	6000H	; -C---
-D.6049	EQU	6049H	; --SL-
+D.6049	EQU	6049H                   ; b7,b6,b2 = terminal mode
 I$604A	EQU	604AH	; ----I
-D.6074	EQU	6074H	; --S--
-D.6075	EQU	6075H	; --SL-
-D.607A	EQU	607AH	; ---L-
-D.607C	EQU	607CH	; ---L-
-D.6085	EQU	6085H	; --SL-
+D.6074	EQU	6074H                   ; alt1 enabled
+D.6075	EQU	6075H                   ; alt1 enabled
+D.607A	EQU	607AH                   ; counter set #1, number of 100 ms
+D.607C	EQU	607CH                   ; counter set #1, number of seconds
+D.6085	EQU	6085H                   ; b7,b6 = dialer mode,b5, b4 = SI/SO handshake, b3 = auto LF on receive, b2 = auto LF on send, b1 = RTS/CTS handshake, b0 = XON/XOFF handshake
 D.6086	EQU	6086H	                ; b7 = SI/SO receive, b6 = ?, b5 = CR on send, b4 = ?, b3 = channel open, b2 = XON/XOFF receive, b1 = sending suspended, b0 = SI/SO send
-D$608A	EQU	608AH	; ---L-
-D$608E	EQU	608EH	; --S--
-D.6090	EQU	6090H	; --SL-
-D.6092	EQU	6092H	; --SL-
-D.6094	EQU	6094H	; --SL-
-D$6098	EQU	6098H	; ---L-
+D$608A	EQU	608AH                   ; get offset in receive buffer
+D$608E	EQU	608EH                   ; alt2 get offset in receive buffer
+D.6090	EQU	6090H                   ; number of bytes in receive buffer
+D.6092	EQU	6092H                   ; alt1 number of bytes in receive buffer
+D.6094	EQU	6094H                   ; alt2 number of bytes in receive buffer
+D$6098	EQU	6098H                   ; buffer size
 D$615D	EQU	615DH	; ---L-
 D$615E	EQU	615EH	; ---L-
 D.6164	EQU	6164H	; ---L-
@@ -63,7 +63,7 @@ D$6165	EQU	6165H	; ---L-
 D$616A	EQU	616AH	; ---L-
 D$616C	EQU	616CH	; ---L-
 D$6173	EQU	6173H	; ---L-
-D.6174	EQU	6174H	; --SL-
+D.6174	EQU	6174H                   ; saved 7EED
 D$61C5	EQU	61C5H	; ---L-
 D.61D8	EQU	61D8H	; ---L-
 D.6340	EQU	6340H	; --SL-
@@ -75,18 +75,18 @@ D.6348	EQU	6348H	; --S-I
 D.6349	EQU	6349H	; --SLI
 D.634A	EQU	634AH	; --SL-
 D$634B	EQU	634BH	; --S--
-D.634C	EQU	634CH	; --SL-
-D.634D	EQU	634DH	; --SL-
+D.634C	EQU	634CH                   ; saved 6085
+D.634D	EQU	634DH                   ; file open
 D.634E	EQU	634EH	; --SL-
 D.634F	EQU	634FH	; --SL-
-D.6351	EQU	6351H	; --SL-
+D.6351	EQU	6351H                   ; alt2 enabled
 D.6352	EQU	6352H	; --S--
 D.6353	EQU	6353H	; --SL-
 D$6354	EQU	6354H	; --S--
 D$6355	EQU	6355H	; ---L-
 D.6358	EQU	6358H	; --SL-
 D.6359	EQU	6359H	; --SL-
-D.635B	EQU	635BH	; --SL-
+D.635B	EQU	635BH                   ; wildcard flag
 D$635E	EQU	635EH	; ---L-
 D.6361	EQU	6361H	; --SL-
 D.6362	EQU	6362H	; --SL-
@@ -133,21 +133,21 @@ I$40AB:	JP	J$461A
 ?.40AE:	JP	J$46A1
 ?.40B1:	JP	C.47DF
 ?.40B4:	JP	C.47F2
-?.40B7:	JP	C.49C4
+?.40B7:	JP	C.49C4                  ; close file (with stop/start sending)
 ?.40BA:	JP	J$4D24
 ?.40BD:	JP	J$5AD5
 ?.40C0:	JP	C.4EB2
 ?.40C3:	JP	C.4EFD
-?.40C6:	JP	C.4DC7
+?.40C6:	JP	C.4DC7                  ; sender may start sending
 I$40C9:	JP	J$4ABF
 
 J$40CC:	XOR	A
         LD	(D.6353),A
         CALL	C$41EC
         LD	A,(D.6049)
-        AND	10H	; 16 
+        AND	10H                     ; terminal mode = raw ?
 	LD	L,06H	; 6 
-        JR	NZ,J.40DE
+        JR	NZ,J.40DE               ; yep,
         LD	L,04H	; 4 
 J.40DE:	CALL	C.4CFD
         JR	C,J.4117
@@ -157,25 +157,25 @@ J.40DE:	CALL	C.4CFD
         XOR	A
         LD	(D$6354),A
         CPL
-        LD	(D.6351),A
-        LD	HL,(D$608A)
-        LD	(D$608E),HL
-        LD	HL,(D.6090)
-        LD	(D.6094),HL
+        LD	(D.6351),A              ; alt2 enabled
+        LD	HL,(D$608A)             ; get offset in receive buffer
+        LD	(D$608E),HL             ; update alt2 get offset in receive buffer
+        LD	HL,(D.6090)             ; number of bytes in receive buffer
+        LD	(D.6094),HL             ; update alt2 number of bytes in receive buffer
         EI
         CALL	C.6000
         DEFB    1
         DEFW    I$40CF
         RET
 
-J$4105:	LD	HL,(D.6094)
+J$4105:	LD	HL,(D.6094)             ; alt2 number of bytes in receive buffer
         LD	A,L
         OR	H
         JR	Z,J$4114
         CALL	C.416F
         LD	A,(D.6351)
-        OR	A
-        RET	Z
+        OR	A                       ; alt2 enabled ?
+        RET	Z                       ; nope, quit
 J$4114:	CALL	C$41C4
 J.4117:	LD	C,0EH	; 14 
         LD	L,12H	; 18 
@@ -186,19 +186,18 @@ J.4117:	LD	C,0EH	; 14
 
 C.411B:	JR	NC,J.411E
         LD	L,C
-J.411E:	LD	A,00H
-        LD	(D.6351),A
+J.411E:	LD	A,0
+        LD	(D.6351),A              ; alt2 disabled
         LD	(D.6352),A
         PUSH	HL
         CALL	C,C.4139
         LD	A,(D.634D)
-        OR	A
-        CALL	NZ,C$413C
+        OR	A                       ; file open ?
+        CALL	NZ,C$413C               ; yep, close file (with stop/start sending)
         CALL	C,C.4139
         POP	HL
         CALL	C.4EDD
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -206,51 +205,48 @@ J.411E:	LD	A,00H
 
 C.4139:	JP	C.4EB2
 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$413C:	JP	C.49C4                  ; close file (with stop/start sending)
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$413C:	JP	C.49C4
-
-
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
-
-C$413F:	CALL	C.4A9A
-        CALL	C.4857
-        RET	C
-        AND	A
-        JR	Z,J.414D
-J$4149:	CALL	C.48BB
+C$413F:	CALL	C.4A9A                  ; get pointer to buffer
+        CALL	C.4857                  ; check if file exists
+        RET	C                       ; error, quit
+        AND	A                       ; file exists ?
+        JR	Z,J.414D                ; yep,
+J$4149:	CALL	C.48BB                  ; create file (with stop/start sending)
         RET
 
 J.414D:	CALL	C$4EFB
         CALL	C.4E6D
         CALL	C.4EE3
         JR	C,J.416B
-        CALL	C.4F2B
-        CP	52H	; "R"
+        CALL	C.4F2B                  ; to upper
+        CP	"R"
         JR	Z,J$4149
-        CP	43H	; "C"
+        CP	"C"
         JR	Z,J.416B
-        CP	41H	; "A"
+        CP	"A"
         JR	NZ,J.414D
-        CALL	C$4C70
+        CALL	C$4C70                  ; open file for append
         RET
 
-J.416B:	LD	E,01H	; 1 
+J.416B:	LD	E,1
         SCF
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.416F:	CALL	C.4DE4
-J.4172:	LD	HL,(D.6094)
+C.416F:	CALL	C.4DE4                  ; sender must stop sending
+J.4172:	LD	HL,(D.6094)             ; alt2 number of bytes in receive buffer
         LD	A,L
         OR	H
         JR	Z,J$41C0
@@ -269,8 +265,8 @@ J$4189:	POP	AF
         CP	1AH
         JR	NZ,J$4199
         LD	A,(D.6049)
-        AND	10H	; 16 
-        JR	Z,J$41B7
+        AND	10H                     ; terminal mode = raw ?
+        JR	Z,J$41B7                ; nope,
         LD	A,1AH
 J$4199:	LD	HL,(D$635E)
         INC	L
@@ -284,46 +280,44 @@ J$4199:	LD	HL,(D$635E)
         JR	NZ,J.4172
 J.41AC:	CALL	C$41CE
         JR	NC,J.4172
-        CALL	C.4DC7
+        CALL	C.4DC7                  ; sender may start sending
         JP	J.4117
 
 J$41B7:	CALL	C.41FB
-        CALL	C.4DC7
+        CALL	C.4DC7                  ; sender may start sending
         JP	J.4117
 
-J$41C0:	CALL	C.4DC7
+J$41C0:	CALL	C.4DC7                  ; sender may start sending
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$41C4:	CALL	C.4DE4
+C$41C4:	CALL	C.4DE4                  ; sender must stop sending
         CALL	C.41FB
-        CALL	C.4DC7
+        CALL	C.4DC7                  ; sender may start sending
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$41CE:	PUSH	AF
-        CALL	C.4A9A
+        CALL	C.4A9A                  ; get pointer to buffer
         LD	A,(D.6353)
         LD	E,A
-        LD	D,00H
+        LD	D,0
         ADD	HL,DE
         INC	A
         LD	(D.6353),A
         POP	BC
         LD	(HL),B
         RET	NZ
-        CALL	C.4A9A
-        CALL	C.4849
-        LD	DE,I.0100
-        CALL	C.49A2
+        CALL	C.4A9A                  ; get pointer to buffer
+        CALL	C.4849                  ; set DMA address
+        LD	DE,256
+        CALL	C.49A2                  ; write random block to file
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -331,8 +325,8 @@ C$41CE:	PUSH	AF
 
 C$41EC:	PUSH	AF
         PUSH	DE
-        CALL	C.4A9A
-        LD	B,00H
+        CALL	C.4A9A                  ; get pointer to buffer
+        LD	B,0
 J$41F3:	LD	(HL),1AH
         INC	HL
         DJNZ	J$41F3
@@ -340,25 +334,24 @@ J$41F3:	LD	(HL),1AH
         POP	AF
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.41FB:	CALL	C.4A9A
-        CALL	C.4849
+C.41FB:	CALL	C.4A9A                  ; get pointer to buffer
+        CALL	C.4849                  ; set DMA address
         LD	A,(D.6353)
         LD	E,A
-        LD	D,00H
+        LD	D,0
         OR	A
         RET	Z
-        CALL	C.4999
+        CALL	C.4999                  ; write random block to file (with stop/start sending)
         RET
 
 J$420D:	LD	A,(D.6049)
-I$4210:	AND	10H	; 16 
+I$4210:	AND	10H                     ; terminal mode = raw ?
         LD	L,02H	; 2 
-        JR	NZ,J$4218
+        JR	NZ,J$4218               ; yep,
         LD	L,00H
 J$4218:	CALL	C.4CFD
         JP	C,J.422E
@@ -378,14 +371,13 @@ J$4234:	LD	L,10H	; 16
         OR	A
         JP	J.411E
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.423A:	CALL	C.4A9A
-        CALL	C.4857
-        RET	C
+C.423A:	CALL	C.4A9A                  ; get pointer to buffer
+        CALL	C.4857                  ; check if file exists
+        RET	C                       ; error, quit
         CALL	C.47E3
         RET
 
@@ -395,7 +387,6 @@ J$4245:	LD	L,0AH	; 10
         LD	C,0EH	; 14 
         LD	L,12H	; 18 
         JP	C.411B
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -409,8 +400,8 @@ C$4254:	LD	L,08H	; 8
         CALL	C.5074
         JR	Z,J.426F
         LD	A,(D.634D)
-        OR	A
-        JR	Z,J.426F
+        OR	A                       ; file open ?
+        JR	Z,J.426F                ; nope,
         CALL	C.6000
         DEFB    7
         DEFW    I$40E1
@@ -420,12 +411,11 @@ J.426F:	POP	DE
         LD	L,10H	; 16 
         JP	C.411B
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4278:	CALL	C.4FCC
+C.4278:	CALL	C.4FCC                  ; disable XON/XOFF handshake
         CALL	C.4CFD
         RET	C
         XOR	A
@@ -433,14 +423,14 @@ C.4278:	CALL	C.4FCC
         LD	D,A
         LD	E,A
         LD	(D.6359),DE
-        CALL	C.4FD0
-        CALL	C.4A9A
-        CALL	C.4857
-        RET	C
-        AND	A
-        JR	NZ,J.42B5
+        CALL	C.4FD0                  ; disable auto LF on send and receive
+        CALL	C.4A9A                  ; get pointer to buffer
+        CALL	C.4857                  ; check if file exists
+        RET	C                       ; error, quit
+        AND	A                       ; file exists ?
+        JR	NZ,J.42B5               ; yep,
         CALL	C.5074
-        LD	E,41H	; "A"
+        LD	E,41H
         SCF
         RET	NZ
         LD	L,16H
@@ -448,14 +438,14 @@ C.4278:	CALL	C.4FCC
         CALL	C.4E6D
         CALL	C.4EE3
         JR	C,J$42B1
-        CALL	C.4F2B
-        CP	52H	; "R"
+        CALL	C.4F2B                  ; to upper
+        CP	"R"
         JR	Z,J.42B5
 J$42B1:	SCF
         LD	E,01H	; 1 
         RET
 
-J.42B5:	CALL	C.48BB
+J.42B5:	CALL	C.48BB                  ; create file (with stop/start sending)
         RET	C
         XOR	A
         LD	(D.6349),A
@@ -465,11 +455,11 @@ J.42B5:	CALL	C.48BB
         JR	Z,J$42D7
         CALL	C.6000
         DEFB    0
-        DEFW    I$40AE
+        DEFW    I$40AE                  ; counter set #1, clear
 J$42CD:	CALL	C.5065
-        LD	A,(D.607C)
-        CP	14H	; 20 
-        JR	C,J$42CD
+        LD	A,(D.607C)              ; counter set #1, number of seconds
+        CP	20                      ; 20 seconds passed ?
+        JR	C,J$42CD                ; nope, wait
 J$42D7:	LD	A,01H	; 1 
         LD	(D.6358),A
         LD	A,43H	; "C"
@@ -537,7 +527,7 @@ J$4359:	LD	A,06H	; 6
 
 J.4361:	CALL	C.6000
         DEFB    0
-        DEFW    I$40EA
+        DEFW    I$40EA                  ; counter set #1, clear
         LD	HL,(NULBUF)
         INC	HL
         LD	B,83H
@@ -545,7 +535,7 @@ J.4361:	CALL	C.6000
         ADD	A,B
         LD	B,A
 J$4372:	PUSH	HL
-        LD	HL,I$003C
+        LD	HL,60
         CALL	C.4D43
         POP	HL
 J$437A:	CALL	C.5065
@@ -553,10 +543,10 @@ J$437A:	CALL	C.5065
         JR	NZ,J.4322
         LD	A,(D$6165)
         AND	A
-        LD	D,14H	; 20 
+        LD	D,20
         JR	Z,J$438B
         LD	D,A
-J$438B:	LD	A,(D.607C)
+J$438B:	LD	A,(D.607C)              ; counter set #1, number of seconds
         CP	D
         JR	Z,J.4322
         CALL	C.45BC
@@ -579,11 +569,11 @@ J$438B:	LD	A,(D.607C)
         POP	IX
         LD	HL,C.0000
         LD	B,80H
-J$43B6:	LD	A,(IX)
+J$43B6:	LD	A,(IX+0)
         INC	IX
         CALL	C.45D2
         DJNZ	J$43B6
-        LD	A,(IX)
+        LD	A,(IX+0)
         CP	H
         JR	NZ,J$43CA
         LD	A,(IX+1)
@@ -620,19 +610,19 @@ J$43DA:	CALL	C.5065
         LD	A,(D.6362)
         OR	A
         JR	Z,J$441E
-        CALL	C.4A9A
+        CALL	C.4A9A                  ; get pointer to buffer
         LD	B,80H
 J$4405:	CALL	C.6000
         DEFB    0
-        DEFW    I$40EA
-J$440B:	LD	A,(D.607C)
-        CP	14H	; 20 
-        JR	NC,J$442B
-        CALL	C.00A8
-        JR	Z,J$440B
+        DEFW    I$40EA                  ; counter set #1, clear
+J$440B:	LD	A,(D.607C)              ; counter set #1, number of seconds
+        CP	20                      ; 20 seconds passed ?
+        JR	NC,J$442B               ; yep,
+        CALL	LPTSTT                  ; get printer status
+        JR	Z,J$440B                ; not ready, wait
         LD	A,(HL)
         INC	HL
-        CALL	C$00A5
+        CALL	LPTOUT
         DJNZ	J$4405
 J$441E:	CALL	C$4996
         RET	C
@@ -645,10 +635,10 @@ J$442B:	LD	A,18H
         CALL	C.4F82
         CALL	C.6000
         DEFB    0
-        DEFW    I$40AE
-J$4436:	LD	A,(D.607C)
-        CP	04H	; 4 
-        JR	C,J$4436
+        DEFW    I$40AE                  ; counter set #1, clear
+J$4436:	LD	A,(D.607C)              ; counter set #1, number of seconds
+        CP	4                       ; 4 seconds passed ?
+        JR	C,J$4436                ; nope, wait
         LD	L,2CH	; ","
         CALL	C.4EFD
         RET
@@ -660,7 +650,6 @@ J$4443:	LD	E,06H	; 6
 J$4447:	LD	E,03H	; 3 
         SCF
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -677,7 +666,6 @@ J$4452:	LD	L,08H	; 8
         LD	L,10H	; 16 
         JP	C.411B
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -689,23 +677,22 @@ C$4461:	LD	L,0AH	; 10
         LD	L,12H	; 18 
         JP	C.411B
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4470:	CALL	C.4FCC
+C.4470:	CALL	C.4FCC                  ; disable XON/XOFF handshake
         CALL	C.4CFD
         RET	C
         XOR	A
         LD	(D.6358),A
         LD	DE,C.0000
         LD	(D.6359),DE
-        CALL	C.4FD0
-        CALL	C.4A9A
-        CALL	C.4857
-        RET	C
-        CALL	C.4920
+        CALL	C.4FD0                  ; disable auto LF on send and receive
+        CALL	C.4A9A                  ; get pointer to buffer
+        CALL	C.4857                  ; check if file exists
+        RET	C                       ; error, quit
+        CALL	C.4920                  ; open file (with stop/start sending)
         RET	C
         LD	A,01H	; 1 
         LD	(D.6349),A
@@ -741,7 +728,7 @@ J$44D0:	LD	L,18H
 J$44D5:	LD	L,1EH
         CALL	C.444B
 J$44DA:	LD	HL,(NULBUF)
-        LD	(HL),01H	; 1 
+        LD	(HL),1
         INC	HL
         LD	A,(D.6349)
         LD	(HL),A
@@ -751,7 +738,7 @@ J$44DA:	LD	HL,(NULBUF)
         INC	HL
         CALL	C$4FEB
         PUSH	HL
-        CALL	C$4950
+        CALL	C$4950                  ; read from file (with stop/start sending)
         POP	HL
         RET	C
         OR	A
@@ -762,12 +749,12 @@ J$44DA:	LD	HL,(NULBUF)
         PUSH	HL
         POP	IX
         LD	B,80H
-        LD	HL,C.0000
-J$4503:	LD	A,(IX)
+        LD	HL,0
+J$4503:	LD	A,(IX+0)
         INC	IX
         CALL	C.45D2
         DJNZ	J$4503
-        LD	(IX),H
+        LD	(IX+0),H
         LD	(IX+1),L
         JR	J.451C
 
@@ -789,19 +776,19 @@ J$4526:	CALL	C.5065
         DJNZ	J$4526
         CALL	C.6000
         DEFB    0
-        DEFW    I$4093
+        DEFW    I$4093                  ; clear receive buffer
         CALL	C.6000
         DEFB    0
-        DEFW    I$40AE
+        DEFW    I$40AE                  ; counter set #1, clear
 J.453D:	CALL	C.5065
         EI
         CALL	C.45B4
         LD	A,(D.6164)
         AND	A
-        LD	D,0AH	; 10 
+        LD	D,10                    ; 1 second
         JR	Z,J$454D
         LD	D,A
-J$454D:	LD	A,(D.607C)
+J$454D:	LD	A,(D.607C)              ; counter set #1, number of seconds
         CP	D
         JR	Z,J.457E
         CALL	C.4FA6
@@ -823,7 +810,6 @@ J$454D:	LD	A,(D.607C)
 J.4573:	LD	E,04H	; 4 
         SCF
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -863,34 +849,31 @@ J.45B0:	LD	E,05H	; 5
         SCF
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.45B4:	CALL	C.4F34
-        RET	NC
+C.45B4:	CALL	C.4F34                  ; CTRL-STOP pressed ?
+        RET	NC                      ; nope, quit
         LD	A,04H	; 4 
         JR	J$45C2
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.45BC:	CALL	C.4F34
-        RET	NC
+C.45BC:	CALL	C.4F34                  ; CTRL-STOP pressed ?
+        RET	NC                      ; nope, quit
         LD	A,18H
 J$45C2:	PUSH	AF
-J$45C3:	CALL	C.4F34
-        JR	C,J$45C3
+J$45C3:	CALL	C.4F34                  ; CTRL-STOP pressed ?
+        JR	C,J$45C3                ; yep,
         POP	AF
         CALL	C.4F82
         POP	IX
         SCF
         LD	E,01H	; 1 
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -923,14 +906,13 @@ C$45D7:	LD	A,H
         LD	H,A
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$45EC:	ADD	A,A
         LD	E,A
-        LD	D,00H
+        LD	D,0
         PUSH	HL
         LD	HL,I$45FA
         ADD	HL,DE
@@ -974,7 +956,6 @@ J$461A:	CALL	C.6000
         DEFW    I$40E7
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -982,7 +963,7 @@ J$461A:	CALL	C.6000
 C$462A:	PUSH	AF
         PUSH	DE
         CALL	C.47B6
-        JR	C,J.469E
+        JR	C,J.469E                ; error,
         LD	L,A
         POP	DE
         POP	AF
@@ -994,7 +975,7 @@ C$462A:	PUSH	AF
         LD	E,H
         PUSH	BC
         PUSH	DE
-        CALL	C.48BB
+        CALL	C.48BB                  ; create file (with stop/start sending)
         JR	C,J.469E
         POP	DE
         POP	BC
@@ -1004,7 +985,7 @@ C$462A:	PUSH	AF
         SBC	HL,BC
         PUSH	DE
         EX	DE,HL
-        CALL	C.4A9A
+        CALL	C.4A9A                  ; get pointer to buffer
         XOR	A
         LD	(HL),0FEH
         INC	HL
@@ -1022,8 +1003,8 @@ C$462A:	PUSH	AF
         POP	DE
         PUSH	BC
         PUSH	DE
-        LD	DE,I.0007
-        CALL	C.4999
+        LD	DE,7
+        CALL	C.4999                  ; write random block to file (with stop/start sending)
 J$4664	EQU	$-2
         JR	C,J.469E
         POP	DE
@@ -1031,7 +1012,7 @@ J$4664	EQU	$-2
 J$466A:	LD	H,D
         LD	L,E
         SBC	HL,BC
-        JR	C,J$4694
+        JR	C,J$4694                ; close file (with stop/start sending) and quit
         LD	A,H
         OR	A
         JR	Z,J$4677
@@ -1044,13 +1025,13 @@ J$4677:	INC	HL
         LD	E,C
         LD	B,H
         LD	C,L
-        CALL	C.4A9A
+        CALL	C.4A9A                  ; get pointer to buffer
         EX	DE,HL
         LDIR
         POP	DE
         PUSH	DE
-        CALL	C.4999
-        JR	C,J$4697
+        CALL	C.4999                  ; write random block to file (with stop/start sending)
+        JR	C,J$4697                ; error, close file (with stop/start sending) and quit
         POP	BC
         POP	DE
         POP	HL
@@ -1059,10 +1040,10 @@ J$4677:	INC	HL
         LD	C,L
         JR	J$466A
 
-J$4694:	JP	C.49C4
+J$4694:	JP	C.49C4                  ; close file (with stop/start sending)
 
 J$4697:	PUSH	DE
-        CALL	C.49C4
+        CALL	C.49C4                  ; close file (with stop/start sending)
         POP	DE
         SCF
         POP	HL
@@ -1079,7 +1060,6 @@ J$46A1:	CALL	C.6000
         DEFW    I$40E7
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -1088,19 +1068,19 @@ C$46B1:	PUSH	DE
         PUSH	BC
         CALL	C.47DF
         JR	C,J$4730
-        LD	DE,I.0007
-        CALL	C.4977
-        JR	C,J.4727
-        LD	DE,I.0007
+        LD	DE,7                    ; number of bytes = 7
+        CALL	C.4977                  ; read random block from file
+        JR	C,J.4727                ; close file (with stop/start sending)
+        LD	DE,7
         SBC	HL,DE
-        LD	E,3DH	; "="
+        LD	E,3DH
         SCF
-        JR	NZ,J.4727
-        CALL	C.4A9A
+        JR	NZ,J.4727               ; close file (with stop/start sending)
+        CALL	C.4A9A                  ; get pointer to buffer
         LD	A,(HL)
         CP	0FEH
         SCF
-        JR	NZ,J.4727
+        JR	NZ,J.4727               ; close file (with stop/start sending)
         INC	HL
         LD	C,(HL)
         INC	HL
@@ -1132,21 +1112,21 @@ J.46F3:	PUSH	HL
         OR	A
         SBC	HL,BC
         POP	HL
-        JR	C,J.4721
+        JR	C,J.4721                ; close file (with stop/start sending)
         PUSH	BC
         PUSH	HL
-        LD	DE,I.0100
-        CALL	C.4977
-        JR	C,J.4727
+        LD	DE,256                  ; number of bytes = 256
+        CALL	C.4977                  ; read random block from file
+        JR	C,J.4727                ; close file (with stop/start sending)
         EX	DE,HL
         POP	HL
         POP	BC
         LD	A,D
         OR	E
-        JR	Z,J.4721
+        JR	Z,J.4721                ; close file (with stop/start sending)
         PUSH	BC
         PUSH	HL
-        CALL	C.4A9A
+        CALL	C.4A9A                  ; get pointer to buffer
         PUSH	DE
         LD	D,B
         LD	E,C
@@ -1164,12 +1144,12 @@ J.46F3:	PUSH	HL
         JR	J.46F3
 
 J.4721:	PUSH	HL
-        CALL	C.49C4
+        CALL	C.49C4                  ; close file (with stop/start sending)
         POP	HL
         RET
 
 J.4727:	PUSH	DE
-        CALL	C.49C4
+        CALL	C.49C4                  ; close file (with stop/start sending)
         POP	DE
 J.472C:	SCF
         POP	HL
@@ -1177,14 +1157,13 @@ J.472C:	SCF
         RET
 
 J$4730:	LD	A,E
-        CP	35H	; "5"
+        CP	35H
         JR	NZ,J.472C
         LD	A,(TMPFCB+1)
-        CP	20H	; " "
+        CP	" "
         JR	NZ,J.472C
-        LD	E,38H	; "8"
+        LD	E,38H
         JR	J.472C
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1192,20 +1171,19 @@ J$4730:	LD	A,E
 
 C.4740:	CALL	C.5074
         JR	NZ,C.474E
-        CALL	C.4DE4
+        CALL	C.4DE4                  ; sender must stop sending
         CALL	C.474E
-        JP	C.4DC7
-
+        JP	C.4DC7                  ; sender may start sending
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.474E:	CALL	C.4A9A
-        CALL	C.4849
+C.474E:	CALL	C.4A9A                  ; get pointer to buffer
+        CALL	C.4849                  ; set DMA address
         CALL	C.4893                  ; search first
         RET	C
-        LD	E,35H	; "5"
+        LD	E,35H
         SCF
         RET	NZ
         CALL	C.4EE3
@@ -1213,15 +1191,15 @@ J$475F:	CALL	C.5074
         JR	Z,J.4773
         CALL	C.6000
         DEFB    1
-        DEFW    I$409F
+        DEFW    I$409F                  ; get received byte
         JR	Z,J.4773
         LD	E,01H	; 1 
         RET	C
-        CP	03H	; 3 
+        CP	03H
         SCF
         RET	Z
 J.4773:	CALL	C.5065
-        CALL	C.4A9A
+        CALL	C.4A9A                  ; get pointer to buffer
         INC	HL
         LD	B,0BH	; 11 
 J$477C:	LD	A,(HL)
@@ -1256,19 +1234,17 @@ J.47AB:	XOR	A
         JR	Z,J$475F
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.47B6:	CALL	C.47C3
-        RET	C
+        RET	C                       ; error, quit
         PUSH	BC
         LD	HL,(NULBUF)
-        CALL	C.4857
+        CALL	C.4857                  ; check if file exists
         POP	BC
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1278,7 +1254,7 @@ C.47C3:	PUSH	BC
         PUSH	HL
         CALL	C.4D07
         LD	HL,(NULBUF)
-        LD	(HL),22H	; """
+        LD	(HL),"""
         INC	HL
         EX	DE,HL
         POP	HL
@@ -1295,26 +1271,24 @@ J$47D9:	EX	DE,HL
         POP	BC
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.47DF:	CALL	C.47B6
-        RET	C
+        RET	C                       ; error, quit
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.47E3:	CALL	C.4920
-        RET	C
+C.47E3:	CALL	C.4920                  ; open file (with stop/start sending)
+        RET	C                       ; error, quit
         LD	HL,1
-        LD	(TMPFCB+14),HL
+        LD	(TMPFCB+14),HL          ; record size = 1
         XOR	A
         LD	(D.6353),A
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1323,16 +1297,16 @@ C.47E3:	CALL	C.4920
 C.47F2:	LD	A,(D.6353)
         OR	A
         JR	NZ,J$481E
-        LD	DE,I.0100
-        CALL	C.4DE4
-        CALL	C.4977
-        CALL	C.4DC7
+        LD	DE,256                  ; number of bytes = 256
+        CALL	C.4DE4                  ; sender must stop sending
+        CALL	C.4977                  ; read random block from file
+        CALL	C.4DC7                  ; sender may start sending
         RET	C
         LD	A,H
         OR	L
         LD	A,1AH
         RET	Z
-        LD	A,01H	; 1 
+        LD	A,1
         LD	(D.6353),A
         EX	DE,HL
         LD	HL,(NULBUF)
@@ -1351,48 +1325,46 @@ J$481E:	INC	A
         LD	(D.6353),A
         DEC	A
         LD	E,A
-        LD	D,00H
+        LD	D,0
         LD	HL,(NULBUF)
         ADD	HL,DE
         LD	A,(HL)
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine TMPFCB to diskdrive file ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.482C:	PUSH	BC
         LD	B,A
         LD	A,(H.PHYD)
-        CP	0C9H
+        CP	0C9H                    ; MSX disk system ?
         SCF
         CCF
-        JR	Z,J$483C
+        JR	Z,J$483C                ; nope, quit
         LD	A,(TMPFCB+0)
-        CP	8+1
+        CP	8+1                     ; MSX disk system BASIC device ?
 J$483C:	LD	A,B
         POP	BC
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine check if diskdrive or console device
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.483F:	LD	A,(TMPFCB+0)
-        CP	0FFH
-        RET	Z
+        CP	0FFH                    ; CON device ?
+        RET	Z                       ; yep, quit
         CP	0FCH
         CCF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine set DMA address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4849:	CALL	C.482C
-        RET	NC
+C.4849:	CALL	C.482C                  ; TMPFCB to diskdrive file ?
+        RET	NC                      ; nope, quit
         PUSH	DE
         LD	D,H
         LD	E,L
@@ -1401,55 +1373,53 @@ C.4849:	CALL	C.482C
         POP	DE
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine check if file exists
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4857:	CALL	C.482C
-        JR	C,J$4874
+C.4857:	CALL	C.482C                  ; TMPFCB to diskdrive file ?
+        JR	C,J$4874                ; yep,
         LD	A,(TMPFCB+0)
-        CP	0FFH
-        JR	NZ,J$4865
-        OR	A
+        CP	0FFH                    ; CON device ?
+        JR	NZ,J$4865               ; nope, test device open
+        OR	A                       ; no error, file exists
         RET
 
-J$4865:	CALL	C.4920
+J$4865:	CALL	C.4920                  ; open file (with stop/start sending)
         PUSH	AF
-        CALL	C.49C4
+        CALL	C.49C4                  ; close file (with stop/start sending)
         POP	AF
         LD	A,0FFH
-        JR	C,J$4872
-        XOR	A
+        JR	C,J$4872                ; error, quit with no error, file does not exists
+        XOR	A                       ; no error, file exists
 J$4872:	OR	A
         RET
 
-J$4874:	CALL	C.4849
-        CALL	C.4DE4
-        CALL	C$4880
-        JP	C.4DC7
+J$4874:	CALL	C.4849                  ; set DMA address
+        CALL	C.4DE4                  ; sender must stop sending
+        CALL	C$4880                  ; search file
+        JP	C.4DC7                  ; sender may start sending
 
-
-;	  Subroutine __________________________
+;	  Subroutine search file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4880:	CALL	C.4893                  ; search first
-        RET	C
-        RET	NZ
-        CALL	C.4A9A
+        RET	C                       ; error, quit
+        RET	NZ                      ; file not found, quit
+        CALL	C.4A9A                  ; get pointer to buffer
         INC	HL
         LD	DE,TMPFCB+1
         LD	BC,11
         LDIR
-        XOR	A
+        XOR	A                       ; no error, file exists
         RET
 
 ;	  Subroutine search first
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4893:	LD	BC,I.48B9
+C.4893:	LD	BC,I.48B9               ; error handler
         CALL	C.4C3A                  ; enter disk operation
         LD	DE,TMPFCB
         LD	C,11H                   ; SEARCH FIRST
@@ -1462,7 +1432,7 @@ C.4893:	LD	BC,I.48B9
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$48A6:	LD	BC,I.48B9
+C$48A6:	LD	BC,I.48B9               ; error handler
         CALL	C.4C3A                  ; enter disk operation
         LD	DE,TMPFCB
         LD	C,12H                   ; SEARCH NEXT
@@ -1474,40 +1444,39 @@ C$48A6:	LD	BC,I.48B9
 I.48B9:	SCF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine create file (with stop/start sending)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.48BB:	CALL	C.4DE4
-        CALL	C$48C4
-        JP	C.4DC7
+C.48BB:	CALL	C.4DE4                  ; sender must stop sending
+        CALL	C$48C4                  ; create file
+        JP	C.4DC7                  ; sender may start sending
 
-
-;	  Subroutine __________________________
+;	  Subroutine create file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$48C4:	CALL	C$48EE
-        LD	E,38H	; "8"
-        RET	C
-        LD	BC,I.48B9
+C$48C4:	CALL	C$48EE                  ; validate file name
+        LD	E,38H
+        RET	C                       ; error,
+        LD	BC,I.48B9               ; error handler
         CALL	C.4C3A                  ; enter disk operation
-        CALL	C.482C
-        JR	NC,J$491B
+        CALL	C.482C                  ; TMPFCB to diskdrive file ?
+        JR	NC,J$491B               ; nope, open I/O channel for sequential output and quit
         LD	DE,TMPFCB
         LD	C,16H                   ; CREATE FILE (FCB)
         CALL	C.4A07                  ; diskbasic BDOS
         OR	A
 J$48DE:	CALL	C.4C46                  ; leave disk operation
         LD	HL,1
-        LD	(TMPFCB+14),HL
-        OR	A
-        JR	Z,J$4945
-        LD	E,43H	; "C"
+        LD	(TMPFCB+14),HL          ; record size = 1
+        OR	A                       ; error ?
+        JR	Z,J$4945                ; nope,
+        LD	E,43H
         SCF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine validate file name
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1523,7 +1492,7 @@ J$48FB:	LD	A,(HL)
         PUSH	BC
         PUSH	HL
         LD	HL,I$4912
-        LD	BC,I.0009
+        LD	BC,9
         CPIR
         POP	HL
         POP	BC
@@ -1543,81 +1512,77 @@ I$4912:	LD	(D$2B2A),HL
         CCF
         LD	E,E
         LD	E,L
-J$491B:	CALL	C$4A0C
-        JR	J$48DE
 
+J$491B:	CALL	C$4A0C                  ; open I/O channel for sequential output
+        JR	J$48DE                  ; leave disk operation
 
-;	  Subroutine __________________________
+;	  Subroutine open file (with stop/start sending)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4920:	CALL	C.4DE4
-        CALL	C$4929
-        JP	C.4DC7
+C.4920:	CALL	C.4DE4                  ; sender must stop sending
+        CALL	C$4929                  ; open file
+        JP	C.4DC7                  ; sender may start sending
 
-
-;	  Subroutine __________________________
+;	  Subroutine open file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4929:	LD	BC,I.48B9
+C$4929:	LD	BC,I.48B9               ; error handler
         CALL	C.4C3A                  ; enter disk operation
-        CALL	C.482C
-        JR	NC,J$494B
+        CALL	C.482C                  ; TMPFCB to diskdrive file ?
+        JR	NC,J$494B               ; nope, open I/O channel for sequential input and quit
         LD	DE,TMPFCB
         LD	C,0FH                   ; OPEN FILE (FCB)
         CALL	C.4A07                  ; diskbasic BDOS
         OR	A
 J$493D:	CALL	C.4C46                  ; leave disk operation
-        OR	A
-        LD	E,35H	; "5"
+        OR	A                       ; error ?
+        LD	E,35H
         SCF
-        RET	NZ
+        RET	NZ                      ; yep, quit
 J$4945:	DEC	A
-        LD	(D.634D),A
+        LD	(D.634D),A              ; file open
         XOR	A
         RET
 
-J$494B:	CALL	C$4A16
-        JR	J$493D
+J$494B:	CALL	C$4A16                  ; open I/O channel for sequential input
+        JR	J$493D                  ; leave disk operation
 
-
-;	  Subroutine __________________________
+;	  Subroutine read from file (with stop/start sending)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4950:	CALL	C.4DE4
-        CALL	C$4959
-        JP	C.4DC7
+C$4950:	CALL	C.4DE4                  ; sender must stop sending
+        CALL	C$4959                  ; read from file
+        JP	C.4DC7                  ; sender may start sending
 
-
-;	  Subroutine __________________________
+;	  Subroutine read from file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4959:	LD	BC,I.48B9
+C$4959:	LD	BC,I.48B9               ; error handler
         CALL	C.4C3A                  ; enter disk operation
-        CALL	C.482C
-        JR	NC,J$4970
+        CALL	C.482C                  ; TMPFCB to diskdrive file ?
+        JR	NC,J$4970               ; nope,
         LD	DE,TMPFCB
         LD	C,14H                   ; READ FILE (FCB)
         CALL	C.4A07                  ; diskbasic BDOS
 J$496C:	CALL	C.4C46                  ; leave disk operation
         RET
 
-J$4970:	LD	B,80H
+J$4970:	LD	B,128
         CALL	C.4A54
         JR	J$496C
 
-
-;	  Subroutine __________________________
+;	  Subroutine read random block from file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4977:	LD	BC,I.48B9
+C.4977:	LD	BC,I.48B9               ; error handler
         CALL	C.4C3A                  ; enter disk operation
-        CALL	C.482C
-        JR	NC,J$4990
+        CALL	C.482C                  ; TMPFCB to diskdrive file ?
+        JR	NC,J$4990               ; nope,
         LD	H,D
         LD	L,E
         LD	DE,TMPFCB
@@ -1630,63 +1595,59 @@ J$4990:	LD	B,E
         CALL	C.4A54
         JR	J$498C
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4996:	LD	DE,DBUF
 
-;	  Subroutine __________________________
+;	  Subroutine write random block to file (with stop/start sending)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4999:	CALL	C.4DE4
-        CALL	C.49A2
-        JP	C.4DC7
+C.4999:	CALL	C.4DE4                  ; sender must stop sending
+        CALL	C.49A2                  ; write random block to file
+        JP	C.4DC7                  ; sender may start sending
 
-
-;	  Subroutine __________________________
+;	  Subroutine write random block to file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.49A2:	LD	BC,I.48B9
+C.49A2:	LD	BC,I.48B9               ; error handler
         CALL	C.4C3A                  ; enter disk operation
         EX	DE,HL
-        CALL	C.482C
-        JR	NC,J$49BF
+        CALL	C.482C                  ; TMPFCB to diskdrive file ?
+        JR	NC,J$49BF               ; nope,
         LD	DE,TMPFCB
         LD	C,26H                   ; RANDOM BLOCK WRITE (FCB)
         CALL	C.4A07                  ; diskbasic BDOS
 J$49B6:	CALL	C.4C46                  ; leave disk operation
         OR	A
         RET	Z
-        LD	E,42H	; "B"
+        LD	E,42H
         SCF
         RET
 
 J$49BF:	CALL	C$4A30
         JR	J$49B6
 
-
-;	  Subroutine __________________________
+;	  Subroutine close file (with stop/start sending)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.49C4:	CALL	C.4DE4
-        CALL	C$49CD
-        JP	C.4DC7
+C.49C4:	CALL	C.4DE4                  ; sender must stop sending
+        CALL	C$49CD                  ; close file
+        JP	C.4DC7                  ; sender may start sending
 
-
-;	  Subroutine __________________________
+;	  Subroutine close file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$49CD:	XOR	A
-        LD	(D.634D),A
-        CALL	C.482C
-        JP	NC,C.49EA
-        LD	BC,I.48B9
+        LD	(D.634D),A              ; file closed
+        CALL	C.482C                  ; TMPFCB to diskdrive file ?
+        JP	NC,C.49EA               ; nope, close I/O channel () and quit
+        LD	BC,I.48B9               ; error handler
         CALL	C.4C3A                  ; enter disk operation
         LD	DE,TMPFCB
         LD	C,10H                   ; CLOSE FILE (FCB)
@@ -1695,15 +1656,14 @@ J$49E5:	CALL	C.4C46                  ; leave disk operation
         OR	A
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine close I/O channel ()
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.49EA:	LD	BC,I$49F5
+C.49EA:	LD	BC,I$49F5               ; error handler
         CALL	C.4C3A                  ; enter disk operation
-        CALL	C$4A8F
-        JR	J$49E5
+        CALL	C$4A8F                  ; close I/O channel
+        JR	J$49E5                  ; leave disk operation and quit
 
 I$49F5:	LD	HL,(FILTAB)
         INC	HL
@@ -1712,9 +1672,9 @@ I$49F5:	LD	HL,(FILTAB)
         INC	HL
         LD	H,(HL)
         LD	L,A
-        LD	(HL),00H
-        CALL	C.49EA
-        LD	E,13H	; 19 
+        LD	(HL),0
+        CALL	C.49EA                  ; close channel ()
+        LD	E,13H
         SCF
         RET
 
@@ -1726,46 +1686,44 @@ C.4A07:	CALL	BDOS
         EI
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine open I/O channel for sequential output
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4A0C:	CALL	C.483F
-        LD	E,3EH	; ">"
-        RET	C
-        LD	E,02H	; 2 
-        JR	C.4A1E
+C$4A0C:	CALL	C.483F                  ; check if diskdrive or console device
+        LD	E,3EH
+        RET	C                       ; nope, quit
+        LD	E,2                     ; file mode = sequential output
+        JR	C.4A1E                  ; open I/O channel and quit
 
-
-;	  Subroutine __________________________
+;	  Subroutine open I/O channel for sequential input
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4A16:	CALL	C.483F
-        LD	E,3EH	; ">"
-        RET	C
-        LD	E,01H	; 1 
+C$4A16:	CALL	C.483F                  ; check if diskdrive or console device
+        LD	E,3EH
+        RET	C                       ; nope, quit
+        LD	E,1                     ; file mode = sequential input
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine open I/O channel
+;	     Inputs  E = file mode
 ;	     Outputs ________________________
 
 C.4A1E:	LD	A,(TMPFCB+0)
-        LD	D,A
-        LD	A,1
+        LD	D,A                     ; BASIC device code
+        LD	A,1                     ; I/O channel = 1
         LD	HL,TMPFCB+13
         LD	IX,OPNFIL               ; open i/o channel
-        CALL	C.4E24
+        CALL	C.4E24                  ; wait ? ms when RS232 port is open, execute main bios
         XOR	A
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4A30:	LD	B,L
-        CALL	C.4A9A
+        CALL	C.4A9A                  ; get pointer to buffer
 J$4A34:	LD	A,(HL)
         CP	1AH
         JR	Z,J$4A3D
@@ -1783,22 +1741,21 @@ J$4A48:	LD	IX,FILOUT               ; do sequential output
         XOR	A
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4A54:	LD	A,(D.634A)
-        CP	01H	; 1 
+        CP	1
         RET	Z
-        CALL	C.4A9A
+        CALL	C.4A9A                  ; get pointer to buffer
         XOR	A
         LD	C,A
 J$4A5F:	PUSH	AF
         LD	IX,INDSKC               ; get sequential input
         CALL	C.4E27                  ; call main bios
         JR	C,J.4A85
-        CP	03H	; 3 
+        CP	3
         JR	NZ,J$4A77
         LD	IX,INDSKC               ; get sequential input
         CALL	C.4E27                  ; call main bios
@@ -1818,48 +1775,45 @@ J$4A80:	LD	L,A
         RET
 
 J.4A85:	LD	(HL),1AH
-        LD	A,01H	; 1 
+        LD	A,1
         LD	(D.634A),A
         POP	AF
         JR	J$4A80
 
-
-;	  Subroutine __________________________
+;	  Subroutine close I/O channel
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4A8F:	LD	A,1
+C$4A8F:	LD	A,1                     ; I/O channel = 1
         LD	IX,CLSFIL               ; close i/o channel
-        CALL	C.4E24
+        CALL	C.4E24                  ; wait ? ms when RS232 port is open, execute main bios
         XOR	A
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine get pointer to buffer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4A9A:	LD	HL,(NULBUF)
         CALL	C.6000
         DEFB    0
-        DEFW    I$40F9
-        RET	Z
+        DEFW    I$40F9                  ; port open ?
+        RET	Z                       ; nope, quit
         LD	A,(D.6049)
-        AND	0C0H
-        CP	80H
-        RET	NZ
+        AND	0C0H                    ; b7,b6 = terminal mode
+        CP	80H                     ; terminal mode = X-modem ?
+        RET	NZ                      ; nope, quit
         INC	HL
         INC	HL
         INC	HL
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4AB0:	XOR	A
-        LD	(D.635B),A
+        LD	(D.635B),A              ; reset wildcard flag
         CALL	C$4B47
         CALL	C.4AD4
         RET	C
@@ -1874,22 +1828,21 @@ J$4ABF:	CALL	C.47C3
         OR	A
         RET	Z
         LD	HL,(NULBUF)
-        CALL	C.4849
+        CALL	C.4849                  ; set DMA address
         JP	C.47E3
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4AD4:	JR	NC,J$4B01
-        CALL	C.482C
+        CALL	C.482C                  ; TMPFCB to diskdrive file ?
         CCF
         LD	A,E
-        LD	E,3EH	; ">"
-        RET	C
+        LD	E,3EH
+        RET	C                       ; nope, quit
         LD	E,A
-        CP	38H	; "8"
+        CP	38H
         SCF
         RET	NZ
         LD	HL,(NULBUF)
@@ -1906,22 +1859,22 @@ C.4AD4:	JR	NC,J$4B01
         OR	A
         SCF
         RET	NZ
-        LD	A,2AH	; "*"
+        LD	A,"*"
         LD	(FILNAM+0),A
         LD	(FILNAM+8),A
         LD	D,00H
         CALL	C$4BD3
-J$4B01:	CALL	C.482C
+J$4B01:	CALL	C.482C                  ; TMPFCB to diskdrive file ?
         LD	A,0FFH
-        RET	NC
+        RET	NC                      ; nope, quit
         LD	A,(D.635B)
-        OR	A
-        JR	NZ,J$4B27
+        OR	A                       ; wildcard flag set ?
+        JR	NZ,J$4B27               ; yep,
         LD	HL,TMPFCB+1
         LD	B,11
 J$4B12:	LD	A,(HL)
         INC	HL
-        CP	20H	; " "
+        CP	" "
         SCF
         CCF
         LD	A,0FFH
@@ -1950,7 +1903,6 @@ J$4B37:	CALL	C.4740
         CALL	C.4EB2
         XOR	A
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2030,11 +1982,11 @@ J$4BB8:	CALL	C.4EE3
 C$4BBB:	LD	(HL),"""
         INC	HL
         LD	(HL),0
-        LD	BC,I$4C1A
+        LD	BC,I$4C1A               ; error handler
         CALL	C.4C3A                  ; enter disk operation
         LD	HL,(NULBUF)
         LD	IX,FILEVL               ; evaluate filespecification
-        CALL	C.4E24
+        CALL	C.4E24                  ; wait ? ms when RS232 port is open, execute main bios
         CALL	C.4C46                  ; leave disk operation
 
 ;	  Subroutine __________________________
@@ -2042,12 +1994,12 @@ C$4BBB:	LD	(HL),"""
 ;	     Outputs ________________________
 
 C$4BD3:	LD	HL,TMPFCB
-        LD	(HL),D
+        LD	(HL),D                  ; device code
         INC	HL
         LD	DE,FILNAM
-        LD	B,08H	; 8 
+        LD	B,8
         CALL	C.4BFC
-        LD	B,03H	; 3 
+        LD	B,3
         CALL	C.4BFC
         XOR	A
         LD	B,19H
@@ -2059,35 +2011,34 @@ J$4BE8:	LD	(HL),A
         OR	A
         RET	NZ
         LD	A,(H.PHYD)
-        SUB	0C9H
+        SUB	0C9H                    ; MSX disk system ?
         OR	A
-        RET	NZ
+        RET	NZ                      ; yep, quit
         LD	(HL),0FFH
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4BFC:	LD	A,(DE)
-        CP	2AH	; "*"
+        CP	"*"
         JR	Z,J.4C0E
-        CP	3FH	; "?"
+        CP	"?"
         JR	NZ,J$4C08
-        LD	(D.635B),A
+        LD	(D.635B),A              ; set wildcard flag
 J$4C08:	LD	(HL),A
         INC	HL
         INC	DE
         DJNZ	C.4BFC
         RET
 
-J.4C0E:	LD	(HL),3FH	; "?"
+J.4C0E:	LD	(HL),"?"
         INC	HL
         INC	DE
         DJNZ	J.4C0E
         LD	A,0FFH
-        LD	(D.635B),A
+        LD	(D.635B),A              ; set wildcard flag
         RET
 
 I$4C1A:	SCF
@@ -2114,7 +2065,6 @@ J$4C2A:	POP	HL
         POP	AF
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2128,7 +2078,7 @@ C.4C2F:	PUSH	AF
         JR	J$4C2A
 
 ;	  Subroutine enter disk operation
-;	     Inputs  ________________________
+;	     Inputs  BC = error handler
 ;	     Outputs ________________________
 
 C.4C3A:	POP	HL
@@ -2164,7 +2114,6 @@ J$4C51:	PUSH	AF
 J$4C61:	POP	AF
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2178,51 +2127,50 @@ J$4C69:	LD	(HL),20H	; " "
         POP	HL
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine open file for append
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4C70:	CALL	C.482C
-        JR	C,J$4C8D
-        CALL	C.4DE4
-        LD	BC,I.48B9
-        CALL	C.4C3A
-        LD	E,08H	; 8 
-        CALL	C.4A1E
+C$4C70:	CALL	C.482C                  ; TMPFCB to diskdrive file ?
+        JR	C,J$4C8D                ; yep,
+        CALL	C.4DE4                  ; sender must stop sending
+        LD	BC,I.48B9               ; error handler
+        CALL	C.4C3A                  ; enter disk operation
+        LD	E,8                     ; file mode = sequential append
+        CALL	C.4A1E                  ; open I/O channel
         CALL	C.4C46                  ; leave disk operation
         DEC	A
-        LD	(D.634D),A
-        JP	C.4DC7
+        LD	(D.634D),A              ; file open
+        JP	C.4DC7                  ; sender may start sending
 
-J$4C8D:	CALL	C.4920
-        RET	C
+J$4C8D:	CALL	C.4920                  ; open file (with stop/start sending)
+        RET	C                       ; error, quit
         CALL	C$4C63
         LD	HL,1
         LD	(TMPFCB+14),HL
         LD	HL,(TMPFCB+16)
-        LD	DE,(TMPFCB+18)
+        LD	DE,(TMPFCB+18)          ; file size
         LD	A,L
         OR	H
         OR	D
-        OR	E
-        RET	Z
-        LD	BC,DBUF
-        CALL	C.4CF1
-        JR	NC,J$4CB7
+        OR	E                       ; empty file ?
+        RET	Z                       ; yep, quit
+        LD	BC,128                  ; number of bytes before end = 128
+        CALL	C.4CF1                  ; calculate random record
+        JR	NC,J$4CB7               ; ok, continue
         LD	HL,0
         LD	E,L
-        LD	D,H
-        LD	BC,(TMPFCB+16)
+        LD	D,H                     ; random record = 0
+        LD	BC,(TMPFCB+16)          ; file size (file must be < 64 KB)
 J$4CB7:	LD	(TMPFCB+33),HL
-        LD	(TMPFCB+35),DE
-        CALL	C.4DE4
+        LD	(TMPFCB+35),DE          ; update random record
+        CALL	C.4DE4                  ; sender must stop sending
         PUSH	BC
         PUSH	BC
         POP	DE
-        CALL	C.4977
+        CALL	C.4977                  ; read random block from file
         POP	BC
-        CALL	C.4DC7
+        CALL	C.4DC7                  ; sender may start sending
         RET	C
         LD	HL,(NULBUF)
         LD	B,C
@@ -2235,19 +2183,18 @@ J$4CD0:	LD	A,(HL)
         RET
 
 J$4CDA:	LD	C,B
-        LD	B,00H
+        LD	B,0                     ; number of bytes
         LD	HL,(TMPFCB+16)
-        LD	DE,(TMPFCB+18)
-        CALL	C.4CF1
+        LD	DE,(TMPFCB+18)          ; file size
+        CALL	C.4CF1                  ; calculate random record
         LD	(TMPFCB+33),HL
-        LD	(TMPFCB+35),DE
-        RET	NC
+        LD	(TMPFCB+35),DE          ; update random record
+        RET	NC                      ; ok, quit
         DI
-        HALT
+        HALT                            ; halt system
 
-
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine calculate random record
+;	     Inputs  BC = number of bytes before end
 ;	     Outputs ________________________
 
 C.4CF1:	OR	A
@@ -2262,7 +2209,6 @@ C.4CF1:	OR	A
         OR	A
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2272,7 +2218,6 @@ C.4CFD:	CALL	C.4D07
         CALL	C.4AB0
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2281,12 +2226,12 @@ C.4D07:	XOR	A
         LD	(D.634A),A
         LD	(D$634B),A
         LD	(D.634E),A              ; not in disk operation
-        LD	(D.634D),A
-        LD	(D.635B),A
+        LD	(D.634D),A              ; file closed
+        LD	(D.635B),A              ; reset wildcard flag
         LD	A,(D.6085)
-        LD	(D.634C),A
+        LD	(D.634C),A              ; saved 6085
         LD	A,(D.7EED)
-        LD	(D.6174),A
+        LD	(D.6174),A              ; saved 7EED
         RET
 
 J$4D24:	PUSH	AF
@@ -2304,7 +2249,6 @@ J$4D34:	CALL	C.4D5E
         POP	BC
         POP	AF
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2327,7 +2271,6 @@ C.4D43:	LD	(D.6340),HL
         RES	1,(HL)
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2336,7 +2279,6 @@ C$4D55:	LD	(D.6344),HL
         LD	HL,I.6346
         RES	2,(HL)
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2356,7 +2298,6 @@ C$4D64	EQU	$-2
         POP	BC
         POP	HL
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2395,7 +2336,6 @@ J$4D9C:	LD	HL,(D.6344)
         EX	DE,HL
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2406,10 +2346,10 @@ C.4DA9:	PUSH	HL
         POP	HL
         RET
 
-?.4DB0:	CALL	C.4F34
+?.4DB0:	CALL	C.4F34                  ; CTRL-STOP pressed ?
         RET	NC
         PUSH	AF
-J$4DB5:	CALL	C.4F34
+J$4DB5:	CALL	C.4F34                  ; CTRL-STOP pressed ?
         JR	C,J$4DB5
         POP	AF
         POP	IX
@@ -2426,7 +2366,7 @@ C.4DC1:	LD	A,(D.6086)
         BIT	3,A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine sender may start sending
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2437,21 +2377,20 @@ C.4DC7:	PUSH	AF
         JR	Z,J.4DDF                ; nope, quit
         CALL	C.6000
         DEFB    0
-        DEFW    I$4141
+        DEFW    I$4141                  ; determine number of bytes in receive buffer (version)
         LD	A,E
-        OR	D
-        JR	NZ,J.4DDF
+        OR	D                       ; receive buffer empty ?
+        JR	NZ,J.4DDF               ; nope, quit
         CALL	C.6000
         DEFB    0
-        DEFW    I$40CC
+        DEFW    I$40CC                  ; signal sender to resume sending
 J.4DDF:	EI
         POP	HL
         POP	DE
         POP	AF
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine sender must stop sending
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2459,46 +2398,45 @@ C.4DE4:	PUSH	AF
         PUSH	DE
         PUSH	HL
         CALL	C.4DC1                  ; RS232 port open ?
-        JR	Z,J.4DDF                ; nope,
+        JR	Z,J.4DDF                ; nope, quit
         LD	A,(D.6086)
         BIT	1,A                     ; sending suspended ?
-        JR	NZ,J.4DDF               ; yep,
+        JR	NZ,J.4DDF               ; yep, quit
         CALL	C.6000
         DEFB    0
-        DEFB    I$40CF
+        DEFB    I$40CF                  ; signal sender to stop sending
         LD	A,(D.6085)
-        BIT	0,A
-        CALL	NZ,C.4E03
-        JR	J.4DDF
+        BIT	0,A                     ; XON/XOFF handshake ?
+        CALL	NZ,C.4E03               ; yep, wait for 1 second period of empty receive
+        JR	J.4DDF                  ; quit
 
-
-;	  Subroutine __________________________
+;	  Subroutine wait for 1 second period of empty receive
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4E03:	CALL	C.6000
         DEFB    0
-        DEFW    I$40AE
-        LD	DE,(D.6090)
+        DEFW    I$40AE                  ; counter set #1, clear
+        LD	DE,(D.6090)             ; number of bytes in receive buffer
 J$4E0D:	OR	A
-        LD	HL,(D$6098)
-        SBC	HL,DE
-        RET	Z
+        LD	HL,(D$6098)             ; buffer size
+        SBC	HL,DE                   ; buffer full ?
+        RET	Z                       ; yep, quit
         OR	A
-        LD	HL,(D.6090)
-        SBC	HL,DE
-        JR	NZ,C.4E03
-        LD	A,(D.607A)
-        CP	0AH	; 10 
-        JR	C,J$4E0D
+        LD	HL,(D.6090)             ; number of bytes in receive buffer
+        SBC	HL,DE                   ; received byte(s) ?
+        JR	NZ,C.4E03               ; yep, again
+        LD	A,(D.607A)              ; counter set #1, number of 100 ms
+        CP	10                      ; 1 second passed ?
+        JR	C,J$4E0D                ; nope, wait
         RET
 
 
-;	  Subroutine __________________________
+;	  Subroutine wait ? ms when RS232 port is open, execute main bios
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4E24:	CALL	C$4E32
+C.4E24:	CALL	C$4E32                  ; wait ? ms when RS232 port is open
 
 ;	  Subroutine call main bios
 ;	     Inputs  ________________________
@@ -2513,8 +2451,7 @@ C.4E27:	PUSH	BC
         POP	BC
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine wait ? ms when RS232 port is open
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2532,7 +2469,6 @@ J$4E3C:	EI
 J$4E43:	POP	AF
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2542,15 +2478,15 @@ C.4E45:	PUSH	BC
         PUSH	HL
         CALL	C.6000
         DEFB    0
-        DEFW    I$40C0
+        DEFW    C.40C0                  ;
         AND	08H	; 8 
         JR	Z,J.4E68
-        CALL	C.4F3B
-        JR	NC,J.4E68
+        CALL	C.4F3B                  ; get carrier detect status
+        JR	NC,J.4E68               ; nope,
         LD	HL,I$00F0
         CALL	C$4D55
-J$4E5D:	CALL	C.4F3B
-        JR	NC,J.4E68
+J$4E5D:	CALL	C.4F3B                  ; get carrier detect status
+        JR	NC,J.4E68               ; nope,
         CALL	C$4D64
         JR	Z,J$4E5D
         SCF
@@ -2559,7 +2495,6 @@ J.4E68:	EI
         POP	DE
         POP	BC
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2570,45 +2505,41 @@ C.4E6D:	PUSH	HL
         CALL	C.5074
         JR	Z,J.4E96
 J$4E74:	CALL	C.6000
-        NOP
-        LD	D,B
-        LD	B,C
+        DEFB    0
+        DEFW    C.4150                  ; RS232.STAT
         BIT	0,L
         SCF
         JR	Z,J.4EAE
         CALL	C.6000
-        NOP
-        LD	E,A
-        LD	B,C
+        DEFB	0
+        DEFW    C.415F                  ; RS232.LOC
         LD	A,L
         OR	H
         JR	Z,J$4E74
         CALL	C.6000
-        NOP
-        AND	D
-        LD	B,B
-        CP	03H	; 3 
+        DEFB	0
+        DEFW    C.40A2                  ; wait for received byte
+        CP	03H
         SCF
         JR	Z,J.4EAE
         JR	J$4EAD
 
 J.4E96:	CALL	C.5065
-        CALL	C.4F34
+        CALL	C.4F34                  ; CTRL-STOP pressed ?
         JR	C,J.4EAE
         CALL	C.6000
         LD	(BC),A
         SBC	A,C
         LD	B,B
         EI
-        CALL	C.009C
+        CALL	CHSNS
         JR	Z,J.4E96
-        CALL	C.009F
+        CALL	CHGET
 J$4EAD:	OR	A
 J.4EAE:	EI
         POP	BC
         POP	HL
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2616,11 +2547,11 @@ J.4EAE:	EI
 
 C.4EB2:	LD	A,E
         LD	HL,I$5079
-        LD	BC,I$0011
+        LD	BC,17
         CPIR
         LD	HL,I$5531
         JR	NZ,J$4ED8
-        LD	A,11H	; 17 
+        LD	A,11H
         INC	C
         SUB	C
         LD	E,A
@@ -2637,7 +2568,6 @@ J$4ED2:	ADD	HL,DE
         EX	DE,HL
 J$4ED8:	CALL	C.4F15
         JR	C.4EE3
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2656,13 +2586,12 @@ C.4EE3:	PUSH	AF
         LD	A,(CSRX)
         OR	A
         JR	Z,J$4EF9
-J$4EEF:	LD	A,0DH	; 13 
+J$4EEF:	LD	A,13
         CALL	C.4F43
-        LD	A,0AH	; 10 
+        LD	A,10
         CALL	C.4F43
 J$4EF9:	POP	AF
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2677,7 +2606,6 @@ C$4EFB:	LD	L,1CH
 C.4EFD:	CALL	C.4F02
         JR	C.4F15
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2686,14 +2614,13 @@ C.4F02:	CALL	C.4F26
         LD	DE,I$510A
         JR	Z,J$4F0D
         LD	DE,I$50CE
-J$4F0D:	LD	H,00H
+J$4F0D:	LD	H,0
         ADD	HL,DE
         LD	E,(HL)
         INC	HL
         LD	D,(HL)
         EX	DE,HL
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2714,7 +2641,6 @@ C.4F1D:	LD	A,(HL)
         INC	HL
         JR	C.4F1D
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2723,41 +2649,36 @@ C.4F26:	LD	A,(D$61C5)
         OR	A
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine to upper
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4F2B:	CP	61H	; "a"
+C.4F2B:	CP	"a"
         RET	C
-        CP	7BH	; "{"
+        CP	"z"+1
         RET	NC
-        SUB	20H	; " "
+        SUB	20H
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine CTRL-STOP pressed ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4F34:	CALL	C.6000
-        NOP
-        SUB	B
-        LD	B,B
+        DEFB	0
+        DEFW    C.4090                  ; CTRL-STOP pressed ?
         RET
 
 
-;	  Subroutine __________________________
+;	  Subroutine get carrier detect status
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4F3B:	CALL	C.6000
-        NOP
-        SUB	(HL)
-        LD	B,B
+        DEFB	0
+        DEFW    C.4096                  ; get carrier detect status
         CCF
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2770,9 +2691,8 @@ C.4F43:	PUSH	BC
         CALL	C.5074
         JR	Z,J$4F73
         CALL	C.6000
-        NOP
-        LD	D,B
-        LD	B,C
+        DEFB	0
+        DEFW    C.4150                  ; RS232.STAT
         BIT	0,L
         JR	Z,J.4F7B
         LD	HL,CSRX
@@ -2788,9 +2708,8 @@ J$4F63:	POP	AF
         JR	NZ,J$4F6B
         LD	(HL),00H
 J$4F6B:	CALL	C.6000
-        NOP
-        LD	D,(HL)
-        LD	B,C
+        DEFB	0
+        DEFW    C.4156                  ; RS232.SNDCHR
         JR	J.4F7B
 
 J$4F73:	POP	AF
@@ -2807,7 +2726,6 @@ J.4F7B:	POP	AF
         CCF
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2818,9 +2736,8 @@ C.4F82:	PUSH	AF
         POP	AF
         PUSH	AF
         CALL	C.6000
-        NOP
-        LD	D,(HL)
-        LD	B,C
+        DEFB	0
+        DEFW    C.4156                  ; RS232.SNDCHR
         JR	C,J$4F99
         JP	Z,J$4F9D
         POP	AF
@@ -2839,7 +2756,6 @@ J.4FA3:	POP	AF
         SCF
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2847,9 +2763,8 @@ J.4FA3:	POP	AF
 C.4FA6:	PUSH	BC
         PUSH	HL
         CALL	C.6000
-        NOP
-        LD	E,A
-        LD	B,C
+        DEFB	0
+        DEFW    C.415F                  ; RS232.LOC
         LD	A,L
         OR	H
         POP	HL
@@ -2862,7 +2777,6 @@ C.4FA6:	PUSH	BC
         CCF
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2871,46 +2785,43 @@ C.4FBC:	CALL	C.4E45
         LD	E,02H	; 2 
         RET	C
         CALL	C.6000
-        NOP
-        LD	D,E
-        LD	B,C
+        DEFB	0
+        DEFW    C.4153                  ; RS232.GETCHR
         EI
         SCF
         CCF
         RET
 
 
-;	  Subroutine __________________________
+;	  Subroutine disable XON/XOFF handshake
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4FCC:	LD	B,0FEH
+C.4FCC:	LD	B,0FEH                  ; clear b0
         JR	J$4FD6
 
 
-;	  Subroutine __________________________
+;	  Subroutine disable auto LF on send and receive
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4FD0:	XOR	A
         LD	(D.7EED),A
-        LD	B,0F3H
+        LD	B,0F3H                  ; clear b3 and b2
 J$4FD6:	LD	A,(D.6085)
         AND	B
         LD	(D.6085),A
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4FDE:	LD	A,(D.634C)
+C.4FDE:	LD	A,(D.634C)              ; saved 6085
         LD	(D.6085),A
-        LD	A,(D.6174)
+        LD	A,(D.6174)              ; saved 7EED
         LD	(D.7EED),A
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2938,7 +2849,6 @@ J$5006:	LD	(D.6359),HL
         POP	AF
         POP	HL
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2971,7 +2881,6 @@ J$502A:	POP	AF
         POP	HL
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -2981,7 +2890,6 @@ C$5037:	CP	0AH	; 10
         ADD	A,07H	; 7 
 J$503D:	ADD	A,30H	; "0"
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2997,7 +2905,6 @@ J$5046:	OR	A
 
 J$504E:	ADD	HL,DE
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -3024,7 +2931,6 @@ C.505C:	LD	A,(HL)
         CALL	C.4F43
         JR	C.505C
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -3038,7 +2944,6 @@ C.5065:	PUSH	AF
         DEFW    I$40E1
 J$5072:	POP	AF
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -3060,6 +2965,7 @@ I$5079:	LD	BC,I$0302
         LD	B,L
         LD	B,(HL)
         LD	B,C
+
 I$508A:	JR	C,J$50E0
         LD	B,C
         LD	D,H
@@ -3091,6 +2997,7 @@ I$508A:	JR	C,J$50E0
         LD	D,L
         XOR	B
         LD	D,H
+
 I$50AC:	LD	HL,I$2E59
         LD	E,C
         LD	C,E
@@ -3120,6 +3027,7 @@ J$50C0	EQU	$-1
         LD	E,D
         EX	(SP),HL
         LD	E,C
+
 I$50CE:	LD	B,(HL)
         LD	D,C
         LD	E,(HL)
@@ -3171,6 +3079,7 @@ J$50E0:	LD	DE,I$2252
         LD	D,E
         OR	H
         LD	D,E
+
 I$510A:	LD	B,B
         LD	D,L
         ADD	A,(HL)
@@ -5461,16 +5370,17 @@ J$594E:	LD	B,E
         ADD	A,D
         OR	A
         NOP
+
 J$5AD5:	LD	(D.F55E),HL
         LD	(D.F560),DE
-        LD	A,01H	; 1 
+        LD	A,1
         LD	(D.6361),A
         LD	A,(SCRMOD)
         PUSH	AF
         LD	A,(D.6049)
         PUSH	AF
-        AND	2FH	; "/"
-        LD	(D.6049),A
+        AND	2FH                     ; b7,b6,b2 = terminal mode
+        LD	(D.6049),A              ; 
         CALL	C.6000
         DEFB    1
         DEFW    I$40E4
@@ -5479,36 +5389,32 @@ J$5AD5:	LD	(D.F55E),HL
         DEFB    1
         DEFW    I$40E7
         POP	AF
-        LD	(D.6049),A
+        LD	(D.6049),A              ; b7,b6,b2 = terminal mode
         POP	AF
         LD	(SCRMOD),A
         XOR	A
         LD	(D.6361),A
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine wait 300 ms
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$5B0A:	LD	C,03H	; 3 
+C$5B0A:	LD	C,3                     ; 300 ms
         JR	J$5B10
 
-
-;	  Subroutine __________________________
+;	  Subroutine wait 1 second
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$5B0E:	LD	C,0AH	; 10 
+C$5B0E:	LD	C,10                    ; 1 second
 J$5B10:	CALL	C.6000
-        NOP
-        XOR	(HL)
-        LD	B,B
-J$5B16:	LD	A,(D.607A)
+        DEFB	0
+        DEFW    C.40AE                  ; counter set #1, clear
+J$5B16:	LD	A,(D.607A)              ; counter set #1, number of 100 ms
         CP	C
         JR	C,J$5B16
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -5520,11 +5426,10 @@ C$5B1D:	CALL	C.6000
         RET	C
 J$5B24:	LD	A,01H	; 1 
         CALL	C.6000
-        NOP
-        LD	(HL),A
-        LD	B,C
+        DEFB	0
+        DEFW    C.4177                  ; MODEM.LINSEL
 J$5B2C:	LD	A,(D.6075)
-        OR	A
+        OR	A                       ; alt1 enabled ?
         JR	Z,J.5B56
         LD	A,04H	; 4 
         CALL	C.5FE8
@@ -5537,42 +5442,44 @@ J$5B2C:	LD	A,(D.6075)
         DEFW    I$40DE
         JR	J.5B56
 
-J$5B49:	LD	HL,(D.6092)
+J$5B49:	LD	HL,(D.6092)             ; alt1 number of bytes in receive buffer
         LD	A,L
-        OR	H
-        JR	NZ,J$5B2C
+        OR	H                       ; receive buffer empty ?
+        JR	NZ,J$5B2C               ; nope,
         CALL	C.5E86
         CALL	C.5E95
 J.5B56:	XOR	A
         LD	(D.F65B),A
         CALL	C.5FE8
-        CALL	C$5B0E
+        CALL	C$5B0E                  ; wait 1 second
         CALL	KILBUF
         CALL	C.6000
-        NOP
-        CALL	M,C$CD40
+        DEFB	0
+        DEFW    C.40FC
+        DEFB    0CDH
         NOP
         LD	H,B
         NOP
         XOR	(HL)
         LD	B,B
-J.5B6F:	LD	A,(D.607C)
-        CP	04H	; 4 
+J.5B6F:	LD	A,(D.607C)              ; counter set #1, number of seconds
+        CP	4
         JR	C,J$5B7A
         XOR	A
         LD	(D.F65B),A
 J$5B7A:	XOR	A
         CALL	C.5FE8
-        CALL	C.009C
+        CALL	CHSNS
         JR	Z,J$5B8B
-        CALL	C.009F
+        CALL	CHGET
         CP	14H	; 20 
         JR	NZ,J.5B6F
         RET
 
 J$5B8B:	CALL	C.6000
-        NOP
-        CALL	M,C$2840
+        DEFB	0
+        DEFW    C.40FC
+        DEFB    28H
         CALL	C,C$00CD
         LD	H,B
         NOP
@@ -5587,76 +5494,67 @@ J$5B8B:	CALL	C.6000
         CALL	C.5FE8
         XOR	A
         CALL	C.6000
-        NOP
-        LD	(HL),A
-        LD	B,C
-        CALL	C$5B0A
+        DEFB	0
+        DEFW    C.4177                  ; MODEM.LINSEL
+        CALL	C$5B0A                  ; wait 300 ms
         CALL	C.6000
-        NOP
-        RET	NZ
-        LD	B,B
+        DEFB	0
+        DEFW    C.40C0
         LD	(D.F65C),A
         CALL	C.5C68
         LD	B,08H	; 8 
 J$5BBF:	CALL	C.6000
-        NOP
-        XOR	(HL)
-        LD	B,B
+        DEFB	0
+        DEFW    C.40AE                  ; counter set #1, clear
 J$5BC5:	CALL	C.6000
-        NOP
-        RET	NZ
-        LD	B,B
+        DEFB	0
+        DEFW    C.40C0
         LD	C,A
         LD	A,(D.F65C)
         CP	C
         JR	NZ,J.5C04
-        CALL	C.009C
+        CALL	CHSNS
         JR	Z,J$5BDE
-        CALL	C.009F
+        CALL	CHGET
         CP	14H	; 20 
         JR	Z,J.5C04
-J$5BDE:	LD	A,(D.607C)
-        CP	0AH	; 10 
+J$5BDE:	LD	A,(D.607C)              ; counter set #1, number of seconds
+        CP	10
         JR	NC,J$5BF1
         CALL	C.6000
-        NOP
-        LD	D,B
-        LD	B,C
+        DEFB	0
+        DEFW    C.4150                  ; RS232.STAT
         BIT	0,L
         JR	NZ,J$5C1A
         JR	J$5BC5
 
 J$5BF1:	PUSH	BC
         CALL	C.6000
-        NOP
-        LD	E,C
-        LD	B,C
+        DEFB	0
+        DEFW    C.4159                  ; RS232.CLOSE
         CALL	C.6000
-        LD	B,0F0H
-        LD	B,B
+        DEFB    6
+        DEFW    C.40F0
         CALL	C.5C68
         POP	BC
         DJNZ	J$5BBF
 J.5C04:	CALL	C.6000
-        NOP
-        LD	E,C
-        LD	B,C
+        DEFB	0
+        DEFW    C.4159                  ; RS232.CLOSE
         LD	A,01H	; 1 
         CALL	C.6000
-        NOP
-        LD	(HL),A
-        LD	B,C
+        DEFB	0
+        DEFW    C.4177                  ; MODEM.LINSEL
         LD	A,(D$6370)
         OR	A
         JP	Z,J$5B24
         RET
 
 J$5C1A:	CALL	C.6000
-        NOP
-        XOR	(HL)
-        LD	B,B
-J$5C20:	LD	A,(D.607C)
-        CP	02H	; 2 
+        DEFB	0
+        DEFW    C.40AE                  ; counter set #1, clear
+J$5C20:	LD	A,(D.607C)              ; counter set #1, number of seconds
+        CP	2
         JR	C,J$5C20
         CALL	C.6000
         DEFB    1
@@ -5687,7 +5585,6 @@ D$5C52:	LD	A,0FFH
         CALL	C.5FE8
         JR	J$5C4D
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -5701,14 +5598,12 @@ C.5C68:	LD	HL,(D$616C)
         LD	D,H
         LD	B,L
         LD	HL,(D$616A)
-        LD	E,04H	; 4 
-        LD	C,00H
+        LD	E,4                     ; raw mode
+        LD	C,0
         CALL	C.6000
-        NOP
-        LD	C,L
-        LD	B,C
+        DEFB	0
+        DEFW    C.414D                  ; RS232.OPEN
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -5726,7 +5621,6 @@ J$5C87:	PUSH	BC
         CALL	C.5EC1
         SCF
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -5754,7 +5648,6 @@ J$5CB8:	LD	A,(DE)
         INC	DE
         INC	HL
         JR	J$5CB8
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -5830,15 +5723,14 @@ J$5D1E:	LD	A,(HL)
         OR	A
         JR	NZ,J.5D58
         LD	A,(D.6075)
-        OR	A
+        OR	A                       ; alt1 enabled ?
         JP	NZ,J.5E7F
-        CALL	C.00A8
-        JP	Z,J.5E78
+        CALL	LPTSTT                  ; get printer status
+        JP	Z,J.5E78                ; not ready,
         LD	A,0FFH
         LD	(D.6362),A
         LD	A,05H	; 5 
         JR	J$5D98
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -5894,8 +5786,8 @@ J$5D96:	LD	A,03H	; 3
 J$5D98:	CALL	C.5FE8
         LD	A,(D.6049)
         PUSH	AF
-        AND	2FH	; "/"
-        OR	80H
+        AND	2FH                     ; b7,b6,b2 = terminal mode
+        OR	80H                     ; terminal mode = X-modem
         LD	(D.6049),A
         CALL	C$4254
 J$5DA9:	POP	AF
@@ -5908,8 +5800,8 @@ J$5DB2:	LD	A,02H	; 2
         CALL	C.5FE8
         LD	A,(D.6049)
         PUSH	AF
-        AND	2FH	; "/"
-        OR	80H
+        AND	2FH                     ; b7,b6,b2 = terminal mode
+        OR	80H                     ; terminal mode = X-modem
         LD	(D.6049),A
         CALL	C$4461
         JR	J$5DA9
@@ -5937,7 +5829,7 @@ J$5DEE:	CALL	C.423A
         JR	C,J.5E2A
 J$5DF3:	CALL	C.6000
         DEFB    1
-        DEFW    I$409F
+        DEFW    I$409F                  ; get received byte
         JR	Z,J$5E04
         LD	E,01H	; 1 
         JR	C,J.5E2A
@@ -5950,9 +5842,8 @@ J$5E04:	CALL	C.47F2
         JR	Z,J$5E26
         PUSH	AF
         CALL	C.6000
-        NOP
-        LD	D,B
-        LD	B,C
+        DEFB	0
+        DEFW    C.4150                  ; RS232.STAT
         BIT	0,L
         JR	Z,J$5E21
         POP	AF
@@ -5975,19 +5866,18 @@ J$5E2D:	CALL	C.411B
         RET
 
 J$5E32:	LD	A,(D.6075)
-        OR	A
+        OR	A                       ; alt1 enabled ?
         JR	NZ,J.5E7F
-        CALL	C.00A8
-        JR	Z,J.5E78
+        CALL	LPTSTT                  ; get printer status
+        JR	Z,J.5E78                ; not ready,
         LD	A,04H	; 4 
         CALL	C.5FE8
         CALL	C.6000
         DEFB    1
         DEFW    I$40D8
 J.5E48:	CALL	C.6000
-        NOP
-        LD	D,B
-        LD	B,C
+        DEFB	0
+        DEFW    C.4150                  ; RS232.STAT
         BIT	0,L
         JR	Z,J.5E70
         LD	HL,(D.7EE7)
@@ -5996,7 +5886,7 @@ J.5E48:	CALL	C.6000
         JR	NC,C.5E75
         CALL	C.6000
         DEFB    1
-        DEFW    I$409F
+        DEFW    I$409F                  ; get received byte
         JR	Z,J.5E48
         CP	1AH
         JR	Z,J.5E70
@@ -6006,9 +5896,8 @@ J.5E48:	CALL	C.6000
         JR	J.5E48
 
 J.5E70:	XOR	A
-        LD	(D.6074),A
+        LD	(D.6074),A              ; alt1 enabled
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -6025,21 +5914,19 @@ J.5E7F:	LD	L,32H	; "2"
         OR	A
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.5E86:	DI
         XOR	A
-        LD	(D.6074),A
-        LD	(D.6075),A
+        LD	(D.6074),A              ; alt1 enabled
+        LD	(D.6075),A              ; alt1 enabled
         LD	L,A
         LD	H,A
-        LD	(D.6092),HL
+        LD	(D.6092),HL             ; update alt1 number of bytes in receive buffer
         EI
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -6059,14 +5946,13 @@ C.5E95:	LD	A,18H
 
 C.5EA3:	PUSH	AF
         CALL	C.6000
-        NOP
-        XOR	(HL)
-        LD	B,B
-J$5EAA:	LD	A,(D.607C)
-        CP	14H	; 20 
-        JR	NC,J$5EBE
-        CALL	C.00A8
-        JR	Z,J$5EAA
+        DEFB	0
+        DEFW    C.40AE                  ; counter set #1, clear
+J$5EAA:	LD	A,(D.607C)              ; counter set #1, number of seconds
+        CP	20                      ; 20 seconds passed ?
+        JR	NC,J$5EBE               ; yep, quit
+        CALL	LPTSTT                  ; get printer status
+        JR	Z,J$5EAA                ; not ready, wait
         POP	AF
         CALL	C.6000
         DEFB    1
@@ -6077,16 +5963,14 @@ J$5EBE:	POP	AF
         SCF
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.5EC1:	PUSH	HL
         CALL	C.6000
-        NOP
-        LD	D,B
-        LD	B,C
+        DEFB	0
+        DEFW    C.4150                  ; RS232.STAT
         BIT	0,L
         POP	HL
         SCF
@@ -6096,7 +5980,8 @@ C.5EC1:	PUSH	HL
         RET	Z
         INC	HL
         CALL	C.6000
-        LD	BC,I.40A2
+        DEFB    1
+        DEFW    C.40A2
         JR	C.5EC1
 
 I$5ED9:	LD	D,B
@@ -6150,7 +6035,6 @@ I$5EF7:	LD	C,H
 C.5F09:	LD	HL,I$5EE4
         JP	C.5EC1
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -6163,17 +6047,16 @@ J$5F16:	LD	(HL),A
         INC	HL
         DJNZ	J$5F16
         POP	HL
-J.5F1B:	CALL	C.009C
+J.5F1B:	CALL	CHSNS
         JR	Z,J$5F27
-        CALL	C.009F
+        CALL	CHGET
         CP	14H	; 20 
         SCF
         RET	Z
 J$5F27:	PUSH	HL
         CALL	C.6000
-        NOP
-        LD	D,B
-        LD	B,C
+        DEFB	0
+        DEFW    C.4150                  ; RS232.STAT
         BIT	0,L
         POP	HL
         SCF
@@ -6181,7 +6064,7 @@ J$5F27:	PUSH	HL
         PUSH	BC
         PUSH	HL
         LD	A,(D.6075)
-        OR	A
+        OR	A                       ; alt1 enabled ?
         JR	Z,J.5F77
         LD	HL,(D.7EE7)
         LD	DE,1200
@@ -6190,10 +6073,10 @@ J$5F27:	PUSH	HL
         CALL	C.5E75
         JR	J$5F5C
 
-J$5F4A:	LD	HL,(D.6092)
+J$5F4A:	LD	HL,(D.6092)             ; alt1 number of bytes in receive buffer
         LD	A,L
-        OR	H
-        JR	NZ,J.5F77
+        OR	H                       ; receive buffer empty ?
+        JR	NZ,J.5F77               ; nope,
         CALL	C.5E86
         CALL	C.5E95
         LD	L,3AH	; ":"
@@ -6212,18 +6095,22 @@ J$5F67:	OR	A
 J$5F6D:	LD	A,(HL)
         INC	HL
         CALL	C.6000
-        LD	BC,I.40A2
+        DEFB    1
+        DEFW    C.40A2
         DJNZ	J$5F6D
 J.5F77:	POP	HL
         POP	BC
         CALL	C.6000
-        LD	BC,I.409F
+        DEFB    1
+        DEFW    C.409F                  ; get received byte
         JR	NZ,J$5F8A
         CALL	C.6000
-        NOP
-        CALL	Z,C$C340
+        DEFB	0
+        DEFW    C.40CC                  ; signal sender to resume sending
+        DEFB    0C3H
         DEC	DE
         LD	E,A
+
 J$5F8A:	CP	08H	; 8 
         JR	Z,J$5FB8
         CP	0DH	; 13 
@@ -6237,7 +6124,8 @@ J$5F8A:	CP	08H	; 8
         POP	AF
         PUSH	AF
         CALL	C.6000
-        LD	BC,I.40A2
+        DEFB    1
+        DEFW    C.40A2
 J$5FA6:	POP	AF
         LD	(HL),A
         INC	HL
@@ -6262,7 +6150,6 @@ J$5FB8:	LD	A,B
 J$5FC7:	CALL	C.4EE3
         OR	A
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -6293,7 +6180,6 @@ C.5FDF:	CP	61H	; "a"
         SUB	20H	; " "
 J$5FE6	EQU	$-1
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
