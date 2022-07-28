@@ -19,7 +19,7 @@ CHGET	EQU	009FH	; -C---
 KILBUF	EQU	0156H	; -C---
 EXTROM	EQU	015FH	; -C---
 
-S.INIPLT	EQU	0141H	; -C--I
+S.INIPLT	EQU	0141H
 S.REDCLK        EQU     01F5H
 S.WRTCLK	EQU	01F9H
 
@@ -38,6 +38,7 @@ I.0800	EQU	0800H	; ----I
 J.0960	EQU	0960H	; J---I
 I$2020	EQU	2020H	; ----I
 I$4000	EQU	4000H	; ----I
+
 X.6000	EQU	6000H	; -CS--
 I.601D	EQU	601DH	; ----I
 I.6040	EQU	6040H	; ----I
@@ -46,6 +47,7 @@ I.607D	EQU	607DH	; ----I
 I.60AC	EQU	60ACH	; ----I
 I.60C5	EQU	60C5H	; ----I
 I.60FD	EQU	60FDH	; ----I
+
 D$6800	EQU	6800H	; --S--
 D$7000	EQU	7000H	; --S--
 D$7800	EQU	7800H	; --S--
@@ -110,7 +112,6 @@ I$F959	EQU	0F959H	; ----I
 I$F95F	EQU	0F95FH	; ----I
 I$F965	EQU	0F965H	; ----I
 I$F975	EQU	0F975H	; ----I
-I$FAF5	EQU	0FAF5H	; ----I
 
 MUSICF	EQU	0FB3FH	; ---L-
 PLYCNT	EQU	0FB40H	; --S--
@@ -118,30 +119,29 @@ SCRMOD	EQU	0FCAFH	; --S--
 EXPTBL	EQU	0FCC1H	; ----I
 H.TIMI	EQU	0FD9FH	; --S-I
 H.STKE	EQU	0FEDAH	; ----I
-C.FF00	EQU	0FF00H	; -C--I
-I.FF1D	EQU	0FF1DH	; ----I
-I$FF40	EQU	0FF40H	; ----I
-I.FF53	EQU	0FF53H	; ----I
-I$FF7D	EQU	0FF7DH	; ----I
 I$FFA0	EQU	0FFA0H	; ----I
 RG8SAV	EQU	0FFE7H	; ---L-
 D.FFFF	EQU	0FFFFH	; --SLI
+
+;	  Subroutine start panasonic firmware
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 ?.4090:	CALL	C$4819			; H.STKE hooked ?
         JP	C,J.419B		; yep, quit
         CALL	C$482A			; BASIC ROM in external cartridge ?
         JP	C,J.419B		; yep, quit
-        CALL	C$48B5
+        CALL	C$48B5                  ; ASCII or Panasonic firmware ?
         JP	C,J.419B                ; yep, quit
-        CALL	C$4906			; switch on ?
+        CALL	C$4906			; firmware switch on ?
         JP	C,J.419B		; nope, quit
         DI
         CALL	C$4277
         CALL	C$4208
-        CALL	C$41E7
-        CALL	C$424E
+        CALL	C$41E7                  ; define function keys
+        CALL	C$424E                  ; initialize screen 1
         CALL	C$427C
-        LD	A,02H	; 2 
+        LD	A,2
         CALL	C$4281
         CALL	C$422F
         EI
@@ -149,7 +149,7 @@ D.FFFF	EQU	0FFFFH	; --SLI
         CALL	C$428B
         CALL	C$4290
         CALL	C$42A9
-        CALL	GICINI
+        CALL	GICINI                  ; initialize PSG
         CALL	C$444A
         LD	HL,I$4477
         CALL	C$4392
@@ -160,24 +160,24 @@ J$40DE:	LD	A,(D.CEB4)
         JR	Z,J$40D9
         CALL	C$41DE                  ; key pressed ?
         JR	NC,J$40F1               ; yep,
-        LD	A,06H	; 6 
+        LD	A,6
         CALL	C$42B8
-        JR	J$40DE
+        JR	J$40DE                  ; again
 
 J$40F1:	CALL	CHGET                   ; get key
         LD	(D.C3BC),A              ; store key
         CALL	C$43BE
         LD	A,8
         LD	B,3
-        LD	E,00H
+        LD	E,0
 J$4100:	CALL	WRTPSG
         INC	A
-        DJNZ	J$4100
+        DJNZ	J$4100                  ; silence PSG
         LD	HL,I$F975
 J$4109:	LD	A,0FFH
         LD	(HL),A
         INC	HL
-        LD	DE,I$FAF5
+        LD	DE,I$F975+3*80H
         EX	DE,HL
         OR	A
         SBC	HL,DE
@@ -204,7 +204,7 @@ J.413E:	CALL	KILBUF
 J$4147:	CALL	C$42A4
         LD	A,(D.C3BC)              ; stored key
         CP	" "
-        JR	Z,J$4175
+        JR	Z,J$4175                ; change language
         CP	"1"
         JR	Z,J$417A                ; clock settings
         CP	"2"
@@ -226,6 +226,8 @@ J$4147:	CALL	C$42A4
 
         LD	A,1
         JR	J.4197
+
+; change language
 
 J$4175:	CALL	C$42B3
         JR	J.413E
@@ -278,26 +280,26 @@ J.419B:	LD	A,1
 ;	     Outputs ________________________
 
 C$41A5:	PUSH	AF
-        CALL	INIFNK
+        CALL	INIFNK                  ; initialize function key definitions
         CALL	C$42AE
         LD	IX,S.INIPLT
-        CALL	EXTROM
-        LD	A,0FH	; 15 
+        CALL	EXTROM                  ; initialize color palette
+        LD	A,15
         LD	(FORCLR),A
-        LD	A,04H	; 4 
+        LD	A,4
         LD	(BAKCLR),A
-        LD	A,07H	; 7 
+        LD	A,7
         LD	(BDRCLR),A
-        CALL	CHGCLR
-        LD	A,01H	; 1 
-        CALL	CHGMOD
+        CALL	CHGCLR                  ; initialize default colors (japanese default)
+        LD	A,1
+        CALL	CHGMOD                  ; select screen mode 1
         LD	A,(RG8SAV)
         AND	0DFH
         LD	B,A
-        LD	C,08H	; 8 
+        LD	C,8
         CALL	WRTVDP
-        LD	B,60H	; "`"
-        LD	C,01H	; 1 
+        LD	B,60H
+        LD	C,1
         CALL	WRTVDP
         POP	AF
         RET
@@ -314,12 +316,12 @@ C$41DE:	CALL	CHSNS
 J$41E5:	AND	A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine define function keys
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$41E7:	LD	HL,FNKSTR
-        LD	BC,0FFA0H
+        LD	BC,0FFH*256+10*16
 J$41ED:	LD	(HL),B
         DEC	C
         JR	Z,J$41F4
@@ -338,7 +340,6 @@ J$41FD:	LD	A,0FEH
         DEC	C
         JR	NZ,J$41FD
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -363,16 +364,15 @@ C$4208:	LD	HL,I.C6B4
         LD	(D$C3CA),HL
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$422F:	LD	C,21H	; "!"
+C$422F:	LD	C,2*16+1
         LD	IX,S.REDCLK+1
         CALL	EXTROM
         LD	D,A
-        LD	C,22H	; """
+        LD	C,2*16+2
         LD	IX,S.REDCLK+1
         CALL	EXTROM
         ADD	A,A
@@ -381,158 +381,159 @@ C$422F:	LD	C,21H	; "!"
         ADD	A,A
         OR	D
         LD	B,A
-        LD	C,12H	; 18 
+        LD	C,12H
         CALL	WRTVDP
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$424E:	LD	A,01H	; 1 
+C$424E:	LD	A,1
         LD	(SCRMOD),A
-        CALL	CHGMOD
+        CALL	CHGMOD                  ; screen mode 1
         LD	HL,(T32CGP)
         LD	DE,I.C6B4
-        LD	BC,I.0800
-        CALL	LDIRMV
+        LD	BC,256*8
+        CALL	LDIRMV                  ; initialize character pattern
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine clock settings
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4263:	LD	HL,I.8000
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
-;	  Subroutine __________________________
+;	  Subroutine screen adjust
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4268:	LD	HL,I$8003
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
-;	  Subroutine __________________________
+;	  Subroutine clock
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$426D:	LD	HL,I$8006
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
-;	  Subroutine __________________________
+;	  Subroutine calendar
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4272:	LD	HL,I$8009
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4277:	LD	HL,I$800C
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$427C:	LD	HL,I$800F
-        JR	J.42C2
-
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4281:	LD	HL,I$8012
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4286:	LD	HL,I$8015
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$428B:	LD	HL,I$8018
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4290:	LD	HL,I$801B
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4295:	LD	HL,I$801E
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$429A:	LD	HL,I$8021
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$429F:	LD	HL,I$8024
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$42A4:	LD	HL,I$8027
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$42A9:	LD	HL,I$802A
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$42AE:	LD	HL,I$802D
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
-;	  Subroutine __________________________
+;	  Subroutine change language
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$42B3:	LD	HL,I$8030
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$42B8:	LD	HL,I$8033
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$42BD:	LD	HL,I$8036
-        JR	J.42C2
+        JR	J.42C2                  ; select firmware in page 1 and 2, start routine
+
+;	  Subroutine select firmware in page 1 and 2, start routine
+;	     Inputs  HL = routine to be called
+;	     Outputs ________________________
 
 J.42C2:	PUSH	AF
         PUSH	HL
@@ -541,12 +542,12 @@ J.42C2:	PUSH	AF
         LD	HL,I$4391
         LD	BC,I.42EB
         AND	A
-        SBC	HL,BC
+        SBC	HL,BC                   ; size of I.42EB routine
         PUSH	HL
         POP	BC
         LD	HL,I.42EB
         LD	DE,J.CF00
-        LDIR
+        LDIR                            ; copy I.42EB routine in RAM page 3
         POP	HL
         LD	A,0C3H
         LD	(DE),A
@@ -555,48 +556,52 @@ J.42C2:	PUSH	AF
         LD	(DE),A
         INC	DE
         LD	A,H
-        LD	(DE),A
+        LD	(DE),A                  ; add JP address
         POP	AF
         JP	J.CF00
+
+;	  Subroutine select firmware in page 1 and 2
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 I.42EB:	DI
         PUSH	AF
         PUSH	BC
         PUSH	DE
-        PUSH	HL
+        PUSH	HL                      ; store registers
         IN	A,(0A8H)
-        LD	B,A
-        AND	3FH	; "?"
-        LD	D,A
-        LD	A,8FH
+        LD	B,A                     ; store primairy slot register
+        AND	3FH
+        LD	D,A                     ; OR mask
+        LD	A,8FH                   ; firmware slot id = 3-3
         LD	H,A
-        AND	03H	; 3 
+        AND	03H                     ; primairy slot firmware
         RRCA
         RRCA
         OR	D
-        OUT	(0A8H),A
+        OUT	(0A8H),A                ; make secundairy slot register firmware slot accessable
         LD	A,(D.FFFF)
         CPL
-        LD	C,A
+        LD	C,A                     ; store secundairy slot register
         AND	0F3H
-        LD	E,A
-        LD	A,H
-        AND	0CH	; 12 
+        LD	E,A                     ; OR mask
+        LD	A,H                     ; firmware slot
+        AND	0CH                     ; secundairy slot
         OR	E
-        LD	(D.FFFF),A
-        LD	A,B
+        LD	(D.FFFF),A              ; select firmware secundairy slot in page 1
+        LD	A,B                     ; restore primairy slot register
         AND	0F3H
-        LD	D,A
-        LD	A,H
-        AND	03H	; 3 
+        LD	D,A                     ; OR mask
+        LD	A,H                     ; firmware slot
+        AND	03H                     ; primairy slot
         RLCA
         RLCA
         OR	D
-        OUT	(0A8H),A
+        OUT	(0A8H),A                ; select firmware primairy slot in page 1
         POP	HL
         POP	DE
         POP	BC
-        POP	AF
+        POP	AF                      ; restore registers
         EI				; enable slot 3-3 in page 1
         EX	AF,AF'
         LD	A,0A8H
@@ -620,44 +625,44 @@ I.42EB:	DI
         PUSH	AF
         PUSH	BC
         PUSH	DE
-        PUSH	HL
+        PUSH	HL                      ; store register
         IN	A,(0A8H)
-        LD	B,A
-        AND	3FH	; "?"
-        LD	D,A
+        LD	B,A                     ; store primairy slot register
+        AND	3FH
+        LD	D,A                     ; OR mask
         LD	A,8FH
-        LD	H,A
-        AND	03H	; 3 
+        LD	H,A                     ; firmware slot id = 3-3
+        AND	03H                     ; primairy slot firmware
         RRCA
         RRCA
         OR	D
-        OUT	(0A8H),A
+        OUT	(0A8H),A                ; make secundairy slot register firmware slot accessable
         LD	A,(D.FFFF)
         CPL
-        LD	C,A
+        LD	C,A                     ; store secundairy slot register
         AND	0CFH
-        LD	E,A
+        LD	E,A                     ; OR mask
         LD	A,H
-        AND	0CH	; 12 
+        AND	0CH                     ; secundairy slot firmware
         RLCA
         RLCA
         OR	E
-        LD	(D.FFFF),A
-        LD	A,B
+        LD	(D.FFFF),A              ; select firmware secundairy slot in page 2
+        LD	A,B                     ; primairy slot register
         AND	0CFH
-        LD	D,A
+        LD	D,A                     ; OR mask
         LD	A,H
-        AND	03H	; 3 
+        AND	03H                     ; primairy slot firmware
         RLCA
         RLCA
         RLCA
         RLCA
         OR	D
-        OUT	(0A8H),A
+        OUT	(0A8H),A                ; select firmware primairy slot in page 2
         POP	HL
         POP	DE
         POP	BC
-        POP	AF
+        POP	AF                      ; restore registers
         EI
         EX	AF,AF'
         LD	A,0AAH
@@ -717,7 +722,6 @@ C$4392:	LD	(D.C6B1),HL
         LD	(D.C6AA),A
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -725,7 +729,6 @@ C$4392:	LD	(D.C6B1),HL
 C$43BE:	XOR	A
         LD	(D.C6AA),A
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -738,7 +741,6 @@ C$43C3:	LD	A,(MUSICF)
         AND	A
         CALL	NZ,C$43D1
 J$43D0:	RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -765,7 +767,6 @@ J$43F9:	LD	A,01H	; 1
         LD	(PLYCNT),A
         CALL	STRTMS
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -796,7 +797,7 @@ C.4402:	LD	L,(IX+0)
         LD	C,L
         POP	HL
 J$4421:	POP	AF
-        LD	(IX),C
+        LD	(IX+0),C
         LD	(IX+1),B
         EX	DE,HL
         LD	C,A
@@ -816,7 +817,6 @@ J$4435:	LD	L,B
         LDIR
         RET
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -828,7 +828,6 @@ J$4440:	LD	HL,J.C6A5
         LDIR
 J$4448:	EI
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1640,64 +1639,65 @@ J$4820:	CP	(HL)
 J$4828:	SCF
         RET
 
-
-;	  Subroutine __________________________
+;	  Subroutine BASIC ROM in external cartridge ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$482A:	LD	D,2			; slot 2
+C$482A:	LD	D,2			; slot 2,1
 J$482C:	PUSH	DE
         LD	L,D
-        LD	H,00H
+        LD	H,0
         LD	BC,EXPTBL
         ADD	HL,BC
         LD	A,(HL)
-        OR	A
-        JR	NZ,J$4844
+        OR	A                       ; slot expanded ?
+        JR	NZ,J$4844               ; yep, handle secundairy slots
         LD	A,D
-        LD	B,2
-J$483B:	CALL	C.4876			; basic ROM ?
+        LD	B,2                     ; page 2,1
+J$483B:	CALL	C.4876			; BASIC ROM ?
         JR	C,J$4874		; yep,
         DJNZ	J$483B			; other page
         JR	J$486C			; next slot
 
-J$4844:	LD	C,4
+; secundairy slots
+
+J$4844:	LD	C,4                     ; all secundairy slots
 J$4846:	PUSH	BC
-        DEC	C
-        JR	NZ,J$484E
+        DEC	C                       ; secundairy slot 0 ?
+        JR	NZ,J$484E               ; nope,
         LD	A,80H
         JR	J.485E
 
-J$484E:	DEC	C
-        JR	NZ,J$4855
+J$484E:	DEC	C                       ; secundairy slot 1 ?
+        JR	NZ,J$4855               ; nope,
         LD	A,84H
         JR	J.485E
 
-J$4855:	DEC	C
-        JR	NZ,J$485C
+J$4855:	DEC	C                       ; secundairy slot 2 ?
+        JR	NZ,J$485C               ; nope, secundairy slot 3
         LD	A,88H
         JR	J.485E
 
 J$485C:	LD	A,8CH
-J.485E:	OR	D
-        LD	B,2
-J$4861:	CALL	C.4876			; basic ROM ?
+J.485E:	OR	D                       ; add primairy slot
+        LD	B,2                     ; page 2,1
+J$4861:	CALL	C.4876			; BASIC ROM ?
         JR	C,J$4873		; yep,
-        DJNZ	J$4861
+        DJNZ	J$4861                  ; next page
         POP	BC
         DEC	C
-        JR	NZ,J$4846
+        JR	NZ,J$4846               ; next secundairy slot
 J$486C:	POP	DE
         DEC	D
-        JR	NZ,J$482C
-        OR	A
-        JR	J$4875
+        JR	NZ,J$482C               ; next primairy slot
+        OR	A                       ; BASIC ROM not found
+        JR	J$4875                  ; quit
 
 J$4873:	POP	BC
 J$4874:	POP	DE
 J$4875:	RET
 
-;	  Subroutine __________________________
+;	  Subroutine BASIC ROM ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1749,31 +1749,31 @@ J$48B4:	RET
 ;	     Outputs ________________________
 
 C$48B5:	LD	HL,I.C010
-        LD	DE,D.48FF
-        CALL	C.48E5
-        JR	C,J$48CD
+        LD	DE,D.48FF               ; MSX (ASCII firmware ROM)
+        CALL	C.48E5                  ; compare string
+        JR	C,J$48CD                ; found, clear
         LD	HL,I.C010
-        LD	DE,D.4903
-        CALL	C.48E5
-        JR	C,J$48D9
+        LD	DE,D.4903               ; JW (PANASONIC firmware ROM)
+        CALL	C.48E5                  ; compare string
+        JR	C,J$48D9                ; found, clear
         AND	A
         RET
 
 J$48CD:	LD	A,(D.48FF)
         LD	B,A
         LD	HL,I.C010
-        CALL	C.48F9
+        CALL	C.48F9                  ; clear
         SCF
         RET
 
 J$48D9:	LD	A,(D.4903)
         LD	B,A
         LD	HL,I.C010
-        CALL	C.48F9
+        CALL	C.48F9                  ; clear
         SCF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine compare string
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1783,7 +1783,7 @@ C.48E5:	LD	A,(DE)
 J$48E8:	LD	A,(DE)
         CP	(HL)
         JR	Z,J$48F1
-        ADD	A,20H	; " "
+        ADD	A,20H
         CP	(HL)
         JR	NZ,J$48F7
 J$48F1:	INC	HL
@@ -1794,7 +1794,6 @@ J$48F1:	INC	HL
 
 J$48F7:	AND	A
         RET
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1812,7 +1811,7 @@ D.48FF:	DEFB	3
 D.4903:	DEFB	2
         DEFB	"JW"
 
-;	  Subroutine switch on ?
+;	  Subroutine firmware switch on ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1827,27 +1826,29 @@ J$490F:	AND	A
 
         DEFS	05000H-$,0FFH
 
-C.5000:	CP	02H	; 2 
-        JR	Z,J$500A
+; firmware
+
+C.5000:	CP	2                       ; access link network ?
+        JR	Z,J$500A                ; yep,
         CALL	X.6000
         DEFB    9
-        DEFW    I$4090
+        DEFW    I$4090                  ; other firmware option
 
 J$500A:	CALL	X.6000
         DEFB    13
-        DEFW    I$4090
+        DEFW    I$4090                  ; access link network
 
 
         DEFS	05800H-$,0FFH
 
 C.5800:	LD	A,7
         CALL	SNSMAT
-        AND	04H				; ESC pressed ?
-        CALL	Z,C$5817			; yep, initialize RP501 bank 2 and 3
+        AND	04H			; ESC pressed ?
+        CALL	Z,C$5817		; yep, initialize RP501 bank 2 and 3
         LD	A,8
         CALL	SNSMAT
-        AND	08H				; DEL
-        JR	Z,J$5815			; yep,
+        AND	08H			; DEL
+        JR	Z,J$5815		; yep,
         AND	A
         RET
 
