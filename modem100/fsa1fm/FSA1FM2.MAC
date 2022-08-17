@@ -18,14 +18,14 @@ C$3A00	EQU	3A00H	; -C---
 I$3B32	EQU	3B32H	; ----I
 
 C$6000	EQU	6000H	; -C---
-D.615D	EQU	615DH	; ---L-
+D.615D	EQU	615DH                   ; comterm mode (b0 = interlace, b1 = full, b2 = chinese, b3/b4 = srceen mode, b5/b6 = kanji code, b7 = DEL operation)
 D$61A3	EQU	61A3H	; ---L-
 D$61A4	EQU	61A4H	; ---L-
 D$61A5	EQU	61A5H	; ---L-
 D.61A6	EQU	61A6H	; ---L-
-D.61AF	EQU	61AFH	; --SL-
-D.61B1	EQU	61B1H	; --SL-
-D.61B3	EQU	61B3H	; --SLI
+D.61AF	EQU	61AFH                   ; resume address
+D.61B1	EQU	61B1H                   ; stored HL
+D.61B3	EQU	61B3H                   ; first ESC character
 D.61B4	EQU	61B4H	; ---LI
 D.61C3	EQU	61C3H	; --S-I
 D.61C4	EQU	61C4H	; --SL-
@@ -37,11 +37,11 @@ D.61CD	EQU	61CDH	; --SL-
 D.61D0	EQU	61D0H	; --SLI
 D.61D1	EQU	61D1H	; --SL-
 D.61D2	EQU	61D2H	; --SL-
-D.61D3	EQU	61D3H	; --SL-
-D.61D4	EQU	61D4H	; --SLI
-D.61D5	EQU	61D5H	; --SL-
-D.61D7	EQU	61D7H	; --SLI
-D.61D8	EQU	61D8H	; ---LI
+D.61D3	EQU	61D3H
+D.61D4	EQU	61D4H
+D.61D5	EQU	61D5H
+D.61D7	EQU	61D7H                   ; number of rows
+D.61D8	EQU	61D8H                   ; number of columns
 D.61D9	EQU	61D9H	; --SLI
 D.61DA	EQU	61DAH	; --SL-
 D.61DB	EQU	61DBH	; ---LI
@@ -118,8 +118,8 @@ RG8SAV	EQU	0FFE7H	; ----I
 RG9SAV	EQU	0FFE8H	; ---L-
 RG23SAV	EQU	0FFF6H	; ---L-
 
-?.4090:	JP	J$40BA
-?.4093:	JP	J$40F0
+?.4090:	JP	J$40BA                  ; initialize comterm mode
+?.4093:	JP	J$40F0                  ; print to screen/printer
 ?.4096:	JP	J$40EA
 ?.4099:	JP	J$467A                  ; update function key display
 ?.409C:	JP	C.421A
@@ -133,10 +133,14 @@ I$40A2:	JP	J$4676
 ?.40B4:	JP	J$4817
 ?.40B7:	JP	J$47F3
 
+;	  Subroutine initialize comterm mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$40BA:	CALL	C$492E
-        LD	A,(D.615D)
+        LD	A,(D.615D)              ; comterm mode
         CPL
-        AND	04H
+        AND	04H                     ; inverse of chinese
         LD	(D.61C5),A              ; english flag
         XOR	A
         LD	(D.61C3),A
@@ -146,8 +150,8 @@ J$40BA:	CALL	C$492E
         LD	(D.61D3),A
         LD	A,(D.6361)
         OR	A                       ; output to modem ?
-        JR	NZ,J$40E8               ; yep,
-        CALL	C$4343
+        JR	NZ,J$40E8               ; yep, skip
+        CALL	C$4343                  ; save cursor position, encoding shift state and formatting attributes
         CALL	C.4555
         CALL	C.50EC
         CALL	C$468E
@@ -156,19 +160,23 @@ J$40E8:	JR	J.412F
 J$40EA:	CALL	C$46CC
         JP	J$4A5C
 
+;	  Subroutine print to screen/printer
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$40F0:	PUSH	AF
         CALL	C.50EC
         POP	AF
         CALL	C$4103
         JP	C.50EC
 
-;	  Subroutine __________________________
+;	  Subroutine store for resume and quit
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.40FB:	LD	(D.61B1),HL
+C.40FB:	LD	(D.61B1),HL             ; store HL
         POP	HL
-        LD	(D.61AF),HL
+        LD	(D.61AF),HL             ; store resume address
         RET
 
 ;	  Subroutine __________________________
@@ -180,8 +188,8 @@ C$4103:	CP	0FFH
         CP	20H                     ; control code ?
         JR	C,J$4116                ; yep,
         CP	7FH                     ; DEL ?
-        JR	NZ,J$4127               ; nope,
-        LD	A,(D.615D)
+        JR	NZ,J$4127               ; nope, restore for resume
+        LD	A,(D.615D)              ; comterm mode
         BIT	7,A                     ; DEL operation
         RET	Z                       ; no operation, quit
         LD	A,8                     ; BS
@@ -192,18 +200,24 @@ J$411C:	CP	18H                     ; SEL ?
         JR	Z,J$4132                ; yep,
         CP	1BH                     ; ESC ?
         JR	Z,J$4137                ; yep,
-        JP	C.4197
+        JP	C.4197                  ; handler other control codes
+
+;	  Subroutine restore for resume
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$4127:	LD	HL,(D.61AF)
-        PUSH	HL
-        LD	HL,(D.61B1)
+        PUSH	HL                      ; return to resume address
+        LD	HL,(D.61B1)             ; restore HL
         RET
 
-J.412F:	CALL	C.40FB
-J$4132:	CALL	C.4197
+J.412F:	CALL	C.40FB                  ; store for resume and quit
+J$4132:	CALL	C.4197                  ; handle other control codes
         JR	J.412F
 
-J$4137:	CALL	C.40FB
+; ESC
+
+J$4137:	CALL	C.40FB                  ; store for resume and quit
         CP	30H
         JR	C,J$414B
         CP	80H
@@ -215,18 +229,23 @@ J$4137:	CALL	C.40FB
 
 J$414B:	CP	"*"
         JR	NZ,J$4156
-        LD	A,0CH
-        CALL	C.4197
+
+; ESC *
+
+        LD	A,12                    ; CLS
+        CALL	C.4197                  ; handle other control codes
         JR	J.412F
 
-J$4156:	LD	(D.61B3),A
-J$4159:	CALL	C.40FB
+J$4156:	LD	(D.61B3),A              ; store first ESC character
+J$4159:	CALL	C.40FB                  ; store for resume and quit
         CP	30H
         JR	C,J$4159
         CP	80H
         JR	NC,J.412F
         CALL	C$42D7
         JR	J.412F
+
+; ESC [
 
 J$4169:	LD	HL,D.61B3
         LD	(HL),0
@@ -235,14 +254,14 @@ J$4169:	LD	HL,D.61B3
         INC	HL
         LD	(HL),0
         DEC	HL
-        CALL	C.40FB
+        CALL	C.40FB                  ; store for resume and quit
         CALL	C.42F0
         JR	NC,J.4185
         CP	30H
         JR	C,J.412F
         CP	40H
         JR	NC,J$418D
-J.4185:	CALL	C.40FB
+J.4185:	CALL	C.40FB                  ; store for resume and quit
         CALL	C.42F0
         JR	NC,J.4185
 J$418D:	CP	80H
@@ -251,24 +270,24 @@ J$418D:	CP	80H
         CALL	C$431B
         JR	J.412F
 
-;	  Subroutine __________________________
+;	  Subroutine handle other control codes
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4197:	CALL	C$4230
         PUSH	AF
-        LD	A,(D.61D8)
+        LD	A,(D.61D8)              ; number of colunms
         DEC	A
         LD	HL,CSRX
-        CP	(HL)
-        JR	NC,J$41AD
+        CP	(HL)                    ; cursor column position at end of line ?
+        JR	NC,J$41AD               ; nope,
         XOR	A
         LD	(HL),A
-        CALL	C.428B
+        CALL	C.428B                  ; new line
         CALL	C.4555
 J$41AD:	POP	AF
 
-;	  Subroutine __________________________
+;	  Subroutine display character
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -293,7 +312,7 @@ J$41CC:	LD	H,A
         XOR	A
         LD	(D.61C4),A
         PUSH	HL
-        LD	A,(D.61D8)
+        LD	A,(D.61D8)              ; number of colunms
         DEC	A
         LD	HL,CSRX
         CP	(HL)
@@ -304,7 +323,7 @@ J$41CC:	LD	H,A
 J$41E4:	POP	HL
         CALL	C.421A
         LD	A,(D.61D4)
-        AND	40H	; "@"
+        AND	40H
         JR	Z,J$41F2
         LD	HL,I$2121
 J$41F2:	CALL	C$4CA4
@@ -317,14 +336,14 @@ J$41F2:	CALL	C$4CA4
 ;	     Outputs ________________________
 
 C.41FB:	LD	A,(D.61D4)
-        AND	40H	; "@"
+        AND	40H
         JR	Z,J$4204
         LD	L,20H	; " "
 J$4204:	LD	H,00H
         CALL	C$4C40
         LD	HL,CSRX
 J$420C:	INC	(HL)
-        LD	A,(D.61D8)
+        LD	A,(D.61D8)              ; number of colunms
         CP	(HL)
         RET	NZ
         DEC	(HL)
@@ -377,17 +396,17 @@ J.4245:	POP	BC
         INC	(HL)                    ; set graphic header flag
         RET
 
-J$424C:	CP	7                       ; bell character ?
+J$424C:	CP	7                       ; BELL character ?
         JP	Z,BEEP                  ; yep,
         LD	HL,CSRX
-        CP	8                       ; backspace character ?
+        CP	8                       ; BS character ?
         JR	Z,J$4276                ; yep,
         LD	BC,C.4555
         PUSH	BC
-        CP	9                       ; tab character ?
+        CP	9                       ; TAB character ?
         JR	Z,J$427B
-        CP	10                      ; lf character ?
-        JR	Z,C.428B
+        CP	10                      ; LF character ?
+        JR	Z,C.428B                ; yep, new line
         CP	11
         JR	Z,J$4293
         CP	12                      ; clear screen character ?
@@ -406,7 +425,7 @@ J$427B:	LD	A,(HL)
         OR	07H
         INC	A
         PUSH	HL
-        LD	HL,D.61D8
+        LD	HL,D.61D8              ; number of colunms
         CP	(HL)
         JR	C,J$4288
         LD	A,(HL)
@@ -415,18 +434,22 @@ J$4288:	POP	HL
         LD	(HL),A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine new line
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.428B:	JP	J$42C4
 
+;	  Subroutine clear screen, cursor home
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$428E:	PUSH	HL
-        CALL	C$43B2
+        CALL	C$43B2                  ; clear screen
         POP	HL
-J$4293:	LD	(HL),00H
+J$4293:	LD	(HL),0
         DEC	HL
-J$4296:	LD	(HL),00H
+J$4296:	LD	(HL),0
         RET
 
 J$4299:	XOR	A
@@ -442,7 +465,11 @@ C$42A1:	LD	BC,5
         CALL	C.456B
 
         DEFB    "78MDE"
-        DEFB    (C$4343-$),(C.4356-$),(C.42B1-$),(J$42C4-$),($C42D0-$)
+        DEFB    (C$4343-$),(C.4356-$),(C.42B1-$),(J$42C4-$),(C$42C0-$)
+
+;	  Subroutine remove line (ESC M)
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.42B1: LD      A,(CSRY)
         OR      A
@@ -451,13 +478,18 @@ C.42B1: LD      A,(CSRY)
         CALL	C$519D
         JP	C.4555
 
-;	  Subroutine __________________________
+;	  Subroutine ESC E
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$42C0:	XOR	A
         LD	(CSRX),A
-J$42C4:	CALL	C.4787
+
+;	  Subroutine cursor left (ESC D)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$42C4:	CALL	C.4787                  ; get number of rows (usable)
         DEC	A
         LD	HL,CSRY
         CP	(HL)
@@ -471,14 +503,14 @@ J$42C4:	CALL	C.4787
 ;	     Outputs ________________________
 
 C$42D7:	LD	B,A
-        LD	A,(D.61B3)
-        CP	29H
+        LD	A,(D.61B3)              ; first ESC character
+        CP	')'
         RET	NZ
-        LD	A,(D.615D)
-        AND	04H
-        RET	Z
+        LD	A,(D.615D)              ; comterm mode
+        AND	04H                     ; english ?
+        RET	Z                       ; yep, quit
         LD	A,B
-        SUB	30H
+        SUB	'0'
         JR	Z,J.42EC
         CP	03H
         RET	NZ
@@ -522,7 +554,7 @@ J$4318:	XOR	A
         LD	(HL),A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine handle ESC [
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -534,20 +566,24 @@ C$431B:	LD	BC,17
         DEFB    (C.438F-$),(C.4395-$),(C.439B-$),(C.43A1-$),(C.436E-$),(C.43A7-$),(C.43D0-$),(C.4402-$),(C.440E-$)
         DEFB    (C.441F-$),(C.436E-$),(C.4430-$),(C.4435-$),(C.443A-$),(C.4427-$),(C$4343-$),(C.4356-$)
 
-;	  Subroutine __________________________
+;	  Subroutine ESC 7, ESC[s
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4343:	LD	HL,(CSRY)
-        LD	(D.61C9),HL
+        LD	(D.61C9),HL             ; store cursor position
         LD	HL,(D.61D3)
         LD	(D.61CB),HL
         LD	HL,(D.61D5)
         LD	(D.61CD),HL
         RET
 
+;	  Subroutine ESC 8, ESC[u
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.4356:	LD	HL,(D.61C9)
-        LD	(CSRY),HL
+        LD	(CSRY),HL               ; restore cursor position
         CALL	C.4555
         LD	HL,(D.61CB)
         LD	(D.61D3),HL
@@ -555,20 +591,24 @@ C.4356:	LD	HL,(D.61C9)
         LD	(D.61D5),HL
         JP	C.4B8C
 
-C.436E:	CALL	C.4787
+;	  Subroutine ESC [H, ESC[f
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.436E:	CALL	C.4787                  ; get number of rows (usable)
         LD	E,A
         LD	HL,D.61B4
         CALL	C.4388
         DEC	A
         PUSH	AF
-        LD	A,(D.61D8)
+        LD	A,(D.61D8)              ; number of colunms
         LD	E,A
         INC	HL
         CALL	C.4388
         DEC	A
         LD	E,A
         POP	AF
-        JP	C.4513
+        JP	C.4513                  ; update cursor position
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -580,20 +620,39 @@ C.4388:	CALL	C$4566
         LD	A,E
         RET
 
+;	  Subroutine ESC [A
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.438F:	CALL	C.4563
         JP	C.451B
+
+;	  Subroutine ESC [B
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.4395:	CALL	C.4563
         JP	J.452D
 
+;	  Subroutine ESC [C
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.439B:	CALL	C.4563
         JP	J$4544
+
+;	  Subroutine ESC [D
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.43A1:	CALL	C.4563
         JP	J.4521
 
+;	  Subroutine ESC [J
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.43A7:	LD	A,(D.61B4)
-J$43A8	EQU	$-2
         OR	A
         JR	Z,J$43C3
         DEC	A
@@ -601,27 +660,31 @@ J$43A8	EQU	$-2
         DEC	A
         RET	NZ
 
-;	  Subroutine __________________________
+;	  Subroutine clear screen
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$43B2:	CALL	C.4787
-        LD	E,A
-        XOR	A
-        JR	J.43E0
+C$43B2:	CALL	C.4787                  ; get number of rows (usable)
+        LD	E,A                     ; last row = number of rows
+        XOR	A                       ; first row = 0
+        JR	J.43E0                  ; clear screen (partly)
 
 J$43B9:	CALL	C.43E3
         LD	A,(CSRY)
-        LD	E,A
-        XOR	A
-        JR	J.43E0
+        LD	E,A                     ; last row = until cursor row
+        XOR	A                       ; first row = 0
+        JR	J.43E0                  ; clear screen (partly)
 
 J$43C3:	CALL	C.43F1
-        CALL	C.4787
-        LD	E,A
+        CALL	C.4787                  ; get number of rows (usable)
+        LD	E,A                     ; last row
         LD	A,(CSRY)
-        INC	A
-        JR	J.43E0
+        INC	A                       ; first row = below cursor row
+        JR	J.43E0                  ; clear screen (partly)
+
+;	  Subroutine ESC [K
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.43D0:	LD	A,(D.61B4)
         OR	A
@@ -633,7 +696,7 @@ C.43D0:	LD	A,(D.61B4)
         LD	A,(CSRY)
         LD	E,A
         INC	E
-J.43E0:	JP	C.52AD
+J.43E0:	JP	C.52AD                  ; clear screen (partly)
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -641,7 +704,7 @@ J.43E0:	JP	C.52AD
 
 C.43E3:	LD	E,00H
         LD	A,(CSRX)
-        LD	HL,D.61D8
+        LD	HL,D.61D8               ; number of colunms
         CP	(HL)
         JR	Z,C.43F8
         INC	A
@@ -653,7 +716,7 @@ C.43E3:	LD	E,00H
 
 C.43F1:	LD	A,(CSRX)
         LD	E,A
-        LD	A,(D.61D8)
+        LD	A,(D.61D8)              ; number of colunms
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -666,11 +729,19 @@ C.43F8:	SUB	E
         LD	A,(CSRY)
         JP	J$5407
 
+;	  Subroutine ESC [M
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.4402:	CALL	C.4563
         LD	B,A
         LD	A,(CSRY)
         CALL	C.5299
         JR	J$4418
+
+;	  Subroutine ESC [L
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.440E:	CALL	C.4563
         LD	B,A
@@ -680,21 +751,41 @@ J$4418:	XOR	A
         LD	(CSRX),A
         JP	C.4555
 
+;	  Subroutine ESC [c
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.441F:	LD	A,(D.61B4)
         OR	A
         RET	NZ
         JP	J$44C1
 
+;	  Subroutine ESC [n
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 C.4427:	LD	A,(D.61B4)
-        CP	06H	; 6 
+        CP	06H
         RET	NZ
         JP	J$44D7
 
-C.4430:	LD	A,68H	; "h"
+;	  Subroutine ESC [h
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4430:	LD	A,"h"
         JP	J.44E8
 
-C.4435:	LD	A,6CH	; "l"
+;	  Subroutine ESC [l
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4435:	LD	A,"l"
         JP	J.44E8
+
+;	  Subroutine ESC [m
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.443A:	EX	DE,HL
         INC	HL
@@ -729,7 +820,7 @@ C$445E:	LD	HL,D.61D4
         JR	Z,J$4497
         DEC	A
         JR	Z,J$449C
-        SUB	03H	; 3 
+        SUB	03H
         JR	Z,J$449F
         DEC	A
         JR	Z,J$44A2
@@ -739,21 +830,21 @@ C$445E:	LD	HL,D.61D4
         JR	Z,J$44A8
         DEC	A
         JR	Z,J.44A5
-        SUB	08H	; 8 
+        SUB	08H
         JR	Z,J.44A5
         INC	HL
-        SUB	0EH	; 14 
-        CP	08H	; 8 
+        SUB	0EH
+        CP	08H
         JR	C,J.44BD
-        SUB	14H	; 20 
-        CP	08H	; 8 
+        SUB	14H
+        CP	08H
         JR	C,J.44B3
         INC	HL
         SUB	0F6H
-        CP	08H	; 8 
+        CP	08H
         JR	C,J.44BD
-        SUB	14H	; 20 
-        CP	08H	; 8 
+        SUB	14H
+        CP	08H
         JR	C,J.44B3
         XOR	A
         RET
@@ -762,16 +853,16 @@ J$4497:	CALL	C.4B52
         XOR	A
         RET
 
-J$449C:	LD	A,03H	; 3 
+J$449C:	LD	A,03H
         RET
 
-J$449F:	LD	A,11H	; 17 
+J$449F:	LD	A,11H
         RET
 
-J$44A2:	LD	A,21H	; "!"
+J$44A2:	LD	A,21H
         RET
 
-J.44A5:	LD	A,41H	; "A"
+J.44A5:	LD	A,41H
         RET
 
 J$44A8:	LD	A,81H
@@ -783,7 +874,7 @@ I$44AB:	EX	AF,AF'
         DEC	C
         ADD	HL,BC
         DEC	BC
-        LD	C,0FH	; 15 
+        LD	C,0FH
 J.44B3:	LD	DE,I$44AB
         ADD	A,E
         LD	E,A
@@ -792,56 +883,56 @@ J.44B3:	LD	DE,I$44AB
         LD	D,A
         LD	A,(DE)
 J.44BD:	LD	(HL),A
-        LD	A,01H	; 1 
+        LD	A,1
         RET
 
 J$44C1:	CALL	C.44CE
-        LD	A,(D.615D)
-        AND	04H	; 4 
+        LD	A,(D.615D)              ; comterm mode
+        AND	04H                     ; chinese
         RRCA
-        RRCA
+        RRCA                            ; to b0
         JP	J$589E
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.44CE:	CALL	C.4787
+C.44CE:	CALL	C.4787                  ; get number of rows (usable)
         LD	L,A
-        LD	A,(D.61D8)
+        LD	A,(D.61D8)              ; number of colunms
         LD	H,A
         RET
 
 J$44D7:	LD	HL,(CSRY)
-        LD	A,(D.61D8)
-        CP	H
-        JR	NZ,J$44E3
-        LD	H,00H
-        INC	L
+        LD	A,(D.61D8)              ; number of colunms
+        CP	H                       ; at end of line ?
+        JR	NZ,J$44E3               ; nope,
+        LD	H,0
+        INC	L                       ; start of new line
 J$44E3:	INC	H
-        INC	L
+        INC	L                       ; 1 based
         JP	J$58D1
 
 J.44E8:	PUSH	AF
-        LD	(D.61B3),A
-        CP	3EH	; ">"
+        LD	(D.61B3),A              ; store first ESC character
+        CP	">"
         JR	NZ,J$44F2
         POP	AF
         RET
 
 J$44F2:	POP	AF
         LD	HL,I$46D5
-        LD	E,01H	; 1 
-        CP	68H	; "h"
+        LD	E,1
+        CP	"h"
         JR	Z,J$4503
         LD	HL,I$4697
         DEC	E
-        CP	6CH	; "l"
+        CP	"l"
         RET	NZ
 J$4503:	LD	A,(D.61B4)
-        CP	01H	; 1 
+        CP	01H
         JR	Z,J$4512
-        CP	05H	; 5 
+        CP	05H
         RET	NZ
         LD	A,E
         LD	(D.61D3),A
@@ -849,8 +940,8 @@ J$4503:	LD	A,(D.61B4)
 
 J$4512:	JP	(HL)
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine update cursor position
+;	     Inputs  E = column, A = row
 ;	     Outputs ________________________
 
 C.4513:	LD	HL,CSRY
@@ -881,7 +972,7 @@ J.452D:	LD	HL,CSRY
         JR	NC,J$4534
         SBC	A,A
 J$4534:	LD	D,A
-        CALL	C.4787
+        CALL	C.4787                  ; get number of rows (usable)
         LD	E,A
         LD	A,D
         CP	E
@@ -895,7 +986,7 @@ J$4544:	LD	HL,CSRX
         ADD	A,(HL)
         JR	NC,J$454B
         SBC	A,A
-J$454B:	LD	HL,D.61D8
+J$454B:	LD	HL,D.61D8              ; number of colunms
         CP	(HL)
         JR	C,J$4552
         LD	A,(HL)
@@ -906,7 +997,7 @@ J$4552:	LD	(CSRX),A
 ;	     Outputs ________________________
 
 C.4555:	LD	HL,(CSRY)
-        LD	A,(D.61D8)
+        LD	A,(D.61D8)              ; number of colunms
         DEC	A
         CP	H
         JR	NC,J$4560
@@ -970,11 +1061,11 @@ C.4596:	CALL	C.4793
         PUSH	HL
         LD	A,(D.61D1)
         LD	E,A
-        LD	A,(D.61D7)
+        LD	A,(D.61D7)              ; number of rows
         DEC	A
         LD	HL,D.61D9
         ADD	A,(HL)
-        CALL	C.4513
+        CALL	C.4513                  ; update cursor position
         LD	A,(D.61D2)
         LD	B,A
         CALL	C.4657
@@ -990,7 +1081,7 @@ C.4596:	CALL	C.4793
         CALL	C.43F8
         CALL	C.50EC
         LD	A,(CSRX)
-        LD	(D.61D1),A
+        LD	(D.61D1),A              ; store cursor column position
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1033,8 +1124,8 @@ C$45F5:	LD	A,(HL)
         OR	A
         RET	Z
         PUSH	BC
-        CP	20H	; " "
-        JR	NC,J$4670
+        CP	20H
+        JR	NC,J$4670               ; display character
         CP	10H	; 16 
         JR	NC,J$460F
         CP	05H	; 5 
@@ -1064,7 +1155,7 @@ J$4624:	PUSH	HL
         LD	A,(CSRX)
         LD	E,A
         LD	D,B
-        LD	A,(D.61D8)
+        LD	A,(D.61D8)              ; number of colunms
         DEC	A
         CALL	C$53F8
         POP	HL
@@ -1086,13 +1177,13 @@ J.463E:	LD	A,(CSRX)
 
 C.4645:	PUSH	HL
         LD	A,B
-        ADD	A,03H	; 3 
+        ADD	A,3
         LD	E,A
-        LD	A,(D.61D7)
+        LD	A,(D.61D7)              ; number of rows
         DEC	A
         LD	HL,D.61D9
         ADD	A,(HL)
-        CALL	C.4513
+        CALL	C.4513                  ; update cursor position
         POP	HL
         RET
 
@@ -1117,7 +1208,7 @@ C.4657:	PUSH	HL
         RET
 
 J$4670:	PUSH	HL
-        CALL	C.41AE
+        CALL	C.41AE                  ; display character
         POP	HL
         RET
 
@@ -1132,7 +1223,7 @@ J$467A:	PUSH	AF
         LD	HL,NEWKEY+6
         XOR	(HL)
         RRCA
-        CALL	C,C.46F0
+        CALL	C,C.46F0                ; update function key display
         POP	BC
         POP	DE
         POP	HL
@@ -1146,12 +1237,12 @@ J$467A:	PUSH	AF
 C$468E:	XOR	A
         LD	(D.61C8),A
         LD	A,(CNSDFG)
-        OR	A
-        RET	Z
+        OR	A                       ; functionkey display enabled ?
+        RET	Z                       ; nope, quit
 I$4697:	LD	A,1
         CALL	C.469F
         RET	C
-        JR	C.46F0
+        JR	C.46F0                  ; update functionkey display
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1164,7 +1255,7 @@ C.469F:	PUSH	AF
         POP	AF
         CALL	C.477E
         RET	C
-        LD	A,(D.61D7)
+        LD	A,(D.61D7)              ; number of rows
         DEC	A
         LD	HL,D.61D9
         ADD	A,(HL)
@@ -1176,7 +1267,7 @@ C.469F:	PUSH	AF
         LD	A,01H	; 1 
         CALL	C.451B
 J$46C2:	LD	A,0FFH
-        LD	(CNSDFG),A
+        LD	(CNSDFG),A              ; functionkey display enabled
         CALL	C.4772
         XOR	A
         RET
@@ -1188,7 +1279,7 @@ J$46C2:	LD	A,0FFH
 C$46CC:	LD	A,(D.61C8)
         RRCA
         SBC	A,A
-        LD	(CNSDFG),A
+        LD	(CNSDFG),A              ; update functionkey display
         RET
 
 I$46D5:	LD	A,1
@@ -1204,12 +1295,12 @@ J$46D7:	PUSH	AF
         JR	NZ,J$46ED
         LD	HL,CNSDFG
         XOR	A
-        CP	(HL)
-        LD	(HL),A
-        RET	Z
+        CP	(HL)                    ; functionkey display enabled ?
+        LD	(HL),A                  ; functionkey display disabled
+        RET	Z                       ; nope, quit
 J$46ED:	CALL	C.4772
 
-;	  Subroutine __________________________
+;	  Subroutine update function key display
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1219,7 +1310,7 @@ C.46F0:	LD	A,01H	; 1
         CALL	C.4772
         CALL	C.4793
         CALL	C.4B52
-        LD	A,(D.61D7)
+        LD	A,(D.61D7)              ; number of rows
         DEC	A
         LD	HL,D.61D9
         ADD	A,(HL)
@@ -1228,19 +1319,19 @@ C.46F0:	LD	A,01H	; 1
         LD	(CSRY),HL
         CALL	C.4555
         LD	A,(NEWKEY+6)
-        RRCA
+        RRCA                            ; shift pressed ?
         LD	HL,FNKSTR+0*16
         LD	A,1
-        JR	C,J$471F
+        JR	C,J$471F                ; nope,
         LD	HL,FNKSTR+5*16
         XOR	A
 J$471F:	LD	(FNKSWI),A
-        LD	C,05H
-        LD	A,(D.61D8)
-        CALL	C$4764
+        LD	C,5                     ; 5 function key definitions
+        LD	A,(D.61D8)              ; number of colunms
+        CALL	C$4764                  ; calculate function key definition display size
         RET	C
 J$472B:	PUSH	BC
-        LD	C,00H
+        LD	C,0
 J$472E:	LD	A,(HL)
         INC	HL
         INC	C
@@ -1252,7 +1343,7 @@ J$472E:	LD	A,(HL)
         JR	Z,J.4746
         PUSH	HL
         PUSH	BC
-        CALL	C.41AE
+        CALL	C.41AE                  ; display character
         POP	BC
         POP	HL
         JR	J$4749
@@ -1266,7 +1357,7 @@ J$4749:	DJNZ	J$472E
         CALL	C.4758
         POP	BC
         DEC	C
-        JR	NZ,J$472B
+        JR	NZ,J$472B               ; next function key definition
         RET
 
 ;	  Subroutine __________________________
@@ -1282,30 +1373,30 @@ C.4758:	PUSH	HL
         POP	HL
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine calculate function key definition display size
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4764:	SUB	04H	; 4 
+C$4764:	SUB	4
         RET	C
-        LD	B,0FFH
+        LD	B,-1
 J$4769:	INC	B
-        SUB	05H	; 5 
+        SUB	5
         JR	NC,J$4769
         LD	A,B
-        SUB	01H	; 1 
+        SUB	1
         RET
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4772:	LD	A,(D.61D7)
+C.4772:	LD	A,(D.61D7)              ; number of rows
         LD	HL,D.61D9
         ADD	A,(HL)
         LD	E,A
         DEC	A
-        JP	C.52AD
+        JP	C.52AD                  ; clear screen (partly)
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1319,15 +1410,15 @@ C.477E:	LD	HL,D.61C8
         CP	(HL)
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine get number of rows (usable)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4787:	LD	A,(D.61D7)
+C.4787:	LD	A,(D.61D7)              ; number of rows
         LD	HL,D.61D9
         ADD	A,(HL)
         LD	HL,CNSDFG
-        ADD	A,(HL)
+        ADD	A,(HL)                  ; adjust if functionkey display enabled
         RET
 
 ;	  Subroutine __________________________
@@ -1408,12 +1499,12 @@ J$47F3:	LD	A,(D.61D9)
         CALL	C.47DF
         CALL	C.4910
         LD	HL,I$48EA
-        CALL	C.4905
+        CALL	C.4905                  ; display string
         LD	A,4
         CALL	C.47DF
         CALL	C.4910
         LD	HL,I$48F4
-        JP	C.4905
+        JP	C.4905                  ; display string
 
 J$4817:	LD	A,(D.61D9)
         OR	A
@@ -1428,7 +1519,7 @@ J$4817:	LD	A,(D.61D9)
         AND	7FH
         CALL	C$484A
         LD	A,"."
-        CALL	C.41AE
+        CALL	C.41AE                  ; display character
         LD	HL,(D.61A6)
         SRL	H
         RR	L
@@ -1439,7 +1530,7 @@ J$4817:	LD	A,(D.61D9)
         RRCA
         RRCA
         RRCA
-        JP	C.48DA
+        JP	C.48DA                  ; display digit
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1451,20 +1542,20 @@ C$484A:	CALL	C$4868
         RRCA
         RRCA
         RRCA
-        AND	0FH	; 15 
-        CALL	Z,C$4860
-        CALL	NZ,C.48DA
+        AND	0FH
+        CALL	Z,C$4860                ; display '.'
+        CALL	NZ,C.48DA               ; display digit
         POP	AF
-        AND	0FH	; 15 
-        JP	C.48DA
+        AND	0FH
+        JP	C.48DA                  ; display digit
 
-;	  Subroutine __________________________
+;	  Subroutine display ' '
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4860:	PUSH	AF
         LD	A," "
-        CALL	C.41AE
+        CALL	C.41AE                  ; display character
         POP	AF
         RET
 
@@ -1517,7 +1608,7 @@ J$4893:	LD	A,(D.61D9)
         CALL	C.47DF
         CALL	C.4910
         LD	HL,I$48E1
-        JP	C.4905
+        JP	C.4905                  ; display string
 
 J$48A8:	LD	A,(D.61D9)
         OR	A
@@ -1529,11 +1620,11 @@ J$48A8:	LD	A,(D.61D9)
         LD	A,(D$61A3)
         CALL	C.48D1
         LD	A,":"
-        CALL	C.41AE
+        CALL	C.41AE                  ; display character
         LD	A,(D$61A4)
         CALL	C.48D1
         LD	A,":"
-        CALL	C.41AE
+        CALL	C.41AE                  ; display character
         LD	A,(D$61A5)
 
 ;	  Subroutine __________________________
@@ -1545,16 +1636,16 @@ C.48D1:	PUSH	AF
         RRCA
         RRCA
         RRCA
-        CALL	C.48DA
+        CALL	C.48DA                  ; display digit
         POP	AF
 
-;	  Subroutine __________________________
+;	  Subroutine display digit
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.48DA:	AND	0FH
         ADD	A,"0"
-        JP	C.41AE
+        JP	C.41AE                  ; display character
 
 I$48E1:	SUB	B
         JP	C,J$B191
@@ -1579,7 +1670,7 @@ J$48FA	EQU	$-1
         CALL	C.4793
         CALL	C.4910
 
-;	  Subroutine __________________________
+;	  Subroutine display string
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1588,7 +1679,7 @@ C.4905:	LD	A,(HL)
         RET	Z
         INC	HL
         PUSH	HL
-        CALL	C.41AE
+        CALL	C.41AE                  ; display character
         POP	HL
         JR	C.4905
 
@@ -1602,7 +1693,7 @@ C.4910:	PUSH	HL
         LD	(FORCLR),A
         CALL	C.4B52
         POP	DE
-        LD	A,(D.61D7)
+        LD	A,(D.61D7)              ; number of rows
         LD	HL,D.61D9
         ADD	A,(HL)
         ADD	A,E
@@ -1614,7 +1705,7 @@ C.4910:	PUSH	HL
         RET
 
 ;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	     Inputs  A = comterm mode
 ;	     Outputs ________________________
 
 C$492E:	LD	B,A
@@ -1655,21 +1746,21 @@ J$496A:	LD	D,0
         ADD	HL,DE
         LD	B,(HL)
         LD	A,B
-        AND	07H
+        AND	07H                     ; b2-b0
         LD	(D.61DC),A
         LD	A,B
-        AND	18H
-        JR	Z,J$497F
+        AND	18H                     ; b4-b3
+        JR	Z,J$497F                ; zero, use screen mode 2
         RRCA
         RRCA
-        RRCA
-        ADD	A,2
+        RRCA                            ; to b1-b0
+        ADD	A,2                     ; screen mode 5,6 or 7
 J$497F:	ADD	A,2
         LD	(SCRMOD),A
         LD	A,B
         AND	18H
         RRCA
-        RRCA
+        RRCA                            ; to b2-b1
         LD	HL,I$4AAA
         LD	E,A
         LD	D,0
@@ -1677,7 +1768,7 @@ J$497F:	ADD	A,2
         LD	DE,D.61DB
         LDI
         CALL	C.4A72
-        LD	A,00H
+        LD	A,0
         JR	C,J$499E
         LD	A,0FFH
 J$499E:	LD	(D.61D9),A
@@ -1686,18 +1777,18 @@ J$499E:	LD	(D.61D9),A
         ADD	A,A
         ADD	A,(HL)
         ADD	A,A
-        LD	HL,I$4AB2
+        LD	HL,I$4AB2               ; screen size table
         LD	E,A
-        LD	D,00H
+        LD	D,0
         ADD	HL,DE
         CALL	C.4A72
         JR	C,J$49B8
         LD	DE,16
         ADD	HL,DE
 J$49B8:	LD	DE,D.61D7
-        LDI
+        LDI                             ; number of rows
         LD	A,(HL)
-        LD	(DE),A
+        LD	(DE),A                  ; number of columns
         LD	L,A
         CALL	C.54D0
         EX	DE,HL
@@ -1717,7 +1808,7 @@ J$49D7:	LD	A,L
         ADD	A,A
         LD	HL,I$4B02
         LD	E,A
-        LD	D,00H
+        LD	D,0
         ADD	HL,DE
         CALL	C.4A72
         JR	C,J$49EF
@@ -1733,22 +1824,22 @@ J$49EF:	LD	DE,D.61E3
         LD	A,10H	; 16 
         LD	(D.61E4),A
 J$4A00:	LD	A,(VDP.DR)
-        LD	(D.61DA),A
+        LD	(D.61DA),A              ; store VDP data read port
         LD	A,(D.6361)
         OR	A                       ; output to modem ?
         RET	NZ                      ; yep, quit
         LD	A,(SCRMOD)
-        CALL	CHGMOD
+        CALL	CHGMOD                  ; change screen mode
         CALL	C$4B16
         CALL	C.4B52
         CALL	C$553C
         LD	A,(D.61D7)
-        LD	E,A
+        LD	E,A                     ; number of rows
         CALL	C.56A5                  ; screen mode 2 ?
         JR	Z,J$4A24                ; yep,
         INC	E
-J$4A24:	XOR	A
-        CALL	C.52AD
+J$4A24:	XOR	A                       ; first row = 0
+        CALL	C.52AD                  ; clear screen (partly)
         CALL	C.56A5                  ; screen mode 2 ?
         RET	Z                       ; yep, quit
         LD	BC,(RG8SAV-1)
@@ -1800,128 +1891,107 @@ C.4A72:	LD	A,(D.61DC)
         OR	A
         RET
 
-I$4A82:	DEFB	0,0
-        LD	BC,I.0201
-        LD	(BC),A
-        LD	(BC),A
-        LD	(BC),A
-        EX	AF,AF'
-        EX	AF,AF'
-        ADD	HL,BC
-        ADD	HL,BC
-        LD	A,(BC)
-        DEC	BC
-        INC	D
-        DEC	D
-        DJNZ	J$4AA4
-        LD	DE,I$1211
-        INC	DE
-        INC	D
-        DEC	D
-        JR	J$4AB4
+I$4A82:	DEFB	8*0+0                   ; screen mode 2
+        DEFB    8*0+0                   ; screen mode 2
+        DEFB    8*0+1                   ; screen mode 2
+        DEFB    8*0+1                   ; screen mode 2
+        DEFB    8*0+2                   ; screen mode 2
+        DEFB    8*0+2                   ; screen mode 2
+        DEFB    8*0+2                   ; screen mode 2
+        DEFB    8*0+2                   ; screen mode 2
 
-?.4A9C:	ADD	HL,DE
-        ADD	HL,DE
-        LD	A,(DE)
-        DEC	DE
-        INC	D
-        DEC	D
+        DEFB    8*1+0                   ; screen mode 5
+        DEFB    8*1+0                   ; screen mode 5
+        DEFB    8*1+1                   ; screen mode 5
+        DEFB    8*1+1                   ; screen mode 5
+        DEFB    8*1+2                   ; screen mode 5
+        DEFB    8*1+3                   ; screen mode 5
+        DEFB    8*2+4                   ; screen mode 6
+        DEFB    8*2+5                   ; screen mode 6
 
-I$4AA2: DEFB    6
-        DEFB    6
-        DEFB    0EH
-        DEFB    0FH
-        DEFB    16H
-        DEFB    17H
-        DEFB    1EH
-        DEFB    1FH
+        DEFB    8*2+0                   ; screen mode 6
+        DEFB    8*2+0                   ; screen mode 6
+        DEFB    8*2+1                   ; screen mode 6
+        DEFB    8*2+1                   ; screen mode 6
+        DEFB    8*2+2                   ; screen mode 6
+        DEFB    8*2+3                   ; screen mode 6
+        DEFB    8*2+4                   ; screen mode 6
+        DEFB    8*2+5                   ; screen mode 6
 
-I$4AAA:	LD	(BC),A
-        DEFB	0,0
-        LD	BC,I.0201
-        NOP
-        INC	BC
-I$4AB2:	JR	J.4ADC
+        DEFB    8*3+0                   ; screen mode 7
+        DEFB    8*3+0                   ; screen mode 7
+        DEFB    8*3+1                   ; screen mode 7
+        DEFB    8*3+1                   ; screen mode 7
+        DEFB    8*3+2                   ; screen mode 7
+        DEFB    8*3+3                   ; screen mode 7
+        DEFB    8*2+4                   ; screen mode 6
+        DEFB    8*2+5                   ; screen mode 6
 
-J$4AB4:	LD	A,(DE)
-        JR	Z,J$4AD1
-        LD	D,B
-        LD	A,(DE)
-        LD	D,B
-        JR	J.4ADC
+I$4AA2: DEFB    8*0+6                   ; screen mode 2
+        DEFB    8*0+6                   ; screen mode 2
+        DEFB    8*1+6                   ; screen mode 5
+        DEFB    8*1+7                   ; screen mode 5
+        DEFB    8*2+6                   ; screen mode 6
+        DEFB    8*2+7                   ; screen mode 6
+        DEFB    8*3+6                   ; screen mode 7
+        DEFB    8*3+7                   ; screen mode 7
 
-?.4ABC:	LD	A,(DE)
-        JR	NZ,J$4AD9
-        LD	B,B
-        LD	A,(DE)
-        LD	B,B
-        INC	C
-        JR	NZ,J$4AD2
-        JR	NZ,J$4AD4
-        LD	B,B
-        DEC	C
-        LD	B,B
-        JR	J$4AEC
+I$4AAA: DEFB    2,0
+        DEFB    0,1
+        DEFB    1,2
+        DEFB    0,3
 
-?.4ACC:	LD	A,(DE)
-        JR	NZ,J$4AE9
-        LD	B,B
-        LD	A,(DE)
-J$4AD1:	LD	B,B
-J$4AD2:	INC	C
-        JR	Z,J$4AE2
-J$4AD4	EQU	$-1
-        JR	Z,J$4AE4
-        LD	D,B
-        DEC	C
-J$4AD9:	LD	D,B
-        JR	J$4B04
+I$4AB2:	DEFB    24,40
+        DEFB    26,40
+        DEFB    26,80
+        DEFB    26,80
+        DEFB    24,32
+        DEFB    26,32
+        DEFB    26,64
+        DEFB    26,64
+        DEFB    12,32
+        DEFB    13,32
+        DEFB    13,64
+        DEFB    13,64
+        DEFB    24,32
+        DEFB    26,32
+        DEFB    26,64
+        DEFB    26,64
+        DEFB    12,40
+        DEFB    13,40
+        DEFB    13,80
+        DEFB    13,80
+        DEFB    24,40
+        DEFB    26,40
+        DEFB    26,80
+        DEFB    26,80
+        DEFB    12,40
+        DEFB    15,40
+        DEFB    15,80
+        DEFB    15,80
+        DEFB    12,40
+        DEFB    26,40
+        DEFB    26,80
+        DEFB    26,80
+        DEFB    12,40
+        DEFB    16,40
+        DEFB    16,80
+        DEFB    16,80
+        DEFB    12,40
+        DEFB    30,40
+        DEFB    30,80
+        DEFB    30,80
 
-J.4ADC:	LD	A,(DE)
-        JR	Z,J$4AF9
-        LD	D,B
-        LD	A,(DE)
-        LD	D,B
-J$4AE2:	INC	C
-        JR	Z,J$4AF4
-J$4AE4	EQU	$-1
-        JR	Z,J$4AF6
-        LD	D,B
-        RRCA
-J$4AE9:	LD	D,B
-        INC	C
-        JR	Z,J.4B07
-J$4AEC	EQU	$-1
-        JR	Z,J$4B09
-        LD	D,B
-        LD	A,(DE)
-        LD	D,B
-        INC	C
-        JR	Z,J$4B05
-J$4AF4	EQU	$-1
-        JR	Z,J.4B07
-J$4AF6	EQU	$-1
-        LD	D,B
-        DJNZ	J.4B4A
-J$4AF9	EQU	$-1
-        INC	C
-        JR	Z,J$4B1B
-        JR	Z,J$4B1D
-        LD	D,B
-J$4B00:	LD	E,50H	; "P"
-I$4B02:	LD	B,08H	; 8 
-J$4B04:	EX	AF,AF'
-J$4B05:	EX	AF,AF'
-        EX	AF,AF'
-J.4B07:	DJNZ	J$4B11
-J$4B09:	EX	AF,AF'
-        LD	B,10H	; 16 
-        LD	B,08H	; 8 
-        LD	B,0EH	; 14 
-        LD	B,08H	; 8 
-J$4B11	EQU	$-1
-        LD	B,0DH	; 13 
-        LD	B,07H	; 7 
+I$4B02: DEFB    06H,08H
+        DEFB    08H,08H
+        DEFB    08H,10H
+        DEFB    08H,08H
+        DEFB    06H,10H
+        DEFB    06H,08H
+        DEFB    06H,0EH
+        DEFB    06H,08H
+        DEFB    06H,0DH
+        DEFB    06H,07H
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1930,7 +2000,6 @@ J$4B11	EQU	$-1
 C$4B16:	LD	HL,I$4B42
         LD	B,04H	; 4 
 J$4B1B:	LD	A,(D.61DB)
-J$4B1D	EQU	$-1
         DEC	A
         RET	NZ
         LD	A,(D.61DC)
@@ -1946,7 +2015,7 @@ J.4B2E:	SLA	B
         EI
         POP	BC
         LD	A,(D.61DA)
-        ADD	A,2
+        ADD	A,2                     ; VDP palette register
         LD	C,A
         OTIR
         RET
@@ -2023,7 +2092,7 @@ C.4B8C:	LD	A,(D.61D4)
         JR	Z,J$4B9C
         LD	D,A
         LD	A,L
-        XOR	08H	; 8 
+        XOR	08H
         LD	L,A
         LD	A,D
 J$4B9C:	BIT	7,A
@@ -2078,7 +2147,7 @@ J.4BE6:	LD	A,H
         LD	A,(D.61D4)
         LD	(D.61DF),HL
         LD	A,(SCRMOD)
-        CP	02H	; 2 
+        CP	2
         JR	NZ,J$4BFF
         LD	A,L
         ADD	A,A
@@ -2149,18 +2218,18 @@ I$4C30	EQU	$-1
 C$4C40:	LD	A,(D.61DC)
         CP	2
         JR	NC,J$4C5E
-        CALL	C.50AD
+        CALL	C.50AD                  ; copy system character pattern
         CALL	C$4F55
         EI
         LD	HL,(GRPACX)
         LD	BC,(D.61E3)
-        LD	B,00H
+        LD	B,0
         ADD	HL,BC
         LD	(GRPACX),HL
         JP	J.55A6
 
 J$4C5E:	LD	A,L
-        CP	20H	; " "
+        CP	20H
         JR	C,J.4C6F
         CP	80H
         JR	C,J.4C84
@@ -2168,10 +2237,10 @@ J$4C5E:	LD	A,L
         JR	C,J.4C6F
         CP	0E0H
         JR	C,J.4C84
-J.4C6F:	CALL	C.50AD
+J.4C6F:	CALL	C.50AD                  ; copy system character pattern
         LD	HL,PATWRK
         LD	DE,D.6320
-        LD	B,08H	; 8 
+        LD	B,8
 J$4C7A:	LD	A,(HL)
         INC	HL
         LD	(DE),A
@@ -2204,16 +2273,16 @@ C$4CA4:	LD	A,(D.61DC)
         CP	6
         JR	C,J$4CC6
         LD	A,H
-        SUB	21H	; "!"
+        SUB	21H
         RRA
-        ADD	A,0EH	; 14 
+        ADD	A,0EH
         BIT	0,H
         LD	H,A
         LD	A,L
         JR	NZ,J$4CB9
-        ADD	A,5EH	; "^"
-J$4CB9:	SUB	21H	; "!"
-        CP	3FH	; "?"
+        ADD	A,5EH
+J$4CB9:	SUB	21H
+        CP	3FH
         CCF
         ADC	A,00H
         LD	L,A
@@ -2224,7 +2293,7 @@ J$4CC6:	LD	DE,I$DFE0
         ADD	HL,DE
         PUSH	HL
         LD	L,H
-        LD	H,00H
+        LD	H,0
         LD	E,L
         LD	D,H
         ADD	HL,HL
@@ -2236,10 +2305,10 @@ J$4CC6:	LD	DE,I$DFE0
         ADD	HL,HL
         EX	DE,HL
         POP	HL
-        LD	H,00H
+        LD	H,0
         ADD	HL,DE
         LD	A,H
-        CP	04H	; 4 
+        CP	04H
         JR	C,J$4CE3
         DEC	H
         DEC	H
@@ -2358,7 +2427,7 @@ J$4D8D:	XOR	A
         INC	IX
 J.4DA2:	LD	B,06H	; 6 
 J$4DA4:	IN	A,(49H)
-        LD	(IX),A
+        LD	(IX+0),A
         RRCA
         RRCA
         AND	0C0H
@@ -2664,7 +2733,6 @@ J$4F54	EQU	$-1
 ;	     Outputs ________________________
 
 C$4F55:	LD	C,0B0H
-J$4F56	EQU	$-1
         CALL	C.56A5                  ; screen mode 2 ?
         JP	Z,J$5047                ; yep,
         LD	HL,PATWRK
@@ -2738,7 +2806,7 @@ J$4FBB:	PUSH	HL
         ADD	A,3
         LD	C,A                     ; VDP indirect port
         LD	IX,D.61E3
-        LD	B,(IX)
+        LD	B,(IX+0)
         DEC	B
         LD	A,(D.61E5)
 J$4FDC:	EX	AF,AF'
@@ -2795,7 +2863,7 @@ J$502C: OUT	(C),E
         CALL	C.55FC
         JR	NZ,J$5035
         INC	HL
-J$5035:	LD	B,(IX)
+J$5035:	LD	B,(IX+0)
         EX	AF,AF'
         DEC	A
         JR	NZ,J$4FDC
@@ -2879,32 +2947,32 @@ C$50A2:	LD	A,(D.61DC)
         RRA
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine copy system character pattern
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.50AD:	ADD	HL,HL
         ADD	HL,HL
-        ADD	HL,HL
+        ADD	HL,HL                   ; *8
         EX	DE,HL
         LD	HL,(CGPNT+1)
         ADD	HL,DE
         LD	DE,PATWRK
-        LD	B,08H	; 8 
+        LD	B,8
         LD	A,(CGPNT+0)
-        OR	A
-        JR	NZ,J$50C3
-        LD	A,(EXPTBL+0)
+        OR	A                       ; default character set slotid ?
+        JR	NZ,J$50C3               ; nope, use that slotid
+        LD	A,(EXPTBL+0)            ; yep, use main-rom slotid
 J$50C3:	LD	C,A
         LD	A,(EXPTBL+0)
-        CP	C
-        JR	NZ,J$50D1
+        CP	C                       ; character set in main-rom ?
+        JR	NZ,J$50D1               ; nope, use RDSLT
         LD	C,B
-        LD	B,00H
-        LDIR
+        LD	B,0
+        LDIR                            ; copy character pattern
         JR	J$50E1
 
-J$50D1:	LD	A,C
+J$50D1:	LD	A,C                     ; slotid
 J$50D2:	PUSH	AF
         PUSH	BC
         PUSH	DE
@@ -3057,9 +3125,9 @@ J$51B2:	CP	E
         JR	J$51B2
 
 J$51BB:	PUSH	DE
-        LD	HL,D.61D7
+        LD	HL,D.61D7               ; number of rows
         LD	A,(CNSDFG)
-        ADD	A,(HL)
+        ADD	A,(HL)                  ; adjust if functionkey display enabled
         LD	E,A
         LD	A,(D.61D9)
         ADD	A,E
@@ -3107,16 +3175,16 @@ C$51F1:	CALL	C.56A5                  ; screen mode 2 ?
         LD	B,D
         JP	Z,C.5299                ; yep,
         CALL	C$554D
-        LD	BC,(D.61D7)
+        LD	BC,(D.61D7)             ; number of rows
         DEC	C
-        LD	B,00H
+        LD	B,0
         LD	A,(CNSDFG)
-        OR	A
-        JR	NZ,J$523B
+        OR	A                       ; functionkey display enabled ?
+        JR	NZ,J$523B               ; yep,
         LD	A,(D.61D9)
         OR	A
         JR	NZ,J$5241
-        LD	A,(D.61D7)
+        LD	A,(D.61D7)              ; number of rows
         LD	C,A
         ADD	A,D
         LD	E,A
@@ -3152,7 +3220,7 @@ C.5225:	CALL	C.5657                  ; wait for command ready
 J$523B:	LD	A,(D.61D9)
         OR	A
         JR	NZ,J$5265
-J$5241:	LD	A,(D.61D7)
+J$5241:	LD	A,(D.61D7)              ; number of rows
         LD	E,A
         DEC	E
         INC	A
@@ -3165,14 +3233,14 @@ J$5241:	LD	A,(D.61D7)
         LD	A,01H	; 1 
         CALL	C.54FB
         CALL	C.5225
-        LD	A,(D.61D7)
+        LD	A,(D.61D7)              ; number of rows
         LD	D,A
         DEC	D
         LD	E,A
         INC	E
         JP	C.52E3
 
-J$5265:	LD	A,(D.61D7)
+J$5265:	LD	A,(D.61D7)              ; number of rows
         LD	E,A
         INC	A
         CALL	C.5373
@@ -3191,7 +3259,7 @@ J$5265:	LD	A,(D.61D7)
         LD	A,01H	; 1 
         CALL	C.54FB
         CALL	C.5225
-        LD	A,(D.61D7)
+        LD	A,(D.61D7)              ; number of rows
         LD	D,A
         DEC	D
         DEC	D
@@ -3211,23 +3279,23 @@ C.5299:	LD	D,A
         JR	NC,J$529E
         SBC	A,A
 J$529E:	LD	E,A
-        LD	HL,D.61D7
+        LD	HL,D.61D7               ; number of rows
         LD	A,(CNSDFG)
-        ADD	A,(HL)
+        ADD	A,(HL)                  ; adjust if functionkey display enabled
         LD	HL,D.61D9
         ADD	A,(HL)
         CALL	C.535D
 
-;	  Subroutine __________________________
+;	  Subroutine clear screen (partly)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.52AD:	CP	E
-        RET	Z
+C.52AD:	CP	E                       ; at last row ?
+        RET	Z                       ; yep, quit
         CALL	C$5587
         CALL	C.5373
-        INC	A
-        JR	C.52AD
+        INC	A                       ; update row
+        JR	C.52AD                  ; next row
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -3238,9 +3306,9 @@ C.52B8:	LD	E,A
         JR	NC,J$52BD
         SBC	A,A
 J$52BD:	LD	D,A
-        LD	HL,D.61D7
+        LD	HL,D.61D7               ; number of rows
         LD	A,(CNSDFG)
-        ADD	A,(HL)
+        ADD	A,(HL)                  ; adjust if functionkey display enabled
         LD	HL,D.61D9
         ADD	A,(HL)
         CP	D
@@ -3262,7 +3330,7 @@ J$52D6:	DEC	D
         DJNZ	J$52D6
 J$52DF:	LD	A,E
         LD	E,D
-        JR	C.52AD
+        JR	C.52AD                  ; clear screen (partly)
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -3462,7 +3530,7 @@ C.53E8:	PUSH	AF
         LD	HL,256
         LD	A,(SCRMOD)
         AND	06H
-        CP	06H
+        CP	6
         JR	NZ,J$53F6
         ADD	HL,HL
 J$53F6:	POP	AF
@@ -3619,7 +3687,7 @@ C.54C3:	CALL	C.54D0
 ;	     Outputs ________________________
 
 C.54D0:	PUSH	AF
-        LD	H,00H
+        LD	H,0
         LD	A,(D.61DC)
         CP	4
         JR	NC,J$54DD
@@ -3657,7 +3725,7 @@ J$54F9:	POP	AF
 ;	     Outputs ________________________
 
 C.54FB:	LD	L,A
-        LD	H,00H
+        LD	H,0
         LD	A,(D.61DC)
         CP	7
         JR	Z,J$5521
@@ -3748,9 +3816,9 @@ C$5558:	LD	HL,D.61EF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$5563:	LD	HL,D.61D7
+C$5563:	LD	HL,D.61D7               ; number of rows
         LD	A,(CNSDFG)
-        ADD	A,(HL)
+        ADD	A,(HL)                  ; adjust if functionkey display enabled
         LD	HL,D.61D9
         ADD	A,(HL)
         DEC	A
@@ -3979,10 +4047,10 @@ C.5678:	PUSH	AF
         SET	7,L
         LD	A,(D.61DA)
         LD	C,A
-        INC	C
+        INC	C                       ; VDP command port
         DI
-        OUT	(C),B
-        OUT	(C),L
+        OUT	(C),B                   ; register data
+        OUT	(C),L                   ; register number
         LD	A,L
         LD	HL,RG0SAV-80H
         CP	88H
@@ -4022,7 +4090,7 @@ J.56AB:	LD	A,B
         EX	DE,HL
 J$56B4:	CALL	C.56CC
         LD	A,(D.61DA)
-        LD	C,A
+        LD	C,A                     ; VDP data read port
         LD	IY,0
         ADD	IY,SP
         LD	A,(IY+6)
@@ -4086,13 +4154,13 @@ C$56DB:	CP	0E0H
 C$56FB:	LD	B,(IY+2)
 J$56FE:	PUSH	BC
         PUSH	HL
-        CALL	C.588F
+        CALL	C.588F                  ; setup VDP for VRAM read
         LD	B,32
         LD	HL,LINWRK
 J$5708:	INI
         JR	NZ,J$5708
         EX	DE,HL
-        CALL	C.588B
+        CALL	C.588B                  ; setup VDP for VRAM write
         EX	DE,HL
         LD	B,32
         LD	HL,LINWRK
@@ -4133,7 +4201,7 @@ C$573A:	LD	A,L
         XOR	L
         CP	L
         LD	L,A
-        LD	A,(IY)
+        LD	A,(IY+0)
         JR	Z,J$575B
         PUSH	AF
         PUSH	BC
@@ -4201,17 +4269,17 @@ C$5789:	CP	0C0H
 J$5796:	PUSH	HL
         LD	DE,(GRPCGP)
         ADD	HL,DE
-        CALL	C.588B
+        CALL	C.588B                  ; setup VDP for VRAM write
         XOR	A
-        LD	B,08H	; 8 
+        LD	B,8
 J$57A2:	OUT	(C),A
         DJNZ	J$57A2
         JR	J$57BB
 
 J$57A8:	PUSH	HL
         CALL	C.5850
-        CALL	C.588B
-        LD	B,08H	; 8 
+        CALL	C.588B                  ; setup VDP for VRAM write
+        LD	B,8
         LD	HL,D.6320
 J$57B4:	LD	A,(HL)
         AND	D
@@ -4227,9 +4295,9 @@ J$57BB:	POP	HL
 J$57C6:	LD	E,0FFH
 J$57C8:	PUSH	HL
         CALL	C.5850
-        CALL	C.588B
+        CALL	C.588B                  ; setup VDP for VRAM write
         LD	HL,D.6320
-        LD	B,08H	; 8 
+        LD	B,8
 J$57D4:	LD	A,(HL)
         XOR	E
         OUT	(C),A
@@ -4238,7 +4306,7 @@ J$57D4:	LD	A,(HL)
         POP	HL
         LD	DE,(GRPCOL)
         ADD	HL,DE
-        CALL	C.588F
+        CALL	C.588F                  ; setup VDP for VRAM read
         IN	A,(C)
         XOR	(IY+4)
         RLCA
@@ -4246,14 +4314,14 @@ J$57D4:	LD	A,(HL)
         RLCA
         RLCA
         XOR	(IY+4)
-J$57F0:	CALL	C.588B
-        LD	B,08H	; 8 
+J$57F0:	CALL	C.588B                  ; setup VDP for VRAM write
+        LD	B,8
 J$57F5:	OUT	(C),A
         DJNZ	J$57F5
         RET
 
 J$57FA:	CALL	C.5866
-        LD	B,08H	; 8 
+        LD	B,8
         LD	HL,PATWRK
 J$5802:	OUTI
         JR	NZ,J$5802
@@ -4270,7 +4338,7 @@ J$5807:	LD	A,B
         LD	HL,D.6320
         EXX
         LD	HL,PATWRK
-        LD	C,08H	; 8 
+        LD	C,8
 J$581C:	LD	A,(HL)
         LD	B,E
         INC	B
@@ -4330,8 +4398,8 @@ C.5850:	PUSH	DE
         ADD	HL,DE
         POP	DE
         PUSH	HL
-        CALL	C.588F
-        LD	B,08H	; 8 
+        CALL	C.588F                  ; setup VDP for VRAM read
+        LD	B,8
         LD	HL,D.6320
 J$5860:	INI
         JR	NZ,J$5860
@@ -4347,7 +4415,7 @@ C.5866:	PUSH	HL
         PUSH	BC
         LD	DE,(GRPCOL)
         ADD	HL,DE
-        CALL	C.588B
+        CALL	C.588B                  ; setup VDP for VRAM write
         LD	DE,(D.61DF)
         LD	A,E
         ADD	A,A
@@ -4355,7 +4423,7 @@ C.5866:	PUSH	HL
         ADD	A,A
         ADD	A,A
         OR	D
-        LD	B,08H	; 8 
+        LD	B,8
 J$587D:	OUT	(C),A
         DJNZ	J$587D
         POP	BC
@@ -4366,14 +4434,14 @@ J$587D:	OUT	(C),A
         ADD	HL,DE
         POP	DE
 
-;	  Subroutine __________________________
+;	  Subroutine setup VDP for VRAM write
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.588B:	SET	6,H
         JR	J$5891
 
-;	  Subroutine __________________________
+;	  Subroutine setup VDP for VRAM read
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 

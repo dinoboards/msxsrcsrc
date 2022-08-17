@@ -107,7 +107,7 @@ D.60B4	EQU	60B4H	; --SL-
 D.60B5	EQU	60B5H	; --SL-
 D.60B6	EQU	60B6H	; --SL-
 D.60B7	EQU	60B7H                   ; modem mode
-D$615D	EQU	615DH	; --S--
+D$615D	EQU	615DH                   ; comterm mode (b0 = interlace, b1 = full, b2 = chinese, b3/b4 = srceen mode, b5/b6 = kanji code, b7 = DEL operation)
 D.615F	EQU	615FH                   ; flags before interrupt disable
 D.6172	EQU	6172H	; --SL-
 D$6173	EQU	6173H	; ---L-
@@ -287,15 +287,15 @@ I$40B1:	JP	J$44EF			; counter #1, get number of seconds
 I$40B4:	JP	C.4466			; get my slotid
 I$40B7:	JP	J$41B4			; comterm
 I$40BA:	JP	J$41BB                  ; comterm ??
-I$40BD:	JP	J$41C2			; store protocol and timer values
-I$40C0:	JP	C.557C
+I$40BD:	JP	J$41C2			; set protocol and timer values
+I$40C0:	JP	C.557C                  ; get line status
 I.40C3:	JP	J$41EC
 I$40C6:	JP	J$41F3
 ?.40C9:	JP	J$4195			; MAIN BIOS CALL
 I$40CC:	JP	C.5190                  ; signal sender to resume sending
 ?.40CF:	JP	C.51A6                  ; signal sender to stop sending
 ?.40D2:	JP	J$41FA
-?.40D5:	JP	J$419C
+?.40D5:	JP	J$419C                  ; initialize comterm mode
 ?.40D8:	JP	J$41A6
 ?.40DB:	JP	J$41AD
 ?.40DE:	JP	J$41D0
@@ -401,10 +401,10 @@ J$4195:	CALL	C.6000			; interbank call (EI)
         DEFW	C.40AB
         RET
 
-J$419C:	LD	(D$615D),A
+J$419C:	LD	(D$615D),A              ; store comterm mode
         CALL	C.6000			; interbank call (EI)
         DEFB	2
-        DEFW	C.4090
+        DEFW	C.4090                  ; initialize comterm mode
         RET
 
 J$41A6:	CALL	C.6000			; interbank call (EI)
@@ -1342,7 +1342,7 @@ C$4658:	LD	A,0C0H
         OR	0C0H
         LD	(D.6085),A              ; set dial mode = pulse dial, 20pps
         LD	A,40H                   ; pulse dial
-        JR	J$46C8
+        JR	J$46C8			; clear flags and receive buffer
 
 ;	  Subroutine clear flags and receive buffer
 ;	     Inputs  ________________________
@@ -1527,7 +1527,7 @@ J$47D5:	LD	A,C
         OR	B
         LD	(D.6082),A              ; update last i8251 mode byte
         DI
-        CALL	C$5627
+        CALL	C$5627                  ; update modem mode
         LD	A,(IY+12)               ; timeout value
         LD	(D.6072),A              ; store timeout value
         CALL	C$54C3
@@ -2645,7 +2645,7 @@ C$4E83:	LD	A,(D.60A4)              ; i8255 port B register backup
         LD	A,(IY+1)
         OR	A
         JP	M,J$4F24
-        CALL	C.557C
+        CALL	C.557C                  ; get line status
         AND	03H                     ; b1-b0
         LD	L,A
         LD	A,(D$6373)
@@ -3903,7 +3903,7 @@ J$5571:	LD	A,(D.7FC6)              ; i8255 port C
 J$557A:	POP	AF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine get line status
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4059,7 +4059,7 @@ J$5612:	LD	H,00H
         SCF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine pdate modem mode
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 

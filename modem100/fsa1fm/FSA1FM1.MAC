@@ -1694,7 +1694,7 @@ J$49C7:	PUSH	HL
         LD	B,02H                   ; set shift JIS D flag
 J$49D6:	LD	A,C
         OR	B
-        LD	(D.615E),A
+        LD	(D.615E),A              ; update shift JIS D flag
         LD	(D.6162),HL             ; update auto login pointer
         CALL	C.49E4                  ; restore foreground, background and border color
         POP	AF
@@ -2123,7 +2123,7 @@ J$4C38:	LD	(DE),A
         LD	A,H
         LD	(BDRCLR),A              ; restore border color
         LD	A,(D.615E)
-        LD	C,A
+        LD	C,A                     ; shift JIS D mode, 12 dots mode
         LD	A,(D.615D)              ; comterm mode
         CALL	C.6000
         DEFB    2
@@ -2465,28 +2465,28 @@ C.4EBD:	PUSH	BC
         LD	B,A
         LD	A,(D.6073)
         AND	A                       ; literal mode ?
-        JR	Z,J.4EE3                ; nope,
+        JR	Z,J.4EE3                ; nope, print to screen/printer
         LD	A,B
-        CP	20H
-        JR	NC,J.4EE3
+        CP	20H                     ; control code ?
+        JR	NC,J.4EE3               ; nope, print to screen/printer
         LD	A,"^"
-        CALL	C.4EE5
+        CALL	C.4EE5                  ; print to screen/printer
         LD	A,B
         ADD	A,40H
-        CALL	C.4EE5
+        CALL	C.4EE5                  ; print to screen/printer
         LD	A,B
-        CP	10
+        CP	10                      ; LF ?
         POP	BC
-        RET	NZ
-        LD	A,13
-        CALL	C.4EE5
-        LD	A,10
-        JR	C.4EE5
+        RET	NZ                      ; nope, quit
+        LD	A,13                    ; CR
+        CALL	C.4EE5                  ; print to screen/printer
+        LD	A,10                    ; LF
+        JR	C.4EE5                  ; print to screen/printer
 
 J.4EE3:	LD	A,B
         POP	BC
 
-;	  Subroutine __________________________
+;	  Subroutine print to screen/printer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2750,7 +2750,7 @@ C.5064:	EXX
 ;	     Outputs ________________________
 
 C$506C:	XOR	A
-        LD	(D.615E),A
+        LD	(D.615E),A              ; shift JIS D disabled, 12 dots disabled
         PUSH	HL
         PUSH	DE
         LD	DE,'A'*256+'N'          ; ANK, non-interlace

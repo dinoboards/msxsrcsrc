@@ -17,13 +17,13 @@
 
         org     04000H
 
-RDSLT	EQU	000CH	; -C---
-WRSLT	EQU	0014H	; -C--I
-CALSLT	EQU	001CH	; -C---
-CHSNS	EQU	009CH	; -C---
-CHGET	EQU	009FH	; -C---
-SNSMAT	EQU	0141H	; -C---
-KILBUF	EQU	0156H	; ----I
+RDSLT	EQU	000CH
+WRSLT	EQU	0014H
+CALSLT	EQU	001CH
+CHSNS	EQU	009CH
+CHGET	EQU	009FH
+SNSMAT	EQU	0141H
+KILBUF	EQU	0156H
 
 ERROR   equ     406FH                   ; BASIC error
 FNDLIN  EQU     4295H                   ; search linenumber from start of program
@@ -154,9 +154,9 @@ D.7FC0	EQU	7FC0H	; --SL-
 
 
 ?.4000:	DEFB	"AB"
-	DEFW	C.4034
-	DEFW	C.441F
-	DEFW	C.4268
+	DEFW	C.4034			; ROM extension initialization
+	DEFW	C.441F			; ROM extension CALL statement handler
+	DEFW	C.4268			; ROM extension BASIC device handler
 	DEFS	8,0
 
 ; interrupt handler
@@ -187,7 +187,7 @@ C.402B:	CALL	C.6000			; inter segment call (EI)
 	DEFW	C.4046
 	JP	J.605A			; continue with previous H.ERRO handler
 
-; extension init
+; ROM extension init
 
 C.4034:	DI
 	LD	A,40H			; ?,segment=0
@@ -212,9 +212,9 @@ I.405E:	JP	C.43F9                  ; counter #1, clear
 I$4061:	JP	C.440C			; counter #1, get number of seconds
 ?.4064:	JP	C.43AC			; get my slotid
 ?.4067:	JP	C.4736			; comterm
-?.406A:	JP	J$45DA
-?.406D:	JP	C.4F3A			; set protocol
-?.4070:	JP	J$40FE
+?.406A:	JP	J$45DA                  ; comterm ??
+?.406D:	JP	C.4F3A			; set protocol and timer values
+?.4070:	JP	J$40FE                  ; get line status
 ?.4073:	JP	J$412A
 ?.4076:	JP	J$4131
 ?.4079:	JP	C.505B			; MAIN BIOS CALL
@@ -284,6 +284,10 @@ J$40F7:	CALL	C.6000			; inter segment call (EI)
 	DEFW	I.405E
 	RET
 
+;	  Subroutine get line status
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$40FE:	PUSH	BC
 	LD	A,(D.6093)		; 7FC0 register backup
 	AND	10H
@@ -297,38 +301,32 @@ J$40FE:	PUSH	BC
 
 J$410E:	CALL	C.6000			; inter segment call (EI)
 	DEFB	3
-	LD	D,D
-	LD	B,B
+	DEFW	C.4052
 	RET
 
 J$4115:	CALL	C.6000			; inter segment call (EI)
 	DEFB	3
-	LD	D,L
-	LD	B,B
+	DEFW	C.4055
 	RET
 
 J$411C:	CALL	C.6000			; inter segment call (EI)
 	DEFB	3
-	LD	E,B
-	LD	B,B
+	DEFW	C.4058
 	RET
 
 J$4123:	CALL	C.6000			; inter segment call (EI)
 	DEFB	2
-	LD	E,B
-	LD	B,B
+	DEFW	C.4058
 	RET
 
 J$412A:	CALL	C.6000			; inter segment call (EI)
 	DEFB	3
-	LD	C,C
-	LD	B,B
+	DEFW	C.4049
 	RET
 
 J$4131:	CALL	C.6000			; inter segment call (EI)
 	DEFB	3
-	LD	C,H
-	LD	B,B
+	DEFW	C.404C
 	RET
 
 J$4138:	LD	A,100
@@ -770,8 +768,7 @@ J$438E:	POP	AF
 
 C.4390:	CALL	C.6000			; inter segment call (EI)
 	DEFB	2
-	LD	B,E
-	LD	B,B
+	DEFW	C.4043
 	RET
 
 ;	  Subroutine set comterm mode
@@ -1502,7 +1499,7 @@ J.479A:	PUSH	BC
 	JR	NC,J$47C8
 	OR	A
 	JR	NZ,J$47B1
-	CALL	C.5DE7
+	CALL	C.5DE7			; send break
 	JR	J.479A			; main loop
 
 J$47B1:	LD	D,A
@@ -1565,12 +1562,11 @@ J.481A:	LD	HL,0
 	LD	A,(D.6153)		; comterm mode
 	RRCA
 	RRCA
-	RRCA
+	RRCA                            ; Cx = chinese mode
 	CALL	C.6000			; inter segment call (EI)
 	DEFB	1
 	DEFW	C.4040
 	CALL	NC,C$5118
-
 J.482F:	EI
 	CALL	C.463A			; wait for carrier (10s)
 	AND	A			; carrier ?
@@ -1589,25 +1585,24 @@ J.482F:	EI
 
 J.4850:	CALL	NZ,C.48D1
 	CALL	C.4339			; STOP pressed (reset STOP flag) ?
-	CALL	NZ,C.5DE7		; yep,
+	CALL	NZ,C.5DE7		; yep, send break
 	CALL	C.4327			; CTRL-STOP pressed (reset STOP flag) ?
 	LD	A,1
 	JP	C,J.4B64		; yep, quit comterm
-	CALL	CHSNS
+	CALL	CHSNS			; key pressed ?
 	EI
 	CALL	C.6000			; inter segment call (EI)
 	DEFB	2
-	LD	C,C
-	LD	B,B
-	JR	Z,J$487F
+	DEFW	C.4049
+	JR	Z,J$487F		; nope,
 	LD	HL,(GETPNT)
 	LD	A,(HL)
-	CP	0FFH
-	JP	Z,J$4B04
-	CP	18H
-	JR	Z,J$487C
-	CP	20H	; " "
-J$487C:	CALL	Z,C$4AD9
+	CP	0FFH			; function key pressed ?
+	JP	Z,J$4B04		; yep, handle
+	CP	18H			; SELECT key pressed ?
+	JR	Z,J$487C		; yep,
+	CP	20H			; SPACE key pressed ?
+J$487C:	CALL	Z,C$4AD9		; yep, check special keys
 J$487F:	CALL	C.6000			; inter segment call (EI)
 	DEFB	1
 	DEFW	C.4046
@@ -1630,8 +1625,8 @@ J.488C:	LD	A,(HL)
 
 C$4898:	LD	C,A
 	LD	A,(D.6153)		; comterm mode
-	AND	06H	; 6 
-	CP	02H	; 2 
+	AND	06H                     ; chinese + full
+	CP	02H
 	LD	A,C
 	JR	Z,C.48B4
 	CP	80H
@@ -1642,7 +1637,7 @@ C$4898:	LD	C,A
 	JR	C,J$48B2
 	CP	0E0H
 	JR	C,C.48B4
-J$48B2:	XOR	20H	; " "
+J$48B2:	XOR	20H
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1678,8 +1673,7 @@ C.48D1:	PUSH	AF
 	PUSH	AF
 	CALL	C.6000			; inter segment call (EI)
 	DEFB	3
-	LD	C,A
-	LD	B,B
+	DEFW	C.404F
 J$48E0:	POP	AF
 	JP	C.434E			; echo to screen/printer (literal)
 
@@ -1702,8 +1696,7 @@ C$48E4:	LD	A,(D.62E9)
 
 J$4901:	CALL	C.6000			; inter segment call (EI)
 	DEFB	2
-	LD	B,(HL)
-	LD	B,B
+	DEFW	C.4046
 	AND	A
 	RET
 
@@ -1765,33 +1758,33 @@ J.494A:	LD	A,D
 	LD	D,00H
 	CP	"A"
 D$494F:	JR	Z,J.4964
-	LD	D,02H	; 2 
+	LD	D,02H
 	CP	"M"
 	JR	Z,J.4964
-	LD	D,04H	; 4 
+	LD	D,04H
 	CP	"K"
 	JR	Z,J.4964
-	LD	D,06H	; 6 
+	LD	D,06H
 	CP	"G"
 J.4961:	JP	NZ,J.454B		; illegal function call
 J.4964:	LD	A,E
 	LD	E,00H
 	CP	"N"
 	JR	Z,J$4971
-	LD	E,01H	; 1 
+	LD	E,01H
 	CP	"I"
 	JR	NZ,J.4961
 J$4971:	LD	A,L
 	LD	L,00H
 	CP	"O"
 	JR	Z,J.498A
-	LD	L,20H	; " "
+	LD	L,20H
 	CP	"J"
 	JR	Z,J.498A
-	LD	L,40H	; "@"
+	LD	L,40H
 	CP	"S"
 	JR	Z,J.498A
-	LD	L,60H	; "`"
+	LD	L,60H
 	CP	"N"
 	JR	NZ,J.4961
 J.498A:	LD	A,H
@@ -1818,14 +1811,14 @@ J$49AB:	LD	E,00H
 
 J$49AF:	CP	05H	; 5 
 	JR	C,J$49AB
-	LD	E,08H	; 8 
+	LD	E,08H
 	JR	Z,J.49C3
-	LD	E,10H	; 16 
+	LD	E,10H
 	CP	07H	; 7 
 	JR	C,J.49C3
 	LD	E,18H
 	JR	Z,J.49C3
-	LD	E,08H	; 8 
+	LD	E,08H
 J.49C3:	LD	A,E
 	OR	D
 	LD	(D.6153),A		; update comterm mode
@@ -2016,17 +2009,17 @@ C$4AD9:	LD	H,A
 	CALL	SNSMAT
 	LD	L,A
 	LD	A,H
-	CP	20H	; " "
+	CP	20H
 	JR	Z,J$4AF1
-	BIT	2,L
-	JR	Z,J$4AF4
-	BIT	0,L
-	RET	NZ
+	BIT	2,L			; GRAPH pressed ?
+	JR	Z,J$4AF4		; yep,
+	BIT	0,L			; SHIFT pressed ?
+	RET	NZ			; nope, quit
 	LD	HL,J.4B64		; quit comterm
 	JR	J$4AFD
 
-J$4AF1:	BIT	1,L
-	RET	NZ
+J$4AF1:	BIT	1,L			; CTRL pressed ?
+	RET	NZ			; nope, quit
 J$4AF4:	CALL	C.6000			; inter segment call (EI)
 	DEFB	1
 	DEFW	C.4043
@@ -2051,18 +2044,18 @@ J$4B04:	CALL	CHGET
 	JP	Z,J$4B42
 	JR	NZ,J.4B31
 
-; F7
+; F7, printer echo
 
 J$4B1F:	CALL	C.4B4F			; echo CR/LF to printer (if enabled)
 	JR	C,J.4B31
 	JR	J.4B2E
 
-; F5
+; F5, literal mode
 
 J$4B26:	LD	HL,D.6072		; literal mode
 	JR	J.4B2E
 
-; F6
+; F6, duplex mode
 
 J$4B2B:	LD	HL,D.6074		; duplex mode
 J.4B2E:	LD	A,(HL)
@@ -2070,18 +2063,17 @@ J.4B2E:	LD	A,(HL)
 	LD	(HL),A
 J.4B31:	JP	J.482F
 
-; F8
+; F8, upload
 
 J$4B34:	LD	A,(D.62E9)
 	OR	A
 	JR	NZ,J.4B45
 	CALL	C.6000			; inter segment call (EI)
 	DEFB	3
-	LD	B,B
-	LD	B,B
+	DEFw	C.4040
 	JR	J.4B45
 
-; F9
+; F9, download
 
 J$4B42:	CALL	C.4B48
 J.4B45:	JP	J.482F
@@ -2092,8 +2084,7 @@ J.4B45:	JP	J.482F
 
 C.4B48:	CALL	C.6000			; inter segment call (EI)
 	DEFB	3
-	LD	B,E
-	LD	B,B
+	DEFW	C.4043
 	RET
 
 ;	  Subroutine echo CR/LF to printer (if enabled)
@@ -2175,8 +2166,7 @@ C.4B8D:	CALL	C.506C			; evaluate comidentifier and check if this one
 	DEFB	")"
 J.4B9F:	CALL	C.6000			; inter segment call (EI)
 	DEFB	2
-	LD	E,E
-	LD	B,B
+	DEFW	C.405B
 	RET
 
 ;	  Subroutine CALL NET
@@ -3447,12 +3437,12 @@ C$5289:	LD	A,(D.6094)		; NCU register 0 backup
 	INC	HL
 	LD	A,(D$60AD)
 	XOR	(HL)
-	CALL	C.5301
+	CALL	C.5301			; write NCU register 3
 	INC	HL
 	LD	A,(D$7EFD)
 	AND	30H			; clear b7,b6,b3,b2,b1,b0
 	OR	(HL)
-	CALL	C.5301
+	CALL	C.5301			; write NCU register 3
 	CALL	C.52C5
 	CALL	C.5823
 	CALL	C.583C
@@ -3780,7 +3770,7 @@ J$545E:	AND	03H
 	DI
 	CALL	C.6039			; inter segment call
 	DEFB	1
-	DEFW	C.4061
+	DEFW	C.4061			; update modem mode
 	LD	A,(IY+12)		; timeout value
 	LD	(D.6071),A		; update timeout value
 	LD	A,(D.60AC)
@@ -5448,15 +5438,15 @@ J$5DE4:	LD	A,B
 	POP	BC
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine send break
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.5DE7:	PUSH	BC
-	CALL	C.5E28
+	CALL	C.5E28			; enable break
 	LD	C,18			; 0.3 seconds
 	CALL	C.58F2			; wait for interrupts
-	CALL	C.5E1B
+	CALL	C.5E1B			; disable break
 	POP	BC
 	RET
 
@@ -5464,7 +5454,7 @@ C.5DE7:	PUSH	BC
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.5DF5:	CALL	C.5E28
+C.5DF5:	CALL	C.5E28			; enable break
 	EX	DE,HL
 	LD	A,(D.607F)
 	BIT	0,A
@@ -5480,14 +5470,14 @@ J$5E0A:	ADD	HL,HL
 J$5E0B:	EX	DE,HL
 	LD	C,1
 J$5E0E:	CALL	C.4327			; CTRL-STOP pressed (reset STOP flag) ?
-	JR	C,C.5E1B		; yep,
+	JR	C,C.5E1B		; yep, disable break and quit
 	CALL	C.58F2			; wait for interrupts
 	DEC	DE
 	LD	A,D
 	OR	E
 	JR	NZ,J$5E0E
-;
-;	  Subroutine __________________________
+
+;	  Subroutine disable break
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -5500,7 +5490,7 @@ J$5E22:	CALL	C.52E9			; write NCU register 1
 	POP	AF
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine enable break
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 

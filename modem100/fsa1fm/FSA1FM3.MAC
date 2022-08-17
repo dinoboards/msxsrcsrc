@@ -56,8 +56,8 @@ D.6090	EQU	6090H                   ; number of bytes in receive buffer
 D.6092	EQU	6092H                   ; number of bytes in receive buffer (printer echo)
 D.6094	EQU	6094H                   ; number of bytes in receive buffer (download text/log)
 D$6098	EQU	6098H                   ; buffer size
-D$615D	EQU	615DH	; ---L-
-D$615E	EQU	615EH	; ---L-
+D$615D	EQU	615DH                   ; comterm mode (b0 = interlace, b1 = full, b2 = chinese, b3/b4 = srceen mode, b5/b6 = kanji code, b7 = DEL operation)
+D$615E	EQU	615EH                   ; b1 = shift JIS D, b0 = 12 dot
 D.6164	EQU	6164H                   ; protocol timer #1 value
 D.6165	EQU	6165H                   ; protocol timer #2 value
 D$616A	EQU	616AH	; ---L-
@@ -110,8 +110,8 @@ I.F562	EQU	0F562H	; ----I
 D.F57E	EQU	0F57EH	; ---LI
 D.F580	EQU	0F580H	; ---L-
 
-D.F65B	EQU	0F65BH	; --S-I
-D.F65C	EQU	0F65CH	; --SL-
+D.F65B	EQU	0F65BH                  ; ring counter
+D.F65C	EQU	0F65CH                  ; last line status
 D.F65D	EQU	0F65DH	; --SL-
 HOLD8   EQU     0F806H
 TMPFCB  EQU     HOLD8
@@ -2514,7 +2514,7 @@ C.4E45:	PUSH	BC
         PUSH	HL
         CALL	C.6000
         DEFB    0
-        DEFW    C.40C0                  ;
+        DEFW    C.40C0                  ; read line status
         AND	08H                     ; b3 set ?
         JR	Z,J.4E68                ; nope, quit
         CALL	C.4F3B                  ; get carrier detect status
@@ -4497,7 +4497,7 @@ J$5AD5:	LD	(D.F55E),HL
         POP	AF
         LD	(D.6049),A              ; b7,b6,b2 = terminal mode
         POP	AF
-        LD	(SCRMOD),A              ; restor screen mode
+        LD	(SCRMOD),A              ; restore screen mode
         XOR	A
         LD	(D.6361),A              ; output to screen
         RET
@@ -4555,7 +4555,7 @@ J$5B49:	LD	HL,(D.6092)             ; number of bytes in receive buffer (printer 
         CALL	C.5E86                  ; cancel printer echo
         CALL	C.5E95
 J.5B56:	XOR	A
-        LD	(D.F65B),A
+        LD	(D.F65B),A              ; clear ring counter
         CALL	C.5FE8
         CALL	C$5B0E                  ; wait 1 second
         CALL	KILBUF
@@ -4566,10 +4566,10 @@ J.5B56:	XOR	A
         DEFB    0
         DEFW    C.40AE                  ; counter set #1, clear
 J.5B6F:	LD	A,(D.607C)              ; counter set #1, number of seconds
-        CP	4
-        JR	C,J$5B7A
+        CP	4                       ; 4 seconds passed without ring ?
+        JR	C,J$5B7A                ; nope,
         XOR	A
-        LD	(D.F65B),A
+        LD	(D.F65B),A              ; clear ring counter
 J$5B7A:	XOR	A
         CALL	C.5FE8
         CALL	CHSNS                   ; key pressed ?
@@ -4582,15 +4582,15 @@ J$5B7A:	XOR	A
 J$5B8B:	CALL	C.6000
         DEFB	0
         DEFW    C.40FC                  ; get ring status
-        JR      Z,J.5B6F                ; nope,
+        JR      Z,J.5B6F                ; no ring,
         CALL    C.6000
         DEFB    0
         DEFW    C.40AE                  ; counter set #1, clear
         LD	HL,D.F65B
-        INC	(HL)
+        INC	(HL)                    ; update ring counter
         LD	A,(HL)
-        CP	5
-        JR	C,J.5B6F
+        CP	5                       ; 5 rings ?
+        JR	C,J.5B6F                ; nope,
         LD	A,1
         CALL	C.5FE8
         XOR	A                       ; off hook
@@ -4600,28 +4600,28 @@ J$5B8B:	CALL	C.6000
         CALL	C$5B0A                  ; wait 300 ms
         CALL	C.6000
         DEFB	0
-        DEFW    C.40C0
-        LD	(D.F65C),A
-        CALL	C.5C68
-        LD	B,08H	; 8 
+        DEFW    C.40C0                  ; read line status
+        LD	(D.F65C),A              ; store last line status
+        CALL	C.5C68                  ; open channel in raw mode
+        LD	B,8                     ; 8 tries
 J$5BBF:	CALL	C.6000
         DEFB	0
         DEFW    C.40AE                  ; counter set #1, clear
 J$5BC5:	CALL	C.6000
         DEFB	0
-        DEFW    C.40C0
+        DEFW    C.40C0                  ; read line status
         LD	C,A
         LD	A,(D.F65C)
-        CP	C
-        JR	NZ,J.5C04
+        CP	C                       ; line status changed ?
+        JR	NZ,J.5C04               ; yep,
         CALL	CHSNS                   ; key pressed ?
         JR	Z,J$5BDE                ; nope,
         CALL	CHGET                   ; get key
         CP	14H                     ; CTRL-T ?
         JR	Z,J.5C04                ; yep,
 J$5BDE:	LD	A,(D.607C)              ; counter set #1, number of seconds
-        CP	10
-        JR	NC,J$5BF1
+        CP	10                      ; line status unchanged for 10 seconds ?
+        JR	NC,J$5BF1               ; yep,
         CALL	C.6000
         DEFB	0
         DEFW    C.4150                  ; RS232.STAT
@@ -4636,9 +4636,9 @@ J$5BF1:	PUSH	BC
         CALL	C.6000
         DEFB    6
         DEFW    C.40F0
-        CALL	C.5C68
+        CALL	C.5C68                  ; open channel in raw mode
         POP	BC
-        DJNZ	J$5BBF
+        DJNZ	J$5BBF                  ; next try
 J.5C04:	CALL	C.6000
         DEFB	0
         DEFW    C.4159                  ; RS232.CLOSE
@@ -4656,23 +4656,22 @@ J$5C1A:	CALL	C.6000
         DEFW    C.40AE                  ; counter set #1, clear
 J$5C20:	LD	A,(D.607C)              ; counter set #1, number of seconds
         CP	2
-        JR	C,J$5C20
+        JR	C,J$5C20                ; wait 2 seconds
         CALL	C.6000
         DEFB    1
         DEFW    I$4099
         LD	A,(D$615E)
-        LD	C,A
-        LD	A,(D$615D)
+        LD	C,A                     ; shift JIS D mode, 12 dot mode
+        LD	A,(D$615D)              ; comterm mode
         CALL	C.6000
-        LD	(BC),A
-        SUB	B
-        LD	B,B
+        DEFB    2
+        DEFW    C.4090                  ; initialize comterm mode
         LD	HL,(D.F55E)
-        CALL	C.5EC1
+        CALL	C.5EC1                  ; send or print string (carrier detect)
         JR	C,J.5C04
         CALL	C.4EE3                  ; output new line
-        CALL	C$5C85
-        JR	C,J.5C04
+        CALL	C$5C85                  ; get and verify password (with retry)
+        JR	C,J.5C04                ; error, quit
         CALL	C.5D4A                  ; menu
 J$5C4D:	CALL	C.5F09
         JR	C,J.5C04
@@ -4686,12 +4685,12 @@ D$5C52:	LD	A,0FFH
         CALL	C.5FE8
         JR	J$5C4D
 
-;	  Subroutine __________________________
+;	  Subroutine open channel in raw mode
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.5C68:	LD	HL,(D$616C)
-        LD	DE,I.0009
+        LD	DE,9
         OR	A
         SBC	HL,DE
         SRL	H
@@ -4706,33 +4705,33 @@ C.5C68:	LD	HL,(D$616C)
         DEFW    C.414D                  ; RS232.OPEN
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine get and verify password (with retry)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$5C85:	LD	B,03H	; 3 
+C$5C85:	LD	B,3
 J$5C87:	PUSH	BC
-        CALL	C$5C9D
+        CALL	C$5C9D                  ; get and verify password
         POP	BC
-        RET	NC
-        LD	HL,I$5EE6
-        CALL	C.5EC1
+        RET	NC                      ; correct, quit
+        LD	HL,I$5EE6               ; wrong password
+        CALL	C.5EC1                  ; send or print string (carrier detect)
         DJNZ	J$5C87
-        LD	HL,I$5EF7
-        CALL	C.5EC1
+        LD	HL,I$5EF7               ; login incorrect
+        CALL	C.5EC1                  ; send or print string (carrier detect)
         SCF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine get and verify password
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$5C9D:	LD	HL,(D.F560)
         LD	A,(HL)
-        OR	A
-        RET	Z
-        LD	HL,I$5ED9
-        CALL	C.5EC1
+        OR	A                       ; empty password ?
+        RET	Z                       ; yep, quit (correct)
+        LD	HL,I$5ED9               ; password
+        CALL	C.5EC1                  ; send or print string (carrier detect)
         RET	C
         XOR	A
         LD	(D.F65D),A
@@ -5092,7 +5091,7 @@ J$5EBE:	POP	AF
         SCF
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine send or print string (carrier detect)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -5110,59 +5109,23 @@ C.5EC1:	PUSH	HL
         INC	HL
         CALL	C.6000
         DEFB    1
-        DEFW    C.40A2
-        JR	C.5EC1
+        DEFW    C.40A2                  ; send or print byte
+        JR	C.5EC1                  ; next byte
 
-I$5ED9:	LD	D,B
-        LD	H,C
-        LD	(HL),E
-        LD	(HL),E
-        LD	(HL),A
-        LD	L,A
-        LD	(HL),D
-        LD	H,H
-        LD	A,(X.0020)
-I$5EE4:	LD	A,00H
-I$5EE6:	LD	D,A
-        LD	(HL),D
-        LD	L,A
-        LD	L,(HL)
-        LD	H,A
-        JR	NZ,J$5F5D
-        LD	H,C
-        LD	(HL),E
-        LD	(HL),E
-        LD	(HL),A
-        LD	L,A
-        LD	(HL),D
-        LD	H,H
-        DEC	C
-        LD	A,(BC)
-        NOP
-I$5EF7:	LD	C,H
-        LD	L,A
-        LD	H,A
-        LD	L,C
-        LD	L,(HL)
-        JR	NZ,J$5F67
-        LD	L,(HL)
-        LD	H,E
-        LD	L,A
-        LD	(HL),D
-        LD	(HL),D
-        LD	H,L
-        LD	H,E
-        LD	(HL),H
-        DEC	C
-        LD	A,(BC)
-        NOP
+I$5ED9: DEFB    "Password: "
+
+I$5EE4: DEFB    ">",0
+
+I$5EE6: DEFB    "Wrong password",13,10,0
+
+I$5EF7: DEFB    "Login incorrect",13,10,0
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.5F09:	LD	HL,I$5EE4
-        JP	C.5EC1
+        JP	C.5EC1                  ; send or print string (carrier detect)
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -5170,7 +5133,7 @@ C.5F09:	LD	HL,I$5EE4
 
 C.5F0F:	LD	HL,I.F562
         PUSH	HL
-        LD	B,1FH
+        LD	B,31
         XOR	A
 J$5F16:	LD	(HL),A
         INC	HL
@@ -5288,14 +5251,12 @@ C.5FCC:	PUSH	AF
         LD	A,(D.F65D)
         OR	A
         LD	HL,I$5FDB
-        CALL	NZ,C.5EC1
+        CALL	NZ,C.5EC1               ; send or print string (carrier detect)
         POP	HL
         POP	AF
         RET
 
-I$5FDB:	EX	AF,AF'
-        JR	NZ,J$5FE6
-        NOP
+I$5FDB: DEFB    8," ",8,0
 
 ;	  Subroutine to upper
 ;	     Inputs  ________________________
