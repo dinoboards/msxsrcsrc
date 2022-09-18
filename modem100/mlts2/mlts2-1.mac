@@ -58,37 +58,37 @@ I$3A1E	EQU	3A1EH	; ----I
 I$3B1E	EQU	3B1EH	; ----I
 
 C.6000	EQU	6000H	; -C---
-D$6047	EQU	6047H	; ---L-
+D$6047	EQU	6047H			; MSX modem disabled
 D.6049	EQU	6049H	; --SL-
-D.604B	EQU	604BH	; ---L-
-D.6065	EQU	6065H	; --SLI
+D.604B	EQU	604BH			; my RS232 number/trap
+D.6065	EQU	6065H			; MSX serial defaults
 D.6066	EQU	6066H	; --SL-
 D.606D	EQU	606DH	; ---L-
 D.606F	EQU	606FH	; ---L-
 D$6071	EQU	6071H	; --S--
 D.6073	EQU	6073H	; --SLI
 D.6074	EQU	6074H	; --SLI
-D.6075	EQU	6075H	; --SL-
-D.6076	EQU	6076H	; --SL-
-D$6078	EQU	6078H	; --S--
-D$607A	EQU	607AH	; --S--
+D.6075	EQU	6075H			; printer output enabled
+D.6076	EQU	6076H			; printer not ready counter
+D$6078	EQU	6078H			; start of buffer
+D$607A	EQU	607AH			; size of buffer
 D$6082	EQU	6082H	; --S--
 D$6084	EQU	6084H	; --S--
 D.6088	EQU	6088H	; --SLI
-D.608D	EQU	608DH	; ---L-
-D.6095	EQU	6095H	; ---L-
-D.6096	EQU	6096H	; ---LI
-D$6097	EQU	6097H	; ---L-
+D.608D	EQU	608DH			; counter #1, number of seconds
+D.6095	EQU	6095H			; receive byte mask
+D.6096	EQU	6096H			; b7,b6 = dailer mode, b1 = originate/answer
+D$6097	EQU	6097H			; flags
 D$60A1	EQU	60A1H	; ---L-
-D$60BE	EQU	60BEH	; --S--
+D$60BE	EQU	60BEH			; modem type
 D.60C6	EQU	60C6H	; --SL-
 D.60CE	EQU	60CEH	; --SL-
 I.60D0	EQU	60D0H	; ----I
 D.6170	EQU	6170H	; --SL-
 D.6172	EQU	6172H	; --SL-
 D.6174	EQU	6174H	; --SL-
-D.6175	EQU	6175H	; --SL-
-D$6176	EQU	6176H	; --S--
+D.6175	EQU	6175H			; comterm mode
+D$6176	EQU	6176H			; flags before disable interrupts
 D.6179	EQU	6179H	; --SL-
 D$617B	EQU	617BH	; ---L-
 D.617D	EQU	617DH	; --SL-
@@ -128,13 +128,9 @@ D.6BBC	EQU	6BBCH	; --SL-
 D.6BC0	EQU	6BC0H	; --S-I
 D.6BC2	EQU	6BC2H	; --SL-
 I$6C1C	EQU	6C1CH	; ----I
-C$7B40	EQU	7B40H	; -C---
 
 D$9958	EQU	9958H	; --S--
 I$C000	EQU	0C000H	; ----I
-D$C341	EQU	0C341H	; --S--
-J.CA40	EQU	0CA40H	; J----
-J$F140	EQU	0F140H	; J----
 
 D.F24F	EQU	0F24FH	; --SL-
 D$F3B0	EQU	0F3B0H	; ---L-
@@ -173,14 +169,14 @@ I$406F:	JP	C.4253
 ?.4078:	JP	C.589F			; call MAIN BIOS
 ?.407B:	JP	C.589A			; call MAIN BIOS (EI)
 ?.407E:	JP	J$54B2
-?.4081:	JP	J$47DC
-?.4084:	JP	C.49F1
-?.4087:	JP	J$455A
+?.4081:	JP	J$47DC			; set comterm mode
+?.4084:	JP	C.49F1			; comterm
+?.4087:	JP	J$455A			; CALL statement handler
 ?.408A:	JP	J$46A1
-?.408D:	JP	J$5445
+?.408D:	JP	J$5445			; new statement handler
 ?.4090:	JP	J$5781
-?.4093:	JP	C.5759
-?.4096:	JP	C.4CBB
+?.4093:	JP	C.5759			; set protocol and timer values
+?.4096:	JP	C.4CBB			; echo to screen/printer (literal)
 ?.4099:	JP	C.4DAE
 ?.409C:	JP	C.5052
 ?.409F:	JP	C.5061
@@ -403,12 +399,10 @@ J$4191:	LD	E,A
 	LD	D,(HL)
 	DEC	HL
 	CALL	C.4204
-;
 	JR	NZ,J$41A3
-;
-	LD	A,(D.6175)
-	AND	60H	; "`"
-	CP	40H	; "@"
+	LD	A,(D.6175)		; comterm mode
+	AND	60H
+	CP	40H
 	JR	Z,J$41AD
 ;
 J$41A3:	PUSH	HL
@@ -459,13 +453,11 @@ I.41CB:	JR	Z,J$4217
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 ;
-C.41D3:	LD	A,(D.6175)
+C.41D3:	LD	A,(D.6175)		; comterm mode
 	CALL	C.4204
-;
 	JR	Z,J$41DD
-;
-	LD	A,60H	; "`"
-J$41DD:	AND	60H	; "`"
+	LD	A,60H
+J$41DD:	AND	60H
 	RRCA
 	RRCA
 	RRCA
@@ -683,7 +675,7 @@ J$42B2:	CP	0FFH
 J$42B6:	BIT	3,(IX)
 	JR	Z,J$42C8
 ;
-	CALL	C.432C
+	CALL	C.432C			; mask off received data
 ;
 	CP	40H	; "@"
 	CCF
@@ -718,19 +710,16 @@ J$42E1:	BIT	2,(IX)
 ;
 J.42E7:	OR	A
 	LD	A,(D.6095)
-	INC	A
+	INC	A			; 8 bits data ?
 	LD	A,B
-	RET	NZ
-;
+	RET	NZ			; nope, quit
 	LD	A,(D.61C1)
 	OR	A
 	LD	A,B
 	RET	NZ
-;
 	CP	81H
 	CCF
 	RET	NC
-;
 J$42F8:	SET	1,(IX)
 	LD	(IX+3),A
 	XOR	A
@@ -749,7 +738,7 @@ J$4301:	RES	1,(IX)
 	RET
 ;
 ;	-----------------
-J$4316:	CALL	C.432C
+J$4316:	CALL	C.432C			; mask off received data
 ;
 	CP	80H
 	JR	C,J$4332
@@ -765,19 +754,16 @@ J$4316:	CALL	C.432C
 	JR	C,J.42E7
 ;
 	RET
-;
-;	-----------------
-;
-;	  Subroutine __________________________
+
+;	  Subroutine mask off received data
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C.432C:	LD	A,(D.6095)
 	AND	B
 	LD	B,A
 	RET
-;
-;	-----------------
+
 J$4332:	CP	30H	; "0"
 	JR	NC,J$435F
 ;
@@ -875,18 +861,14 @@ C$43A2:	CP	28H	; "("
 ;	-----------------
 J$43AC:	CP	29H	; ")"
 	JR	NZ,J$43C2
-;
-	LD	A,(D.6175)
-	AND	04H	; 4 
+	LD	A,(D.6175)		; comterm mode
+	AND	04H
 	RET	Z
-;
 	LD	A,B
 	SUB	30H	; "0"
 	JR	Z,J$43BE
-;
 	CP	03H	; 3 
 	RET	NZ
-;
 J$43BE:	LD	(D.61C1),A
 	RET
 ;
@@ -1227,27 +1209,27 @@ I$4554	EQU	$-1
 ;
 ;	-----------------
 ?.4559:	NOP
+
+;	  Subroutine CALL statement handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$455A:	EI
 	PUSH	HL
 	POP	IX
 	LD	A,(D$6047)
-	AND	A
-	SCF
-	RET	NZ
-;
+	AND	A			; MSX modem disabled ?
+	SCF				; statement not recognized
+	RET	NZ			; yep, quit
 	CALL	C$456A
-;
-	RET	C
-;
+	RET	C			; statement not recognized, quit
 	PUSH	DE
 	RET
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C$456A:	PUSH	BC
 	PUSH	HL
 	LD	HL,I.FD89
@@ -1748,13 +1730,11 @@ J$47B1:	LD	A,E
 	DEFW	C.40F6
 	JP	C,J.469F
 	RET
-;
-;	-----------------
-;
-;	  Subroutine __________________________
+
+;	  Subroutine store current screen colors
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C.47CD:	PUSH	HL
 	LD	HL,(D.F3E9)
 	LD	(D.6170),HL
@@ -1766,20 +1746,17 @@ C.47CD:	PUSH	HL
 ;	-----------------
 J$47DC:	PUSH	HL
 	PUSH	AF
-	LD	(D.6175),A
+	LD	(D.6175),A		; comterm mode
 	LD	(D.6179),HL
-	CALL	C.47EA
-;
+	CALL	C.47EA			; restore current screen colors
 	POP	AF
 	POP	HL
 	RET
-;
-;	-----------------
-;
-;	  Subroutine __________________________
+
+;	  Subroutine restore current screen colors
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C.47EA:	PUSH	HL
 	LD	HL,(D.6170)
 	LD	(D.F3E9),HL
@@ -1787,9 +1764,7 @@ C.47EA:	PUSH	HL
 	LD	(D.F3EB),A
 	POP	HL
 	RET
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -1872,26 +1847,18 @@ J$4835:	CALL	C.6000
 	JR	NC,J$4835
 	XOR	A
 	RET
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$4853:	CALL	C.47CD
-;
+
+C$4853:	CALL	C.47CD			; store current screen colors
 	CALL	C.58AB
-;
 	CALL	C$4DD4
-;
 	DEC	HL
 	CALL	C.584D
-;
 	JR	Z,J$4866
-;
 	CALL	C.5845
-;
 	ADD	HL,HL
 J$4866:	CALL	C.6000
 	DEFB	0
@@ -1900,7 +1867,7 @@ J$4866:	CALL	C.6000
 	LD	A,0FFH
 	LD	(D$6358),A
 J.4873:	PUSH	HL
-	CALL	C.5892
+	CALL	C.5892			; close all i/o channels
 	XOR	A
 	LD	H,A
 	LD	L,A
@@ -1913,12 +1880,10 @@ J.4873:	PUSH	HL
 	LD	(D.6BC0),A
 	LD	HL,(D.F3E9)
 	LD	(D.6BBC),HL
-	CALL	C.49F1
-;
+	CALL	C.49F1			; comterm
 	POP	HL
 	SUB	03H	; 3 
 	RET	Z
-;
 	PUSH	AF
 	LD	A,01H	; 1 
 	CALL	C.6000
@@ -2029,8 +1994,8 @@ C$48F8:	LD	(D.618E),A
 C.4901:	CALL	C.6000
 	DEFB	0
 	DEFW	C.407E			; counter #1, clear
-J$4907:	LD	A,(D.608D)
-	CP	03H	; 3 
+J$4907:	LD	A,(D.608D)		; counter #1, number of seconds
+	CP	3
 	RET	NC
 	PUSH	BC
 	CALL	C.4824
@@ -2039,13 +2004,9 @@ J$4907:	LD	A,(D.608D)
 	SCF
 	RET	NZ
 	CALL	C.48EB
-;
 	JR	NZ,J.492C
-;
 	CALL	C.48B7
-;
 	JR	C,J$4929
-;
 	JR	NZ,J.492C
 	CALL	C.6000
 	DEFB	0
@@ -2242,18 +2203,16 @@ J$49E9:	LD	(DE),A
 	DJNZ	J$49E0
 ;
 	RET
-;
-;	-----------------
-;
-;	  Subroutine __________________________
+
+;	  Subroutine comterm
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C.49F1:	CALL	C.49AB
 ;
 	XOR	A
 	LD	(D.6074),A
-	LD	(D.6075),A
+	LD	(D.6075),A		; printer output disabled
 	LD	(D.6073),A
 	LD	(D.634F),A
 	LD	(D.6350),A
@@ -2284,11 +2243,11 @@ C.49F1:	CALL	C.49AB
 	LD	(D.F3E9),HL
 	LD	A,H
 	LD	(D.F3EB),A
-	LD	A,(D.6175)
+	LD	A,(D.6175)		; comterm mode
 	CALL	C.6000
 	DEFB	2
 	DEFW	C.4060
-	LD	A,(D.6175)
+	LD	A,(D.6175)		; comterm mode
 	RRCA
 	RRCA
 	RRCA
@@ -2555,15 +2514,14 @@ J.4BB4:	EI
 	JR	NZ,J.4BD4
 ;
 	LD	A,(D.6075)
-	OR	A
-	JR	Z,J.4BD4
-;
+	OR	A			; printer output enabled
+	JR	Z,J.4BD4		; nope,
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.4120
 	JR	NZ,J.4BD4
 	XOR	A
-	LD	(D.6075),A
+	LD	(D.6075),A		; printer output disabled
 J.4BD4:	CALL	C.48EB
 ;
 	JR	NZ,J.4BE7
@@ -2674,9 +2632,9 @@ J.4C69:	LD	A,(HL)
 ;	     Outputs ________________________
 ;
 C.4C75:	LD	C,A
-	LD	A,(D.6175)
-	AND	06H	; 6 
-	CP	02H	; 2 
+	LD	A,(D.6175)		; comterm mode
+	AND	06H
+	CP	02H
 	LD	A,C
 	JR	Z,C.4C91
 ;
@@ -2920,12 +2878,12 @@ C.4D6E:	LD	HL,(D.F6C6)
 	SBC	HL,DE
 	SRL	H
 	RR	L
-	LD	(D$607A),HL
+	LD	(D$607A),HL		; size of buffer
 	LD	(D$6084),HL
 	PUSH	HL
 	LD	HL,(D.6181)
 	ADD	HL,DE
-	LD	(D$6078),HL
+	LD	(D$6078),HL		; start of buffer
 	POP	DE
 	ADD	HL,DE
 	LD	(D$6082),HL
@@ -3100,7 +3058,7 @@ J$4E6A:	CP	05H	; 5
 	LD	E,08H	; 8 
 J.4E7E:	LD	A,E
 	OR	D
-	LD	(D.6175),A
+	LD	(D.6175),A		; update comterm mode
 	POP	DE
 	POP	HL
 	RET
@@ -3508,11 +3466,11 @@ J$5049:	XOR	A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 ;
-C.5052:	LD	HL,I.0000
-	LD	(D.6076),HL
+C.5052:	LD	HL,0
+	LD	(D.6076),HL		; reset printer not ready counter
 	LD	A,0FFH
 	LD	(D.6074),A
-	LD	(D.6075),A
+	LD	(D.6075),A		; printer output enabled
 	RET
 ;
 ;	-----------------
@@ -3562,14 +3520,11 @@ C.5084:	CALL	C.6000
 	DEFW	C.407E			; counter #1, clear
 J$508A:	OR	A
 	CALL	C.40C9
-;
 	RET	NC
-;
 	PUSH	AF
-	LD	A,(D.608D)
-	CP	14H	; 20 
+	LD	A,(D.608D)		; counter #1, number of seconds
+	CP	20
 	JR	NC,J$509A
-;
 	POP	AF
 	JR	J$508A
 ;
@@ -3593,16 +3548,14 @@ J$50A2:	POP	AF
 ;	     Outputs ________________________
 ;
 C$50A5:	LD	A,(D.6075)
-	OR	A
-	RET	Z
-;
-	LD	HL,(D.6076)
-	LD	DE,I.04B0
+	OR	A			; printer output enabled ?
+	RET	Z			; nope, quit
+	LD	HL,(D.6076)		; printer not ready counter
+	LD	DE,1200
 	SBC	HL,DE
 	CCF
 	RET	NC
-;
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -3610,14 +3563,10 @@ C$50A5:	LD	A,(D.6075)
 C.50B4:	LD	A,(D.618A)
 	OR	A
 	JR	NZ,C.50C6
-;
 	CALL	C.47FE
-;
 	CALL	C.50C6
-;
 	PUSH	AF
 	CALL	C.47F9
-;
 	POP	AF
 	RET
 ;
@@ -3634,32 +3583,22 @@ C.50C6:	LD	L,08H	; 8
 	CALL	KILBUF
 J$50D1:	CALL	CHSNS
 	JR	Z,J$50D1
-;
 	CALL	CHGET
-;
 	PUSH	AF
 	CALL	C.4CFC
-;
 	CALL	KILBUF
-;
 	CALL	C.4D0B
-;
 	POP	AF
 	CALL	C.45BF
-;
-	CP	52H	; "R"
+	CP	"R"
 	JR	NZ,J$50F2
-;
-	LD	HL,I.0000
-	LD	(D.6076),HL
+	LD	HL,0
+	LD	(D.6076),HL		; reset printer not ready counter
 	RET
-;
-;	-----------------
-J$50F2:	CP	43H	; "C"
+
+J$50F2:	CP	"C"
 	JR	NZ,C.50B4
-;
 	CALL	C.50FB
-;
 	SCF
 	RET
 ;
@@ -3690,21 +3629,18 @@ J.5102:	DEC	A
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.407E			; counter #1, clear
-J$511E:	LD	A,(D.608D)
-	CP	03H	; 3 
+J$511E:	LD	A,(D.608D)		; counter #1, number of seconds
+	CP	3
 	JR	C,J$511E
-;
 J$5125:	LD	A,(D.6350)
 	OR	A
 	JR	Z,J$5131
-;
 	CALL	C.6000
 	DEFB	3
 	DEFW	C.4072
 J$5131:	LD	A,(D.634F)
 	OR	A
 	JR	Z,J$513D
-;
 	CALL	C.6000
 	DEFB	3
 	DEFW	C.4075
@@ -3719,9 +3655,8 @@ J$513D:	CALL	C$57F8
 	DEFB	0
 	DEFW	C.4159
 J$514F:	LD	A,(D.6075)
-	OR	A
-	CALL	NZ,C.5061
-;
+	OR	A			; printer output enabled ?
+	CALL	NZ,C.5061		; yep,
 	CALL	C.49C7
 ;
 	LD	HL,I.60D0
@@ -3729,7 +3664,7 @@ J$514F:	LD	A,(D.6075)
 	LD	BC,10*16
 	LDIR
 	XOR	A
-	LD	(INTFLG),A
+	LD	(INTFLG),A		; clear STOP key status
 	CALL	KILBUF
 ;
 	CALL	C.6000
@@ -3780,12 +3715,9 @@ I$5187:	RST	38H
 	LD	A,D
 	AND	A
 	JR	Z,J.51B2
-;
 	CP	3AH	; ":"
 	JR	Z,J.51B2
-;
 	CALL	C.5845
-;
 	ADD	HL,HL
 J.51B2:	PUSH	HL
 	LD	HL,I$5218
@@ -3793,61 +3725,46 @@ J.51B6:	LD	A,(HL)
 	INC	HL
 	INC	A
 	JR	Z,J.5208
-;
 	DEC	A
 	JR	Z,J$51D2
-;
 	PUSH	AF
 	AND	7FH
 	CALL	NZ,CHPUT
-;
 	POP	AF
 	CALL	M,C$520B
-;
 	LD	A,(INTFLG)
-	AND	A
-	JR	Z,J.51B6
-;
-	CP	03H	; 3 
-	JR	Z,J.5208
-;
+	AND	A			; STOP key pressed ?
+	JR	Z,J.51B6		; nope,
+	CP	3			; CTRL-STOP pressed ?
+	JR	Z,J.5208		; yep, quit
 J$51D2:	PUSH	HL
 	LD	HL,INTFLG
-	LD	(HL),0
+	LD	(HL),0			; clear STOP key status
 	LD	A,1BH
 	CALL	CHPUT
-;
 	LD	A,"y"
 	CALL	CHPUT
-;
 	LD	A,"5"
 	CALL	CHPUT
-;
 J$51E7:	EI
 	LD	A,(HL)
-	AND	A
-	JR	Z,J$51E7
-;
+	AND	A			; STOP key pressed ?
+	JR	Z,J$51E7		; nope, wait
 	PUSH	AF
 	LD	A,1BH
 	CALL	CHPUT
-;
 	LD	A,"x"
 	CALL	CHPUT
-;
 	LD	A,"5"
 	CALL	CHPUT
-;
 	POP	AF
 	POP	HL
-	CP	03H	; 3 
-	JR	Z,J.5208
-;
+	CP	3			; CTRL-STOP pressed ?
+	JR	Z,J.5208		; yep, quit
 	XOR	A
-	LD	(INTFLG),A
+	LD	(INTFLG),A		; clear STOP key status
 	JR	J.51B6
-;
-;	-----------------
+
 J.5208:	POP	HL
 	AND	A
 	RET
@@ -4380,8 +4297,11 @@ C.543E:	CALL	C.6000
 	DEFB	0
 	DEFW	C.40D5
 	RET
-;
-;	-----------------
+
+;	  Subroutine new statement handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$5445:	EI
 	PUSH	HL
 	CALL	C.6000
@@ -4404,38 +4324,30 @@ J.545A:	CALL	C$545F
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 ;
-C$545F:	LD	A,0AFH
-C$5460	EQU	$-1
+C$545F:	DEFB	03EH
+
+C$5460:	XOR	A
 	LD	(D.6065),A
 	CALL	C.5489
-;
 	RET	C
-;
 	LD	A,(HL)
 	AND	01H	; 1 
 	RET	Z
-;
 	LD	A,(HL)
 	OR	04H	; 4 
 	CP	(HL)
 	RET	Z
-;
 	CP	05H	; 5 
 	RET	NZ
-;
 	PUSH	AF
 	LD	A,(D.6065)
 	OR	A
 	JR	Z,J.5482
-;
 	CALL	C.543E
-;
 	JR	NZ,J.5482
-;
 	POP	AF
 	RET
-;
-;	-----------------
+
 J.5482:	POP	AF
 	LD	(HL),A
 	LD	HL,I$FBD8
@@ -4477,33 +4389,28 @@ C$549A:	PUSH	BC
 	RRCA
 	RRCA
 	RRCA
-	RRCA
+	RRCA				; my trap number
 	INC	B
 	DEC	B
 	JR	Z,J$54AD
-;
 	INC	A
 J$54AD:	CP	05H	; 5 
 	CCF
 	POP	BC
 	RET
-;
-;	-----------------
+
 J$54B2:	PUSH	HL
-	CALL	C.5892
-;
+	CALL	C.5892			; close all i/o channels
 	POP	HL
-	CALL	C.47CD
-;
+	CALL	C.47CD			; store current screen colors
 	CALL	C.6000
 	DEFB	4
 	DEFW	C.4060
-	CALL	C.47EA
+	CALL	C.47EA			; restore current screen colors
 	XOR	A
-	LD	(INTFLG),A
+	LD	(INTFLG),A		; clear STOP key status
 	RET
-;
-;	-----------------
+
 ?.54C8:	CALL	C.58AB
 ;
 	CALL	C.5914
@@ -4746,7 +4653,7 @@ J.55F6:	CALL	C.6000
 	DEFB	0
 	DEFW	C.40E1
 	LD	A,D
-	LD	(D$60BE),A
+	LD	(D$60BE),A		; update modem type
 	CP	0FFH
 	RET	Z
 ;
@@ -4881,12 +4788,11 @@ J$56B5:	LD	A,B
 	JR	Z,J$56F0
 ;
 	LD	A,(D.6096)
-	AND	0C0H
+	AND	0C0H			; dailer mode
 	CP	80H
 	JR	NZ,J.56CA
-;
 	LD	A,(D.60C6)
-	LD	A,02H	; 2 
+	LD	A,2
 	LD	(D.60C6),A
 J.56CA:	CALL	C.6000
 	DEFB	0
@@ -5027,50 +4933,41 @@ J.5772:	LD	A,(D.6049)
 	LD	(D$617B),DE
 	POP	BC
 	RET
-;
-;	-----------------
+
 J$5781:	EI
 	CP	0FFH
 	JP	NZ,J$57BE
-;
 	LD	HL,I.FD89
 	LD	A,(HL)
-	CP	43H	; "C"
+	CP	"C"
 	JR	NZ,J.57BC
-;
 	INC	HL
 	LD	A,(HL)
-	CP	4FH	; "O"
+	CP	"O"
 	JR	NZ,J.57BC
-;
 	INC	HL
 	LD	A,(HL)
-	CP	4DH	; "M"
+	CP	"M"
 	JR	NZ,J.57BC
-;
 	INC	HL
 	LD	A,(HL)
 	AND	A
 	JR	NZ,J$57A3
-;
 	DEC	HL
-	LD	A,30H	; "0"
-J$57A3:	SUB	30H	; "0"
+	LD	A,"0"
+J$57A3:	SUB	"0"
 	JR	C,J.57BC
-;
-	CP	0AH	; 10 
+	CP	9+1
 	JR	NC,J.57BC
-;
 	PUSH	BC
 	PUSH	AF
 	LD	A,(D.604B)
-	AND	0FH	; 15 
+	AND	0FH			; my RS232 number
 	LD	B,A
 	POP	AF
 	CP	B
 	POP	BC
 	JR	NZ,J.57BC
-;
 	INC	HL
 	LD	A,(HL)
 	AND	A
@@ -5283,13 +5180,11 @@ J.588C:	CALL	C.589A			; call MAIN BIOS (EI)
 ;
 J$588F:	POP	IX
 	RET
-;
-;	-----------------
-;
-;	  Subroutine __________________________
+
+;	  Subroutine close all i/o channels
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C.5892:	PUSH	IX
 	LD	IX,I$6C1C
 	JR	J.588C
@@ -5383,7 +5278,7 @@ J$58E9:	DEC	HL
 	DEC	B
 J.58F7:	LD	E,A
 	LD	A,(D.604B)
-	AND	0FH	; 15 
+	AND	0FH			; my RS232 number
 	PUSH	HL
 	EXX
 	POP	HL

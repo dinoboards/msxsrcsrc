@@ -15,31 +15,29 @@
         .Z80
         ASEG
 
-        org     04040H
+	ORG	04040H
 
-I.0000	EQU	0000H	; ----I
-I$0008	EQU	0008H	; ----I
-I$000C	EQU	000CH	; ----I
-I$0010	EQU	0010H	; ----I
 CALSLT	EQU	001CH
-C.0020	EQU	0020H	; -C---
-C.0038	EQU	0038H	; -C---
-I$0042	EQU	0042H	; ----I
 CHSNS	EQU	009CH
 CHGET	EQU	009FH
 LPTOUT	EQU	00A5H
 LPTSTT	EQU	00A8H
-I.012C	EQU	012CH	; ----I
 SNSMAT	EQU	0141H
 
-I$0384	EQU	0384H	; ----I
-I$1000	EQU	1000H	; ----I
-I$1567	EQU	1567H	; ----I
-C.6000	EQU	6000H	; -C---
+SNERR	EQU	4055H			; syntax error
+CHRGTR  EQU     4666H                   ; get next BASIC character
+GETBYT	EQU	521CH			; evaluate byte operand
+GETUIN	EQU	542FH			; evaluate address operand
+
+LPTPOS	EQU	0F415H
+STREND	EQU	0F6C6H
+FNKSTR	EQU	0F87FH
+HOKVLD	EQU	0FB20H
+EXPTBL	EQU	0FCC1H
+EXTBIO	EQU	0FFCAH
+
+C.6000	EQU	6000H			; inter segment call (EI)
 D.6064	EQU	6064H			; temporary store
-D$606C	EQU	606CH	; ---L-
-D.606E	EQU	606EH	; ---L-
-D$6070	EQU	6070H	; --S--
 D.6072	EQU	6072H			; literal mode
 D.6073	EQU	6073H			; printer echo
 D.607F	EQU	607FH			; current modem type
@@ -50,11 +48,9 @@ D.6098	EQU	6098H			; NCU register 3 backup (b6=0,b7=1)
 D.60A5	EQU	60A5H	; --S--
 D$60AD	EQU	60ADH	; --S--
 I.60AE	EQU	60AEH			; saved F1-F10 definition
-D.6153	EQU	6153H			; comterm mode
-D.615B	EQU	615BH	; --SLI
-C.615C	EQU	615CH	; -C--I
-D$615F	EQU	615FH	; --S--
-D$6162	EQU	6162H	; ---L-
+D.6153	EQU	6153H			; comterm mode (b7 = back space, b6-b5 = JIS mode, b4-b3 = screen mode, b2-b1 = character mode, b0 = interlace)
+D.615B	EQU	615BH			; MSX-JE flags
+C.615C	EQU	615CH			; call MSX-JE
 D.616C	EQU	616CH	; --S-I
 D.616E	EQU	616EH	; --S-I
 D.6171	EQU	6171H	; --SLI
@@ -63,54 +59,52 @@ D.6173	EQU	6173H	; --SL-
 D.6174	EQU	6174H	; --SL-
 D.6190	EQU	6190H	; --SL-
 D.619A	EQU	619AH	; --SL-
-I$61A3	EQU	61A3H	; ----I
+D.61A3	EQU	61A3H			; screen size, number of columns
 I$62F2	EQU	62F2H	; ----I
 D$7EFD	EQU	7EFDH	; --S--
 
-I$C000	EQU	0C000H	; ----I
 
-LPTPOS	EQU	0F415H
-STREND	EQU	0F6C6H
-FNKSTR	EQU	0F87FH
-HOKVLD	EQU	0FB20H
-EXPTBL	EQU	0FCC1H
-EXTBIO	EQU	0FFCAH
-
-?.4040:	JP	J$4576
-?.4043:	JP	J$462D
+?.4040:	JP	J$4576			; is MSX-JE usable ?
+?.4043:	JP	J$462D			; japanese input frontend execution/termination
 ?.4046:	JP	J$466B
 ?.4049:	JP	J$431A
 ?.404C:	JP	C.42F5
 ?.404F:	JP	J$4325
 ?.4052:	JP	J$41B1
-I$4055:	JP	C.41C6
-?.4058:	JP	J$4493
-?.405B:	JP	J$4064
+I$4055:	JP	C.41C6			; byte to printer
+?.4058:	JP	J$4493			; evaluate _COMINI RS232 port configuration
+?.405B:	JP	J$4064			; netmodem functions
 ?.405E:	JP	J$413E			; MODEM.CONFIG
 ?.4061:	JP	J$4153			; update modem mode
+
+;	  Subroutine netmodem functions
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$4064:	PUSH	HL
 	PUSH	BC
 	LD	B,A
 	LD	HL,I$6083
 	BIT	3,(HL)
-	JR	NZ,J.407A
-	AND	A
-	JP	Z,J$407F
-	DEC	A
-	JP	Z,J$40C8
-	DEC	A
-	JP	Z,J$40CB
+	JR	NZ,J.407A		; quit with error
+	AND	A			; function 0, set transmitter power ?
+	JP	Z,J$407F		; yep,
+	DEC	A			; function 1 ?
+	JP	Z,J$40C8		; quit with error
+	DEC	A			; function 2, set equalizer mode ?
+	JP	Z,J$40CB		; yep,
 J.407A:	SCF
 J.407B:	LD	A,B
 	POP	BC
 	POP	HL
 	RET
 
+; set transmitter power
+
 J$407F:	LD	A,C
 	INC	A
-	CP	11H
-	JP	NC,J.407A
+	CP	16+1
+	JP	NC,J.407A		; quit with error
 	AND	A
 	JR	Z,J$40C4
 	CP	0BH
@@ -122,9 +116,9 @@ J$407F:	LD	A,C
 	CP	0FH
 	LD	H,20H
 	JR	C,J.409D
-	LD	H,00H
+	LD	H,0
 J.409D:	LD	A,H
-	LD	(D$7EFD),A
+	LD	(D$7EFD),A		; store transmitter
 	DI
 	CALL	C.6000
 	DEFB	0
@@ -146,28 +140,30 @@ J.409D:	LD	A,H
 J$40C4:	OR	A
 	JP	J.407B
 
-J$40C8:	JP	J.407A
+J$40C8:	JP	J.407A			; quit with error
+
+; set equalizer mode
 
 J$40CB:	XOR	A
 	LD	(D.60A5),A
 	INC	C
 	JR	Z,J$4113
 	DEC	C
-	LD	H,03H	; 3 
+	LD	H,03H
 	JR	Z,J.40E9
 	DEC	C
 	LD	H,00H
 	JR	Z,J.40E9
 	DEC	C
-	LD	H,03H	; 3 
-	LD	A,01H	; 1 
+	LD	H,03H
+	LD	A,1
 	LD	(D.60A5),A
 	JR	Z,J.40E9
-	JP	J.407A
+	JP	J.407A			; quit with error
 
 J.40E9:	LD	A,H
 	CPL
-	AND	03H	; 3 
+	AND	03H
 	LD	(D$60AD),A
 	DI
 	CALL	C.6000
@@ -271,7 +267,7 @@ J.4188:	POP	BC
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine get baudrate code
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -320,7 +316,7 @@ I$41A1:
         DEFB	0FFH                    ; other receiver speed
 
 J$41B1:	PUSH	HL
-	LD	HL,D.616C
+	LD	HL,D.616C		; output to modem flag
 J$41B5:	PUSH	BC
 	LD	B,A
 	PUSH	BC
@@ -335,52 +331,53 @@ J.41C3:	POP	BC
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine byte to printer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.41C6:	PUSH	HL
 	LD	HL,LPTPOS
-	CP	20H
-	JR	NC,J$41ED
-	CP	0DH
-	JR	Z,J$41EB
-	CP	09H
-	JR	NZ,J$41EE
+	CP	20H			; control code ?
+	JR	NC,J$41ED		; nope, update lptpos and print
+	CP	0DH			; CR ?
+	JR	Z,J$41EB		; yep, lptpos = 0 and
+	CP	09H			; TAB ?
+	JR	NZ,J$41EE		; nope, skip lptpos update
 	LD	A,(HL)
 	AND	07H
 	XOR	07H
 	LD	L,A
 J$41DC:	LD	A," "
-	CALL	C.41C6
-	JR	C,J.41E9
+	CALL	C.41C6			; byte to printer
+	JR	C,J.41E9		; error, quit
 	JR	Z,J.41E9
 	DEC	L
 	JP	P,J$41DC
 J.41E9:	POP	HL
 	RET
 
-J$41EB:	LD	(HL),0FFH
+J$41EB:	LD	(HL),-1
 J$41ED:	INC	(HL)
-J$41EE:	LD	HL,D.616E
+J$41EE:	LD	HL,D.616E		; output to printer flag
 	JR	J$41B5
 
 J$41F3:	PUSH	AF
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.405E                  ; counter #1, clear
-J$41FA:	CALL	LPTSTT
-	JR	NZ,J$421E
+J$41FA:	CALL	LPTSTT			; printer ready ?
+	JR	NZ,J$421E		; yep,
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.4040			; CTRL-STOP pressed (reset STOP flag) ?
 	LD	A,1
-	JR	C,J.4214		; yep,
+	JR	C,J.4214		; yep, quit with aborted
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.4061			; counter #1, get number of seconds
 	CP	10
-	JR	C,J$41FA
-	XOR	A
+	JR	C,J$41FA		; nope, wait
+	XOR	A			; timeout
 J.4214:	EXX
 	POP	HL
 	LD	HL,I$6073
@@ -392,10 +389,10 @@ J.4214:	EXX
 J$421E:	POP	AF
 	CALL	LPTOUT
 	LD	A,0
-	INC	A
-	RET	NC
+	INC	A			; aborted
+	RET	NC			; no error, quit
 	PUSH	AF
-	JR	J.4214
+	JR	J.4214			; quit with aborted
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -403,15 +400,15 @@ J$421E:	POP	AF
 
 C$4229:	BIT	5,(HL)
 	JR	NZ,J$424F
-	CALL	C.42EB
-	JR	NC,J$423F
-;
+	CALL	C.42EB			; check if double byte header char
+	JR	NC,J$423F		; yep,
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4232:	CALL	C.42E0
-	JR	NZ,J$41F3
+C.4232:	CALL	C.42E0			; output to modem ?
+	JR	NZ,J$41F3		; nope, byte to printer (with timeout)
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.404F			; RS232.SNDCHR
@@ -421,7 +418,7 @@ C.4232:	CALL	C.42E0
 J$423F:	INC	HL
 	LD	(HL),A
 	DEC	HL
-	LD	DE,I$429F
+	LD	DE,I$429F		; japanese
 	CALL	C.42AF
 	RET	C
 	RET	Z
@@ -431,15 +428,15 @@ J$424C:	SET	6,(HL)
 
 J$424F:	BIT	6,(HL)
 	JR	NZ,J$426D
-	CALL	C.42EB
-	JR	C,J$425E
+	CALL	C.42EB			; check if double byte header char
+	JR	C,J$425E		; nope,
 	INC	HL
 	LD	(HL),A
 	DEC	HL
 	DEC	A
 	JR	J$424C
 
-J$425E:	LD	DE,I$42A7
+J$425E:	LD	DE,I$42A7		; english
 	PUSH	AF
 	CALL	C.42AF
 	POP	BC
@@ -453,10 +450,10 @@ J$426D:	LD	E,A
 	INC	HL
 	LD	D,(HL)
 	DEC	HL
-	CALL	C.42E0
-	JR	NZ,J$427F
+	CALL	C.42E0			; output to modem ?
+	JR	NZ,J$427F		; nope,
 	LD	A,(D.6153)		; comterm mode
-	AND	60H
+	AND	60H			; JIS mode
 	CP	40H
 	JR	Z,J$4289
 J$427F:	PUSH	HL
@@ -500,10 +497,10 @@ I$42A7:	DEFB    "(J"                    ; horizontal tab set
 ;	     Outputs ________________________
 
 C.42AF:	LD	A,(D.6153)		; comterm mode
-	CALL	C.42E0
-	JR	Z,J$42B9
+	CALL	C.42E0			; output to modem ?
+	JR	Z,J$42B9		; yep,
 	LD	A,60H
-J$42B9:	AND	60H
+J$42B9:	AND	60H			; JIS mode
 	RRCA
 	RRCA
 	RRCA
@@ -533,7 +530,7 @@ J$42B9:	AND	60H
 J$42DE:	INC	A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine output to modem ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -546,7 +543,7 @@ C.42E0:	PUSH	DE
 	POP	DE
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine check if double byte header char
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -591,9 +588,9 @@ J$4316:	ADD	A,7EH	; "~"
 	RET
 
 J$431A:	XOR	A
-	LD	(D.6171),A
-	LD	(D.616C),A
-	LD	(D.616E),A
+	LD	(D.6171),A		; reset ESC mode
+	LD	(D.616C),A		; reset output to modem flag
+	LD	(D.616E),A		; reset output to printer flag
 	RET
 
 J$4325:	PUSH	BC
@@ -632,15 +629,15 @@ C$432F:	OR	A
 	LD	A,(D$6072)
 	OR	A			; literal mode ?
 	LD	A,B
-	RET	NZ
-	CP	7FH
-	JR	Z,J$435D
-	CP	20H
-	JR	NC,J$4380
+	RET	NZ			; yep, quit
+	CP	7FH			; DEL ?
+	JR	Z,J$435D		; yep,
+	CP	20H			; control code ?
+	JR	NC,J$4380		; nope,
 J$435D:	LD	HL,D.6171
-	CP	1BH
-	JR	NZ,J$436D
-	LD	(HL),1
+	CP	1BH			; ESC ?
+	JR	NZ,J$436D		; nope,
+	LD	(HL),1			; ESC mode = wait for first char
 	XOR	A
 
 ;	  Subroutine __________________________
@@ -651,10 +648,10 @@ C.4367:	LD	HL,D.616C
 	RES	3,(HL)
 	RET
 
-J$436D:	CP	1AH
-	JR	Z,J$4375
-	CP	18H
-	JR	NZ,J$437C
+J$436D:	CP	1AH			; EOF ?
+	JR	Z,J$4375		; yep,
+	CP	18H			; CAN ?
+	JR	NZ,J$437C		; nope,
 J$4375:	LD	(HL),0
 	CALL	C.4367
 	RES	1,(HL)
@@ -666,7 +663,7 @@ J$4380:	LD	HL,D.616C
 	BIT	3,(HL)
 	JR	Z,J$4393
 	CALL	C.43FA			; mask off data
-	CP	40H	; "@"
+	CP	40H
 	CCF
 	RET	NC
 	CALL	C.4367
@@ -674,9 +671,9 @@ J$4380:	LD	HL,D.616C
 	RET
 
 J$4393:	LD	A,(D.6171)
-	OR	A
+	OR	A			; in ESC mode ?
 	LD	A,B
-	JR	NZ,J$43E4
+	JR	NZ,J$43E4		; yep,
 	BIT	1,(HL)
 	JR	NZ,J$43C6
 	CP	20H	; " "
@@ -728,7 +725,7 @@ J$43E4:	CALL	C.43FA			; mask off data
 	CP	80H
 	JR	C,J$4400
 	XOR	A
-	LD	(D.6171),A
+	LD	(D.6171),A		; reset ESC mode
 	LD	A,B
 	CP	0A0H
 	JR	C,J.43AE
@@ -746,25 +743,25 @@ C.43FA:	LD	A,(D.6081)		; receive data mask
 	LD	B,A
 	RET
 
-J$4400:	CP	30H	; "0"
+J$4400:	CP	30H
 	JR	NC,J$442B
 	LD	A,(D.6171)
-	DEC	A
-	JR	NZ,J.441F
+	DEC	A			; ESC mode = wait for first char ?
+	JR	NZ,J.441F		; nope, update ESC mode
 	LD	A,B
 	LD	(D.6174),A
-	CP	2AH	; "*"
-	JR	NZ,J.441F
+	CP	"*"
+	JR	NZ,J.441F		; nope, update ESC mode
 J.4412:	LD	(D.6172),A
 	SET	0,(HL)
 	XOR	A
-	LD	(D.6171),A
+	LD	(D.6171),A		; reset ESC mode
 	LD	A,1BH
 	OR	A
 	RET
 
 J.441F:	LD	A,(D.6171)
-	INC	A
+	INC	A			; ESC mode = ?
 	JR	NZ,J$4426
 	DEC	A
 J$4426:	LD	(D.6171),A
@@ -772,64 +769,73 @@ J$4426:	LD	(D.6171),A
 	RET
 
 J$442B:	LD	A,(D.6171)
-	DEC	A
-	JR	NZ,J$4442
+	DEC	A			; ESC mode = first char after ESC ?
+	JR	NZ,J$4442		; nope,
 	LD	A,B
-	CP	4BH	; "K"
+	CP	"K"
 	JR	Z,J.4466
-	CP	48H	; "H"
+	CP	"H"
 	JR	Z,J$4460
-	CP	5BH	; "["
+	CP	"["
 	JR	J.4412
 
 ?.443E:	SET	3,(HL)
 	JR	J.4412
 
 J$4442:	LD	A,(D.6174)
-	CP	24H	; "$"
+	CP	"$"
 	JR	NZ,J$4457
 	LD	A,B
-	CP	40H	; "@"
+	CP	"@"
 	JR	Z,J.4466
-	CP	42H	; "B"
+	CP	"B"
 	JR	Z,J.4466
 J.4452:	XOR	A
-	LD	(D.6171),A
+	LD	(D.6171),A		; reset ESC mode
 	RET
 
-J$4457:	CP	28H	; "("
+J$4457:	CP	"("
 	JR	NZ,J$446A
 	LD	A,B
-	CP	40H	; "@"
-	JR	C,J.4452
+	CP	"@"
+	JR	C,J.4452		; reset ESC mode and quit
+
+; ESC H
+
 J$4460:	RES	2,(HL)
 J$4462:	RES	1,(HL)
-	JR	J.4452
+	JR	J.4452			; reset ESC mode and quit
+
+; ESC K
 
 J.4466:	SET	2,(HL)
 	JR	J$4462
 
-J$446A:	CP	29H	; ")"
+J$446A:	CP	")"
 	JR	NZ,J$4483
 	LD	A,(D.6153)		; comterm mode
-	AND	04H	; 4 
-	JR	Z,J.4452
+	AND	04H			; chinese character set ?
+	JR	Z,J.4452		; nope, reset ESC mode and quit
 	LD	A,B
-	SUB	30H	; "0"
+	SUB	"0"
 	JR	Z,J$447E
-	CP	03H	; 3 
-	JR	NZ,J.4452
+	CP	3
+	JR	NZ,J.4452		; reset ESC mode and quit
 J$447E:	LD	(D.6190),A
-	JR	J.4452
+	JR	J.4452			; reset ESC mode and quit
 
-J$4483:	CP	20H	; " "
-	JR	NZ,J.4452
+J$4483:	CP	" "
+	JR	NZ,J.4452		; reset ESC mode and quit
 	LD	A,B
-	CP	3AH	; ":"
-	JR	NZ,J.4452
+	CP	":"
+	JR	NZ,J.4452		; reset ESC mode and quit
 	LD	HL,D.616C
 	SET	4,(HL)
-	JR	J.4452
+	JR	J.4452			; reset ESC mode and quit
+
+;	  Subroutine evaluate _COMINI RS232 port configuration
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$4493:	EI
 	PUSH	IX
@@ -839,12 +845,12 @@ J$4493:	EI
 	PUSH	BC
 	PUSH	DE
 	PUSH	HL
-	LD	HL,I$4559
+	LD	HL,I$4559		; default RS232 port settings
 	LD	DE,I$6064
 	PUSH	DE
 	POP	IY
-	LD	BC,I$0008
-	LD	A,(D$4565)
+	LD	BC,8
+	LD	A,(D$4565)		; default time out value
 	LD	(IY+12),A
 	LDIR
 	POP	HL
@@ -852,17 +858,17 @@ J$4493:	EI
 	POP	BC
 	LD	A,B
 	AND	C
-	INC	A
-	JR	NZ,J$44CB
+	INC	A			; no parameters specified ?
+	JR	NZ,J$44CB		; nope,
 	LD	A,D
-	AND	A
-	JR	Z,J$44BE
-	CP	3AH	; ":"
-J$44BE:	JP	Z,J$4526
-	CP	29H	; ")"
+	AND	A			; end of BASIC line ?
+	JR	Z,J$44BE		; yep,
+	CP	":"			; end of BASIC statement ?
+J$44BE:	JP	Z,J$4526		; yep, use defaults and quit
+	CP	")"
 	JR	Z,J$44E4
-	CALL	C.4540
-	INC	L
+	CALL	C.4540			; check for BASIC character
+	DEFB	","
 	JR	J$44EA
 
 J$44CB:	PUSH	HL
@@ -871,100 +877,100 @@ J$44CB:	PUSH	HL
 	EXX
 	POP	HL
 	LD	A,B
-	AND	A
-	JR	Z,J$44E0
+	AND	A			; empty string ?
+	JR	Z,J$44E0		; yep,
 	PUSH	IY
 	POP	DE
 J$44D7:	LD	A,(HL)
-	CALL	C$452B
+	CALL	C$452B			; to upper
 	LD	(DE),A
 	INC	DE
 	INC	HL
 	DJNZ	J$44D7
 J$44E0:	POP	HL
 	LD	A,(HL)
-	CP	29H	; ")"
+	CP	")"
 J$44E4:	JR	Z,J.4522
-	CALL	C.4540
-	INC	L
-J$44EA:	CP	2CH	; ","
+	CALL	C.4540			; check for BASIC character
+	DEFB	","
+J$44EA:	CP	","
 	JR	Z,J.4500
-	CALL	C.453A
-	LD	(D$606C),DE
+	CALL	C.453A			; evaluate address operand
+	LD	(D.6064+8),DE		; store receiver baudrate
 	LD	A,(HL)
-	CP	29H	; ")"
+	CP	")"
 	JR	NZ,J.4500
-	LD	(D.606E),DE
+	LD	(D.6064+10),DE		; store sender baudrate
 	JR	J.4522
 
-J.4500:	CALL	C.4540
-	INC	L
-	CP	2CH	; ","
+J.4500:	CALL	C.4540			; check for BASIC character
+	DEFB	","
+	CP	","
 	JR	Z,J$4514
-	CALL	C.453A
-	LD	(D.606E),DE
+	CALL	C.453A			; evaluate address operand
+	LD	(D.6064+10),DE		; store send baudrate
 	LD	A,(HL)
-	CP	29H	; ")"
+	CP	")"
 	JR	Z,J.4522
-J$4514:	CALL	C.4540
-	INC	L
-	CP	29H	; ")"
+J$4514:	CALL	C.4540			; check for BASIC character
+	DEFB	","
+	CP	")"
 	JR	Z,J.4522
-	CALL	C$4534
-	LD	(D$6070),A
-J.4522:	CALL	C.4540
-	ADD	HL,HL
-J$4526:	LD	(IY+4),4EH	; "N"
+	CALL	C$4534			; evaluate byte operand
+	LD	(D.6064+12),A		; store time out
+J.4522:	CALL	C.4540			; check for BASIC character
+	DEFB	")"
+J$4526:	LD	(IY+4),"N"		; force no CTS/RTS (no hardware support)
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine to upper
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-C$452B:	CP	61H	; "a"
+
+C$452B:	CP	"a"
 	RET	C
-	CP	7BH	; "{"
+	CP	"z"+1
 	RET	NC
 	AND	0DFH
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine evaluate byte operand
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-C$4534:	LD	IX,I$521C
+
+C$4534:	LD	IX,GETBYT
 	JR	J.4552
 
-;	  Subroutine __________________________
+;	  Subroutine evaluate address operand
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-C.453A:	LD	IX,I$542F
+
+C.453A:	LD	IX,GETUIN
 	JR	J.4552
 
-;	  Subroutine __________________________
+;	  Subroutine check for BASIC character
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.4540:	LD	A,(HL)
 	EX	(SP),HL
 	CP	(HL)
-	JP	NZ,J$454E
+	JP	NZ,J$454E		; syntax error
 	INC	HL
 	EX	(SP),HL
-	LD	IX,I$4666
+	LD	IX,CHRGTR
 	JR	J.4552
 
-J$454E:	LD	IX,I$4055
+J$454E:	LD	IX,SNERR
 J.4552:	CALL	C.6000
 	DEFB	0
 	DEFW	C.4079			; MAIN BIOS CALL
 	RET
 
-I$4559:	JR	C,J$45A9
-	LD	SP,I$4F58
-	LD	C,(HL)
-	LD	C,(HL)
-	LD	C,(HL)
-	INC	L
-	LD	BC,I.012C
-D$4565:	NOP
+I$4559:	DEFB	"8N1XONNN"
+	DEFW	300
+	DEFW	300
+D$4565:	DEFB	0
 
 I$4566:	LD	IY,0
 	LD	IX,0
@@ -973,30 +979,36 @@ I$4566:	LD	IY,0
 	EI
 	RET
 
+S4566	EQU	$-I$4566
+
+;	  Subroutine is MSX-JE usable ?
+;	     Inputs  ________________________
+;	     Outputs Cx reset = MSX-JE usable, DE = MSX-JE workarea size
+
 J$4576:	LD	HL,D.615B
-	LD	(HL),0
+	LD	(HL),0			; clear MSX-JE flags (MSX-JE not invoked)
 	LD	HL,I$4566
 	LD	DE,C.615C
-	LD	BC,I$0010
-	LDIR
-	SBC	A,A
-	LD	HL,I$61A3
-	AND	(HL)
-	CP	20H	; " "
+	LD	BC,S4566
+	LDIR				; install MSX-JE caller
+	SBC	A,A			; chinese mode
+	LD	HL,D.61A3
+	AND	(HL)			; screen size, number of columns
+	CP	32
 	RET	C
-	SUB	04H	; 4 
+	SUB	04H
 	AND	0FEH
 	LD	(D.619A),A
 	LD	A,(HOKVLD)
 	RRCA
-	CCF
-	RET	C
+	CCF				; EXTBIO initialized ?
+	RET	C			; nope, quit
 	LD	HL,-64
 	ADD	HL,SP
 	LD	A,H
-	CP	HIGH 0C100H
-	RET	C
-	LD	SP,HL
+	CP	HIGH 0C100H		; stack in page 3 ?
+	RET	C			; nope, quit
+	LD	SP,HL			; allocate workarea on stack
 	PUSH	HL
 	IN	A,(0A8H)
 	AND	0C0H
@@ -1004,7 +1016,7 @@ J$45A9:	RLCA
 	RLCA
 	LD	HL,EXPTBL
 	LD	C,A
-	LD	B,00H
+	LD	B,0
 	ADD	HL,BC
 	LD	A,(HL)
 	AND	80H
@@ -1021,109 +1033,113 @@ J$45A9:	RLCA
 	SCF
 	RRA
 J$45C3:	OR	C
-	LD	B,A
-	LD	DE,I$1000
+	LD	B,A			; calculate slotid page 3
+	LD	DE,10H*256+0
 	POP	HL
 	PUSH	HL
 	CALL	EXTBIO
 	POP	DE
 	OR	A
-	SBC	HL,DE
-	JR	Z,J.45F3
+	SBC	HL,DE			; any entries ?
+	JR	Z,J.45F3		; nope, MSX-JE not found
 	LD	A,L
 	RRCA
 	RRCA
-	LD	B,A
-J$45D7:	LD	A,(DE)
+	LD	B,A			; number of MSX-JE entries
+J$45D7:	LD	A,(DE)			; capability vector
 	INC	DE
-	AND	03H	; 3 
-	JR	Z,J$45E4
+	AND	03H			; MSX-JE and Virtual terminal input interface ?
+	JR	Z,J$45E4		; yep, useable MSX-JE
 	INC	DE
 	INC	DE
 	INC	DE
-	DJNZ	J$45D7
-	JR	J.45F3
+	DJNZ	J$45D7			; next entry
+	JR	J.45F3			; MSX-JE not found
 
 J$45E4:	EX	DE,HL
 	LD	A,(HL)
-	LD	(D$615F),A
+	LD	(C.615C+0+3),A		; store MSX-JE slotid
 	INC	HL
 	LD	E,(HL)
 	INC	HL
 	LD	D,(HL)
-	LD	(D$6162),DE
+	LD	(C.615C+4+2),DE		; store MSX-JE function entry
 	OR	A
-	SCF
-J.45F3:	PUSH	AF
-	LD	HL,I$0042
+	SCF				; MSX-JE found
+J.45F3:	PUSH	AF			; store MSX-JE found flag
+	LD	HL,64+2
 	ADD	HL,SP
-	POP	AF
-	LD	SP,HL
-	CCF
-	RET	C
+	POP	AF			; restore MSX-JE found flag
+	LD	SP,HL			; deallocate workarea on stack
+	CCF				; MSX-JE found ?
+	RET	C			; nope, quit
 	INC	HL
-	INC	HL
-	PUSH	HL
-	LD	A,01H	; 1 
-	CALL	C.615C
-	POP	BC
+	INC	HL			; pointer to workarea
+	PUSH	HL			; store pointer to workarea
+	LD	A,1                     ; inquiry
+	CALL	C.615C			; call MSX-JE
+	POP	BC			; restore pointer to workarea
 	PUSH	DE
-	POP	IX
+	POP	IX			; minimum MSX-JE workarea size
 	PUSH	HL
-	POP	IY
-	LD	DE,(STREND)
+	POP	IY			; maximum MSX-JE workarea size
+	LD	DE,(STREND)		; start of free BASIC memory
 	LD	A,D
-	CP	0C0H
-	JR	NC,J$4617
-	LD	DE,I$C000
+	CP	0C0H			; in page 3 ?
+	JR	NC,J$4617		; yep,
+	LD	DE,0C000H		; force in page 3
 J$4617:	INC	D
 	INC	D
 	LD	L,C
-	LD	H,B
+	LD	H,B			; pointer to workarea
 	OR	A
-	SBC	HL,DE
-	RET	C
+	SBC	HL,DE			; size of free BASIC memory
+	RET	C			; not enough memory, quit
 	PUSH	IY
-	POP	DE
-	RST	20H
-	JR	NC,J$462B
+	POP	DE			; maximum MSX-JE workarea size
+	RST	20H			; maximum required available ?
+	JR	NC,J$462B		; yep, quit with error
 	PUSH	IX
-	POP	DE
-	RST	20H
-	RET	C
+	POP	DE			; minimum MSX-JE workarea size
+	RST	20H			; minimum requited available ?
+	RET	C			; nope, quit with error
 	EX	DE,HL
 J$462B:	AND	A
 	RET
 
+;	  Subroutine japanese input frontend execution/termination
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$462D:	LD	A,(D.615B)
-	RLCA
-	RET	NC
-	RLCA
-	JR	C,J$4650
+	RLCA				; MSX-JE invoked ?
+	RET	NC			; nope, quit
+	RLCA				; MSX-JE executing ?
+	JR	C,J$4650		; yep, terminate MSX-JE execution
 	CALL	C.6000
 	DEFB	2
-	DEFW	C.404F
-	RET	C
-	LD	A,04H	; 4 
-	CALL	C.615C
-	LD	HL,I$000C
-	PUSH	HL
-	LD	L,00H
-	ADD	HL,SP
-	CALL	C.46D7
-	POP	HL
-	LD	A,0C0H
+	DEFW	C.404F			; start MSX-JE execution
+	RET	C			; error, quit
+	LD	A,4                     ; clear
+	CALL	C.615C			; call MSX-JE
+	LD	HL,12
+	PUSH	HL			; clear screen STB on stack
+	LD	L,0
+	ADD	HL,SP			; pointer to STB
+	CALL	C.46D7			; display STB
+	POP	HL			; restore stack
+	LD	A,0C0H			; MSX-JE invoked, MSX-JE executing
 	JR	J$465B
 
-J$4650:	CALL	C$465F
+J$4650:	CALL	C$465F			; restore F1-F5 definition
 	CALL	C.6000
 	DEFB	2
-	DEFw	C.4052
-	LD	A,80H
+	DEFw	C.4052			; terminate MSX-JE execution
+	LD	A,80H			; MSX-JE invoked, MSX-JE not executing
 J$465B:	LD	(D.615B),A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine restore F1-F5 definition
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1136,86 +1152,86 @@ C$465F:	LD	HL,I.60AE
 J$466B:	LD	HL,D.615B
 	JR	NZ,J$4691
 	LD	A,(HL)
-	AND	0C6H
-	XOR	0C6H
-	JR	Z,J.46BE
-	LD	A,06H	; 6 
-	CALL	SNSMAT
+	AND	0C6H			; b6,b7,b2,b1
+	XOR	0C6H			; b6,b7, all confirmed ?
+	JR	Z,J.46BE		; yep,
+	LD	A,6
+	CALL	SNSMAT			; read keyboard row
 	LD	HL,I$62F2
 	LD	B,(HL)
-	LD	(HL),A
+	LD	(HL),A			; update keyboard row 6
 	XOR	B
-	AND	04H	; 4 
-	LD	B,A
+	AND	04H
+	LD	B,A			; GRAPH key changed
 	LD	A,(D.615B)
-	AND	0C4H
-	XOR	0C4H
-	RET	NZ
+	AND	0C4H			; b7,b6, MSX-JE conversion has not ended
+	XOR	0C4H			; b7 set, b6 set, MSX-JE conversion has not ended ?
+	RET	NZ			; nope, quit
 	INC	B
-	DJNZ	J.46BE
+	DJNZ	J.46BE			; GRAPH key not changed,
 	RET
 
-J$4691:	BIT	6,(HL)
-	JR	NZ,J$469B
+J$4691:	BIT	6,(HL)			; b6 set ?
+	JR	NZ,J$469B		; yep,
 	CALL	CHGET
 	EI
-	CP	A
+	CP	A			; clear Cx, set Zx
 	RET
 
-J$469B:	BIT	2,(HL)
-	JR	NZ,J.46BE
-	CP	7FH
-	JR	Z,J$46B1
-	CP	20H	; " "
-	JR	NC,J.46BE
-	DEC	A
-	JR	NZ,J$46B0
-	CALL	C$46E1
-	DEC	A
-	JR	NZ,J.46BE
+J$469B:	BIT	2,(HL)			; MSX-JE conversion has ended ?
+	JR	NZ,J.46BE		; nope,
+	CP	7FH			; DEL ?
+	JR	Z,J$46B1		; yep,
+	CP	20H			; control code ?
+	JR	NC,J.46BE		; nope,
+	DEC	A			; MSX header ?
+	JR	NZ,J$46B0		; nope,
+	CALL	C$46E1			; get number of keys in keyboard buffer
+	DEC	A			; 1 ?
+	JR	NZ,J.46BE		; nope, dispatch
 J$46B0:	INC	A
 J$46B1:	PUSH	AF
-	LD	A,0AH	; 10 
-	CALL	C.615C
-	OR	A
-	JR	Z,J$46BD
+	LD	A,10                    ; conflict detect control key collision prevention 
+	CALL	C.615C			; call MSX-JE
+	OR	A			; detected ?
+	JR	Z,J$46BD		; nope, dispatch
 	POP	AF
-	CP	A
+	CP	A			; clear Cx, set Zx
 	RET
 
 J$46BD:	POP	AF
-J.46BE:	LD	A,06H	; 6 
-	CALL	C.615C
-	XOR	0C4H
-	LD	(D.615B),A
-	RRCA
+J.46BE:	LD	A,6                     ; dispatch
+	CALL	C.615C			; call MSX-JE
+	XOR	0C4H			; set b7,b6, flip MSX-JE conversion has ended
+	LD	(D.615B),A		; update MSX-JE flags
+	RRCA				; the AP displays the STB ?
 	PUSH	AF
-	CALL	C,C.46D7
+	CALL	C,C.46D7		; yep, display STB
 	POP	AF
-	RRCA
-	RET	NC
-	LD	A,07H	; 7 
-	CALL	C.615C
+	RRCA				; the AP gets the conversion result ?
+	RET	NC			; nope, quit
+	LD	A,7                     ; get result
+	CALL	C.615C			; call MSX-JE
 	SCF
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine display STB
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.46D7:	LD	A,(D.619A)
 	CALL	C.6000
 	DEFB	2
-	DEFW	C.4055
+	DEFW	C.4055			; display STB
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine get number of keys in keyboard buffer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$46E1:	CALL	CHSNS
+C$46E1:	CALL	CHSNS			; get keyboard status
 	RET	P
-	ADD	A,28H
+	ADD	A,40
 	RET
 
 	END

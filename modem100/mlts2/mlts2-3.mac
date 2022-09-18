@@ -61,13 +61,13 @@ I$604A	EQU	604AH	; ----I
 D.6082	EQU	6082H	; ---L-
 D$6084	EQU	6084H	; ---L-
 D.6086	EQU	6086H	; --SL-
-D$608B	EQU	608BH	; ---L-
-D.608D	EQU	608DH	; ---L-
-D.6096	EQU	6096H	; --SL-
-D.6097	EQU	6097H	; ---L-
+D$608B	EQU	608BH			; counter #1, number of 1/10 seconds
+D.608D	EQU	608DH			; counter #1, number of seconds
+D.6096	EQU	6096H			; b7,b6 = dailer mode, b1 = originate/answer
+D.6097	EQU	6097H			; flags
 D.60A1	EQU	60A1H	; --SL-
-D$60A9	EQU	60A9H	; ---L-
-D$6175	EQU	6175H	; ---L-
+D$60A9	EQU	60A9H			; receive buffer size
+D$6175	EQU	6175H			; comterm mode
 D.617B	EQU	617BH	; ---L-
 D$617C	EQU	617CH	; ---L-
 D$6181	EQU	6181H	; ---L-
@@ -163,7 +163,7 @@ D.F862	EQU	0F862H	; ---L-
 D.F866	EQU	0F866H	; --S-I
 D$F86E	EQU	0F86EH	; --S--
 I$FE02	EQU	0FE02H	; ----I
-D.FFA7	EQU	0FFA7H	; ---L-
+H.PHYD	EQU	0FFA7H
 I$FFFF	EQU	0FFFFH	; ----I
 
 ?.4060:	JP	J$41BC
@@ -614,8 +614,8 @@ J.42BD:	CALL	C.411E
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.407E
-J$42D0:	LD	A,(D.608D)
-	CP	05H	; 5 
+J$42D0:	LD	A,(D.608D)		; counter #1, number of seconds
+	CP	5
 	JR	C,J$42D0
 ;
 	CALL	C.6000
@@ -738,7 +738,7 @@ J$436F:	CALL	C.51D9
 	JR	Z,J$437D
 ;
 	LD	D,A
-J$437D:	LD	A,(D.608D)
+J$437D:	LD	A,(D.608D)		; counter #1, number of seconds
 	CP	D
 	JR	Z,J.431A
 ;
@@ -911,10 +911,9 @@ C$443C:	XOR	A
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.407E
-J$4461:	LD	A,(D.608D)
-	CP	02H	; 2 
+J$4461:	LD	A,(D.608D)		; counter #1, number of seconds
+	CP	2
 	JR	C,J$4461
-;
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.4063			; clear receive buffer
@@ -1032,7 +1031,7 @@ J.450A:	EI
 	JR	Z,J$4517
 ;
 	LD	D,A
-J$4517:	LD	A,(D.608D)
+J$4517:	LD	A,(D.608D)		; counter #1, number of seconds
 	CP	D
 	JR	Z,J.4541
 ;
@@ -1719,12 +1718,11 @@ J$47CB:	LD	E,A
 ;
 C.47D8:	PUSH	BC
 	LD	B,A
-	LD	A,(D.FFA7)
-	CP	0C9H
+	LD	A,(H.PHYD+0)
+	CP	0C9H			; disk system ?
 	SCF
 	CCF
-	JR	Z,J$47E8
-;
+	JR	Z,J$47E8		; nope,
 	LD	A,(D.F806)
 	CP	09H	; 9 
 J$47E8:	LD	A,B
@@ -2591,26 +2589,21 @@ C$4B76:	LD	HL,D.F806
 	LD	DE,D.F866
 	LD	B,08H	; 8 
 	CALL	C.4B9F
-;
 	LD	B,03H	; 3 
 	CALL	C.4B9F
-;
 	XOR	A
 	LD	B,19H
 J$4B8B:	LD	(HL),A
 	INC	HL
 	DJNZ	J$4B8B
-;
 	LD	HL,D.F806
 	LD	A,(HL)
 	OR	A
 	RET	NZ
-;
-	LD	A,(D.FFA7)
-	SUB	0C9H
+	LD	A,(H.PHYD+0)
+	SUB	0C9H			; disk system ?
 	OR	A
-	RET	NZ
-;
+	RET	NZ			; yep, quit
 	LD	(HL),0FFH
 	RET
 ;
@@ -2888,7 +2881,7 @@ J$4CAA:	CALL	C.6000
 	JR	NZ,J$4CCA
 	LD	A,(D.635E)
 	LD	L,A
-	LD	A,(D.608D)
+	LD	A,(D.608D)		; counter #1, number of seconds
 	CP	L
 	JR	C,J$4CAA
 	SCF
@@ -3553,7 +3546,7 @@ J$4FDF:	PUSH	AF
 C.4FF7:	CALL	C.6000
 	DEFB	0
 	DEFW	C.407E
-J$4FFD:	LD	A,(D.608D)
+J$4FFD:	LD	A,(D.608D)		; counter #1, number of seconds
 	CP	C
 	JR	C,J$4FFD
 ;
@@ -3829,7 +3822,7 @@ C.5164:	PUSH	AF
 	LD	(D$F3E9),HL
 	LD	A,H
 	LD	(D$F3EB),A
-	LD	A,(D$6175)
+	LD	A,(D$6175)		; comterm mode
 	CALL	C.6000
 	DEFB	2
 	DEFW	C.4060
@@ -3849,7 +3842,7 @@ C.5188:	XOR	A
 	LD	(D.634A),A
 	LD	(D.6349),A
 	LD	(D.6357),A
-	LD	A,(D.6096)
+	LD	A,(D.6096)		; b7,b6 = dailer mode, b1 = originate/answer
 	LD	(D.6348),A
 	RET
 ;
@@ -3996,19 +3989,15 @@ J$5230:	CALL	C.537E			; CTRL-STOP pressed ?
 	SCF
 	LD	E,01H	; 1 
 	RET
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C.523C:	LD	A,(D.6097)
 	BIT	3,A
 	RET
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -4046,34 +4035,28 @@ C.525F:	PUSH	AF
 	PUSH	DE
 	PUSH	HL
 	CALL	C.523C
-;
 	JR	Z,J.525A
-;
 	LD	A,(D.6097)
 	BIT	1,A
 	JR	NZ,J.525A
-;
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.409F
-	LD	A,(D.6096)
+	LD	A,(D.6096)		; b7,b6 = dailer mode, b1 = originate/answer
 	BIT	0,A
 	CALL	NZ,C.527E
-;
 	JR	J.525A
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C.527E:	CALL	C.6000
 	DEFB	0
 	DEFW	C.407E
 	LD	DE,(D.60A1)
 J$5288:	OR	A
-	LD	HL,(D$60A9)
+	LD	HL,(D$60A9)		; receive buffer size
 	SBC	HL,DE
 	RET	Z
 ;
@@ -4082,8 +4065,8 @@ J$5288:	OR	A
 	SBC	HL,DE
 	JR	NZ,C.527E
 ;
-	LD	A,(D$608B)
-	CP	0AH	; 10 
+	LD	A,(D$608B)		; counter #1, number of 1/10 seconds
+	CP	10
 	JR	C,J$5288
 ;
 	RET
@@ -4448,37 +4431,30 @@ C.53D8:	CALL	C.52C0
 	SCF
 	CCF
 	RET
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C.53E8:	LD	B,0FEH
+
+C.53E8:	LD	B,0FEH			; clear b0
 	JR	J$53EE
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C.53EC:	LD	B,0F3H
-J$53ED	EQU	$-1
-J$53EE:	LD	A,(D.6096)
+
+C.53EC:	LD	B,0F3H			; clear b3,b2
+J$53EE:	LD	A,(D.6096)		; b7,b6 = dailer mode, b1 = originate/answer
 	AND	B
 	LD	(D.6096),A
 	RET
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C.53F6:	LD	A,(D.6348)
-	LD	(D.6096),A
+	LD	(D.6096),A		; b7,b6 = dailer mode, b1 = originate/answer
 	RET
 ;
 ;	-----------------

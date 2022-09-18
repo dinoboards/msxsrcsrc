@@ -163,14 +163,14 @@ C.402C:	CALL	C.6000
 
 C.4035:	CALL	C.6000
 	DEFB	1
-	DEFW	C.408D
+	DEFW	C.408D			; new statement handler
 	JP	J.6056			; continue with previous NEWS handler
 
 ; ROM extension CALL statement handler
 
 ?.403E:	CALL	C.6000
 	DEFB	1
-	DEFW	C.4087
+	DEFW	C.4087			; CALL statement handler
 	RET
 
 ; ROM extension BASIC device handler
@@ -205,21 +205,21 @@ I$407E:	JP	C.448E                  ; counter #1, clear
 I$4081:	JP	J$44A1			; counter #1, get number of seconds
 I$4084:	JP	C.4418			; get my slotid
 I$4087:	JP	J$41A6			; comterm
-?.408A:	JP	J$41AD
+?.408A:	JP	J$41AD			; set comterm mode
 I$408D:	JP	J$41B4			; set protocol and timer values
 I$4090:	JP	C.4177                  ; get line status
 I.4093:	JP	J$41DE
 I$4096:	JP	J$41E5
-?.4099:	JP	J$4187			; MAIN BIOS CALL
+?.4099:	JP	J$4187			; MAIN BIOS CALL (EI)
 ?.409C:	JP	C.508B			; signal sender to resume sending
 ?.409F:	JP	C.50A1			; signal sender to stop sending
 ?.40A2:	JP	J$41EC
 ?.40A5:	JP	J$418E			; set comterm mode
 ?.40A8:	JP	J$4198
 ?.40AB:	JP	J$419F
-?.40AE:	JP	J$41C2
-?.40B1:	JP	J$41C9
-?.40B4:	JP	J$41D0
+?.40AE:	JP	J$41C2			; open file
+?.40B1:	JP	J$41C9			; read byte from file
+?.40B4:	JP	J$41D0			; close file
 ?.40B7:	JP	J$41D7
 ?.40BA:	JP	J$51E7
 ?.40BD:	JP	C.464B
@@ -313,9 +313,13 @@ C.4177:	PUSH	BC
 	POP	BC
 	RET
 
+;	  Subroutine call MAIN BIOS (EI)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$4187:	CALL	C.6000
 	DEFB	1
-	DEFW	C.407B
+	DEFW	C.407B			; call MAIN BIOS (EI)
 	RET
 
 J$418E:	LD	(D$6175),A		; update comterm mode
@@ -340,22 +344,34 @@ J$419F:	CALL	C.6000
 
 J$41A6:	CALL	C.6000
 	DEFB	1
-	DEFW	C.4084
+	DEFW	C.4084			; comterm
 	RET
+
+;	  Subroutine set comterm mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$41AD:	CALL	C.6000
 	DEFB	1
-	DEFW	C.4081
+	DEFW	C.4081			; set comterm mode
 	RET
+
+;	  Subroutine set protocol and timer values
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$41B4:	CALL	C.6000
 	DEFB	1
 	DEFW	C.4093			; set protocol and timer values
 	RET
 
+;	  Subroutine echo to screen/printer (literal)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$41BB:	CALL	C.6000
 	DEFB	1
-	DEFW	C.4096
+	DEFW	C.4096			; echo to screen/printer (literal)
 	RET
 
 J$41C2:	CALL	C.6000
@@ -402,7 +418,7 @@ J$41F5:	LD	(D.61AA),A
 
 J$41F9:	LD	A,(D.61AA)
 	PUSH	AF
-	CALL	C$4508
+	CALL	C$4508                  ; initialize MSX-modem
 	POP	AF
 	LD	(D.61AA),A
 	LD	A,8
@@ -534,6 +550,10 @@ I$42DA:	RST	30H
 	DEFB	0
 	DEFW	C.402C
 	RET
+
+;	  Subroutine BASIC stack initialize interceptor
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 I$42DF:	PUSH	AF
 	PUSH	BC
@@ -1078,7 +1098,7 @@ C$4574:	PUSH	HL
 
 C.4584:	LD	A,(D.6093)
 	LD	B,A
-	AND	0CH	; 12 
+	AND	0CH
 	RRA
 	RRA
 	BIT	5,B
@@ -1087,7 +1107,7 @@ C.4584:	LD	A,(D.6093)
 J$4591:	OR	(HL)
 	LD	(HL),A
 	LD	A,B
-	AND	30H	; "0"
+	AND	30H
 	RLA
 	OR	(HL)
 	LD	(HL),A
