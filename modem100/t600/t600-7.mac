@@ -17,49 +17,49 @@
 
 	ORG	04040H
 
-D.630F	EQU	630FH	; --SL-
-D.6310	EQU	6310H	; --SL-
+D.630F	EQU	630FH			; current column
+D.6310	EQU	6310H			; current line
 D$6318	EQU	6318H			; VDP data write port
-I.63A8	EQU	63A8H	; ----I
+I.63A8	EQU	63A8H			; character pattern buffer
 I$64D0	EQU	64D0H	; ----I
-D$6863	EQU	6863H	; ---L-
-I$6866	EQU	6866H	; ----I
+I$6800	EQU	6800H			; phone book entry table
+I$6866	EQU	6866H			; phone book data blocks
 
-?.4040:	JP	J$40A0
-?.4043:	JP	J$40B8
-?.4046:	JP	J$4167
-?.4049:	JP	J.423F
-?.404C:	JP	C.425A
-?.404F:	JP	C.4058
-?.4052:	JP	J$4072
+?.4040:	JP	J$40A0			; get telcom character pattern
+?.4043:	JP	J$40B8			; display title option 5
+?.4046:	JP	J$4167			; display ?? strings
+?.4049:	JP	J.423F			; display strings
+?.404C:	JP	C.425A			; display character
+?.404F:	JP	C.4058			; get number of free phone book data blocks
+?.4052:	JP	J$4072			; free phone book entry ?
 ?.4055:	JP	J$4077
 
-;	  Subroutine __________________________
+;	  Subroutine get number of free phobe book data blocks
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4058:	LD	HL,I$6866
-	LD	DE,0
-	LD	BC,100
+C.4058:	LD	HL,I$6866		; phone book data blocks
+	LD	DE,0			; number of free data blocks = 0
+	LD	BC,100			; number of data blocks
 J$4061:	LD	A,(HL)
-	OR	A
-	JR	NZ,J$4066
-	INC	DE
+	OR	A			; data block free ?
+	JR	NZ,J$4066		; nope,
+	INC	DE			; increase free data blocks
 J$4066:	PUSH	BC
 	LD	BC,48
-	ADD	HL,BC
+	ADD	HL,BC			; next data block
 	POP	BC
 	DEC	BC
 	LD	A,B
-	OR	C
-	JR	NZ,J$4061
+	OR	C			; data blocks left ?
+	JR	NZ,J$4061		; yep, next
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine free phone book entry ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J$4072:	LD	A,(D$6863)
+J$4072:	LD	A,(I$6800+99)
 	INC	A
 	RET
 
@@ -68,31 +68,30 @@ J$4072:	LD	A,(D$6863)
 ;	     Outputs ________________________
 
 J$4077:	PUSH	DE
-	CALL	C.4058
-;
-	PUSH	DE
-	LD	BC,48
+	CALL	C.4058			; get number of free phone book data blocks
+	PUSH	DE			; store number of free data blocks
+	LD	BC,48			; size of data block
 	LD	IX,I$64D0
-	LD	DE,0
-	LD	HL,0
+	LD	DE,0			; number of data blocks required = 0
+	LD	HL,0			; number of bytes
 J.4089:	LD	A,(IX+0)
-	OR	A
-	JR	Z,J$409B
+	OR	A			; end of string ?
+	JR	Z,J$409B		; yep, quit
 	INC	IX
 	INC	HL
-	SBC	HL,BC
+	SBC	HL,BC			; data block full ?
 	INC	DE
-	JR	Z,J.4089
+	JR	Z,J.4089		; yep, quit
 	DEC	DE
 	ADD	HL,BC
 	JR	J.4089
 
-J$409B:	POP	HL
+J$409B:	POP	HL			; restore free data blocks
 	SBC	HL,DE
 	POP	DE
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine get telcom character pattern
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -103,7 +102,7 @@ J$40A0:	LD	H,0
 	ADD	HL,HL			; *8
 	LD	DE,I$470D
 	ADD	HL,DE
-	LD	DE,I.63A8
+	LD	DE,I.63A8		; character pattern buffer
 	LD	B,8
 J$40AF:	LD	A,(HL)
 	SRL	A
@@ -113,7 +112,7 @@ J$40AF:	LD	A,(HL)
 	DJNZ	J$40AF
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine display title option 5
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -121,8 +120,7 @@ J$40B8:	LD	HL,I$40C4
 	CALL	C$40DE
 	LD	HL,I$40D1
 	JP	J$40E5
-;
-;	-----------------
+
 I$40C4:	NOP
 	LD	BC,I$0504
 	EX	AF,AF'
@@ -130,10 +128,10 @@ I$40C4:	NOP
 	INC	C
 	DEC	C
 	DJNZ	J$40DF
-;
 	INC	D
 	DEC	D
-	RST	38H
+	DEFB	0FFH
+
 I$40D1:	LD	(BC),A
 	INC	BC
 	LD	B,07H	; 7 
@@ -143,31 +141,31 @@ I$40D1:	LD	(BC),A
 	LD	(DE),A
 	INC	DE
 	LD	D,17H
-	RST	38H
-;
+	DEFB	0FFH
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$40DE:	LD	C,0CH
-	LD	DE,0050H
+
+C$40DE:	LD	C,12
+	LD	DE,0*(32*8) + 10*8	; VRAM address
 	JR	J.40EC
 
-J$40E5:	LD	C,0CH	; 12 
-	LD	DE,0150H
+J$40E5:	LD	C,12
+	LD	DE,1*(32*8) + 10*8	; VRAM address
 	JR	J.40EC
 
 J.40EC:	LD	B,C
 J$40ED:	LD	A,(HL)
-	CP	0FFH
-	RET	Z
+	CP	0FFH			; end marker ?
+	RET	Z			; yep, quit
 	CALL	C$410C
 	LD	A,(HL)
 	CALL	C$4121
 	INC	HL
 	DEC	B
 	JR	NZ,J$40ED
-	LD	A,20H	; " "
+	LD	A,32
 	SUB	C
 	ADD	A,A
 	ADD	A,A
@@ -176,9 +174,9 @@ J$40ED:	LD	A,(HL)
 	LD	L,A
 	LD	H,0
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address
 	POP	HL
-	JP	J.40EC
+	JP	J.40EC			; continue
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -264,14 +262,13 @@ J$415B:	LD	A,(DE)
 	POP	DE
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine display ?? strings
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 J$4167:	LD	HL,I$416D
 	JP	J.423F
-;
-;	-----------------
+
 I$416D:	LD	(BC),A
 	INC	B
 	LD	B,E
@@ -282,7 +279,7 @@ I$416D:	LD	(BC),A
 	LD	C,A
 	LD	C,A
 	LD	C,A
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	DEC	B
 	CCF
@@ -301,12 +298,11 @@ I$416D:	LD	(BC),A
 	LD	A,(D$4B38)
 	LD	SP,D.4F4F
 	LD	C,A
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	RLCA
 	JR	J$41B1
-;
-;	-----------------
+
 ?.4198:	LD	C,18H
 	DEC	D
 	LD	C,A
@@ -314,7 +310,7 @@ I$416D:	LD	(BC),A
 	LD	C,A
 	LD	C,A
 	LD	C,A
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	EX	AF,AF'
 	LD	(HL),3AH	; ":"
@@ -336,7 +332,7 @@ J$41B1:	LD	A,(BC)
 	LD	C,A
 	LD	C,A
 	LD	C,A
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	LD	A,(BC)
 	INC	D
@@ -348,7 +344,7 @@ J$41B1:	LD	A,(BC)
 	RLA
 	LD	C,A
 	LD	C,A
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	DEC	BC
 	INC	SP
@@ -361,11 +357,10 @@ J$41B1:	LD	A,(BC)
 	LD	C,A
 	LD	C,A
 	LD	C,A
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	INC	C
 	JR	NC,J$4222
-;
 	SCF
 	INC	C
 	LD	B,A
@@ -384,7 +379,7 @@ J$41B1:	LD	A,(BC)
 	INC	C
 	LD	A,(D.4F0B)
 	LD	C,A
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	LD	C,18H
 	JR	Z,J$420A
@@ -394,20 +389,17 @@ J$41B1:	LD	A,(BC)
 	LD	C,A
 	LD	C,A
 	LD	E,21H	; "!"
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	RRCA
 	LD	HL,I$2A28
 	JR	Z,J$421C
-;
 	DEC	HL
 	JR	Z,J$4255
-;
 	LD	E,21H	; "!"
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 J$420A:	DJNZ	J$424A
-;
 	LD	A,(BC)
 	LD	C,B
 	LD	A,(D$4635)
@@ -415,7 +407,7 @@ J$420A:	DJNZ	J$424A
 	LD	C,A
 	LD	C,A
 	LD	C,A
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	LD	DE,I$3037
 	LD	B,B
@@ -424,12 +416,11 @@ J$421C:	LD	C,A
 	LD	BC,D.4F4F
 	LD	C,A
 	LD	C,A
-J$4222:	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	LD	(DE),A
 	SCF
 	JR	NC,J$4268
-;
 	INC	C
 	LD	C,A
 	LD	(BC),A
@@ -437,7 +428,7 @@ J$4222:	RST	38H
 	LD	C,A
 	LD	C,A
 	LD	C,A
-	RST	38H
+	DEFB	0FFH
 	LD	(BC),A
 	INC	DE
 	LD	(D$0C35),A
@@ -448,37 +439,33 @@ J$4222:	RST	38H
 	LD	C,A
 	LD	C,A
 	LD	C,A
-	RST	38H
-	RST	38H
-	RST	38H
+	DEFB	0FFH
+	DEFB	0FFH
+	DEFB	0FFH
 
-;	  Subroutine __________________________
+;	  Subroutine display strings
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 J.423F:	LD	A,(HL)
 	CP	0FFH
 	RET	Z
-	LD	(D.630F),A
+	LD	(D.630F),A		; update current column
 	INC	HL
 	LD	A,(HL)
-	LD	(D.6310),A
-J$424A	EQU	$-1
+	LD	(D.6310),A		; update current line
 	INC	HL
 J$424C:	LD	A,(HL)
 	CP	0FFH
 	JR	Z,J$4257
-;
-	CALL	C.425A
-;
+	CALL	C.425A			; display character
 	INC	HL
 J$4255:	JR	J$424C
-;
-;	-----------------
-J$4257:	INC	HL
-	JR	J.423F
 
-;	  Subroutine __________________________
+J$4257:	INC	HL
+	JR	J.423F			; continue
+
+;	  Subroutine display character
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -490,7 +477,7 @@ C.425A:	PUSH	HL
 	ADD	HL,HL			; *8
 	LD	DE,I$441D
 	ADD	HL,DE
-	LD	DE,I.63A8
+	LD	DE,I.63A8		; character pattern buffer
 	LD	B,8
 J$426A:	LD	A,(HL)
 	SRL	A
@@ -498,12 +485,12 @@ J$426A:	LD	A,(HL)
 	INC	HL
 	INC	DE
 	DJNZ	J$426A
-	LD	HL,I.63A8
+	LD	HL,I.63A8		; character pattern buffer
 	LD	A,(D.6310)
-	LD	D,A
+	LD	D,A			; current line
 	LD	A,(D.630F)
 	INC	A
-	LD	(D.630F),A
+	LD	(D.630F),A		; update current column
 	DEC	A
 	ADD	A,A
 	ADD	A,A
@@ -518,20 +505,16 @@ I$428D:	DEFB	0,0
 	CCF
 	DEFB	0,0,0,0,0,0,0
 	RET	M
-;
 	EX	AF,AF'
 	EX	AF,AF'
 	EX	AF,AF'
 	EX	AF,AF'
 	JR	J$429E
-;
-;	-----------------
+
 J$429E:	DEFB	0,0,0,0
 	LD	BC,I$000E
 	DJNZ	J$42B7
-;
 	JR	NZ,J$42C9
-;
 	LD	B,B
 	ADD	A,B
 	DEFB	0,0,0,0,0,0
@@ -541,11 +524,9 @@ J$429E:	DEFB	0,0,0,0
 	DEFB	0
 J$42B7:	DEFB	0,0
 	RET	M
-;
 	EX	AF,AF'
 	JR	J$42ED
-;
-;	-----------------
+
 ?.42BD:	LD	BC,I$0101
 	LD	BC,I$0202
 	INC	C
@@ -555,11 +536,9 @@ J$42B7:	DEFB	0,0
 J$42C9:	DEFB	0,0,0,0,0,0,0,0,0,0
 	LD	BC,I$0003
 	JR	NZ,J$42F8
-;
 	LD	H,B
 	LD	B,B
 	RET	NZ
-;
 	ADD	A,B
 	ADD	A,B
 	LD	C,38H	; "8"
@@ -588,12 +567,9 @@ J$42F8:	ADD	A,B
 	EX	AF,AF'
 	EX	AF,AF'
 	JR	J$4311
-;
-;	-----------------
+
 ?.4301:	DJNZ	J$4333
-;
 	JR	NZ,J$4305
-;
 J$4305:	ADD	A,B
 	ADD	A,B
 	ADD	A,H
@@ -601,7 +577,6 @@ J$4305:	ADD	A,B
 	SBC	A,B
 	OR	B
 	RET	PO
-;
 	NOP
 	LD	BC,I$7F01
 	LD	BC,I$3F01
@@ -610,9 +585,7 @@ J$4311	EQU	$-2
 J$4314	EQU	$-2
 	NOP
 	CALL	M,X.0000
-;
 	RET	M
-;
 	DEFB	0,0
 	LD	A,A
 	LD	(BC),A
@@ -625,9 +598,7 @@ J$4314	EQU	$-2
 	CP	40H	; "@"
 	LD	B,H
 	JR	Z,J$435A
-;
 	DJNZ	J$4314
-;
 	LD	B,00H
 	NOP
 	CCF
@@ -635,7 +606,6 @@ J$4314	EQU	$-2
 J$4333:	LD	A,A
 	LD	BC,X.0000
 	RET	M
-;
 	DEFB	0,0,0
 	CP	00H
 	LD	DE,I$1111
@@ -643,7 +613,6 @@ J$4333:	LD	A,A
 	LD	B,C
 	LD	B,20H	; " "
 	DJNZ	J$4358
-;
 	EX	AF,AF'
 	EX	AF,AF'
 	EX	AF,AF'
@@ -750,36 +719,26 @@ J$435A	EQU	$-1
 	DEFB	0,0,0,0,0,0,0,0
 I$441D:	DEFB	0
 	JR	C,J.4464
-;
 	LD	E,H
 	LD	H,H
 	LD	B,H
 	JR	C,J$4425
-;
 J$4425:	NOP
 	DJNZ	J$4458
-;
 	DJNZ	J$443A
-;
 	DJNZ	J.4464
-;
 	DEFB	0,0
 	JR	C,J$4474
-;
 	JR	J$4452
-;
-;	-----------------
+
 ?.4432:	LD	B,B
 	LD	A,H
 	DEFB	0,0
 	JR	C,J$447C
-;
 	JR	J$443E
-;
-;	-----------------
+
 J$443A:	LD	B,H
 	JR	C,J$443D
-;
 J$443D:	NOP
 J$443E:	INC	C
 	INC	D
@@ -794,116 +753,85 @@ J$443E:	INC	C
 	INC	B
 	LD	B,H
 	JR	C,J$444D
-;
 J$444D:	NOP
 	JR	C,J$4490
-;
 	LD	A,B
 	LD	B,H
 J$4452:	LD	B,H
 	JR	C,J$4455
-;
 J$4455:	NOP
 	LD	A,H
 	LD	B,H
 J$4458:	EX	AF,AF'
 	DJNZ	J$446B
-;
 	DJNZ	J$445D
-;
 J$445D:	NOP
 	JR	C,J$44A4
-;
 	JR	C,J$44A6
-;
 	LD	B,H
 	JR	C,J$4465
 J.4464	EQU	$-1
-;
 J$4465:	NOP
 	JR	C,J.44AC
-;
 	LD	B,H
 	INC	A
 	INC	B
 J$446B:	JR	C,J$446D
-;
 J$446D:	NOP
 	JR	NZ,J.44C0
-;
 	JR	NZ,J$4472
-;
 J$4472:	DEFB	0,0
 J$4474:	DEFB	0,0
 	JR	Z,J$44A0
-;
 	DEFB	0,0,0,0
 J$447C:	DEFB	0,0,0,0
 	LD	A,H
 	DEFB	0,0,0,0,0,0,0,0,0
 	JR	NC,J.44BC
-;
 	DEFB	0,0
 	INC	B
 	EX	AF,AF'
 J$4490:	DJNZ	J$44B2
-;
 	LD	B,B
 	DEFB	0,0,0
 	DJNZ	J$44A8
-;
 	LD	A,H
 	DJNZ	J$44AB
-;
 	DEFB	0,0,0
 	JR	J.44C0
-;
-;	-----------------
+
 J$44A0:	JR	NZ,J$44C2
-;
 	JR	NZ,J.44BC
-;
 J$44A4:	DEFB	0,0
 J$44A6:	JR	J.44AC
-;
-;	-----------------
+
 J$44A8:	INC	B
 	INC	B
 	INC	B
 J$44AB:	JR	J$44AD
 J.44AC	EQU	$-1
-;
-;	-----------------
+
 J$44AD:	NOP
 	JR	C,J.44F4
-;
 	LD	B,H
 	LD	B,H
 J$44B2:	LD	B,H
 	JR	C,J$44B5
-;
 J$44B5:	NOP
 	JR	NC,J$44C8
-;
 	DJNZ	J$44CA
-;
 	DJNZ	J.44F4
-;
 J.44BC:	DEFB	0,0
 	LD	B,H
 	JR	Z,J$44D1
 J.44C0	EQU	$-1
-;
 	DJNZ	J$44EB
 J$44C2	EQU	$-1
-;
 	LD	B,H
 	DEFB	0,0,0,0
 J$44C8:	JR	C,J$450E
-;
 J$44CA:	LD	B,H
 	JR	C,J$44CD
-;
 J$44CD:	DEFB	0,0
 	LD	E,B
 	LD	H,H
@@ -912,28 +840,20 @@ J$44D1:	LD	B,H
 	LD	B,H
 	DEFB	0,0
 	JR	J.44FC
-;
-;	-----------------
+
 ?.44D8:	JR	NZ,J$4556
-;
 	JR	NZ,J.44FC
-;
 	DEFB	0,0
 	INC	A
 	LD	B,B
 	JR	C,J$44E6
-;
 	LD	B,H
 	JR	C,J$44E5
-;
 J$44E5:	NOP
 J$44E6:	DJNZ	J$44E8
-;
 J$44E8:	JR	NC,J$44FA
-;
 	DJNZ	J$4524
 J$44EB	EQU	$-1
-;
 	DEFB	0,0
 	LD	B,B
 	LD	B,B
@@ -943,15 +863,12 @@ J$44EB	EQU	$-1
 	LD	B,H
 J.44F4:	DEFB	0,0
 	JR	NZ,J$4518
-;
 	LD	A,B
 	JR	NZ,J.451F
 J$44FA	EQU	$-1
-;
 	JR	J$44FD
 J.44FC	EQU	$-1
-;
-;	-----------------
+
 J$44FD:	NOP
 	LD	B,H
 	LD	H,H
@@ -968,27 +885,21 @@ J$44FD:	NOP
 	LD	A,H
 	DEFB	0,0
 J$450E:	JR	C,J$4554
-;
 	LD	B,B
 	LD	B,B
 	LD	B,H
 	JR	C,J$4515
-;
 J$4515:	DEFB	0,0
 	INC	A
 J$4518:	LD	B,B
 	JR	C,J.451F
-;
 	LD	A,B
 	DEFB	0,0
 	LD	A,H
 J.451F:	DJNZ	J$4531
-;
 	DJNZ	J$4533
-;
 	DJNZ	J$4525
 J$4524	EQU	$-1
-;
 J$4525:	NOP
 	LD	A,B
 	LD	B,H
@@ -1012,7 +923,6 @@ J$4533:	LD	A,H
 	LD	B,B
 	DEFB	0,0
 	DJNZ	J$4568
-;
 	LD	B,H
 	LD	A,H
 	LD	B,H
@@ -1033,7 +943,6 @@ J$4556:	LD	B,H
 	LD	B,H
 	DEFB	0,0,0
 	JR	C,J$45A5
-;
 	LD	A,H
 	LD	B,B
 	INC	A
@@ -1046,17 +955,14 @@ J$4568:	INC	A
 	INC	A
 	DEFB	0,0,0
 	JR	C,J$45B5
-;
 	LD	B,B
 	LD	B,H
 	JR	C,J$4575
-;
 J$4575:	DEFB	0,0
 	LD	B,H
 	LD	B,H
 	LD	B,H
 	JR	Z,J$458C
-;
 	DEFB	0,0
 	INC	E
 	EX	AF,AF'
@@ -1064,39 +970,30 @@ J$4575:	DEFB	0,0
 	LD	C,B
 	LD	C,B
 	JR	NC,J$4585
-;
 J$4585:	DEFB	0,0,0,0,0,0,0
 J$458C:	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	INC	B
 	EX	AF,AF'
 	JR	J$45CA
-;
-;	-----------------
+
 ?.45A2:	LD	C,B
 	EX	AF,AF'
 	DEFB	0
 J$45A5:	DEFB	0
 	DJNZ	J$4624
-;
 	LD	B,H
 	INC	B
 	EX	AF,AF'
 	DJNZ	J$45AD
-;
 J$45AD:	DEFB	0,0
 	LD	A,H
 	DJNZ	J$45C2
-;
 	DJNZ	J$4630
-;
 	DEFB	0
 J$45B5:	DEFB	0
 	DJNZ	J$4634
-;
 	DJNZ	J$4636
-;
 	DJNZ	J$45CC
-;
 	DEFB	0,0
 	INC	A
 	INC	H
@@ -1105,7 +1002,6 @@ J$45B5:	DEFB	0
 J$45C2:	INC	B
 	EX	AF,AF'
 	DJNZ	J$45C6
-;
 J$45C6:	NOP
 	LD	A,H
 	INC	B
@@ -1117,8 +1013,7 @@ J$45CC:	DEFB	0,0,0
 	INC	B
 	EX	AF,AF'
 	JR	J$45F8
-;
-;	-----------------
+
 ?.45D4:	DEFB	0,0
 	INC	A
 	INC	H
@@ -1127,29 +1022,19 @@ J$45CC:	DEFB	0,0,0
 	INC	B
 	EX	AF,AF'
 	DJNZ	J$45DE
-;
 J$45DE:	JR	J.4650
-;
-;	-----------------
+
 ?.45E0:	DJNZ	J$465E
-;
 	DJNZ	J$4604
-;
 	DEFB	0,0
 	JR	C,J$45E8
-;
 J$45E8:	LD	A,H
 	DJNZ	J$45FB
-;
 	JR	NZ,J$45ED
-;
 J$45ED:	NOP
 	JR	NZ,J$4610
-;
 	JR	C,J$4616
-;
 	JR	NZ,J$4614
-;
 	DEFB	0,0
 	EX	AF,AF'
 	EX	AF,AF'
@@ -1157,20 +1042,16 @@ J$45F8:	LD	A,H
 	EX	AF,AF'
 	EX	AF,AF'
 J$45FB:	JR	NC,J$45FD
-;
 J$45FD:	NOP
 	DJNZ	J$4608
-;
 	INC	H
 	INC	H
 	INC	H
 	LD	B,H
 J$4604:	DEFB	0,0
 	JR	NZ,J$4628
-;
 J$4608:	INC	A
 	JR	NZ,J$462B
-;
 	INC	E
 	DEFB	0,0
 	INC	A
@@ -1180,76 +1061,58 @@ J$4610:	INC	B
 	EX	AF,AF'
 	DJNZ	J$4615
 J$4614	EQU	$-1
-;
 J$4615:	NOP
 J$4616:	DJNZ	J$4694
-;
 	DJNZ	J$466E
-;
 	LD	D,H
 	DJNZ	J$461D
-;
 J$461D:	NOP
 	LD	A,H
 	INC	B
 	INC	B
 	JR	Z,J$4633
-;
 	EX	AF,AF'
 J$4624:	DEFB	0,0
 	LD	(HL),B
 	EX	AF,AF'
 J$4628:	JR	NC,J$4632
-;
 	LD	(HL),B
 J$462B:	INC	C
 	DEFB	0,0
 	DJNZ	J.4650
-;
 J$4630:	JR	NZ,J$467A
-;
 J$4632:	LD	E,B
 J$4633:	LD	H,H
 J$4634:	DEFB	0
 D$4635:	DEFB	0
 J$4636:	LD	A,H
 	JR	NZ,J.46B5
-;
 	JR	NZ,J$465B
-;
 	INC	E
 	DEFB	0,0
 	JR	C,J$4640
-;
 J$4640:	LD	A,H
 	INC	B
 	INC	B
 	EX	AF,AF'
 	DJNZ	J$4646
-;
 J$4646:	INC	H
 	INC	H
 	INC	H
 	INC	B
 	EX	AF,AF'
 	DJNZ	J$464D
-;
 J$464D:	NOP
 	EX	AF,AF'
 	JR	Z,J$4679
 J.4650	EQU	$-1
-;
 	JR	Z,J$467D
-;
 	LD	C,H
 	DEFB	0,0
 	JR	NZ,J$4678
-;
 	JR	NZ,J$467E
-;
 	JR	Z,J$468C
 J$465B	EQU	$-1
-;
 	DEFB	0,0
 J$465E:	DEFB	0
 	LD	A,H
@@ -1269,7 +1132,6 @@ J$466E:	DEFB	0,0
 	LD	D,H
 	INC	B
 	JR	C,J$4675
-;
 J$4675:	DEFB	0,0
 	LD	A,B
 J$4678:	EX	AF,AF'
@@ -1282,26 +1144,20 @@ J$467E:	DEFB	0
 	INC	B
 	EX	AF,AF'
 	JR	J$46AB
-;
-;	-----------------
+
 ?.4683:	EX	AF,AF'
 	DEFB	0,0,0
 	JR	NZ,J$4705
-;
 	INC	H
 	JR	Z,J$46AC
-;
 J$468C:	DEFB	0,0,0,0,0,0,0,0
 J$4694:	DEFB	0,0,0,0,0,0,0
 J$469B:	DEFB	0,0
 	JR	NZ,J$469B
-;
 	JR	NZ,J.471D
-;
 	XOR	D
 	OR	D
 	CALL	NZ,X.0000
-;
 	NOP
 	LD	B,B
 	LD	B,H
@@ -1309,36 +1165,27 @@ J$469B:	DEFB	0,0
 	LD	C,D
 J$46AB:	JR	NC,J$46AD
 J$46AC	EQU	$-1
-;
 J$46AD:	NOP
 	JR	C,J$46B0
-;
 J$46B0:	LD	A,B
 	INC	B
 	INC	B
 	JR	J.46B5
-;
-;	-----------------
+
 J.46B5:	NOP
 	LD	B,B
 	JP	P,J$5252
-;
 	SUB	B
 	JR	NC,J$46BD
-;
 J$46BD:	NOP
 	JR	NZ,J$4738
-;
 	DJNZ	J$46FE
-;
 	ADC	A,B
 	LD	H,B
 	DEFB	0,0
 	INC	C
 	DJNZ	J$46E9
-;
 	JR	NZ,J$46E3
-;
 	INC	B
 	DEFB	0,0
 	LD	B,B
@@ -1347,83 +1194,61 @@ J$46BD:	NOP
 	LD	B,B
 	LD	B,H
 	JR	C,J$46D5
-;
 J$46D5:	NOP
 	EX	AF,AF'
 	LD	A,H
 	JR	J.4702
-;
-;	-----------------
+
 ?.46DA:	JR	J$46E4
-;
-;	-----------------
+
 ?.46DC:	DEFB	0,0
 	LD	A,H
 	EX	AF,AF'
 	DJNZ	J.4702
-;
 	JR	NZ,J$46FC
 J$46E3	EQU	$-1
-;
 J$46E4:	DEFB	0,0
 	INC	H
 	JP	P,J$5C48
 J$46E9	EQU	$-1
-;
 	XOR	B
 	DJNZ	J$46ED
-;
 J$46ED:	NOP
 	LD	A,B
 	DJNZ	J.4729
-;
 	LD	H,H
 	LD	D,H
 	JR	C,J$46F5
-;
 J$46F5:	NOP
 	JR	NZ,J$4728
-;
 	LD	L,H
 	LD	(D$2C62),A
 J$46FC:	DEFB	0,0
 J$46FE:	DJNZ	J$4710
-;
 	JR	NZ,J$4732
-;
 J.4702:	LD	C,D
 	LD	C,H
 	DEFB	0
 J$4705:	DEFB	0,0,0,0,0,0,0,0
+
 I$470D:	EX	AF,AF'
 	DJNZ	J$4720
-;
 J$4710:	DJNZ	J$4722
-;
 	DJNZ	J$471C
-;
 	NOP
 	JR	NZ,J$4727
-;
 	DJNZ	J.4729
-;
 	DJNZ	J$472B
-;
 	JR	NZ,J.471D
 J$471C	EQU	$-1
-;
 J.471D:	JR	NZ,J$479B
-;
 	JR	NZ,J.4791
 J$4720	EQU	$-1
-;
 	LD	E,B
 J$4722:	JR	NZ,J$4760
-;
 	DEFB	0,0,0
 J$4727:	DJNZ	J$47A7
 J$4728	EQU	$-1
-;
 J.4729:	INC	A
 	LD	E,D
 J$472B:	INC	(HL)
@@ -1433,17 +1258,14 @@ J$472B:	INC	(HL)
 	LD	B,D
 J$4732:	LD	D,D
 	JR	NZ,J$4735
-;
 J$4735:	DEFB	0,0
 	INC	E
 J$4738:	INC	E
 	LD	(D$0C02),HL
 	DEFB	0,0,0
 	JR	J.47BD
-;
-;	-----------------
+
 ?.4741:	DJNZ	J.4773
-;
 	LD	C,H
 	DEFB	0,0,0
 	LD	(DE),A
@@ -1453,7 +1275,6 @@ J$4738:	INC	E
 	INC	(HL)
 	DEFB	0,0,0
 	JR	Z,J$47CF
-;
 	LD	HL,(D$1014)
 	DEFB	0,0,0
 	EX	AF,AF'
@@ -1461,7 +1282,6 @@ J$4738:	INC	E
 	LD	L,D
 	EX	AF,AF'
 	JR	NC,J$475D
-;
 J$475D:	DEFB	0,0
 	EX	AF,AF'
 J$4760:	LD	C,38H	; "8"
@@ -1475,9 +1295,7 @@ J$4760:	LD	C,38H	; "8"
 	DEFB	0,0,0,0,0,0,0
 J.4773:	DEFB	0,0
 	JR	NZ,J.4773
-;
 	JR	NZ,J$47F5
-;
 	XOR	D
 	OR	D
 	LD	H,D
@@ -1488,39 +1306,28 @@ J.4773:	DEFB	0,0
 	LD	B,D
 	LD	B,B
 	JR	NC,J$4785
-;
 J$4785:	JR	C,J$4787
-;
 J$4787:	JR	C,J$47CD
-;
 	INC	B
 	INC	B
 	JR	C,J$478D
-;
 J$478D:	JR	C,J$478F
-;
 J$478F:	LD	A,H
 	EX	AF,AF'
 J.4791:	JR	J$47BB
-;
-;	-----------------
+
 ?.4793:	LD	B,(HL)
 	NOP
 	JR	NZ,J.4791
-;
 	LD	(D$A27C),HL
 	AND	D
 J$479B:	LD	C,H
 	NOP
 	JR	NZ,J.47C3
-;
 	JP	P,J$4829
-;
 	ADC	A,B
 	JR	NC,J$47A5
-;
 J$47A5:	DJNZ	J$4823
-;
 J$47A7:	EX	AF,AF'
 	LD	A,04H	; 4 
 	LD	B,B
@@ -1529,9 +1336,7 @@ J$47A7:	EX	AF,AF'
 	EX	AF,AF'
 	EX	AF,AF'
 	DJNZ	J$47D1
-;
 	JR	NZ,J.47C3
-;
 	EX	AF,AF'
 	NOP
 	INC	B
@@ -1541,14 +1346,12 @@ J$47A7:	EX	AF,AF'
 	LD	B,H
 	LD	B,H
 J$47BB:	JR	J.47BD
-;
-;	-----------------
+
 J.47BD:	NOP
 	LD	A,B
 	INC	B
 	NOP
 	JR	NZ,J$4803
-;
 J.47C3:	INC	A
 	NOP
 	EX	AF,AF'
@@ -1566,173 +1369,122 @@ J$47CF:	LD	B,B
 J$47D1:	LD	B,H
 	LD	C,B
 	JR	NC,J$47D5
-;
 J$47D5:	EX	AF,AF'
 	CP	38H	; "8"
 	LD	C,B
 	JR	C,J$47E3
-;
 	DJNZ	J$47DD
-;
 J$47DD:	INC	H
 	INC	H
 	CP	24H	; "$"
 	INC	H
 	JR	NZ,J$4802
 J$47E3	EQU	$-1
-;
 	NOP
 	LD	B,H
 	JR	Z,J$47F8
-;
 	LD	A,(HL)
 	JR	J$480B
-;
-;	-----------------
+
 ?.47EB:	LD	E,00H
 	DEFB	0,0,0,0,0,0,0,0
 J$47F5:	DEFB	0
 	RET	M
-;
 	EX	AF,AF'
 J$47F8:	RET	M
-;
 	EX	AF,AF'
 	DJNZ	J$485C
-;
 	DEFB	0,0,0
 	RET	P
-;
 J$4800:	DJNZ	J$4862
-;
 J$4802:	LD	B,B
 J$4803:	ADD	A,B
 	DEFB	0,0
 	DJNZ	J$4828
-;
 	LD	H,B
 	AND	B
 	JR	NZ,J.482C
 J$480B	EQU	$-1
-;
 J$480C:	DEFB	0,0
 	JR	NZ,J$4800
-;
 J$4810:	SUB	B
 	DJNZ	J$4833
-;
 	LD	B,B
 	DEFB	0,0,0
 	RET	P
-;
 	JR	NZ,J$483A
-;
 	JR	NZ,J$480C
-;
 	DEFB	0,0
 	JR	NZ,J$4810
-;
 	LD	H,B
 	AND	B
 	AND	B
 J$4823:	JR	NZ,J$4825
-;
 J$4825:	NOP
 	LD	B,B
 	RET	M
-;
 J$4828:	LD	C,B
 J$4829:	LD	D,B
 J$482A:	LD	B,B
 	LD	B,B
 J.482C:	DEFB	0,0,0,0
 	RET	P
-;
 	DJNZ	J$4843
-;
 J$4833:	RET	M
-;
 	DEFB	0,0,0
 	RET	P
-;
 	DJNZ	J$482A
-;
 J$483A:	DJNZ	J.482C
-;
 	DEFB	0,0,0
 	XOR	B
 	XOR	B
 	EX	AF,AF'
 	DJNZ	J$4864
 J$4843	EQU	$-1
-;
 	DEFB	0,0,0,0
 J$4848:	RET	M
-;
 	DEFB	0,0,0,0
 	RET	M
-;
 	EX	AF,AF'
 	JR	Z,J$4881
-;
 	JR	NZ,J.4893
-;
 	ADD	A,B
 	NOP
 	EX	AF,AF'
 	DJNZ	J$4888
 J$4857	EQU	$-1
-;
 	RET	NC
-;
 	DJNZ	J$486B
-;
 	DJNZ	J$485D
 J$485C	EQU	$-1
-;
 J$485D:	JR	NZ,J$4857
-;
 	ADC	A,B
 	ADC	A,B
 	EX	AF,AF'
 J$4862:	DJNZ	J$4884
-;
 J$4864:	DEFB	0,0
 	RET	M
-;
 J$4867:	JR	NZ,J$4889
-;
 	JR	NZ,J$488B
-;
 J$486B:	RET	M
-;
 	NOP
 	DJNZ	J$4867
-;
 J$486F:	DJNZ	J$48A1
-;
 	LD	D,B
 	SUB	B
 	DJNZ	J$4875
-;
 J$4875:	JR	NZ,J$486F
-;
 	JR	Z,J$48C1
-;
 J$4879:	LD	C,B
 	LD	C,B
 	SBC	A,B
 	NOP
 	LD	B,B
 	RET	M
-;
 	JR	NZ,J$4879
-;
 J$4881:	JR	NZ,J.4893
-;
 	DJNZ	J$4885
 J$4884	EQU	$-1
-;
 J$4885:	LD	A,B
 	LD	C,B
 	LD	C,B
@@ -1740,56 +1492,42 @@ J$4888:	ADC	A,B
 J$4889:	EX	AF,AF'
 	DJNZ	J$48AC
 J$488B	EQU	$-1
-;
 J$488C:	NOP
 	JR	NZ,J$48AF
-;
 	LD	A,H
 	SUB	B
 	DJNZ	J$48A3
-;
 J.4893:	JR	NZ,J$4895
-;
 J$4895:	NOP
 	RET	M
-;
 	EX	AF,AF'
 	EX	AF,AF'
 	EX	AF,AF'
 	EX	AF,AF'
 	RET	M
-;
 	NOP
 	LD	C,B
 	LD	C,B
 	CALL	M,C$0848
 J$48A1	EQU	$-1
-;
 	DJNZ	J$48C4
 J$48A3	EQU	$-1
-;
 	DEFB	0,0
 	RET	NZ
-;
 	EX	AF,AF'
 	RET	Z
-;
 	EX	AF,AF'
 	DJNZ	J$488C
-;
 J$48AC:	DEFB	0,0
 	RET	M
-;
 J$48AF:	EX	AF,AF'
 	DJNZ	J$48D2
-;
 	LD	D,B
 	ADC	A,B
 	NOP
 	LD	B,B
 	LD	B,B
 	CALL	M,C$5844
-;
 	LD	B,B
 	LD	A,B
 	NOP
@@ -1798,7 +1536,6 @@ J$48AF:	EX	AF,AF'
 	LD	C,B
 	EX	AF,AF'
 J$48C1:	DJNZ	J.48E3
-;
 	LD	B,B
 J$48C4:	NOP
 	LD	A,B
@@ -1807,16 +1544,12 @@ J$48C4:	NOP
 	CP	B
 	EX	AF,AF'
 	DJNZ	J$492C
-;
 	NOP
 J$48CD:	JR	J$493F
-;
-;	-----------------
+
 ?.48CF:	DJNZ	J$48CD
-;
 	DJNZ	J.48E3
 J$48D2	EQU	$-1
-;
 	LD	H,B
 	NOP
 	XOR	B
@@ -1825,18 +1558,13 @@ J$48D2	EQU	$-1
 	EX	AF,AF'
 	EX	AF,AF'
 	DJNZ	J$493C
-;
 	NOP
 	RET	M
-;
 	NOP
 	RET	M
-;
 	JR	NZ,J$4902
-;
 J$48E2:	JR	NZ,J$4924
 J.48E3	EQU	$-1
-;
 	NOP
 	LD	B,B
 	LD	B,B
@@ -1847,44 +1575,30 @@ J.48E3	EQU	$-1
 	LD	B,B
 	NOP
 	DJNZ	J.48FF
-;
 	CALL	M,C$1010
-;
 J$48F2:	JR	NZ,J$4934
-;
 	DEFB	0,0,0
 	LD	A,B
 	DEFB	0,0,0
 	CALL	M,X.0000
-;
 	RET	M
-;
 J.48FF:	EX	AF,AF'
 	LD	L,B
 	DJNZ	J$4933
 J$4902	EQU	$-1
-;
 	RET	Z
-;
 	NOP
 	JR	NZ,J.48FF
-;
 	EX	AF,AF'
 	JR	NC,J$48F2
-;
 	INC	H
 	JR	NZ,J$490D
-;
 J$490D:	DJNZ	J.491F
-;
 	DJNZ	J$4931
-;
 	JR	NZ,J$4953
-;
 	ADD	A,B
 	NOP
 	DJNZ	J.491F
-;
 	LD	B,H
 	LD	B,H
 	LD	B,H
@@ -1893,19 +1607,16 @@ J$490D:	DJNZ	J.491F
 J$491C:	DEFB	0,0
 	ADD	A,B
 J.491F:	RET	M
-;
 	ADD	A,B
 	ADD	A,B
 	ADD	A,B
 	LD	A,B
 J$4924:	DEFB	0,0
 	RET	M
-;
 	EX	AF,AF'
 	EX	AF,AF'
 	EX	AF,AF'
 	DJNZ	J.498C
-;
 J$492C:	DEFB	0,0
 	LD	B,B
 	AND	B
@@ -1915,91 +1626,64 @@ J$4931:	ADC	A,B
 J$4933:	INC	B
 J$4934:	NOP
 	JR	NZ,J$4957
-;
 	RET	M
-;
 	JR	NZ,J$48E2
-;
 	XOR	B
 	JR	NZ,J$493D
 J$493C	EQU	$-1
-;
 J$493D:	NOP
 	CALL	M,C$0804
 J$493F	EQU	$-2
-;
 	LD	D,B
 	JR	NZ,J$4954
-;
 	NOP
 	LD	H,B
 	DJNZ	J$49A8
-;
 	DJNZ	J$494A
-;
 J$494A:	LD	H,B
 	JR	J$494D
-;
-;	-----------------
+
 J$494D:	NOP
 	JR	NZ,J$4990
-;
 	LD	B,B
 	SUB	B
 	CP	B
 J$4953:	CALL	NZ,C$0800
 J$4954	EQU	$-2
-;
 	EX	AF,AF'
 J$4957:	LD	C,B
 	JR	NC,J$496A
 J$4959	EQU	$-1
-;
 	JR	Z,J$491C
-;
 	DEFB	0,0
 	RET	M
-;
 	JR	NZ,J$4959
-;
 	JR	NZ,J$4983
-;
 	JR	J$4965
-;
-;	-----------------
+
 J$4965:	LD	B,B
 	LD	E,H
 	CALL	PO,C$2048
-;
 J$496A:	JR	NZ,J.498C
-;
 J$496C:	DEFB	0,0,0
 	RET	P
-;
 	DJNZ	J$4982
-;
 	DJNZ	J$496C
-;
 	DEFB	0,0
 	RET	M
-;
 	EX	AF,AF'
 	RET	M
-;
 	EX	AF,AF'
 	EX	AF,AF'
 	RET	M
-;
 	NOP
 	LD	(HL),B
 	NOP
 	RET	M
-;
 	EX	AF,AF'
 	EX	AF,AF'
 J$4982:	DJNZ	J$49A4
 J$4983	EQU	$-1
-;
 	NOP
 	LD	C,B
 	LD	C,B
@@ -2007,10 +1691,8 @@ J$4983	EQU	$-1
 	LD	C,B
 	EX	AF,AF'
 	DJNZ	J$49AC
-;
 J.498C:	NOP
 	DJNZ	J$49DF
-;
 	LD	D,B
 J$4990:	LD	D,B
 	LD	D,B
@@ -2026,30 +1708,24 @@ J$4994:	NOP
 	LD	H,B
 	DEFB	0,0
 	RET	M
-;
 	ADC	A,B
 	ADC	A,B
 	ADC	A,B
 	ADC	A,B
 	RET	M
-;
 J$49A4:	DEFB	0,0
 	CALL	M,C$8484
 J$49A8	EQU	$-1
-;
 	INC	B
 	EX	AF,AF'
 	JR	NC,J$49AD
 J$49AC	EQU	$-1
-;
 J$49AD:	NOP
 	RET	NZ
-;
 	NOP
 	EX	AF,AF'
 	EX	AF,AF'
 	DJNZ	J$4994
-;
 	NOP
 	SUB	B
 	LD	C,B
@@ -2059,50 +1735,38 @@ J$49AD:	NOP
 	LD	H,B
 	DEFB	0,0,0,0,0
 	JR	NZ,J$4A43
-;
 	JR	NZ,J$49F8
-;
 	LD	B,B
 	LD	D,B
 	LD	C,A
 	NOP
 	DJNZ	J$4A4B
-;
 	JR	NZ,J.4A09
-;
 	INC	B
 	INC	B
 	JR	C,J$49D5
-;
 J$49D5:	DEFB	0,0
 	LD	A,H
 	LD	(BC),A
 	LD	(BC),A
 	INC	B
 	JR	C,J$49DD
-;
 J$49DD:	NOP
 	LD	A,(HL)
 J$49DF:	INC	C
 	DJNZ	J$4A02
-;
 	JR	NZ,J$4A00
-;
 	NOP
 	JR	NZ,J.4A09
-;
 	JR	C,J.4A09
-;
 	LD	B,B
 	LD	B,B
 	LD	A,00H
 	INC	H
 	JP	P,J$4848
-;
 	SBC	A,H
 	XOR	D
 	DJNZ	J$49F5
-;
 J$49F5:	LD	B,B
 	LD	E,(HL)
 	LD	B,B
@@ -2121,12 +1785,10 @@ J$4A02:	XOR	D
 	NOP
 	LD	B,B
 	CALL	PE,C$6252
-;
 J.4A09:	ADC	A,4AH	; "J"
 	INC	C
 	DEFB	0,0
 	JR	C,J$4A64
-;
 	SUB	D
 	AND	D
 	AND	D
@@ -2141,22 +1803,17 @@ J.4A09:	ADC	A,4AH	; "J"
 	SBC	A,B
 	NOP
 	JR	J$4A73
-;
-;	-----------------
+
 ?.4A1F:	RET	Z
-;
 	LD	C,B
 	LD	C,B
 	LD	C,B
 	JR	NC,J$4A25
-;
 J$4A25:	LD	H,B
 	DJNZ	J$4A48
-;
 	SUB	H
 	SUB	H
 	CALL	NC,C$0020
-;
 	NOP
 	LD	B,B
 	AND	B
@@ -2171,14 +1828,12 @@ J$4A25:	LD	H,B
 	SBC	A,H
 	AND	(HL)
 	JR	J$4A3D
-;
-;	-----------------
+
 J$4A3D:	EX	AF,AF'
 	LD	A,(HL)
 J$4A3F:	EX	AF,AF'
 	LD	A,(HL)
 	JR	C,J$4A8F
-;
 J$4A43:	LD	A,(D$7000)
 	INC	D
 	INC	D
@@ -2188,7 +1843,6 @@ J$4A48:	LD	A,(HL)
 J$4A4B:	LD	C,B
 	NOP
 	JR	NZ,J$4A3F
-;
 	LD	H,H
 	AND	D
 	AND	B
@@ -2199,39 +1853,30 @@ J$4A4B:	LD	C,B
 	LD	C,B
 	LD	A,H
 	JP	Z,J$B2AA
-;
 	LD	H,H
 	NOP
 	LD	B,B
 	RET	P
-;
 	LD	B,B
 	RET	P
-;
 	LD	B,B
 	LD	C,B
 	JR	NC,J$4A65
 J$4A64	EQU	$-1
-;
 J$4A65:	LD	C,B
 	LD	E,H
 	JP	PE,J$2442
-;
 	JR	NZ,J$4A8C
-;
 	NOP
 	EX	AF,AF'
 	CP	H
 	JP	Z,J$BC8A
-;
 	EX	AF,AF'
 J$4A73:	JR	NC,J$4A75
-;
 J$4A75:	EX	AF,AF'
 	EX	AF,AF'
 	LD	C,08H	; 8 
 	JR	C,J$4AC7
-;
 	LD	(D$1800),A
 	LD	B,H
 	LD	B,B
@@ -2247,25 +1892,19 @@ J$4A75:	EX	AF,AF'
 	EX	AF,AF'
 	JR	NC,J$4A8D
 J$4A8C	EQU	$-1
-;
 J$4A8D:	LD	A,H
 	EX	AF,AF'
 J$4A8F:	JR	NC,J$4A9D
-;
 	LD	H,D
 	LD	D,D
 	INC	A
 	NOP
 	JR	NZ,J$4AC3
-;
 	CALL	P,C$6424
-;
 	CALL	PO,C$0026
-;
 J$4A9D:	LD	A,H
 	JR	J$4AE0
-;
-;	-----------------
+
 ?.4AA0:	LD	A,H
 	ADD	A,D
 	LD	(BC),A
@@ -2274,13 +1913,9 @@ J$4A9D:	LD	A,H
 	LD	B,B
 	LD	H,B
 	CALL	C,C$4262
-;
 	JP	NZ,005CH
-;
 	DJNZ	J$4ACF
-;
 	JR	NZ,J$4AE1
-;
 	LD	C,B
 	LD	C,D
 	ADD	A,H

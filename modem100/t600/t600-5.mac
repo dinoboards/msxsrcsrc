@@ -27,18 +27,18 @@ KILBUF	EQU	0156H
 
 
 C.6000	EQU	6000H			; inter segment call (EI)
-D.6300	EQU	6300H	; ---L-
-D.6303	EQU	6303H	; --SL-
-D$6304	EQU	6304H	; --S--
-D.630F	EQU	630FH	; --SL-
-D.6310	EQU	6310H	; --SL-
+D.6300	EQU	6300H			; option
+D.6303	EQU	6303H			; special key
+D$6304	EQU	6304H			; last key
+D.630F	EQU	630FH			; current column
+D.6310	EQU	6310H			; current line
 D$6318	EQU	6318H			; VDP data write port
-I.6319	EQU	6319H	; ----I
+I.6319	EQU	6319H			; sprite attributes
 D$632B	EQU	632BH	; ---L-
 D$632C	EQU	632CH	; ---L-
 D$632D	EQU	632DH	; ---L-
 D.632E	EQU	632EH	; ---L-
-D$6342	EQU	6342H	; ---L-
+D$6342	EQU	6342H			; mode ?
 I.63A8	EQU	63A8H	; ----I
 D.63B2	EQU	63B2H	; ---L-
 I$63B3	EQU	63B3H	; ----I
@@ -50,43 +50,41 @@ I$64FF	EQU	64FFH	; ----I
 I$67D2	EQU	67D2H	; ----I
 I.67D7	EQU	67D7H	; ----I
 
-C.4040:	JP	J$4351
+C.4040:	JP	J$4351			; display option screen
 ?.4043:	JP	C.4335			; write data to VRAM
-?.4046:	JP	J.43A2
-?.4049:	JP	C.43BD
+?.4046:	JP	J.43A2			; display string
+?.4049:	JP	C.43BD			; display character 1 (x times)
 ?.404C:	JP	J$4256
-?.404F:	JP	J$418D
-?.4052:	JP	J$41B0
-?.4055:	JP	J$44E5
+?.404F:	JP	J$418D			; get dial mode
+?.4052:	JP	J$41B0			; wait for key (menu)
+?.4055:	JP	J$44E5			; update function key display F2
 ?.4058:	JP	J$407D
-?.405B:	JP	J$4067
-?.405E:	JP	J$4072
-?.4061:	JP	C.4141
-?.4064:	JP	C.4141
+?.405B:	JP	J$4067			; cleared display item text
+?.405E:	JP	J$4072			; cleared display value text
+?.4061:	JP	C.4141			; intialize sprites
+?.4064:	JP	C.4141			; intialize sprites
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine cleared display item text
+;	     Inputs  C = start line
 ;	     Outputs ________________________
 
 J$4067:	PUSH	BC
-	LD	B,0EH	; 14 
-	LD	D,01H	; 1 
-	LD	E,C
-	CALL	C.43BD
-;
+	LD	B,14			; number of characters
+	LD	D,1			; column = 1
+	LD	E,C			; start line
+	CALL	C.43BD			; display character 1 (x times)
 	POP	BC
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine cleared display item value
+;	     Inputs  C = start line
 ;	     Outputs ________________________
 
 J$4072:	PUSH	BC
-	LD	B,0FH	; 15 
-	LD	D,10H	; 16 
-	LD	E,C
-	CALL	C.43BD
-;
+	LD	B,15			; number of characters
+	LD	D,16			; column = 16
+	LD	E,C			; start line
+	CALL	C.43BD			; display character 1 (x times)
 	POP	BC
 	RET
 
@@ -104,63 +102,51 @@ J$407D:	LD	HL,I.64FA
 	LDIR
 	LD	HL,I.64FA
 	LD	IX,I$63B8
-	LD	(IX),00H
-	LD	C,1BH
-J$40A0:	LD	B,1BH
+	LD	(IX+0),0
+	LD	C,27
+J$40A0:	LD	B,27
 J$40A2:	LD	A,(HL)
-	CALL	C$4138
-;
-	CP	0DH	; 13 
+	CALL	C$4138			; to upper
+	CP	0DH
 	JR	Z,J$40F4
-;
-	CP	5CH	; "\"
+	CP	"\"
 	JR	Z,J$40CD
-;
-	CP	50H	; "P"
+	CP	"P"
 	JR	NZ,J.40DE
-;
-	LD	A,(IX)
-	AND	01H	; 1 
+	LD	A,(IX+0)
+	AND	01H
 	JR	Z,J.40DE
-;
-	LD	A,(IX)
+	LD	A,(IX+0)
 	XOR	80H
 	AND	80H
-	LD	(IX),A
+	LD	(IX+0),A
 	LD	(HL),81H
 	JR	Z,J.40E6
-;
 	DEC	HL
 	LD	(HL),81H
 	INC	HL
 	JR	J.40E6
-;
-;	-----------------
-J$40CD:	LD	A,(IX)
-	AND	01H	; 1 
+
+J$40CD:	LD	A,(IX+0)
+	AND	01H
 	JR	NZ,J.40DE
-;
-	LD	A,(IX)
-	OR	01H	; 1 
-	LD	(IX),A
+	LD	A,(IX+0)
+	OR	01H
+	LD	(IX+0),A
 	JR	J.40E6
-;
-;	-----------------
-J.40DE:	LD	A,(IX)
+
+J.40DE:	LD	A,(IX+0)
 	AND	80H
-	LD	(IX),A
-J.40E6:	LD	A,(IX)
+	LD	(IX+0),A
+J.40E6:	LD	A,(IX+0)
 	AND	80H
 	JR	Z,J$40EF
-;
 	LD	(HL),81H
 J$40EF:	INC	HL
 	DJNZ	J$40A2
-;
 	JR	J.4121
-;
-;	-----------------
-J$40F4:	LD	(IX),00H
+
+J$40F4:	LD	(IX+0),00H
 	PUSH	HL
 	PUSH	DE
 	PUSH	BC
@@ -169,7 +155,7 @@ J$40F4:	LD	(IX),00H
 	EX	DE,HL
 	AND	A
 	SBC	HL,DE
-	LD	D,00H
+	LD	D,0
 	LD	E,B
 	AND	A
 	SBC	HL,DE
@@ -186,269 +172,224 @@ J$40F4:	LD	(IX),00H
 J$4119:	INC	HL
 	DEC	B
 	JR	Z,J.4121
-;
-	LD	(HL),20H	; " "
+	LD	(HL),20H
 	JR	J$4119
-;
-;	-----------------
+
 J.4121:	DEC	C
 	JP	NZ,J$40A0
-;
 	LD	HL,I$67D2
 	LD	BC,I.02D9
 J$412B:	LD	A,(HL)
-	CP	0DH	; 13 
+	CP	0DH
 	RET	Z
-;
-	LD	(HL),20H	; " "
+	LD	(HL),20H
 	DEC	HL
 	DEC	BC
 	LD	A,B
 	OR	C
 	JR	NZ,J$412B
-;
 	RET
-;
-;	-----------------
-;
-;	  Subroutine __________________________
+
+;	  Subroutine to upper
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$4138:	CP	61H	; "a"
+
+C$4138:	CP	"a"
 	RET	C
-;
-	CP	7BH	; "{"
+	CP	"z"+1
 	RET	NC
-;
-	SUB	20H	; " "
+	SUB	20H
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine intialize sprites
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4141:	LD	HL,I$416D
-	LD	DE,I$3800
-	LD	BC,32
+C.4141:	LD	HL,I$416D		; sprite pattern
+	LD	DE,3800H		; VRAM address
+	LD	BC,4*8
 	CALL	C.4335			; write data to VRAM
 	LD	HL,I.6319
-	LD	B,04H	; 4 
+	LD	B,4
 	XOR	A
-J$4153:	LD	(HL),0D0H
+J$4153:	LD	(HL),0D0H		; sprite Y, next sprite invisable
 	INC	HL
-	LD	(HL),00H
+	LD	(HL),00H		; sprite X
 	INC	HL
-	LD	(HL),A
+	LD	(HL),A			; sprite pattern
 	INC	HL
-	LD	(HL),00H
+	LD	(HL),00H		; color
 	INC	HL
 	INC	A
 	DJNZ	J$4153
-;
 	LD	HL,I.6319
-	LD	DE,I$1B00
-	LD	BC,16
+	LD	DE,1B00H		; VRAM address
+	LD	BC,4*4
 	JP	C.4335			; write data to VRAM
 
 I$416D:	DEFB	0,0
 	RRA
 	DJNZ	J$4182
-;
 	DJNZ	J$4184
-;
 	DJNZ	J$4176
-;
 J$4176:	NOP
 	RET	P
-;
 	DJNZ	J$418A
 J$4179	EQU	$-1
-;
 	DJNZ	J$418C
-;
 	DJNZ	J$418E
-;
 	DJNZ	J$4190
-;
 	RRA
 	DEFB	0
 J$4182:	DEFB	0,0
 J$4184:	DEFB	0
 	DJNZ	J$4197
-;
 	DJNZ	J$4179
-;
 	DEFB	0
 J$418A:	DEFB	0,0
 J$418C:	DEFB	0
 
-;	  Subroutine __________________________
+;	  Subroutine get dial mode
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 J$418D:	LD	A,(D$6342)
-J$418E	EQU	$-2
-J$4190:	AND	A
-	JR	Z,J.41AD
-;
-	CP	01H	; 1 
-	LD	C,02H	; 2 
-J$4197:	JR	Z,J.41AE
-;
-	CP	02H	; 2 
-	LD	C,03H	; 3 
-	JR	Z,J.41AE
-;
-	CP	03H	; 3 
-	LD	C,04H	; 4 
-	JR	Z,J.41AD
-;
+	AND	A			; mode 0 ?
+	JR	Z,J.41AD		; yep, return tone dial
+	CP	1			; mode 1 ?
+	LD	C,2
+	JR	Z,J.41AE		; yep, return pulse dial, 20pps
+	CP	2			; mode 2 ?
+	LD	C,3
+	JR	Z,J.41AE		; yep, return pulse dial, 10pps
+	CP	3			; mode 3 ?
+	LD	C,4
+	JR	Z,J.41AD		; yep, return automatic
 	CALL	C.6000
-;
-	NOP
-	LD	(HL),B
-	LD	B,B
-	AND	04H	; 4 
+	DEFB	0
+	DEFW	C.4070			; get line status
+	AND	04H			; b2
 J.41AD:	LD	C,A
 J.41AE:	XOR	A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine wait for key (menu)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 J$41B0:	CALL	C.6000
-;
-	NOP
-	LD	E,(HL)
-	LD	B,B
+	DEFB	0
+	DEFW	C.405E			; counter #1, clear
 	LD	A,(D.6303)
-	CP	0BH	; 11 
-	JR	NC,J.41C0
-;
-	CALL	KILBUF
-;
-J.41C0:	CALL	C$4215
-	CALL	CHSNS
-	JR	NZ,J$41DD
+	CP	0BH			; function key ?
+	JR	NC,J.41C0		; nope, skip
+	CALL	KILBUF			; clear keyboard buffer
+J.41C0:	CALL	C$4215			; update function key display
+	CALL	CHSNS			; have key ?
+	JR	NZ,J$41DD		; yep,
 	LD	A,(D.6402)
 	AND	A
-	JR	NZ,J.41C0
+	JR	NZ,J.41C0		; try again
 	CALL	C.6000
-	NOP
-	LD	H,C
-	LD	B,B
-	CP	03H	; 3 
-	JR	C,J.41C0
-;
+	DEFB	0
+	DEFW	C.4061			; counter #1, get number of seconds
+	CP	3			; 3 seconds passed ?
+	JR	C,J.41C0		; nope, try again
 	LD	(D.6402),A
-	JR	J.41C0
+	JR	J.41C0			; try again
 
-J$41DD:	CALL	CHGET
-;
-	LD	(D$6304),A
-	CP	0FH	; 15 
-	JR	C,J.420F
-	CP	12H	; 18 
-	JR	NC,J$41EF
-	SUB	0EH	; 14 
+J$41DD:	CALL	CHGET			; get key
+	LD	(D$6304),A		; update last key
+	CP	0FH			; F1-F3 ?
+	JR	C,J.420F		; nope,
+	CP	12H			; F1-F3 ?
+	JR	NC,J$41EF		; nope,
+	SUB	0EH			; 1-3
 	JR	J.4211
 
-J$41EF:	JR	Z,J.41C0
-	CP	18H
-	JR	NC,J$41F9
-	SUB	0FH	; 15 
+J$41EF:	JR	Z,J.41C0		; INSERT, try again
+	CP	18H			; F4-F8 ?
+	JR	NC,J$41F9		; nope,
+	SUB	0FH			; 4-8
 	JR	J.4211
 
-J$41F9:	JR	Z,J.41C0
-	CP	1BH
-	JR	NC,J$4203
-	SUB	10H	; 16 
+J$41F9:	JR	Z,J.41C0		; SELECT, try again
+	CP	1BH			; F9-F10 ?
+	JR	NC,J$4203		; nope,
+	SUB	10H			; 9-10
 	JR	J.4211
 
-J$4203:	CP	1CH
-	JR	C,J.420F
-	CP	20H	; " "
-	JR	NC,J.420F
-	SUB	11H	; 17 
+J$4203:	CP	1CH			; ESC ?
+	JR	C,J.420F		; yep,
+	CP	20H			; cursor key ?
+	JR	NC,J.420F		; nope,
+	SUB	11H			; 11-14
 	JR	J.4211
 
-J.420F:	LD	A,0FH	; 15 
+J.420F:	LD	A,0FH			; other key
 J.4211:	LD	(D.6303),A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine update function key display
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4215:	LD	A,(D.6300)
-	AND	A
-	RET	NZ
-	LD	A,06H	; 6 
-	CALL	SNSMAT
-	AND	01H	; 1 
-	JR	NZ,J$422F
+	AND	A			; option 0 ?
+	RET	NZ			; nope, quit
+	LD	A,6
+	CALL	SNSMAT			; read keyboard row 6
+	AND	01H			; SHIFT pressed ?
+	JR	NZ,J$422F		; nope,
 	LD	HL,I$4AB7
-	CALL	C.4A5B
+	CALL	C.4A5B			; update last-1 display line
 	LD	HL,I$4AD8
-	JP	C.4A63
+	JP	C.4A63			; update last display line
 
 J$422F:	LD	A,(D$632D)
 	AND	A
-	JR	NZ,J$4253
-;
+	JR	NZ,J$4253		; update function key display (F5) and quit
 	LD	A,(D.63B2)
 	AND	A
 	JR	NZ,J$4247
-;
 	LD	HL,I.4A75
-	CALL	C.4A5B
-;
+	CALL	C.4A5B			; update last-1 display line
 	LD	HL,I.4A96
-D$4242	EQU	$-2
-	JP	C.4A63
-;
-;	-----------------
+	JP	C.4A63			; update last display line
+
 J$4247:	LD	HL,I$4AF9
-	CALL	C.4A5B
-;
+	CALL	C.4A5B			; update last-1 display line
 	LD	HL,I$4B1A
-	JP	C.4A63
-;
-;	-----------------
-J$4253:	JP	C.4A31
+	JP	C.4A63			; update last display line
+
+J$4253:	JP	C.4A31			; update function key display (F5)
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J$4256:	LD	B,10H	; 16 
-	LD	DE,I.0400
+J$4256:	LD	B,16			; number of lines = 16
+	LD	DE,4*(32*8) + 0*8	; VRAM address
 J$425B:	PUSH	DE
 	PUSH	BC
 	LD	HL,I.45CD
-	LD	C,20H	; " "
-	CALL	C.4471
-;
+	LD	C,32			; line size = 32
+	CALL	C.4471			; display string (windowed)
 	POP	BC
 	POP	DE
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J$425B
-;
-	LD	C,01H	; 1 
-	LD	DE,I.0478
+	LD	C,1			; line size = 1
+	LD	DE,4*(32*8) + 15*8	; VRAM address
 	LD	HL,I.4630
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	LD	A,(D.63B2)
 	AND	A
 	JR	Z,J$42D1
-;
-	LD	HL,I.230C
-	LD	B,0EH	; 14 
+	LD	HL,2000H + 3*(32*8) + 1*8 + 4	; VRAM address
+	LD	B,14			; number of characters = 14
 J$4284:	PUSH	BC
 	PUSH	HL
 	LD	BC,4
@@ -457,11 +398,10 @@ J$4284:	PUSH	BC
 	POP	HL
 	POP	BC
 	LD	DE,8
-	ADD	HL,DE
+	ADD	HL,DE			; update VRAM address to next column
 	DJNZ	J$4284
-;
-	LD	HL,I.2384
-	LD	B,0FH	; 15 
+	LD	HL,2000H + 3*(32*8) + 16*8 + 4	; VRAM address
+	LD	B,15			; number of characters = 15
 J$429B:	PUSH	BC
 	PUSH	HL
 	LD	BC,4
@@ -470,34 +410,26 @@ J$429B:	PUSH	BC
 	POP	HL
 	POP	BC
 	LD	DE,8
-	ADD	HL,DE
+	ADD	HL,DE			; update VRAM address to next column
 	DJNZ	J$429B
-;
-	LD	B,0EH	; 14 
-	LD	DE,I.0408
+	LD	B,14			; number of characters
+	LD	DE,4*(32*8) + 1*8	; VRAM address
 J$42B2:	LD	A,0E4H
-	CALL	C.443F
-;
+	CALL	C.443F			; write character pattern
 	LD	A,0E4H
-	CALL	C.4451
-;
+	CALL	C.4451			; write character color
 	DJNZ	J$42B2
-;
-	LD	B,0FH	; 15 
-	LD	DE,I.0480
+	LD	B,15			; number of characters
+	LD	DE,4*(32*8) + 1*8	; VRAM address
 J$42C3:	LD	A,0E4H
-	CALL	C.443F
-;
+	CALL	C.443F			; write character pattern
 	LD	A,0E4H
-	CALL	C.4451
-;
+	CALL	C.4451			; write character color
 	DJNZ	J$42C3
-;
-	JR	J$4321
-;
-;	-----------------
-J$42D1:	LD	HL,I.230C
-	LD	B,0EH	; 14 
+	JR	J$4321			; display ? string and quit
+
+J$42D1:	LD	HL,2000H + 3*(32*8) + 1*8 + 4	; VRAM address
+	LD	B,14			; number of characters
 J$42D6:	PUSH	BC
 	PUSH	HL
 	LD	BC,4
@@ -506,11 +438,10 @@ J$42D6:	PUSH	BC
 	POP	HL
 	POP	BC
 	LD	DE,8
-	ADD	HL,DE
+	ADD	HL,DE			; update VRAM address to next column
 	DJNZ	J$42D6
-;
-	LD	HL,I.2384
-	LD	B,0FH	; 15 
+	LD	HL,2000H + 3*(32*8) + 16*8 + 4	; VRAM address
+	LD	B,15			; number of characters
 J$42ED:	PUSH	BC
 	PUSH	HL
 	LD	BC,4
@@ -519,31 +450,24 @@ J$42ED:	PUSH	BC
 	POP	HL
 	POP	BC
 	LD	DE,8
-	ADD	HL,DE
+	ADD	HL,DE			; update VRAM address to next column
 	DJNZ	J$42ED
-;
-	LD	B,0EH	; 14 
-	LD	DE,I.0408
-J$4304:	LD	A,02H	; 2 
-	CALL	C.443F
-;
-	LD	A,02H	; 2 
-	CALL	C.4451
-;
+	LD	B,14			; number of characters
+	LD	DE,4*(32*8) + 1*8	; VRAM address
+J$4304:	LD	A,02H
+	CALL	C.443F			; write character pattern
+	LD	A,02H
+	CALL	C.4451			; write character color
 	DJNZ	J$4304
-;
-	LD	B,0FH	; 15 
-	LD	DE,I.0480
-J$4315:	LD	A,02H	; 2 
-	CALL	C.443F
-;
-	LD	A,02H	; 2 
-	CALL	C.4451
-;
+	LD	B,15			; number of characters
+	LD	DE,4*(32*8) + 1*8	; VRAM address
+J$4315:	LD	A,02H
+	CALL	C.443F			; write character pattern
+	LD	A,02H
+	CALL	C.4451			; write character color
 	DJNZ	J$4315
-;
 J$4321:	LD	HL,I.4641
-	JP	J.43A2
+	JP	J.43A2			; display string
 
 ;	  Subroutine setup VDP for VRAM write
 ;	     Inputs  ________________________
@@ -582,8 +506,8 @@ J$433E:	LD	A,(DE)
 	RET
 
 ;	  Subroutine multiply by 8
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Inputs  A = value
+;	     Outputs HL = result
 
 C.434A:	LD	H,0
 	LD	L,A
@@ -592,87 +516,76 @@ C.434A:	LD	H,0
 	ADD	HL,HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine display option screen
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 J$4351:	CALL	DISSCR
-;
-	CALL	C.4141
-;
+	CALL	C.4141			; intialize sprites
 	CALL	C$438C
-;
 	LD	A,(D.6300)
 	LD	HL,I$4491
-	AND	A
-	JR	Z,J.4382
-;
+	AND	A			; option 0 ?
+	JR	Z,J.4382		; yep,
 	LD	HL,I$44AC
-	CP	01H	; 1 
-	JR	Z,J.4382
-;
+	CP	1			; option 1 ?
+	JR	Z,J.4382		; yep,
 	LD	HL,I$44FF
-	CP	02H	; 2 
-	JR	Z,J.4382
-;
+	CP	2			; option 2 ?
+	JR	Z,J.4382		; yep,
 	LD	HL,I$4526
-	CP	03H	; 3 
-	JR	Z,J.4382
-;
+	CP	3			; option 3 ?
+	JR	Z,J.4382		; yep,
 	LD	HL,I$453E
-	CP	04H	; 4 
-	JR	Z,J.4382
-;
+	CP	4			; option 4 ?
+	JR	Z,J.4382		; yep,
 	LD	HL,I$455C
 J.4382:	LD	IX,I$4389
 	PUSH	IX
 	JP	(HL)
-;
-;	-----------------
+
 I$4389:	JP	ENASCR
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C$438C:	LD	DE,0
-	LD	BC,I.0300
+	LD	BC,768
 J$4392:	LD	A,00H
-	CALL	C.443F
+	CALL	C.443F			; write character pattern
 	LD	A,00H
-	CALL	C.4451
+	CALL	C.4451			; write character color
 	DEC	BC
 	LD	A,B
 	OR	C
 	JR	NZ,J$4392
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine display string
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 J.43A2:	LD	A,(HL)
 	CP	0FFH
 	RET	Z
-	LD	(D.630F),A
+	LD	(D.630F),A		; update current column
 	INC	HL
 	LD	A,(HL)
-	LD	(D.6310),A
+	LD	(D.6310),A		; update current line
 	INC	HL
 J$43AF:	LD	A,(HL)
 	CP	0FFH
 	JR	Z,J$43BA
-	CALL	C$43E2
+	CALL	C$43E2			; display character
 	INC	HL
 	JR	J$43AF
 
 J$43BA:	INC	HL
-	JR	J.43A2
+	JR	J.43A2			; continue
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine display character 1 (x times)
+;	     Inputs  E = line, D = column, B = number of
 ;	     Outputs ________________________
 
 C.43BD:	PUSH	BC
@@ -686,62 +599,53 @@ C.43BD:	PUSH	BC
 	ADD	HL,DE
 	ADD	HL,HL
 	ADD	HL,HL
-	ADD	HL,HL
-	EX	DE,HL
+	ADD	HL,HL			; *8
+	EX	DE,HL			; VRAM address
 	LD	A,1
 	CALL	C.434A			; multiply by 8
-	LD	BC,I.4D3F
+	LD	BC,I.4D3F		; character pattern table
 	ADD	HL,BC
 	LD	BC,8
 	CALL	C.4335			; write data to VRAM
 	POP	DE
 	POP	BC
-	INC	D
+	INC	D			; next column
 	DJNZ	C.43BD
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine display character
+;	     Inputs  A = character
 ;	     Outputs ________________________
 
 C$43E2:	PUSH	HL
-	CP	5BH	; "["
-	LD	C,00H
+	CP	"["
+	LD	C,0
 	JR	Z,J.4403
-;
-	CP	5DH	; "]"
-	LD	C,01H	; 1 
+	CP	"]"
+	LD	C,1
 	JR	Z,J.4403
-;
 	CP	86H
 	JR	C,J.4410
-;
 	CP	0A0H
 	JR	C,J$4406
-;
 	CP	0A6H
 	JR	C,J.4410
-;
 	CP	0FEH
 	JR	NC,J.4410
-;
 	SUB	89H
 	JR	J.4408
-;
-;	-----------------
+
 J.4403:	LD	A,C
 	JR	J.4408
-;
-;	-----------------
+
 J$4406:	SUB	84H
 J.4408:	CALL	C.6000
-	RLCA
-	LD	B,B
-	LD	B,B
+	DEFB	7
+	DEFW	C.4040			; get telcom character pattern
 	JR	J$4424
 
 J.4410:	CALL	C.434A			; multiply by 8
-	LD	DE,I$1BBF
+	LD	DE,I$1BBF		; should be LD DE,(CGTABL)
 	ADD	HL,DE
 	LD	DE,I.63A8
 	LD	B,8
@@ -753,28 +657,28 @@ J$441C:	LD	A,(HL)
 	DJNZ	J$441C
 J$4424:	LD	HL,I.63A8
 	LD	A,(D.6310)
-	LD	D,A
+	LD	D,A			; current line
 	LD	A,(D.630F)
 	INC	A
-	LD	(D.630F),A
+	LD	(D.630F),A		; update current column
 	DEC	A
 	ADD	A,A
 	ADD	A,A
-	ADD	A,A
+	ADD	A,A			; *8
 	LD	E,A
 	LD	BC,8
 	CALL	C.4335			; write data to VRAM
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine write character pattern
+;	     Inputs  A = character, DE = VRAM address
 ;	     Outputs ________________________
 
 C.443F:	PUSH	HL
 	PUSH	BC
 D$4441:	CALL	C.434A			; multiply by 8
-	LD	BC,I.4D3F
+	LD	BC,I.4D3F		; character pattern table
 	ADD	HL,BC
 	LD	BC,8
 	CALL	C.4335			; write data to VRAM
@@ -782,14 +686,14 @@ D$4441:	CALL	C.434A			; multiply by 8
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine write character color
+;	     Inputs  A = character
 ;	     Outputs ________________________
 
 C.4451:	PUSH	HL
 	PUSH	BC
 	CALL	C.434A			; multiply by 8
-	LD	BC,I$553F
+	LD	BC,I$553F		; character color table
 	ADD	HL,BC
 	LD	BC,8
 	PUSH	DE
@@ -807,235 +711,185 @@ C.4451:	PUSH	HL
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine display string (windowed)
+;	     Inputs  DE = VRAM address, C = line size
 ;	     Outputs ________________________
 
 C.4471:	LD	B,C
 J$4472:	LD	A,(HL)
-	CP	0FFH
-	RET	Z
-;
-	CALL	C.443F
-;
+	CP	0FFH			; end marker ?
+	RET	Z			; yep, quit
+	CALL	C.443F			; write character pattern
 	LD	A,(HL)
-	CALL	C.4451
-;
+	CALL	C.4451			; write character color
 	INC	HL
 	DEC	B
 	JR	NZ,J$4472
-;
-	LD	A,20H	; " "
+	LD	A,32
 	SUB	C
 	ADD	A,A
 	ADD	A,A
 	ADD	A,A
 	PUSH	HL
 	LD	L,A
-	LD	H,00H
+	LD	H,0
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address
 	POP	HL
-	JP	C.4471
-;
-;	-----------------
+	JP	C.4471			; continue
+
+; option 0
+
 I$4491:	CALL	C$456C
-;
 	LD	HL,I.4A75
-	CALL	C.4A5B
-;
+	CALL	C.4A5B			; update last-1 display line
 	LD	HL,I.4A96
-	CALL	C.4A63
-;
+	CALL	C.4A63			; update last display line
 	LD	HL,I$4959
-	CALL	C.4949
-;
+	CALL	C.4949			; display title line #0
 	LD	HL,I$4965
-	JP	J.4951
-;
-;	-----------------
+	JP	J.4951			; display title line #1
+
+; option 1
+
 I$44AC:	CALL	C$4655
-;
 	LD	A,(D.632E)
 	AND	A
 	JR	Z,J$44CD
-;
 	LD	HL,I$4B7D
-	CALL	C.4A5B
-;
+	CALL	C.4A5B			; update last-1 display line
 	LD	HL,I$4B9E
-	CALL	C.4A63
-;
+	CALL	C.4A63			; update last display line
 	LD	HL,I$4989
-	CALL	C.4949
-;
+	CALL	C.4949			; display title line #0
 	LD	HL,I$4995
-	JP	J.4951
-;
-;	-----------------
-J$44CD:	LD	HL,I$4B3B
-	CALL	C.4A5B
-;
-	LD	HL,I$4B5C
-	CALL	C.4A63
-;
-	LD	HL,I$4971
-	CALL	C.4949
-;
-	LD	HL,I$497D
-	JP	J.4951
+	JP	J.4951			; display title line #1
 
-;	  Subroutine __________________________
+J$44CD:	LD	HL,I$4B3B
+	CALL	C.4A5B			; update last-1 display line
+	LD	HL,I$4B5C
+	CALL	C.4A63			; update last display line
+	LD	HL,I$4971
+	CALL	C.4949			; display title line #0
+	LD	HL,I$497D
+	JP	J.4951			; display title line #1
+
+;	  Subroutine update function key display F2
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 J$44E5:	LD	A,(D$6419)
 	AND	A
 	JR	Z,J$44FD
-;
 	LD	HL,I$4C99
-	LD	DE,I$1648
+	LD	DE,22*(32*8) + 9*8	; VRAM address
 	CALL	C.4A6B
-;
 	LD	HL,I$4C9E
-	LD	DE,I$1748
+	LD	DE,23*(32*8) + 9*8	; VRAM address
 	JP	C.4A70
-;
-;	-----------------
+
 J$44FD:	XOR	A
 	RET
-;
-;	-----------------
+
+; option 2
+
 I$44FF:	CALL	C$46F2
-;
 	CALL	C$47B3
-;
-	CALL	C$4A01
-;
+	CALL	C$4A01			; update function key display (F1 and F5)
 	LD	A,(D$632B)
 	AND	A
 	JR	Z,J$451A
-;
 	LD	HL,I$49B9
-	CALL	C.4949
-;
+	CALL	C.4949			; display title line #0
 	LD	HL,I$49C5
-	JP	J.4951
-;
-;	-----------------
+	JP	J.4951			; display title line #1
+
 J$451A:	LD	HL,I$49A1
-	CALL	C.4949
-;
+	CALL	C.4949			; display title line #0
 	LD	HL,I$49AD
-	JP	J.4951
-;
-;	-----------------
+	JP	J.4951			; display title line #1
+
+; option 3
+
 I$4526:	CALL	C$485C
-;
 	CALL	C.6000
-;
-	RLCA
-	LD	B,(HL)
-	LD	B,B
-	CALL	C.4A31
-;
+	DEFB	7
+	DEFW	C.4046			; display ?? strings
+	CALL	C.4A31			; update function key display (F5)
 	LD	HL,I$49D1
-	CALL	C.4949
-;
+	CALL	C.4949			; display title line #0
 	LD	HL,I$49DD
-	JP	J.4951
-;
-;	-----------------
+	JP	J.4951			; display title line #1
+
+; option 4
+
 I$453E:	CALL	C$48ED
-;
 	CALL	C$4CAD
-;
 	LD	HL,I$4BBF
-	CALL	C.4A5B
-;
+	CALL	C.4A5B			; update last-1 display line
 	LD	HL,I$4BE0
-	CALL	C.4A63
-;
+	CALL	C.4A63			; update last display line
 	LD	HL,I$49E9
-	CALL	C.4949
-;
+	CALL	C.4949			; display title line #0
 	LD	HL,I$49F5
-	JP	J.4951
-;
-;	-----------------
+	JP	J.4951			; display title line #1
+
+; option 5
+
 I$455C:	CALL	C$491B
-;
 	CALL	C$4D03
-;
-	CALL	C.4A31
-;
+	CALL	C.4A31			; update function key display (F5)
 	CALL	C.6000
-;
-	RLCA
-	LD	B,E
-	LD	B,B
+	DEFB	7
+	DEFW	C.4043			; display title option 5
 	RET
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$456C:	LD	B,10H	; 16 
-	LD	DE,I.0400
+
+C$456C:	LD	B,16
+	LD	DE,4*(32*8) + 0*8	; VRAM address
 J$4571:	PUSH	DE
 	PUSH	BC
 	LD	HL,I.45CD
-	LD	C,20H	; " "
-	CALL	C.4471
-;
+	LD	C,32			; line size = 32
+	CALL	C.4471			; display string (windowed)
 	POP	BC
 	POP	DE
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J$4571
-;
-	LD	B,0EH	; 14 
-	LD	DE,I.0408
-J$4589:	LD	A,02H	; 2 
-	CALL	C.443F
-;
-	LD	A,02H	; 2 
-	CALL	C.4451
-;
+	LD	B,14
+	LD	DE,4*(32*8) + 1*8	; VRAM address
+J$4589:	LD	A,02H
+	CALL	C.443F			; write character pattern
+	LD	A,02H
+	CALL	C.4451			; write character color
 	DJNZ	J$4589
-;
-	LD	B,0FH	; 15 
-	LD	DE,I.0480
-J$459A:	LD	A,02H	; 2 
-	CALL	C.443F
-;
-	LD	A,02H	; 2 
-	CALL	C.4451
-;
+	LD	B,15
+	LD	DE,4*(32*8) + 1*8	; VRAM address
+J$459A:	LD	A,02H
+	CALL	C.443F			; write character pattern
+	LD	A,02H
+	CALL	C.4451			; write character color
 	DJNZ	J$459A
-;
-	LD	C,20H	; " "
-	LD	DE,I.0300
+	LD	C,32			; line size = 32
+	LD	DE,3*(32*8) + 0*8	; VRAM address
 	LD	HL,I$45EE
-	CALL	C.4471
-;
-	LD	C,20H	; " "
-	LD	DE,I.1400
+	CALL	C.4471			; display string (windowed)
+	LD	C,32			; line size = 32
+	LD	DE,20*(32*8) + 0*8	; VRAM address
 	LD	HL,I$460F
-	CALL	C.4471
-;
-	LD	C,01H	; 1 
-	LD	DE,I.0478
+	CALL	C.4471			; display string (windowed)
+	LD	C,1			; line size = 1
+	LD	DE,4*(32*8) + 15*8	; VRAM address
 	LD	HL,I.4630
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	LD	HL,I.4641
-	JP	J.43A2
-;
-;	-----------------
+	JP	J.43A2			; display string
+
 I.45CD:	LD	A,(BC)
 	LD	BC,I.0101
 	LD	BC,I.0101
@@ -1133,7 +987,6 @@ I.4641:	LD	(BC),A
 	PUSH	BC
 	NOP
 	RST	08H
-;
 	NOP
 	OR	H
 	NOP
@@ -1141,105 +994,85 @@ I.4641:	LD	(BC),A
 	LD	DE,I$C504
 	NOP
 	DEFB	0DDH		; << Illegal Op Code Byte >>
-;	-----------------
-;
-	NOP
+
 	JP	Z,J.B0DE
-;
 	RST	38H
 	RST	38H
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C$4655:	LD	A,(D.632E)
 	AND	A
 	JR	NZ,J$4662
-;
-	LD	B,02H	; 2 
-	LD	DE,I.0408
+	LD	B,2
+	LD	DE,4*(32*8) + 1*8
 	JR	J.4667
-;
-;	-----------------
-J$4662:	LD	B,01H	; 1 
-	LD	DE,I.0408
+
+J$4662:	LD	B,1
+	LD	DE,4*(32*8) + 1*8	; VRAM address
 J.4667:	PUSH	BC
 	PUSH	DE
-	LD	C,1EH
+	LD	C,30			; line size = 30
 	LD	HL,I.473E
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	POP	DE
 	POP	BC
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J.4667
-;
-	LD	C,1EH
-	LD	DE,I$0308
+	LD	C,30			; line size = 30
+	LD	DE,3*(32*8) + 1*8	; VRAM address
 	LD	HL,I.475D
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	LD	A,(D.632E)
 	AND	A
 	JR	NZ,J$4698
-;
-	LD	C,1EH
-	LD	DE,I$0608
+	LD	C,30			; line size = 30
+	LD	DE,6*(32*8) + 1*8	; VRAM address
 	LD	HL,I.477C
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	JR	J$46A3
-;
-;	-----------------
-J$4698:	LD	C,1EH
-	LD	DE,I.0508
+
+J$4698:	LD	C,30			; line size = 30
+	LD	DE,5*(32*8) + 1*8	; VRAM address
 	LD	HL,I.477C
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 J$46A3:	LD	A,(D.632E)
 	AND	A
 	JR	NZ,J$46B0
-;
 	LD	B,02H	; 2 
 	LD	DE,I.0410
 	JR	J.46B5
-;
-;	-----------------
-J$46B0:	LD	B,01H	; 1 
-	LD	DE,I.0410
+
+J$46B0:	LD	B,1
+	LD	DE,4*(32*8) + 2*8	; VRAM address
 J.46B5:	PUSH	BC
 	PUSH	DE
-	LD	C,07H	; 7 
+	LD	C,7			; line size = 7
 	LD	HL,I.479B
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	POP	DE
 	POP	BC
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J.46B5
-;
 	LD	A,(D.632E)
 	AND	A
 	JR	NZ,J$46D3
-;
 	LD	HL,I$46D9
 	JR	J$46D6
-;
-;	-----------------
+
 J$46D3:	LD	HL,I$46E9
-J$46D6:	JP	J.43A2
-;
-;	-----------------
+J$46D6:	JP	J.43A2			; display string
+
 I$46D9:	LD	(BC),A
 	INC	B
 	PUSH	BC
 	RST	08H
-;
 	OR	H
 	NOP
 	RST	38H
@@ -1247,71 +1080,60 @@ I$46D9:	LD	(BC),A
 	DEC	B
 	PUSH	BC
 	DEFB	0DDH		; << Illegal Op Code Byte >>
-;	-----------------
-;
+
 	JP	Z,J.B0DE
-;
 	RST	38H
 	RST	38H
 I$46E9:	LD	(BC),A
 	INC	B
 	PUSH	BC
 	DEFB	0DDH		; << Illegal Op Code Byte >>
-;	-----------------
-;
+
 	JP	Z,J.B0DE
-;
 	RST	38H
 	RST	38H
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$46F2:	LD	B,03H	; 3 
-	LD	DE,I.0508
+
+C$46F2:	LD	B,3
+	LD	DE,5*(32*8) + 1*8	; VRAM address
 J$46F7:	PUSH	BC
 	PUSH	DE
-	LD	C,1EH
+	LD	C,30			; line size = 30
 	LD	HL,I.473E
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	POP	DE
 	POP	BC
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J$46F7
-;
-	LD	C,1EH
-	LD	DE,I.0408
+	LD	C,30			; line size = 30
+	LD	DE,4*(32*8) + 1*8	; VRAM address
 	LD	HL,I.475D
-	CALL	C.4471
-;
-	LD	C,1EH
-	LD	DE,I$0808
+	CALL	C.4471			; display string (windowed)
+	LD	C,30			; line size = 30
+	LD	DE,8*(32*8) + 1*8	; VRAM address
 	LD	HL,I.477C
-	CALL	C.4471
-;
-	LD	B,03H	; 3 
-	LD	DE,I$0510
+	CALL	C.4471			; display string (windowed)
+	LD	B,3
+	LD	DE,5*(32*8) + 2*8	; VRAM address
 J$4725:	PUSH	BC
 	PUSH	DE
-	LD	C,07H	; 7 
+	LD	C,7			; line size = 7
 	LD	HL,I.479B
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	POP	DE
 	POP	BC
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J$4725
-;
 	LD	HL,I$47A3
-	JP	J.43A2
-;
-;	-----------------
+	JP	J.43A2			; display string
+
 I.473E:	LD	A,(BC)
 	LD	BC,I.0101
 	LD	BC,I.0101
@@ -1331,7 +1153,6 @@ I.475D:	ADD	HL,BC
 	EX	AF,AF'
 	EX	AF,AF'
 	DJNZ	J$476E
-;
 	EX	AF,AF'
 	EX	AF,AF'
 	EX	AF,AF'
@@ -1395,7 +1216,6 @@ I$47A3:	LD	(BC),A
 	DEC	B
 	PUSH	BC
 	RST	08H
-;
 	OR	H
 	NOP
 	RST	38H
@@ -1403,71 +1223,58 @@ I$47A3:	LD	(BC),A
 	RLCA
 	PUSH	BC
 	DEFB	0DDH		; << Illegal Op Code Byte >>
-;	-----------------
-;
 	JP	Z,J.B0DE
-;
 	RST	38H
 	RST	38H
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$47B3:	LD	B,0AH	; 10 
-	LD	DE,I$0A08
+
+C$47B3:	LD	B,10
+	LD	DE,10*(32*8) + 1*8	; VRAM address
 J$47B8:	PUSH	BC
 	PUSH	DE
-	LD	C,1EH
+	LD	C,30			; line size = 30
 	LD	HL,I.473E
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	POP	DE
 	POP	BC
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J$47B8
-;
-	LD	B,0AH	; 10 
-	LD	DE,I.0A10
+	LD	B,10
+	LD	DE,10*(32*8) + 2*8	; VRAM address
 J$47D0:	PUSH	BC
 	PUSH	DE
-	LD	C,01H	; 1 
+	LD	C,1			; line size = 1
 	LD	HL,I$484E
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	POP	DE
 	POP	BC
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J$47D0
-;
-	LD	C,1EH
-	LD	DE,I$0908
+	LD	C,30			; line size = 30
+	LD	DE,9*(32*8) + 1*8	; VRAM address
 	LD	HL,I$4810
-	CALL	C.4471
-;
-	LD	C,1EH
-	LD	DE,I$1408
+	CALL	C.4471			; display string (windowed)
+	LD	C,30			; line size = 30
+	LD	DE,20*(32*8) + 1*8	; VRAM address
 	LD	HL,I$482F
-	CALL	C.4471
-;
-	LD	B,1CH
-	LD	DE,I.0A10
-J$47FE:	LD	A,02H	; 2 
-	CALL	C.443F
-;
-	LD	A,02H	; 2 
-	CALL	C.4451
-;
+	CALL	C.4471			; display string (windowed)
+	LD	B,28
+	LD	DE,10*(32*8) + 2*8	; VRAM address
+J$47FE:	LD	A,02H
+	CALL	C.443F			; write character pattern
+	LD	A,02H
+	CALL	C.4451			; write character color
 	DJNZ	J$47FE
-;
 	LD	HL,I$4850
-	JP	J.43A2
-;
-;	-----------------
+	JP	J.43A2			; display string
+
 I$4810:	LD	H,(HL)
 	LD	H,A
 	LD	H,A
@@ -1537,44 +1344,37 @@ I$4850:	INC	BC
 	OR	L
 	OR	B
 	CALL	NZ,C$B8DB
-;
 	SBC	A,0B2H
 	DEFB	0DDH		; << Illegal Op Code Byte >>
-;	-----------------
-;
 	RST	38H
 	RST	38H
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$485C:	LD	B,10H	; 16 
-	LD	DE,I.0400
+
+C$485C:	LD	B,16
+	LD	DE,4*(32*8) + 0*8	; VRAM address
 J$4861:	PUSH	BC
 	PUSH	DE
-	LD	C,20H	; " "
+	LD	C,32			; line size = 32
 	LD	HL,I.488A
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	POP	DE
 	POP	BC
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J$4861
-;
-	LD	C,20H	; " "
-	LD	DE,I.0300
+	LD	C,32			; line size = 32
+	LD	DE,3*(32*8) + 0*8	; VRAM address
 	LD	HL,I.48AB
-	CALL	C.4471
-;
-	LD	C,20H	; " "
-	LD	DE,I.1400
+	CALL	C.4471			; display string (windowed)
+	LD	C,32			; line size = 32
+	LD	DE,20*(32*8) + 0*8	; VRAM address
 	LD	HL,I.48CC
-	JP	C.4471
-;
-;	-----------------
+	JP	C.4471			; display string (windowed)
+
 I.488A:	LD	A,(BC)
 	LD	(BC),A
 	LD	(BC),A
@@ -1633,96 +1433,82 @@ I.48CC:	LD	A,D
 	LD	A,E
 	LD	A,L
 	CALL	NC,C.D4D4
-;
 	CALL	NC,C.D4D4
-;
 	CALL	NC,C.D4D4
-;
 	CALL	NC,C.D4D4
-;
 	CALL	NC,C.D4D4
-;
 	CALL	NC,C.D4D4
-;
 	LD	A,H
 	RST	38H
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$48ED:	LD	B,0BH	; 11 
-	LD	DE,I.0500
+
+C$48ED:	LD	B,11
+	LD	DE,5*(32*8) + 0*8	; VRAM address
 J$48F2:	PUSH	BC
 	PUSH	DE
-	LD	C,20H	; " "
+	LD	C,32			; line size = 32
 	LD	HL,I.488A
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	POP	DE
 	POP	BC
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J$48F2
-;
-	LD	C,20H	; " "
-	LD	DE,I.0400
+	LD	C,32
+	LD	DE,4*(32*8) + 0*8	; VRAM address
 	LD	HL,I.48AB
-	CALL	C.4471
-;
-	LD	C,20H	; " "
-	LD	DE,I$1000
+	CALL	C.4471			; display string (windowed)
+	LD	C,32			; line size = 32
+	LD	DE,16*(32*8) + 0*8	; VRAM address
 	LD	HL,I.48CC
-	JP	C.4471
-;
-;	-----------------
-;
+	JP	C.4471			; display string (windowed)
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C$491B:	LD	B,07H	; 7 
-	LD	DE,I.0500
+
+C$491B:	LD	B,7
+	LD	DE,5*(32*8) + 0*8	; VRAM address
 J$4920:	PUSH	BC
 	PUSH	DE
-	LD	C,20H	; " "
+	LD	C,32			; line size = 32
 	LD	HL,I.488A
-	CALL	C.4471
-;
+	CALL	C.4471			; display string (windowed)
 	POP	DE
 	POP	BC
-	LD	HL,I.0100
+	LD	HL,256
 	ADD	HL,DE
-	EX	DE,HL
+	EX	DE,HL			; update VRAM address to next line
 	DJNZ	J$4920
-;
-	LD	C,20H	; " "
-	LD	DE,I.0400
+	LD	C,32			; line size = 32
+	LD	DE,4*(32*8) + 0*8	; VRAM address
 	LD	HL,I.48AB
-	CALL	C.4471
-;
-	LD	C,20H	; " "
-	LD	DE,I$0C00
+	CALL	C.4471			; display string (windowed)
+	LD	C,32			; line size = 32
+	LD	DE,12*(32*8) + 0*8	; VRAM address
 	LD	HL,I.48CC
-	JP	C.4471
-;
-;	-----------------
-;
-;	  Subroutine __________________________
+	JP	C.4471			; display string (windowed)
+
+;	  Subroutine display title line #0
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
-C.4949:	LD	C,0BH	; 11 
-	LD	DE,I$0050
-	JP	C.4471
-;
-;	-----------------
-J.4951:	LD	C,0BH	; 11 
-	LD	DE,I$0150
-	JP	C.4471
-;
-;	-----------------
+
+C.4949:	LD	C,11			; line size = 11
+	LD	DE,0*(32*8) + 10*8	; VRAM address
+	JP	C.4471			; display string (windowed)
+
+;	  Subroutine display title line #1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J.4951:	LD	C,11			; line size = 11
+	LD	DE,1*(32*8) + 10*8	; VRAM address
+	JP	C.4471			; display string (windowed)
+
 I$4959:	NOP
 	LD	(DE),A
 	INC	DE
@@ -1738,8 +1524,7 @@ I$4965:	NOP
 	DEC	D
 	NOP
 	JR	J$4984
-;
-;	-----------------
+
 ?.496B:	NOP
 	INC	E
 	DEC	E
@@ -1758,7 +1543,6 @@ I$4971:	CP	(HL)
 	ADC	A,A
 	RST	38H
 I$497D:	RET	NZ
-;
 	POP	BC
 I.497F:	NOP
 	CP	H
@@ -1796,52 +1580,41 @@ I$4995:	CP	B
 	RST	38H
 I$49A1:	DEFB	0,0,0
 	JP	Z,J$00CB
-;
 	NOP
 	ADC	A,0CFH
 	DEFB	0,0
 	RST	38H
 I$49AD:	DEFB	0,0,0
 	CALL	Z,C$00CD
-;
 	NOP
 	RET	NC
-;
 	POP	DE
 	DEFB	0,0
 	RST	38H
 I$49B9:	DEFB	0,0,0
 	JP	NZ,J$00C3
-;
 	NOP
 	ADD	A,0C7H
 	DEFB	0,0
 	RST	38H
 I$49C5:	DEFB	0,0,0
 	CALL	NZ,C$00C5
-;
 	NOP
 	RET	Z
-;
 	RET
-;
-;	-----------------
+
 ?.49CE:	DEFB	0,0
 	RST	38H
 I$49D1:	DEFB	0,0,0
 	RST	28H
-;
 	RET	P
-;
 	DEFB	0,0
 	DI
 	CALL	P,C.0000
-;
 	RST	38H
 I$49DD:	DEFB	0,0,0
 	POP	AF
 	JP	P,C.0000
-;
 	PUSH	AF
 	OR	00H
 	NOP
@@ -1853,14 +1626,11 @@ I$49E9:	LD	E,(HL)
 	LD	H,E
 	NOP
 	RST	28H
-;
 	RET	P
-;
 	NOP
 	DI
 	CALL	P,C$60FF
 I$49F5	EQU	$-1
-;
 	LD	H,C
 	NOP
 	LD	H,H
@@ -1868,103 +1638,80 @@ I$49F5	EQU	$-1
 	NOP
 	POP	AF
 	JP	P,J$F500
-;
 	OR	0FFH
-;
-;	  Subroutine __________________________
+
+;	  Subroutine update function key display (F1 and F5)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C$4A01:	LD	HL,I$4C01
-	CALL	C.4A5B
-;
+	CALL	C.4A5B			; update last-1 display line
 	LD	HL,I$4C22
-	CALL	C.4A63
-;
+	CALL	C.4A63			; update last display line
 	LD	HL,I$4C85
-	LD	DE,I.16D0
+	LD	DE,22*(32*8) + 26*8	; VRAM address
 	CALL	C.4A6B
-;
 	LD	HL,I$4C8A
-	LD	DE,I.17D0
+	LD	DE,23*(32*8) + 26*8	; VRAM address
 	CALL	C.4A70
-;
 	LD	HL,I$4C8F
-	LD	DE,I$1610
+	LD	DE,22*(32*8) + 2*8	; VRAM address
 	CALL	C.4A6B
-;
 	LD	HL,I$4C94
-D$4A2A	EQU	$-1
-	LD	DE,I$1710
+	LD	DE,23*(32*8) + 2*8	; VRAM address
 	JP	C.4A70
-;
-;	-----------------
-;
-;	  Subroutine __________________________
+
+;	  Subroutine update function key display (F5)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C.4A31:	LD	HL,I$4C43
-	CALL	C.4A5B
-;
+	CALL	C.4A5B			; update last-1 display line
 	LD	HL,I$4C64
-	CALL	C.4A63
-;
+	CALL	C.4A63			; update last display line
 	LD	A,(D.6300)
-	CP	03H	; 3 
-	RET	NZ
-;
+	CP	3			; option 3 ?
+	RET	NZ			; nope, quit
 	LD	A,(D$632C)
-	CP	0FH	; 15 
+	CP	0FH
 	RET	NZ
-;
 	LD	HL,I$4CA3
-	LD	DE,I.16D0
+	LD	DE,22*(32*8) + 26*8	; VRAM address
 	CALL	C.4A6B
-;
 	LD	HL,I$4CA8
-	LD	DE,I.17D0
+	LD	DE,23*(32*8) + 26*8	; VRAM address
 	JP	C.4A70
-;
-;	-----------------
-;
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+
+;	  Subroutine update last-1 display line
+;	     Inputs  HL = pointer to string
 ;	     Outputs ________________________
-;
-C.4A5B:	LD	C,20H	; " "
-	LD	DE,I$1600
-	JP	C.4471
-;
-;	-----------------
-;
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+
+C.4A5B:	LD	C,32			; line size = 32
+	LD	DE,23*(32*8) + 0*8	; VRAM address
+	JP	C.4471			; display string (windowed)
+
+;	  Subroutine update last display line
+;	     Inputs  HL = pointer to string
 ;	     Outputs ________________________
-;
-C.4A63:	LD	C,20H	; " "
-	LD	DE,I$1700
-	JP	C.4471
-;
-;	-----------------
-;
+
+C.4A63:	LD	C,32			; line size = 32
+	LD	DE,24*(32*8) + 0*8	; VRAM address
+	JP	C.4471			; display string (windowed)
+
 ;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	     Inputs  HL = pointer to string, DE = VRAM address
 ;	     Outputs ________________________
-;
-C.4A6B:	LD	C,04H	; 4 
-	JP	C.4471
-;
-;	-----------------
-;
+
+C.4A6B:	LD	C,4			; line size = 4
+	JP	C.4471			; display string (windowed)
+
 ;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	     Inputs  HL = pointer to string, DE = VRAM address
 ;	     Outputs ________________________
-;
-C.4A70:	LD	C,04H	; 4 
-	JP	C.4471
-;
-;	-----------------
+
+C.4A70:	LD	C,4			; line size = 4
+	JP	C.4471			; display string (windowed)
+
 I.4A75:	NOP
 	LD	(BC),A
 	LD	E,1FH
@@ -1985,10 +1732,10 @@ I.4A75:	NOP
 	LD	(BC),A
 	NOP
 	RST	38H
+
 I.4A96:	NOP
 	LD	(BC),A
 	JR	NZ,J$4ABB
-;
 	INC	H
 	DEC	H
 	PUSH	HL
@@ -2012,6 +1759,7 @@ I.4A96:	NOP
 	LD	(BC),A
 	NOP
 	RST	38H
+
 I$4AB7:	AND	52H	; "R"
 	LD	D,E
 	LD	D,H
@@ -2022,7 +1770,6 @@ J$4ABB:	LD	D,L
 	AND	0D8H
 	EXX
 	JP	C,J$DCDB
-;
 	PUSH	IX
 	AND	0AEH
 	XOR	A
@@ -2038,6 +1785,7 @@ J$4ABB:	LD	D,L
 	LD	(BC),A
 	PUSH	HL
 	RST	38H
+
 I$4AD8:	AND	58H	; "X"
 	LD	E,C
 	LD	E,D
@@ -2047,12 +1795,9 @@ I$4AD8:	AND	58H	; "X"
 	PUSH	HL
 	AND	0DEH
 	RST	18H
-;
 	RET	PO
-;
 	POP	HL
 	JP	PO,J$E5E3
-;
 	AND	0B0H
 	OR	C
 	OR	H
@@ -2092,7 +1837,6 @@ I$4AF9:	NOP
 I$4B1A:	NOP
 	LD	(BC),A
 	JR	NZ,J$4B3F
-;
 	INC	H
 	DEC	H
 	PUSH	HL
@@ -2117,7 +1861,6 @@ I$4B1A:	NOP
 	NOP
 	RST	38H
 I$4B3B:	JP	NC,J.9392
-;
 	SUB	H
 J$4B3F:	SUB	L
 	SUB	(HL)
@@ -2145,7 +1888,6 @@ J$4B3F:	SUB	L
 	PUSH	HL
 	RST	38H
 I$4B5C:	JP	NC,J.9998
-;
 	SBC	A,D
 	SBC	A,E
 	SBC	A,H
@@ -2173,7 +1915,6 @@ I$4B5C:	JP	NC,J.9998
 	PUSH	HL
 	RST	38H
 I$4B7D:	JP	NC,J.9392
-;
 	SUB	H
 	SUB	L
 	SUB	(HL)
@@ -2201,7 +1942,6 @@ I$4B7D:	JP	NC,J.9392
 	PUSH	HL
 	RST	38H
 I$4B9E:	JP	NC,J.9998
-;
 	SBC	A,D
 	SBC	A,E
 	SBC	A,H
@@ -2237,8 +1977,7 @@ I$4BBF:	NOP
 	AND	72H	; "r"
 	LD	(HL),E
 	HALT
-;
-;	-----------------
+
 ?.4BCA:	LD	(HL),A
 	PUSH	HL
 	AND	7EH	; "~"
@@ -2403,15 +2142,11 @@ I$4C64:	NOP
 	NOP
 	RST	38H
 I$4C85:	RST	30H
-;
 	RET	M
-;
 	EI
 	CALL	M,C$F9FF
 I$4C8A	EQU	$-1
-;
 	JP	M,J$FEFD
-;
 	RST	38H
 I$4C8F:	LD	A,(HL)
 	LD	A,A
@@ -2423,45 +2158,40 @@ I$4C94:	ADD	A,B
 	ADD	A,H
 	ADD	A,L
 	RST	38H
+
 I$4C99:	LD	(BC),A
 	LD	(BC),A
 	LD	(BC),A
 	LD	(BC),A
 	RST	38H
+
 I$4C9E:	LD	(BC),A
 	LD	(BC),A
 	LD	(BC),A
 	LD	(BC),A
 	RST	38H
 I$4CA3:	RST	20H
-;
 	RET	PE
-;
 	EX	DE,HL
 	CALL	PE,C$E9FF
 I$4CA8	EQU	$-1
-;
 	JP	PE,J$EEED
-;
 	RST	38H
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C$4CAD:	LD	HL,I$4CB3
-	JP	J.43A2
-;
-;	-----------------
+	JP	J.43A2			; display string
+
 I$4CB3:	LD	(BC),A
 	DEC	B
 	OR	L
 	OR	B
 	CALL	NZ,C$C0BD
-;
 	OR	B
 	CALL	NZ,C.0000
-;
 	NOP
 	RST	38H
 	LD	(BC),A
@@ -2476,10 +2206,8 @@ I$4CB3:	LD	(BC),A
 	LD	(BC),A
 	ADD	HL,BC
 	RET	NZ
-;
 	SBC	A,0B2H
 	CALL	NC,C$B0D7
-;
 	DEFB	0,0,0,0
 	RST	38H
 	LD	(BC),A
@@ -2491,7 +2219,6 @@ I$4CB3:	LD	(BC),A
 	ADC	A,(HL)
 	SBC	A,B
 	JP	PE,J$FDDE
-;
 	RST	38H
 	LD	(BC),A
 	DEC	C
@@ -2499,8 +2226,7 @@ I$4CB3:	LD	(BC),A
 	SBC	A,92H
 	SBC	A,(HL)
 	DEFB	0FDH		; << Illegal Op Code Byte >>
-;	-----------------
-;
+
 	NOP
 	LD	C,(HL)
 	LD	C,A
@@ -2509,34 +2235,29 @@ I$4CB3:	LD	(BC),A
 	LD	(BC),A
 	RRCA
 	CALL	Z,C.B2A7
-;
 	EXX
 	RET	Z
-;
 	OR	B
 	POP	DE
 	DEFB	0,0,0
 	RST	38H
 	RST	38H
 	RST	38H
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C$4D03:	LD	HL,I$4D09
-	JP	J.43A2
-;
-;	-----------------
+	JP	J.43A2			; display string
+
 I$4D09:	LD	(BC),A
 	DEC	B
 	OR	A
 	XOR	H
 	RST	10H
-;
 	CP	B
 	RET	NZ
-;
 	OR	B
 	DEFB	0,0,0,0
 	RST	38H
@@ -2544,33 +2265,26 @@ I$4D09:	LD	(BC),A
 	RLCA
 	OR	D
 	DEFB	0DDH		; << Illegal Op Code Byte >>
-;	-----------------
-;
+
 	RET	NZ
-;
 	OR	B
 	JP	C,J$BDB0
-;
 	DEFB	0,0,0
 	RST	38H
 	LD	(BC),A
 	ADD	HL,BC
 	SUB	D
 	DEFB	0FDH		; << Illegal Op Code Byte >>
-;	-----------------
-;
+
 	SBC	A,E
 	JP	PO,C.0000
-;
 	DEFB	0,0,0,0
 	RST	38H
 	LD	(BC),A
 	DEC	BC
 	CALL	Z,C.B2A7
-;
 	EXX
 	RET	Z
-;
 	OR	B
 	POP	DE
 	DEFB	0,0,0
@@ -2582,8 +2296,7 @@ I.4D3F:	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	DEFB	0,0,0,0,0,0,0,0,0
 	JR	J$4D8A
-;
-;	-----------------
+
 ?.4D72:	INC	A
 	INC	A
 	LD	A,(HL)
@@ -2592,8 +2305,7 @@ I.4D3F:	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	INC	A
 	INC	A
 	JR	J$4D96
-;
-;	-----------------
+
 ?.4D7E:	DEFB	0,0,0,0,0,0
 	RST	38H
 	DEFB	0,0,0,0,0
@@ -2641,15 +2353,11 @@ J$4D96:	LD	BC,I.0101
 	ADD	A,B
 	RRA
 	DJNZ	J$4E01
-;
 	DJNZ	J$4E03
-;
 	DEFB	0,0,0
 	CALL	M,C$FC84
-;
 	ADD	A,H
 	CALL	M,C$8181
-;
 	LD	A,(HL)
 	NOP
 	LD	A,00H
@@ -2659,12 +2367,9 @@ J$4D96:	LD	BC,I.0101
 	LD	A,00H
 	INC	E
 	RET	P
-;
 	DJNZ	J$4E0C
-;
 	CP	10H	; 16 
 	DJNZ	J$4E00
-;
 J$4E00:	LD	A,22H	; """
 J$4E01	EQU	$-1
 	LD	(D.2222),HL
@@ -2677,9 +2382,7 @@ J$4E03	EQU	$-2
 J$4E0C:	ADD	A,D
 	CP	82H
 	DJNZ	J$4E21
-;
 	DJNZ	J$4E8F
-;
 	LD	D,H
 	LD	D,H
 	LD	D,H
@@ -2688,7 +2391,6 @@ J$4E0C:	ADD	A,D
 	CP	80H
 	ADD	A,B
 	CALL	M,C$FC80
-;
 	ADD	A,B
 	LD	D,H
 	LD	D,A
@@ -2696,7 +2398,6 @@ J$4E21:	LD	D,H
 	LD	D,H
 	LD	D,H
 	DJNZ	J$4E36
-;
 	INC	DE
 	ADD	A,B
 	RST	38H
@@ -2705,7 +2406,6 @@ J$4E21:	LD	D,H
 	ADC	A,D
 	ADD	A,H
 	JP	P,0081H
-;
 	NOP
 	CCF
 	DEFB	0,0,0
@@ -2713,7 +2413,6 @@ J$4E21:	LD	D,H
 J$4E36:	NOP
 	INC	C
 	RET	P
-;
 	ADD	A,B
 	ADD	A,B
 	ADD	A,B
@@ -2757,33 +2456,24 @@ J$4E36:	NOP
 	LD	DE,I.2121
 	LD	HL,I$1046
 	DJNZ	J$4E82
-;
 	DJNZ	J$4EF1
-;
 	DJNZ	J$4E86
-;
 	ADD	HL,SP
 	DJNZ	J$4EA1
-;
 	LD	B,H
 	ADD	A,D
 	LD	A,L
 	DJNZ	J$4E8E
-;
 	RST	38H
 	DEC	(HL)
 	LD	D,C
 	LD	D,C
 J$4E82:	DJNZ	J$4E94
-;
 	DJNZ	J$4E96
-;
 J$4E86:	LD	DE,I.1111
 	RST	38H
 	DJNZ	J$4EB4
-;
 	JR	Z,J$4ED2
-;
 J$4E8E:	ADD	A,E
 J$4E8F:	DEFB	0,0
 	CCF
@@ -2802,11 +2492,9 @@ J$4EA1:	LD	BC,I$003F
 	INC	B
 	EX	AF,AF'
 	JR	NC,J$4EEC
-;
 	ADD	A,H
 	LD	A,(DE)
 	JP	PO,J$9080
-;
 	ADC	A,H
 	ADD	A,D
 	DEFB	0,0
@@ -2820,17 +2508,14 @@ J$4EB4:	INC	H
 	ADD	A,B
 	RST	38H
 	JR	NZ,J$4EE0
-;
 	LD	(D.6021),HL
 	LD	SP,I.0301
 	DEC	C
 	JR	NC,J$4EC5
-;
 J$4EC5:	INC	BC
 	LD	A,H
 	DEFB	0,0
 	RET	M
-;
 	EX	AF,AF'
 	SUB	B
 	LD	H,B
@@ -2841,27 +2526,21 @@ J$4EC5:	INC	BC
 	NOP
 J$4ED2:	RRA
 	DJNZ	J$4EE5
-;
 	RRA
 	DJNZ	J$4ED8
-;
 J$4ED8:	RST	38H
 	ADD	A,B
 	CALL	M,C.8484
-;
 	CALL	M,C.1084
-;
 J$4EE0:	RRA
 	ADD	HL,BC
 	DEC	B
 	LD	(BC),A
 	DEC	B
 J$4EE5:	JR	J$4F47
-;
-;	-----------------
+
 ?.4EE7:	ADD	A,H
 	CALL	M,C.0000
-;
 	NOP
 J$4EEC:	ADD	A,B
 	LD	(HL),B
@@ -2877,10 +2556,8 @@ J$4EF1:	LD	HL,I.0C12
 	LD	H,D
 	INC	H
 	JR	J$4F05
-;
-;	-----------------
+
 ?.4EFD:	CALL	P,C.0002
-;
 	RRCA
 	EX	AF,AF'
 	EX	AF,AF'
@@ -2890,31 +2567,23 @@ J$4F05:	LD	(BC),A
 	LD	A,A
 	NOP
 	RET	M
-;
 	EX	AF,AF'
 	EX	AF,AF'
 	RET	M
-;
 	JR	NZ,J$4F2E
-;
 	RST	38H
 	DJNZ	J$4F39
-;
 	LD	B,H
 	DEFB	0,0
 	LD	A,L
 	DJNZ	J$4F28
-;
 	NOP
 	CALL	M,C.FC04
-;
 	INC	B
 	RST	38H
 	DJNZ	J$4F30
-;
 	LD	A,H
 	DJNZ	J$4F76
-;
 	LD	D,H
 	LD	D,B
 	DEC	E
@@ -2928,26 +2597,20 @@ J$4F28:	LD	E,H
 	SUB	C
 	DJNZ	J$4F5F
 J$4F2E	EQU	$-1
-;
 	DJNZ	J$4F41
 J$4F30	EQU	$-1
-;
 	JR	NZ,J$4F77
-;
 	JR	Z,J$4F46
-;
 	INC	H
 	LD	B,D
 	JR	NZ,J$4F59
-;
 J$4F39:	LD	A,(HL)
 	LD	B,D
 	ADD	A,D
 	LD	B,D
 	INC	H
 	JR	J$4FBE
-;
-;	-----------------
+
 ?.4F40:	LD	A,(BC)
 J$4F41:	EX	AF,AF'
 	LD	HL,(D$4A2A)
@@ -2955,11 +2618,9 @@ J$4F41:	EX	AF,AF'
 J$4F46:	EX	AF,AF'
 J$4F47:	INC	H
 	JP	J$0418
-;
-;	-----------------
+
 ?.4F4B:	LD	H,B
 	DJNZ	J$4F5A
-;
 	LD	(BC),A
 	NOP
 	CCF
@@ -2967,9 +2628,7 @@ J$4F47:	INC	H
 	CALL	M,C$1008
 J$4F59	EQU	$-2
 J$4F5A	EQU	$-1
-;
 	JR	NZ,J$4F9D
-;
 	ADD	A,B
 	ADD	A,B
 J$4F5F:	DEFB	0,0,0,0,0,0,0
@@ -2993,12 +2652,10 @@ J$4F77:	DEFB	0,0,0,0,0,0,0
 	POP	AF
 	NOP
 	DJNZ	J$4F92
-;
 	INC	H
 	INC	H
 	LD	B,H
 	CALL	NZ,C.0044
-;
 	ADD	A,A
 	ADD	A,B
 	ADD	A,B
@@ -3009,24 +2666,18 @@ J$4F77:	DEFB	0,0,0,0,0,0,0
 	LD	B,B
 	CALL	M,C.4040
 J$4F92	EQU	$-1
-;
 	RET	M
-;
 	LD	B,C
 	LD	B,B
 	CALL	M,C.FE00
-;
 	DEFB	0,0,0
 	RST	38H
 J$4F9D:	DJNZ	J$4FAF
-;
 	INC	B
 	EX	AF,AF'
 	EX	AF,AF'
 	DJNZ	J$4FB4
-;
 	DJNZ	J$5007
-;
 	NOP
 	LD	(DE),A
 	LD	D,H
@@ -3052,12 +2703,10 @@ J$4FB4:	LD	E,B
 	POP	HL
 	JP	J.A000
 J$4FBE	EQU	$-2
-;
-;	-----------------
+
 ?.4FC0:	AND	D
 	INC	D
 	DJNZ	J$4FCC
-;
 	LD	L,C
 	ADD	A,H
 	NOP
@@ -3078,12 +2727,10 @@ J$4FCC:	LD	DE,C.0030
 	POP	AF
 	NOP
 	DJNZ	J$4FF2
-;
 	INC	H
 	INC	H
 	LD	B,H
 	CALL	NZ,C.0044
-;
 	ADD	A,A
 	ADD	A,B
 	ADD	A,B
@@ -3094,24 +2741,18 @@ J$4FCC:	LD	DE,C.0030
 	LD	B,B
 	CALL	M,C.4040
 J$4FF2	EQU	$-1
-;
 	RET	M
-;
 	LD	B,C
 	LD	B,B
 	CALL	M,C.FE00
-;
 	DEFB	0,0,0
 	RST	38H
 	DJNZ	J$500F
-;
 	INC	B
 	EX	AF,AF'
 	EX	AF,AF'
 	DJNZ	J$5014
-;
 	DJNZ	J$5067
-;
 	NOP
 J$5007:	LD	(DE),A
 	LD	D,H
@@ -3136,12 +2777,10 @@ J$5014:	LD	E,B
 	OR	C
 	POP	HL
 	JP	J.A000
-;
-;	-----------------
+
 ?.5020:	AND	D
 	INC	D
 	DJNZ	J$502C
-;
 	LD	L,C
 	ADD	A,H
 	NOP
@@ -3222,7 +2861,6 @@ J$5067	EQU	$-1
 	ADD	A,B
 	DEFB	0,0,0
 	RET	NZ
-;
 	LD	B,B
 	LD	B,B
 	LD	B,B
@@ -3239,7 +2877,6 @@ J$50A1:	ADD	A,B
 	LD	B,B
 	LD	B,B
 	RET	NZ
-;
 	LD	B,B
 	DEFB	0,0,0
 	LD	BC,I.0101
@@ -3249,9 +2886,7 @@ J$50A1:	ADD	A,B
 	DEC	B
 	DEFB	0,0
 	RET	NZ
-;
 	JR	NC,J$50A1
-;
 	LD	BC,I.0101
 	LD	BC,I.0101
 	NOP
@@ -3259,19 +2894,15 @@ J$50A1:	ADD	A,B
 	INC	B
 	DEFB	0,0,0,0,0,0,0,0
 	JR	NZ,J$50F3
-;
 	INC	HL
 	CALL	M,C$2020
-;
 	DEFB	0,0,0,0
 	RET	NZ
-;
 	LD	B,B
 	LD	B,B
 	ADD	A,B
 	LD	HL,I$2022
 	JR	NZ,J$5103
-;
 	DEFB	0,0,0
 	RRA
 	DEFB	0,0,0
@@ -3283,10 +2914,8 @@ J$50F3:	RLCA
 	LD	A,(BC)
 	LD	A,(BC)
 	CALL	M,C.0404
-;
 	INC	B
 	RET	PO
-;
 	DEFB	0,0,0
 J$5103:	DEFB	0
 	LD	BC,C.0000
@@ -3294,9 +2923,7 @@ J$5103:	DEFB	0
 	EX	AF,AF'
 	EX	AF,AF'
 	DJNZ	J$512C
-;
 	RET	NZ
-;
 	DEFB	0,0
 	LD	BC,I.0101
 	LD	BC,I.0101
@@ -3317,17 +2944,14 @@ J$5103:	DEFB	0
 	RST	38H
 J$512C:	DEFB	0,0,0
 	JR	NZ,J$5142
-;
 	EX	AF,AF'
 	NOP
 	LD	B,B
 	LD	HL,I$0111
 	DJNZ	J$514B
-;
 	SUB	D
 	SUB	H
 J$513B:	DJNZ	J$513B
-;
 	LD	(BC),A
 	LD	(BC),A
 	LD	BC,I$0909
@@ -3358,16 +2982,12 @@ J$514B	EQU	$-1
 	CCF
 	DEFB	0,0,0
 	JR	NZ,J$517B
-;
 	EX	AF,AF'
 	CALL	P,C.0404
-;
 	NOP
 	LD	BC,I.1F02
 	DJNZ	J$5185
-;
 	DJNZ	J$5196
-;
 	ADD	A,B
 	DEFB	0,0
 	CP	02H	; 2 
@@ -3376,12 +2996,9 @@ J$517B	EQU	$-1
 	LD	(BC),A
 	CP	10H	; 16 
 	DJNZ	J$5192
-;
 	RRA
 	DJNZ	J$5195
-;
 J$5185:	DJNZ	J$51A6
-;
 	LD	(BC),A
 	LD	(BC),A
 	LD	(BC),A
@@ -3392,7 +3009,6 @@ J$5185:	DJNZ	J$51A6
 	RRCA
 	JR	NZ,J$51A4
 J$5192	EQU	$-1
-;
 	LD	A,(BC)
 	INC	C
 J$5195:	LD	(HL),B
@@ -3402,7 +3018,6 @@ J$5196:	RRCA
 	AND	B
 	LD	B,H
 	JR	Z,J$51B5
-;
 	LD	B,0F0H
 	LD	(BC),A
 	LD	(BC),A
@@ -3412,10 +3027,8 @@ J$5196:	RRCA
 J$51A4:	LD	(BC),A
 	INC	B
 J$51A6:	JR	C,J.51E8
-;
 	LD	B,B
 	CALL	M,C.4040
-;
 	LD	B,D
 	LD	B,D
 	LD	A,08H	; 8 
@@ -3423,15 +3036,11 @@ J$51A6:	JR	C,J.51E8
 	EX	AF,AF'
 	RLA
 	DJNZ	J.51E8
-;
 J$51B5:	JR	NC,J$520A
-;
 	NOP
 	CALL	M,C.FE00
-;
 	NOP
 	CALL	M,C.FC00
-;
 	LD	D,B
 	INC	DE
 	LD	(DE),A
@@ -3442,11 +3051,9 @@ J$51B5:	JR	NC,J$520A
 	LD	(DE),A
 	NOP
 	CALL	M,C.0404
-;
 	INC	B
 	INC	B
 	CALL	M,C.0004
-;
 	LD	B,D
 	LD	B,D
 	LD	B,D
@@ -3457,11 +3064,8 @@ J$51B5:	JR	NC,J$520A
 	NOP
 	RRA
 	DJNZ	J$51EB
-;
 	DJNZ	J$51ED
-;
 	JR	NC,J$5227
-;
 	NOP
 	XOR	B
 	XOR	B
@@ -3475,25 +3079,19 @@ J.51E8:	LD	B,H
 	LD	B,H
 	CALL	NZ,C$8584
 J$51EB	EQU	$-2
-;
 J$51ED:	ADD	A,E
 	SBC	A,(HL)
 	DEFB	0,0,0
 	LD	SP,I$9171
 	LD	SP,I$0061
 	JR	NZ,J$521A
-;
 	JR	NZ,J$521C
-;
 	JR	NZ,J$521E
-;
 	JR	NZ,J$5242
-;
 	LD	B,D
 	LD	B,0CH	; 12 
 	JR	J$5235
-;
-;	-----------------
+
 ?.5205:	LD	H,B
 	NOP
 	LD	B,02H	; 2 
@@ -3519,23 +3117,17 @@ J$521E:	NOP
 	LD	B,04H	; 4 
 	NOP
 J$5227:	JR	NZ,J$5249
-;
 	LD	HL,I$2623
 	INC	L
 	JR	C,J$522F
-;
 J$522F:	DEFB	0,0
 	CCF
 	DEFB	0,0,0
 J$5235:	DEFB	0,0,0,0
 	RET	PO
-;
 	JR	NZ,J$525C
-;
 	JR	NZ,J$525E
-;
 	JR	NZ,J$5240
-;
 J$5240:	DEFB	0,0
 J$5242:	DEFB	0,0,0,0,0,0
 	LD	A,A
@@ -3561,25 +3153,19 @@ J$525E:	NOP
 	SUB	B
 	SUB	B
 	DJNZ	J$5285
-;
 	RET	NZ
-;
 	NOP
 	LD	BC,I$0201
 	LD	(BC),A
 	INC	B
 	EX	AF,AF'
 	JR	NC,J$526F
-;
 J$526F:	NOP
 	DJNZ	J$5282
-;
 	DJNZ	J$5287
-;
 	INC	E
 	LD	(HL),B
 	DJNZ	J$5278
-;
 J$5278:	RST	38H
 	LD	DE,I.1111
 	LD	DE,I.1111
@@ -3602,9 +3188,7 @@ J$5287:	LD	DE,I.2121
 	LD	B,H
 	LD	B,38H	; "8"
 	JR	NZ,J$52BB
-;
 	JR	NZ,J$52BD
-;
 	CCF
 	INC	H
 	LD	C,(HL)
@@ -3622,14 +3206,12 @@ J$5287:	LD	DE,I.2121
 	INC	H
 	LD	B,H
 	CALL	NZ,C$0484
-;
 	LD	B,H
 	INC	H
 	DEC	D
 	INC	B
 	CCF
 	JR	NZ,J$52D7
-;
 	LD	(BC),A
 	LD	B,D
 	SUB	D
@@ -3640,12 +3222,9 @@ J$52BD:	SUB	D
 	SUB	D
 	CCF
 	JR	NZ,J$52E2
-;
 	CCF
 	JR	NZ,J$52E5
-;
 	JR	NZ,J$52EA
-;
 	SUB	D
 	SUB	D
 	SUB	D
@@ -3663,7 +3242,6 @@ J$52BD:	SUB	D
 	LD	D,D
 	LD	C,B
 J$52D7:	DJNZ	J$5301
-;
 	LD	B,H
 	LD	B,H
 	ADD	A,D
@@ -3678,10 +3256,8 @@ J$52E5:	LD	B,C
 	LD	B,B
 	DJNZ	J$52E8
 J$52E8	EQU	$-1
-;
 	DJNZ	J$533F
 J$52EA	EQU	$-1
-;
 	LD	D,H
 	SUB	D
 	LD	DE,C.0030
@@ -3692,7 +3268,6 @@ J$52EA	EQU	$-1
 	NOP
 	INC	C
 	RET	P
-;
 	ADD	A,B
 	ADD	A,B
 	ADD	A,B
@@ -3737,9 +3312,7 @@ J$5301:	LD	A,A
 	LD	HL,I$0046
 	LD	BC,I.1F02
 	DJNZ	J$5345
-;
 	DJNZ	J$5356
-;
 	ADD	A,B
 	DEFB	0,0
 	CP	02H	; 2 
@@ -3748,12 +3321,9 @@ J$5301:	LD	A,A
 	CP	10H	; 16 
 J$533F	EQU	$-1
 	DJNZ	J$5352
-;
 	RRA
 	DJNZ	J$5355
-;
 J$5345:	DJNZ	J$5366
-;
 	LD	(BC),A
 	LD	(BC),A
 	LD	(BC),A
@@ -3772,10 +3342,7 @@ J$5356:	LD	H,B
 	LD	H,D
 	INC	H
 	JR	J$5365
-;
-;	-----------------
 ?.535D:	CALL	P,C.0002
-;
 	RRCA
 	EX	AF,AF'
 	EX	AF,AF'
@@ -3785,31 +3352,23 @@ J$5365:	LD	(BC),A
 J$5366:	LD	A,A
 	NOP
 	RET	M
-;
 	EX	AF,AF'
 	EX	AF,AF'
 	RET	M
-;
 	JR	NZ,J$538E
-;
 	RST	38H
 	DJNZ	J$5399
-;
 	LD	B,H
 	DEFB	0,0
 	LD	A,L
 	DJNZ	J$5388
-;
 	NOP
 	CALL	M,C.FC04
-;
 	INC	B
 	RST	38H
 	DJNZ	J$5390
-;
 	LD	A,H
 	DJNZ	J$53D6
-;
 	LD	D,H
 	LD	D,B
 	DEC	E
@@ -3823,7 +3382,6 @@ J$5388:	LD	E,H
 	SUB	C
 	DJNZ	J$53BF
 J$538E	EQU	$-1
-;
 	DEFB	0
 J$5390:	DEFB	0
 	LD	A,A
@@ -3836,17 +3394,14 @@ J$5390:	DEFB	0
 	ADD	A,B
 J$5399:	RST	38H
 	JR	NZ,J$53C0
-;
 	LD	(D.6021),HL
 	LD	SP,I.0301
 	DEC	C
 	JR	NC,J$53A5
-;
 J$53A5:	INC	BC
 	LD	A,H
 	DEFB	0,0
 	RET	M
-;
 	EX	AF,AF'
 	SUB	B
 	LD	H,B
@@ -3857,28 +3412,22 @@ J$53A5:	INC	BC
 	NOP
 	RRA
 	DJNZ	J$53C5
-;
 	RRA
 	DJNZ	J$53B8
-;
 J$53B8:	RST	38H
 	ADD	A,B
 	CALL	M,C.8484
-;
 	CALL	M,C.1084
 J$53BF	EQU	$-1
-;
 J$53C0:	RRA
 	ADD	HL,BC
 	DEC	B
 	LD	(BC),A
 	DEC	B
 J$53C5:	JR	J$5427
-;
-;	-----------------
+
 ?.53C7:	ADD	A,H
 	CALL	M,C.0000
-;
 	NOP
 	ADD	A,B
 	LD	(HL),B
@@ -3899,14 +3448,12 @@ J$53E1:	DEFB	0,0,0
 	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	DEFB	0,0,0,0,0,0,0
 	JR	NZ,J$5425
-;
 	LD	SP,HL
 	ADD	HL,BC
 	ADD	HL,BC
 	LD	DE,I$0015
 	LD	(BC),A
 	JP	P,J$1217
-;
 	LD	(DE),A
 	INC	DE
 	LD	(DE),A
@@ -3914,12 +3461,10 @@ J$53E1:	DEFB	0,0,0
 	LD	C,A
 	LD	C,C
 	JP	(HL)
-;
-;	-----------------
+
 ?.5413:	LD	C,C
 	LD	C,C
 	RST	08H
-;
 	LD	C,C
 	NOP
 	INC	A
@@ -3931,23 +3476,19 @@ J$53E1:	DEFB	0,0,0
 	DEC	A
 	NOP
 	RET	PO
-;
 	AND	E
 	XOR	D
 	XOR	D
 	LD	A,(D$F000)
 J$5425	EQU	$-2
 J$5427:	JR	NZ,J$5449
-;
 	RST	38H
 	LD	BC,I$FD01
 	JR	NZ,J$53CF
-;
 	ADD	HL,SP
 	LD	SP,I$A66A
 	LD	(D$2422),HL
 	JR	Z,J$544A
-;
 	INC	DE
 	LD	(DE),A
 	LD	(DE),A
@@ -3957,13 +3498,11 @@ J$5427:	JR	NZ,J$5449
 	LD	H,H
 	LD	C,C
 	RET
-;
-;	-----------------
+
 ?.5441:	LD	C,C
 	LD	C,A
 	JP	(HL)
-;
-;	-----------------
+
 ?.5444:	LD	C,C
 	LD	C,C
 	INC	SP
@@ -3976,7 +3515,6 @@ J$544A:	INC	H
 	INC	A
 	INC	H
 	DJNZ	J$53E1
-;
 	SUB	B
 	AND	B
 	LD	B,B
@@ -3990,7 +3528,6 @@ J$544A:	INC	H
 	AND	B
 	LD	H,B
 	JR	NC,J$546D
-;
 	DEFB	0,0,0,0,0,0,0,0
 	CP	0FEH
 	CP	0FEH
@@ -4007,7 +3544,6 @@ J$546D:	CP	0FEH
 	NOP
 	RRCA
 	JR	NZ,J$548C
-;
 	LD	A,(BC)
 	INC	C
 	LD	(HL),B
@@ -4017,7 +3553,6 @@ J$546D:	CP	0FEH
 	AND	B
 	LD	B,H
 	JR	Z,J$549D
-;
 	LD	B,0F0H
 	LD	(BC),A
 	LD	(BC),A
@@ -4027,10 +3562,8 @@ J$546D:	CP	0FEH
 J$548C:	LD	(BC),A
 	INC	B
 	JR	C,J.54D0
-;
 	LD	B,B
 	CALL	M,C.4040
-;
 	LD	B,D
 	LD	B,D
 	LD	A,08H	; 8 
@@ -4038,15 +3571,11 @@ J$548C:	LD	(BC),A
 	EX	AF,AF'
 	RLA
 	DJNZ	J.54D0
-;
 J$549D:	JR	NC,J$54F2
-;
 	NOP
 	CALL	M,C.FE00
-;
 	NOP
 	CALL	M,C.FC00
-;
 	LD	D,B
 	INC	DE
 	LD	(DE),A
@@ -4061,7 +3590,6 @@ J$549D:	JR	NC,J$54F2
 	INC	B
 	INC	B
 	CALL	M,C.0004
-;
 	LD	A,00H
 	LD	A,A
 	NOP
@@ -4074,26 +3602,20 @@ J$549D:	JR	NC,J$54F2
 	ADC	A,(HL)
 	NOP
 	CALL	M,C.3E00
-;
 	LD	(D.2222),HL
 	LD	(D.223E),HL
 	INC	B
 J.54D0:	LD	B,H
 	LD	C,B
 	JR	Z,J$54E4
-;
 	DJNZ	J$54FE
-;
 	ADD	A,01H	; 1 
 	LD	BC,I.203F
 	JR	NZ,J$550C
-;
 	LD	BC,I.0009
 	NOP
 	CALL	M,C.0404
-;
 J$54E4:	CALL	P,C.0000
-;
 	ADD	HL,BC
 	ADD	HL,BC
 	ADD	HL,BC
@@ -4102,7 +3624,6 @@ J$54E4:	CALL	P,C.0000
 	INC	DE
 	LD	HL,C.0020
 	RET	PO
-;
 	DEFB	0
 J$54F2:	DEFB	0,0,0
 	ADD	A,B
@@ -4120,26 +3641,20 @@ J$54FE:	LD	A,00H
 	ADC	A,(HL)
 	NOP
 	CALL	M,C.3E00
-;
 	LD	(D.2222),HL
 J$550C:	LD	(D.223E),HL
 	INC	B
 	LD	B,H
 	LD	C,B
 	JR	Z,J$5524
-;
 	DJNZ	J$553E
-;
 	ADD	A,01H	; 1 
 	LD	BC,I.203F
 	JR	NZ,J$554C
-;
 	LD	BC,I.0009
 	NOP
 	CALL	M,C.0404
-;
 J$5524:	CALL	P,C.0000
-;
 	ADD	HL,BC
 	ADD	HL,BC
 	ADD	HL,BC
@@ -4148,12 +3663,12 @@ J$5524:	CALL	P,C.0000
 	INC	DE
 	LD	HL,C.0020
 	RET	PO
-;
 	DEFB	0,0,0,0
 	ADD	A,B
 	LD	A,H
 	DEFB	0,0,0,0,0,0,0
 J$553E:	DEFB	0
+
 I$553F:	CP	0FEH
 	CP	0FEH
 	CP	0FEH

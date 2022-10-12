@@ -40,28 +40,28 @@ C.6000	EQU	6000H			; inter segment call (EI)
 D.6064	EQU	6064H			; temporary store
 D.6072	EQU	6072H			; literal mode
 D.6073	EQU	6073H			; printer echo
-D.607F	EQU	607FH			; current modem type
+D.607F	EQU	607FH			; b7-b6 = stop bits, b5 = parity enabled, b4 = parity odd, b3-b2 = data bits, b1-b0 = modem type
 D.6081	EQU	6081H			; received byte mask
 D.6083	EQU	6083H			; flags
 D.6097	EQU	6097H			; NCU register 3 backup (b6=0,b7=0)
 D.6098	EQU	6098H			; NCU register 3 backup (b6=0,b7=1)
-D.60A5	EQU	60A5H	; --S--
-D$60AD	EQU	60ADH	; --S--
+D.60A5	EQU	60A5H			; automatic equalizer
+D$60AD	EQU	60ADH			; equalizer bits
 I.60AE	EQU	60AEH			; saved F1-F10 definition
 D.6153	EQU	6153H			; comterm mode (b7 = back space, b6-b5 = JIS mode, b4-b3 = screen mode, b2-b1 = character mode, b0 = interlace)
 D.615B	EQU	615BH			; MSX-JE flags
 C.615C	EQU	615CH			; call MSX-JE
-D.616C	EQU	616CH	; --S-I
-D.616E	EQU	616EH	; --S-I
+D.616C	EQU	616CH			; output to modem flag
+D.616E	EQU	616EH			; output to printer flag
 D.6171	EQU	6171H	; --SLI
 D.6172	EQU	6172H	; --SL-
 D.6173	EQU	6173H	; --SL-
 D.6174	EQU	6174H	; --SL-
 D.6190	EQU	6190H	; --SL-
-D.619A	EQU	619AH	; --SL-
+D.619A	EQU	619AH			; start column STB
 D.61A3	EQU	61A3H			; screen size, number of columns
 I$62F2	EQU	62F2H	; ----I
-D$7EFD	EQU	7EFDH	; --S--
+D$7EFD	EQU	7EFDH			; transmitter power bits
 
 
 ?.4040:	JP	J$4576			; is MSX-JE usable ?
@@ -75,7 +75,7 @@ I$4055:	JP	C.41C6			; byte to printer
 ?.4058:	JP	J$4493			; evaluate _COMINI RS232 port configuration
 ?.405B:	JP	J$4064			; netmodem functions
 ?.405E:	JP	J$413E			; MODEM.CONFIG
-?.4061:	JP	J$4153			; update modem mode
+?.4061:	JP	J$4153			; update modem mode (speed) from baudrate settings
 
 ;	  Subroutine netmodem functions
 ;	     Inputs  ________________________
@@ -106,28 +106,28 @@ J$407F:	LD	A,C
 	CP	16+1
 	JP	NC,J.407A		; quit with error
 	AND	A
-	JR	Z,J$40C4
+	JR	Z,J$40C4		; quit without error
 	CP	0BH
-	LD	H,30H
+	LD	H,30H			; xx11xxxx
 	JR	C,J.409D
 	CP	0DH
-	LD	H,10H
+	LD	H,10H			; xx01xxxx
 	JR	C,J.409D
 	CP	0FH
-	LD	H,20H
+	LD	H,20H			; xx10xxxx
 	JR	C,J.409D
-	LD	H,0
+	LD	H,0			; xx00xxxx
 J.409D:	LD	A,H
-	LD	(D$7EFD),A		; store transmitter
+	LD	(D$7EFD),A		; update transmitter power bits
 	DI
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.40A0
-	LD	A,(D.6098)
+	LD	A,(D.6098)		; NCU register 3 backup (b6=0,b7=1)
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.409D			; write NCU register 3
-	LD	A,(D.6097)
+	LD	A,(D.6097)		; NCU register 3 backup (b6=0,b7=0)
 	AND	0CFH
 	OR	H
 	CALL	C.6000
@@ -137,45 +137,45 @@ J.409D:	LD	A,H
 	DEFB	0
 	DEFW	C.40A3
 	EI
-J$40C4:	OR	A
-	JP	J.407B
+J$40C4:	OR	A			; no error
+	JP	J.407B			; quit
 
 J$40C8:	JP	J.407A			; quit with error
 
 ; set equalizer mode
 
 J$40CB:	XOR	A
-	LD	(D.60A5),A
+	LD	(D.60A5),A		; manual equalizer
 	INC	C
-	JR	Z,J$4113
-	DEC	C
+	JR	Z,J$4113		; quit without error
+	DEC	C			; disable equalizer ?
 	LD	H,03H
-	JR	Z,J.40E9
-	DEC	C
+	JR	Z,J.40E9		; yep,
+	DEC	C			; enable equalizer ?
 	LD	H,00H
-	JR	Z,J.40E9
-	DEC	C
+	JR	Z,J.40E9		; yep,
+	DEC	C			; automatic ?
 	LD	H,03H
 	LD	A,1
-	LD	(D.60A5),A
-	JR	Z,J.40E9
+	LD	(D.60A5),A		; automatic equalizer
+	JR	Z,J.40E9		; yep,
 	JP	J.407A			; quit with error
 
 J.40E9:	LD	A,H
 	CPL
 	AND	03H
-	LD	(D$60AD),A
+	LD	(D$60AD),A		; update equalizer bits
 	DI
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.40A0
-	LD	A,(D.6098)
+	LD	A,(D.6098)		; NCU register 3 backup (b6=0,b7=1)
 	AND	0FCH
 	OR	H
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.409D			; write NCU register 3
-	LD	A,(D.6097)
+	LD	A,(D.6097)		; NCU register 3 backup (b6=0,b7=0)
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.409D			; write NCU register 3
@@ -183,20 +183,20 @@ J.40E9:	LD	A,H
 	DEFB	0
 	DEFW	C.40A3
 	EI
-J$4113:	OR	A
-	JP	J.407B
+J$4113:	OR	A			; no error
+	JP	J.407B			; quit
 
 ?.4117:	PUSH	BC
 	LD	B,A
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.40A0
-	LD	A,(D.6098)
+	LD	A,(D.6098)		; NCU register 3 backup (b6=0,b7=1)
 	OR	B
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.409D			; write NCU register 3
-	LD	A,(D.6097)
+	LD	A,(D.6097)		; NCU register 3 backup (b6=0,b7=0)
 	CALL	C.6000
 	DEFB	0
 	DEFW	C.409D			; write NCU register 3
@@ -204,7 +204,7 @@ J$4113:	OR	A
 	DEFB	0
 	DEFW	C.40A3
 	XOR	A
-	LD	(D.60A5),A
+	LD	(D.60A5),A		; manual equalizer
 	POP	BC
 	RET
 
@@ -228,8 +228,8 @@ J$413E:	LD	H,00H
 	SCF
 	RET
 
-;	  Subroutine update modem mode
-;	     Inputs  ________________________
+;	  Subroutine update modem mode (speed) from baudrate settings
+;	     Inputs  IY = pointer to RS232.INIT string
 ;	     Outputs ________________________
 
 J$4153:	PUSH	HL
@@ -256,10 +256,10 @@ J$4153:	PUSH	HL
 	ADD	HL,DE
 	LD	A,(HL)
 	LD	E,A
-	INC	A
-	JR	Z,J.4188                ; yep, modem mode 0
+	INC	A			; default ?
+	JR	Z,J.4188                ; yep, 300 bps
 	LD	A,(D.607F)
-	AND	0FEH
+	AND	0FEH			; clear b0
 	OR	E
 	LD	(D.607F),A		; update current modem type
 J.4188:	POP	BC
@@ -607,7 +607,7 @@ J$4325:	PUSH	BC
 ;	     Outputs ________________________
 
 C$432F:	OR	A
-	LD	HL,D.616C
+	LD	HL,D.616C		; output to modem flag
 	LD	A,(D.6172)
 	BIT	0,(HL)
 	RES	0,(HL)
@@ -644,7 +644,7 @@ J$435D:	LD	HL,D.6171
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4367:	LD	HL,D.616C
+C.4367:	LD	HL,D.616C		; output to modem flag
 	RES	3,(HL)
 	RET
 
@@ -659,7 +659,7 @@ J$437C:	CP	0FFH
 	CCF
 	RET
 
-J$4380:	LD	HL,D.616C
+J$4380:	LD	HL,D.616C		; output to modem flag
 	BIT	3,(HL)
 	JR	Z,J$4393
 	CALL	C.43FA			; mask off data
@@ -829,7 +829,7 @@ J$4483:	CP	" "
 	LD	A,B
 	CP	":"
 	JR	NZ,J.4452		; reset ESC mode and quit
-	LD	HL,D.616C
+	LD	HL,D.616C		; output to modem flag
 	SET	4,(HL)
 	JR	J.4452			; reset ESC mode and quit
 
@@ -994,11 +994,11 @@ J$4576:	LD	HL,D.615B
 	SBC	A,A			; chinese mode
 	LD	HL,D.61A3
 	AND	(HL)			; screen size, number of columns
-	CP	32
-	RET	C
-	SUB	04H
+	CP	32			; <32 ?
+	RET	C			; yep, quit
+	SUB	4
 	AND	0FEH
-	LD	(D.619A),A
+	LD	(D.619A),A		; update start column STB display
 	LD	A,(HOKVLD)
 	RRCA
 	CCF				; EXTBIO initialized ?
@@ -1153,7 +1153,7 @@ J$466B:	LD	HL,D.615B
 	JR	NZ,J$4691
 	LD	A,(HL)
 	AND	0C6H			; b6,b7,b2,b1
-	XOR	0C6H			; b6,b7, all confirmed ?
+	XOR	0C6H			; MSX-JE invoked, MSX-JE execution, all confirmed ?
 	JR	Z,J.46BE		; yep,
 	LD	A,6
 	CALL	SNSMAT			; read keyboard row
@@ -1165,13 +1165,13 @@ J$466B:	LD	HL,D.615B
 	LD	B,A			; GRAPH key changed
 	LD	A,(D.615B)
 	AND	0C4H			; b7,b6, MSX-JE conversion has not ended
-	XOR	0C4H			; b7 set, b6 set, MSX-JE conversion has not ended ?
+	XOR	0C4H			; MSX-JE invoked, MSX-JE execution, MSX-JE conversion has not ended ?
 	RET	NZ			; nope, quit
 	INC	B
 	DJNZ	J.46BE			; GRAPH key not changed,
 	RET
 
-J$4691:	BIT	6,(HL)			; b6 set ?
+J$4691:	BIT	6,(HL)			; MSX-JE execution ?
 	JR	NZ,J$469B		; yep,
 	CALL	CHGET
 	EI
@@ -1219,7 +1219,7 @@ J.46BE:	LD	A,6                     ; dispatch
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.46D7:	LD	A,(D.619A)
+C.46D7:	LD	A,(D.619A)		; start column STB display
 	CALL	C.6000
 	DEFB	2
 	DEFW	C.4055			; display STB

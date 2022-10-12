@@ -60,11 +60,11 @@ D.617A	EQU	617AH			; parameter1
 D.618E	EQU	618EH			; graphic header character flag
 D.618F	EQU	618FH			; double byte character flag
 D.6190	EQU	6190H			; ANK mode flag
-D.6193	EQU	6193H	; --SLI
+D.6193	EQU	6193H			; b1 = MSX-JE on function key display, b0 = function key display enabled
 D.6194	EQU	6194H			; save current cursor position
 D.6196	EQU	6196H			; save normal/inverse video, attribute flags
 D.6198	EQU	6198H			; save current foreground and background color
-D.619B	EQU	619BH			; ? column
+D.619B	EQU	619BH			; current STB column
 D.619C	EQU	619CH			; STB column
 D.619D	EQU	619DH			; current color attribute
 D.619E	EQU	619EH			; normal/inverse video
@@ -83,21 +83,21 @@ D.61AB	EQU	61ABH			; foreground color
 D.61AC	EQU	61ACH			; background color
 D.61AD	EQU	61ADH			; character size, number of horizontal pixels
 D.61AE	EQU	61AEH			; character size, number of vertical pixels
-D.61AF	EQU	61AFH	; --SLI
+D.61AF	EQU	61AFH			; scroll offset, lines
 D.61B0	EQU	61B0H			; current bitmask
 D.61B1	EQU	61B1H			; current bitmask pointer
 I.61B3	EQU	61B3H			; double size character table
 I.62B8	EQU	62B8H			; pattern work area
-I.62C0	EQU	62C0H	; ----I
-I.62C8	EQU	62C8H	; ----I
-I.62D0	EQU	62D0H	; ----I
+I.62C0	EQU	62C0H			; pattern work area
+I.62C8	EQU	62C8H			; pattern work area
+I.62D0	EQU	62D0H			; pattern work area
 
 
 ?.4040:	JP	J$405E			; initialize comterm mode
-?.4043:	JP	J$408E
+?.4043:	JP	J$408E			; echo to screen
 ?.4046:	JP	J$4088			; 
 ?.4049:	JP	J$4610			; update function key display
-?.404C:	JP	C.41B8
+?.404C:	JP	C.41B8			; convert shift-JIS to ?
 ?.404F:	JP	J$451D			; start MSX-JE execution
 I$4052:	JP	J$460C			; terminate MSX-JE execution
 ?.4055:	JP	C.4534			; display STB
@@ -108,7 +108,7 @@ I$4052:	JP	J$460C			; terminate MSX-JE execution
 ;	     Inputs  A = comterm mode (b7 = back space, b6-b5 = JIS mode, b4-b3 = screen mode, b2-b1 = character mode, b0 = interlace)
 ;	     Outputs ________________________
 
-J$405E:	CALL	C$475B
+J$405E:	CALL	C$475B			; intialize screen for comterm mode
 	LD	A,(D.6153)
 	CPL
 	AND	04H			; chinese character mode
@@ -122,20 +122,24 @@ J$405E:	CALL	C$475B
 	CALL	C.42E1			; save cursor position and attributes
 	CALL	C.44F3			; force valid column, update GRPAC with current cursor position (with offset)
 	CALL	C.4D77			; inverse video on character if enabled
-	CALL	C$4624
+	CALL	C$4624			; function key display off
 	JR	J.40CD			; continue
+
+;	  Subroutine revert to normal graphic screen
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$4088:	CALL	C$465E			; update function key display flag
 	JP	J$4855			; display page 0, enable sprites
 
-;	  Subroutine __________________________
+;	  Subroutine echo to screen
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 J$408E:	PUSH	AF			; store character
 	CALL	C.4D77			; inverse video on character if enabled
 	POP	AF			; restore character
-	CALL	C$40A1
+	CALL	C$40A1			; echo to screen
 	JP	C.4D77			; inverse video on character if enabled
 
 ;	  Subroutine register and suspend ESC handler
@@ -147,12 +151,12 @@ C.4099:	LD	(D.6177),HL		; store HL
 	LD	(D.6175),HL		; store return address
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine echo to screen
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$40A1:	CP	0FFH
-	RET	Z
+C$40A1:	CP	0FFH			; function key ?
+	RET	Z			; yep, quit (ignore)
 	CP	20H			; control code ?
 	JR	C,J$40B4		; yep,
 	CP	7FH			; DEL ?
@@ -282,17 +286,17 @@ J$416A:	LD	H,A			; first character
 	LD	A,(D.61A3)		; screen size, number of columns
 	DEC	A
 	LD	HL,CSRX
-	CP	(HL)
-	JR	NZ,J$4182
+	CP	(HL)			; cursor at last column ?
+	JR	NZ,J$4182		; nope,
 	LD	L," "
 	CALL	C.4199
 	CALL	C.425E
-J$4182:	POP	HL
-	CALL	C.41B8
+J$4182:	POP	HL			; restore shift-JIS character
+	CALL	C.41B8			; convert shift-JIS to ?
 	LD	A,(D.619F)
 	AND	40H			; hidden on ?
 	JR	Z,J$4190		; nope,
-	LD	HL,2121H
+	LD	HL,2121H		; space
 J$4190:	CALL	C$4A6C
 	LD	HL,CSRX
 	INC	(HL)
@@ -320,7 +324,7 @@ J$41AA:	INC	(HL)			; update column
 	INC	(HL)			; update column
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine convert shift-JIS to ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -457,7 +461,7 @@ C.424F:	LD	A,(CSRY)
 	OR	A			; line = 0 ?
 	LD	A,1			; lines up = 1
 	JP	NZ,C.44B9		; nope, cursor up with
-	CALL	C$4DAE
+	CALL	C$4DAE			; scroll down
 	JP	C.44F3			; force valid column, update GRPAC with current cursor position (with offset)
 
 ;	  Subroutine ESC [E (move to next line)
@@ -477,7 +481,7 @@ C.4262:	CALL	C.4711			; get number of usable lines
 	CP	(HL)			; cursor at last line ?
 	LD	A,1			; lines down = 1
 	JP	NZ,J.44CB		; nope, cursor down with
-	CALL	C.4DE8
+	CALL	C.4DE8			; scroll up
 	JP	C.44F3			; force valid column, update GRPAC with current cursor position (with offset)
 
 ;	  Subroutine __________________________
@@ -656,7 +660,7 @@ C.433F:	CALL	C.4501			; if parameter1 = 0 or not specified, use 1
 
 C.4345:	LD	A,(D.617A)
 	OR	A			; parameter = 0 or not specified ?
-	JR	Z,J$4361		; yep,
+	JR	Z,J$4361		; yep, clear lines from current line to bottom
 	DEC	A			; parameter = 1 ?
 	JR	Z,J$4357		; yep, clear lines from top to current line
 	DEC	A			; parameter = 2 ?
@@ -675,13 +679,17 @@ C$4350:	CALL	C.4711			; get number of usable lines
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J$4357:	CALL	C.4381
+J$4357:	CALL	C.4381			; clear line from cursor to start of line
 	LD	A,(CSRY)
 	LD	E,A			; end line = current line
 	XOR	A			; start line = 0
 	JR	J.437E			; clear lines
 
-J$4361:	CALL	C.438F
+;	  Subroutine clear lines from current line to bottom
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4361:	CALL	C.438F			; clear line from cursor to end of line
 	CALL	C.4711			; get number of usable lines
 	LD	E,A
 	LD	A,(CSRY)
@@ -694,46 +702,49 @@ J$4361:	CALL	C.438F
 
 C.436E:	LD	A,(D.617A)
 	OR	A			; parameter = 0 or not specified ?
-	JR	Z,C.438F		; yep,
+	JR	Z,C.438F		; yep, clear line from cursor to end of line
 	DEC	A			; parameter = 1 ?
-	JR	Z,C.4381		; yep,
+	JR	Z,C.4381		; yep, clear line from cursor to start of line
 	DEC	A			; parameter = 2 ?
 	RET	NZ			; nope, quit
-	LD	A,(CSRY)
+
+; clear line
+
+	LD	A,(CSRY)		; start line = current line
 	LD	E,A
-	INC	E
+	INC	E			; end line = current line +1
 J.437E:	JP	C.4ED2			; clear lines
 
-;	  Subroutine __________________________
+;	  Subroutine clear line from cursor to start of line
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4381:	LD	E,0			; offset = 0
+C.4381:	LD	E,0			; start column = 0
 	LD	A,(CSRX)
 	LD	HL,D.61A3		; screen size, number of columns
 	CP	(HL)			; at last column ?
-	JR	Z,C.4396		; yep,
+	JR	Z,C.4396		; yep, partly clear line
 	INC	A			; next column
-	JR	C.4396
+	JR	C.4396			; partly clear line
 
-;	  Subroutine __________________________
+;	  Subroutine clear line from cursor to end of line
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.438F:	LD	A,(CSRX)
-	LD	E,A
-	LD	A,(D.61A3)		; screen size, number of columns
+	LD	E,A			; start column = cursor column
+	LD	A,(D.61A3)		; end column = screen size, number of columns
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine partly clear line
+;	     Inputs  E = start column, A = end column
 ;	     Outputs ________________________
 
-C.4396:	SUB	E			; - offset
-	RET	Z
-	RET	C
-	LD	D,A
-	LD	A,(CSRY)
-	JP	J$4F3A
+C.4396:	SUB	E			; at or past end column ?
+	RET	Z			; at, quit
+	RET	C			; past, quit
+	LD	D,A			; number of columns
+	LD	A,(CSRY)		; line
+	JP	J$4F3A			; partly clear line
 
 ;	  Subroutine ESC [[M (scroll down line)
 ;	     Inputs  ________________________
@@ -1084,22 +1095,22 @@ I$4516:	DEFB	18H			; move cursor
 
 J$451D:	XOR	A
 	LD	(D.619C),A		; STB column = 0
-	LD	(D.619B),A		; ? column = 0
+	LD	(D.619B),A		; current STB column = 0
 	CALL	C$4569			; update current color attribute
-	LD	A,2			; set b1
-	CALL	C.4635
+	LD	A,2			; MSX-JE executing
+	CALL	C.4635			; set function key display flags
 	LD	HL,I$4516
-	XOR	A
+	XOR	A			; column = 0
 	CALL	C.4534			; display STB
 	RET
 
 ;	  Subroutine display STB
-;	     Inputs  ________________________
+;	     Inputs  A = start column STB, HL = pointer to STB
 ;	     Outputs ________________________
 
 C.4534:	CALL	C.4719			; store current status, execute next and restore current status
-	PUSH	AF
-	PUSH	HL
+	PUSH	AF			; store start column STB
+	PUSH	HL			; store pointer to STB
 	LD	A,(D.619C)
 	LD	E,A			; STB column
 	LD	A,(D.61A2)		; screen size, number of lines
@@ -1111,13 +1122,13 @@ C.4534:	CALL	C.4719			; store current status, execute next and restore current s
 	XOR	A
 	LD	(D.619E),A		; normal video
 	CALL	C.4D77			; inverse video on character if enabled
-	POP	HL
-	CALL	C.457D
+	POP	HL			; restore pointer to STB
+	CALL	C.457D			; STB to screen
 	LD	A,(D.619B)
-	LD	E,A			; ? column
-	POP	AF
+	LD	E,A			; start column = current STB column
+	POP	AF			; restore start column STB
 	ADD	A,4			; +4
-	CALL	C.4396
+	CALL	C.4396			; partly clear line
 	CALL	C.4D77			; inverse video on character if enabled
 	LD	A,(CSRX)
 	LD	(D.619C),A		; update STB column
@@ -1139,7 +1150,7 @@ C$4569:	LD	A,(FORCLR)
 	LD	(D.619D),A		; update current color attribute
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine STB to screen
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1147,9 +1158,9 @@ C.457D:	CALL	C$458F
 	PUSH	HL
 	LD	A,(CSRX)
 	LD	HL,D.619B
-	CP	(HL)			; ? column
+	CP	(HL)			; current STB column
 	JR	C,J$458B
-	LD	(HL),A			; update ? column
+	LD	(HL),A			; update current STB column
 J$458B:	POP	HL
 	INC	HL
 	JR	C.457D
@@ -1215,7 +1226,7 @@ J$45CD:	LD	A,(CSRX)
 J$45D3:	LD	B,4-3			; 4 columns
 	CALL	C.45DF			; move cursor
 J.45D8:	LD	A,(CSRX)
-	LD	(D.619B),A		; update ? column
+	LD	(D.619B),A		; update current STB column
 	RET
 
 ;	  Subroutine move cursor
@@ -1261,8 +1272,8 @@ J$4606:	PUSH	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J$460C:	LD	A,2			; reset b1
-	JR	J$4669
+J$460C:	LD	A,2			; MSX-JE executing
+	JR	J$4669			; reset function key display flags
 
 J$4610:	PUSH	AF
 	PUSH	HL
@@ -1271,8 +1282,8 @@ J$4610:	PUSH	AF
 	LD	A,(FNKSWI)
 	LD	HL,NEWKEY+6
 	XOR	(HL)
-	RRCA
-	CALL	C,C.4682
+	RRCA				; SHIFT key status changed ?
+	CALL	C,C.4682		; yep, update function key display
 	POP	BC
 	POP	DE
 	POP	HL
@@ -1284,7 +1295,7 @@ J$4610:	PUSH	AF
 ;	     Outputs ________________________
 
 C$4624:	XOR	A
-	LD	(D.6193),A
+	LD	(D.6193),A		; function key display off, MSX-JE not on funcion key display
 	LD	A,(CNSDFG)
 	OR	A			; function key display on ?
 	RET	Z			; nope, quit
@@ -1293,12 +1304,12 @@ C$4624:	XOR	A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.462D:	LD	A,1			; set b0
-	CALL	C.4635
+C.462D:	LD	A,1			; function key display enabled
+	CALL	C.4635			; set function key display flags
 	RET	C
-	JR	C.4682
+	JR	C.4682			; update function key display
 
-;	  Subroutine __________________________
+;	  Subroutine set function key display flags
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1314,8 +1325,8 @@ C.4635:	PUSH	AF
 	LD	HL,CSRY
 	CP	(HL)			; cursor at last line ?
 	JR	NZ,J$4654		; nope,
-	LD	A,1
-	CALL	C.4DE8
+	LD	A,1			; 1 line
+	CALL	C.4DE8			; scroll up
 	LD	A,1			; lines up = 1
 	CALL	C.44B9			; cursor up with
 J$4654:	LD	A,0FFH
@@ -1329,7 +1340,7 @@ J$4654:	LD	A,0FFH
 ;	     Outputs ________________________
 
 C$465E:	LD	A,(D.6193)
-	RRCA				; b0
+	RRCA				; function key display enabled
 	SBC	A,A
 	LD	(CNSDFG),A		; update function key display flag
 	RET
@@ -1338,7 +1349,12 @@ C$465E:	LD	A,(D.6193)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4667:	LD	A,1			; reset b0
+C.4667:	LD	A,1			; function key display enabled
+
+;	  Subroutine reset function key display flags
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$4669:	PUSH	AF
 	LD	HL,D.6193
 	CPL
@@ -1354,15 +1370,18 @@ J$4669:	PUSH	AF
 	CP	(HL)			; function key display on ?
 	LD	(HL),A			; function key display off
 	RET	Z			; nope, quit
+
+; remove function key display
+
 J$467F:	CALL	C.4700			; clear last line
 
-;	  Subroutine __________________________
+;	  Subroutine update function key display
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4682:	LD	A,1			; b0
+C.4682:	LD	A,1			; function key display enabled
 	CALL	C.4708
-	RET	NZ			; nope, quit
+	RET	NZ			; function key display not enabled, quit
 	CALL	C.4700			; clear last line
 	CALL	C.4719			; store current status, execute next and restore current status
 	CALL	C.4907			; turn off character attributes
@@ -1380,15 +1399,16 @@ C.4682:	LD	A,1			; b0
 	LD	HL,FNKSTR+5*16
 	XOR	A
 J$46AD:	LD	(FNKSWI),A
-	LD	C,5
+	LD	C,5			; number of keys to display
 	LD	A,(D.61A3)		; screen size, number of columns
-	CALL	C$46F2
-	RET	C
-J$46B9:	PUSH	BC
-	LD	C,0
+	CALL	C$46F2			; calculate function key display size
+	RET	C			; too small, quit
+
+J$46B9:	PUSH	BC			; store function key display size, number of keys left
+	LD	C,0			; character counter = 0
 J$46BC:	LD	A,(HL)
 	INC	HL
-	INC	C
+	INC	C			; update character counter
 	CP	21H			; space or control code ?
 	JR	C,J.46D4		; yep,
 	CP	7FH			; DEL ?
@@ -1403,15 +1423,15 @@ J$46BC:	LD	A,(HL)
 	JR	J$46D7
 
 J.46D4:	CALL	C.46E6			; increase and force column, update GRPAC with current cursor position (with offset)
-J$46D7:	DJNZ	J$46BC
+J$46D7:	DJNZ	J$46BC			; next character
 	LD	A,16
 	SUB	C
 	LD	C,A
-	ADD	HL,BC
+	ADD	HL,BC			; update to next function key definition
 	CALL	C.46E6			; increase and force column, update GRPAC with current cursor position (with offset)
-	POP	BC
+	POP	BC			; restore function key display size, number of keys left
 	DEC	C
-	JR	NZ,J$46B9
+	JR	NZ,J$46B9		; next key
 	RET
 
 ;	  Subroutine increase and force column, update GRPAC with current cursor position (with offset)
@@ -1427,18 +1447,18 @@ C.46E6:	PUSH	HL
 	POP	HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine calculate function key display size
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$46F2:	SUB	04H	; 4 
-	RET	C
-	LD	B,0FFH
+C$46F2:	SUB	4			; at least 4 columns ?
+	RET	C			; nope, quit
+	LD	B,-1
 J$46F7:	INC	B
-	SUB	05H	; 5 
+	SUB	5
 	JR	NC,J$46F7
 	LD	A,B
-	SUB	01H	; 1 
+	SUB	1
 	RET
 
 ;	  Subroutine clear last line
@@ -1515,7 +1535,7 @@ C$4757:	PUSH	BC
 	EX	AF,AF'
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine intialize screen for comterm mode
 ;	     Inputs  A = comterm mode (b7 = back space, b6-b5 = JIS mode, b4-b3 = screen mode, b2-b1 = character mode, b0 = interlace)
 ;	     Outputs ________________________
 
@@ -1597,8 +1617,8 @@ J$47D2:	LD	A,L
 	LD	D,0
 	ADD	HL,DE
 	LD	DE,D.61AD
-	LDI
-	LDI
+	LDI				; update character size, number of horizontal pixels
+	LDI				; update character size, number of vertical pixels
 	LD	HL,VDP.DR
 	LD	A,(EXPTBL+0)
 	LD	IX,RDSLT
@@ -1609,9 +1629,9 @@ J$47D2:	LD	A,L
 	LD	IX,CHGMOD
 	LD	IY,(EXPTBL+0-1)
 	CALL	CALSLT			; initialize screen mode
-	CALL	C$48CF
+	CALL	C$48CF			; initialize colors
 	CALL	C.4907			; turn off character attributes
-	CALL	C$4FE9
+	CALL	C$4FE9			; initialize double size character table, scroll offset
 	LD	A,(D.61A2)		; screen size, number of lines
 	LD	E,A
 	CALL	C.515A			; screen mode 2 ?
@@ -1763,7 +1783,7 @@ I$48C3:	DEFB    6,8			; 6*8, non interlaced
         DEFB    6,13			; 6*13, interlaced
         DEFB    6,7			; 6*7, non interlaced
 
-;	  Subroutine __________________________
+;	  Subroutine initialize colors
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2039,8 +2059,8 @@ J$4A4A:	LD	DE,(GRPACY)
 
 J$4A5A:	PUSH	DE
 	LD	HL,I.62B8
-	LD	B,16
-	LD	C,6
+	LD	B,16			; number of pixel lines = 16
+	LD	C,6			; number of pixel columns = 6
 	CALL	C.4B37
 	POP	HL
 	LD	(GRPACY),HL
@@ -2069,7 +2089,7 @@ C$4A6C:	LD	DE,0DFE0H
 	LD	H,00H
 	ADD	HL,DE
 	LD	A,H
-	CP	04H	; 4 
+	CP	04H
 	JR	C,J$4A89
 	DEC	H
 	DEC	H
@@ -2083,8 +2103,8 @@ J$4A89:	CALL	C.4AAE			; read JIS ROM character pattern
 
 J$4A9C:	PUSH	DE
 	LD	HL,I.62B8
-	LD	B,16
-	LD	C,12
+	LD	B,16			; number of pixel lines = 16
+	LD	C,12			; number of pixel columns = 12
 	CALL	C.4B37
 	POP	HL
 	LD	(GRPACY),HL
@@ -2109,16 +2129,16 @@ J$4ABA:	OUT	(C),H
 	INC	C
 	LD	HL,I.62B8
 	LD	B,8
-	INIR
+	INIR				; upper left
 	LD	HL,I.62C8
 	LD	B,8
-	INIR
+	INIR				; upper right
 	LD	HL,I.62C0
 	LD	B,8
-	INIR
+	INIR				; lower left
 	LD	HL,I.62D0
 	LD	B,8
-	INIR
+	INIR				; lower right
 	LD	A,(D.619F)
 	BIT	4,A			; underline on ?
 	RET	Z			; nope, quit
@@ -2171,12 +2191,12 @@ J$4B13:	POP	DE
 	RET
 
 ;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	     Inputs  B = pixel lines, C = pixel columns
 ;	     Outputs ________________________
 
 C.4B37:	CALL	C.50BB			; interlace mode ?
 	JR	NZ,J.4B3E		; nope,
-	SRL	B
+	SRL	B			; lines /2
 J.4B3E:	CALL	C.4B59
 	CALL	C.50BB			; interlace mode ?
 	JR	NZ,J$4B4D		; nope,
@@ -2207,17 +2227,17 @@ C.4B59:	PUSH	HL
 	LD	D,C
 	LD	A,(D.619F)
 	BIT	7,A			; reverse video on ?
-	LD	E,0
+	LD	E,0			; XOR mask = 00H
 	JR	Z,J$4B73		; nope,
-	DEC	E
+	DEC	E			; XOR mask = FFH
 J$4B73:	PUSH	DE
-	LD	C,0B0H			; vdp command = LMMC
+	LD	C,0B0H			; vdp command = LMMC (logical, CPU->VRAM)
 	LD	A,(PATWRK+0)
-	XOR	E
+	XOR	E			; XOR mask
 	RLCA
 	RLCA
-	PUSH	AF
-	CALL	C.4CBF
+	PUSH	AF			; store color
+	CALL	C.4CBF			; write graphic vdp command (NY,NX,CL,cmd)
 	LD	BC,256*(128+44)+17	; no increment, CL
 	CALL	C.5133			; write VDP register
 	EI
@@ -2225,15 +2245,15 @@ J$4B73:	PUSH	DE
 	LD	A,(D.61A4)		; VDP data read port
 	ADD	A,3
 	LD	C,A			; VDP command port
-	POP	AF
+	POP	AF			; restore color
 	POP	DE
-	LD	B,3
+	LD	B,4-1
 J$4B94:	RLCA
 	RLCA
 	OUT	(C),A
 	DJNZ	J$4B9F
 	LD	A,(HL)
-	XOR	E
+	XOR	E			; XOR mask
 	INC	HL
 	LD	B,4
 J$4B9F:	DEC	D
@@ -2266,11 +2286,11 @@ C$4BA6:	LD	A,(HL)
 	ADD	HL,HL
 	ADD	HL,HL
 	LD	A,H
-	AND	3FH	; "?"
+	AND	3FH
 	CALL	C.4BC9
 	POP	HL
 	LD	A,L
-	AND	3EH	; ">"
+	AND	3EH
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -2278,7 +2298,7 @@ C$4BA6:	LD	A,(HL)
 
 C.4BC9:	LD	HL,I$4BD3
 	LD	C,A
-	LD	B,00H
+	LD	B,0
 	ADD	HL,BC
 	LDI
 	RET
@@ -2342,7 +2362,7 @@ I$4BD3:	NOP
 J$4C10:	EI
 	CALL	M,xxxx
 
-C.4C13:	LD	C,0B0			; vdp command = LMMC
+C.4C13:	LD	C,0B0H			; vdp command = LMMC (logical, CPU->VRAM)
 	CALL	C.515A			; screen mode 2 ?
 	JP	Z,J$4CD6		; yep,
 	LD	HL,PATWRK
@@ -2357,7 +2377,7 @@ J$4C28:	LD	D,A
 	LD	HL,8*256+8		; NY = 8, NX = 8
 	JR	NZ,J$4C35		; nope,
 	LD	HL,4*256+8		; NY = 4, NX = 4
-J$4C35:	CALL	C.4CBF
+J$4C35:	CALL	C.4CBF			; write graphic vdp command (NY,NX,CL,cmd)
 	LD	BC,256*(128+44)+17	; no increment, CL
 	CALL	C.5133			; write VDP register
 	EI
@@ -2394,15 +2414,15 @@ J$4C6F:	POP	AF
 	CALL	C.50BB			; interlace mode ?
 	RET	NZ			; nope, quit
 	CALL	C.4F7E			; select display page 1
-	LD	C,0B0H			; vdp command = LMMC
+	LD	C,0B0H			; vdp command = LMMC (logical, CPU->VRAM)
 	LD	HL,PATWRK+1
 	LD	DE,(D.61A9)		; character foreground and background color
 	RL	(HL)			; get bit
-	LD	A,E
+	LD	A,E			; foreground color
 	JR	C,J$4C8B		; bit set,
-	LD	A,D
+	LD	A,D			; background color
 J$4C8B:	LD	HL,4*256+8		; NY = 4, NX = 8
-	CALL	C.4CBF
+	CALL	C.4CBF			; write graphic vdp command (NY,NX,CL,cmd)
 	LD	BC,256*(128+44)+17	; no increment, CL
 	CALL	C.5133			; write VDP register
 	EI
@@ -2411,15 +2431,15 @@ J$4C8B:	LD	HL,4*256+8		; NY = 4, NX = 8
 	LD	A,(D.61A4)		; VDP data read port
 	ADD	A,3			; VDP command port
 	LD	BC,8*256+4
-	DEC	B
+	DEC	B			; ??odd code??, LD BC,7*256+4
 J$4CA8:	PUSH	BC
 	LD	C,A
 J$4CAA:	RL	(HL)			; get bit
 	JR	C,J$4CB2		; bit set,
-	OUT	(C),D
+	OUT	(C),D			; background color
 	JR	J$4CB4
 
-J$4CB2:	OUT	(C),E
+J$4CB2:	OUT	(C),E			; foreground color
 J$4CB4:	DJNZ	J$4CAA
 	POP	BC
 	INC	HL
@@ -2429,7 +2449,7 @@ J$4CB4:	DJNZ	J$4CAA
 	JR	NZ,J$4CA8
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine write graphic vdp command (NY,NX,CL,cmd)
 ;	     Inputs  H = NY, L = NX, A = color, C = VDP cmd
 ;	     Outputs ________________________
 
@@ -2501,15 +2521,15 @@ J.4CF7:	PUSH	AF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4D11:	LD	C,0B0H			; vdp command = LMMC
+C$4D11:	LD	C,0B0H			; vdp command = LMMC (logical, CPU->VRAM)
 	CALL	C.515A			; screen mode 2 ?
 	JR	Z,C.4D5D		; yep,
 	LD	HL,PATWRK
 	LD	DE,(D.61A9)		; character foreground and background color
 	RL	(HL)			; get bit
-	LD	A,E
+	LD	A,E			; foregroud color
 	JR	C,J$4D25		; bit set,
-	LD	A,D
+	LD	A,D			; background color
 J$4D25:	CALL	C.4D5D
 	LD	BC,256*(128+44)+17	; no increment, CL
 	CALL	C.5133			; write VDP register
@@ -2520,16 +2540,16 @@ J$4D25:	CALL	C.4D5D
 	ADD	A,3			; VDP command port
 	LD	IX,D.61AD
 	LD	B,(IX+0)		; character size, number of horizontal pixels
-	LD	C,(IX+1)
+	LD	C,(IX+1)		; character size, number of vertical pixels
 	DEC	B
 J$4D46:	PUSH	BC
 	LD	C,A
 J$4D48:	RL	(HL)			; get bit
 	JR	C,J$4D50		; bit set,
-	OUT	(C),D
+	OUT	(C),D			; background color
 	JR	J$4D52
 
-J$4D50:	OUT	(C),E
+J$4D50:	OUT	(C),E			; foreground color
 J$4D52:	DJNZ	J$4D48
 	POP	BC
 	INC	HL
@@ -2565,7 +2585,7 @@ J$4D65:	LD	H,D
 C.4D77:	LD	A,(D.619E)
 	AND	01H			; inverse video ?
 	RET	NZ			; yep, quit
-	LD	C,83H			; vdp command = LMMV + XOR
+	LD	C,83H			; vdp command = LMMV (logical, VDP->VRAM) + XOR
 	LD	A,(D.61AB)		; CL
 	PUSH	BC
 	PUSH	AF
@@ -2598,23 +2618,23 @@ C$4D92:	PUSH	BC
 	PUSH	HL			; DX
 	JP	J.50E4			; write graphic vdp command (without SX,SY)
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine scroll down
+;	     Inputs  A = number of lines
 ;	     Outputs ________________________
 
-C$4DAE:	LD	D,A
-	CALL	C$4DB5
+C$4DAE:	LD	D,A			; number of lines
+	CALL	C$4DB5			; scroll down
 	JP	J.5040			; clear double size character table of current line
 
-;	  Subroutine __________________________
+;	  Subroutine scroll down
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4DB5:	CALL	C.515A			; screen mode 2 ?
 	LD	A,0
-	LD	B,D
+	LD	B,D			; number of lines
 	JP	Z,C.4E73		; yep,
-	CALL	C$5006
+	CALL	C$5006			; decrease scroll offset
 	XOR	A
 	LD	E,A
 	SUB	D
@@ -2641,23 +2661,23 @@ J$4DCD:	PUSH	DE
 	LD	L,A
 	JP	C.50C9			; scroll vertical
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine scroll up
+;	     Inputs  A = number of lines
 ;	     Outputs ________________________
 
-C.4DE8:	LD	D,A
-	CALL	C$4DEF
+C.4DE8:	LD	D,A			; number of lines
+	CALL	C$4DEF			; scroll up
 	JP	J.5040			; clear double size character table of current line
 
-;	  Subroutine __________________________
+;	  Subroutine scroll up
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4DEF:	CALL	C.515A			; screen mode 2 ?
 	LD	A,0
-	LD	B,D
+	LD	B,D			; number of lines
 	JR	Z,C.4E42		; yep,
-	CALL	C$4FFB
+	CALL	C$4FFB			; increase scroll offset
 	LD	BC,(D.61A2)		; screen size, number of lines
 	DEC	C
 	LD	B,0
@@ -2799,7 +2819,7 @@ C.4E98:	PUSH	DE
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4EB3:	LD	C,0E0H			; vdp command = YMMM
+C.4EB3:	LD	C,0E0H			; vdp command = YMMM (high speed, VRAM->VRAM)
 	PUSH	BC
 	LD	BC,0			; CL = 0, command flags
 	PUSH	BC
@@ -2854,7 +2874,7 @@ C.4EDD:	PUSH	AF
 ;	     Inputs  A = line
 ;	     Outputs ________________________
 
-C.4EF5:	LD	C,0C0H			; vdp command = HMMV
+C.4EF5:	LD	C,0C0H			; vdp command = HMMV (high speed, VDP->VRAM)
 	PUSH	BC
 	LD	BC,(D.61AC)		; background color
 	LD	B,0
@@ -2903,25 +2923,29 @@ C$4F22:	PUSH	DE
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$4F32:	LD	C,83H			; vdp command = LMMV + XOR
+C$4F32:	LD	C,83H			; vdp command = LMMV (logical, CPU->VRAM) + XOR
 	PUSH	BC
 	LD	HL,(D.61AB)		; CL
 	JR	J$4F64
 
+;	  Subroutine partly clear line
+;	     Inputs  A = line, E = start column, D = number of columns
+;	     Outputs ________________________
+
 J$4F3A:	PUSH	AF
-	LD	L,A
-	LD	H,E
+	LD	L,A			; line
+	LD	H,E			; start column
 	CALL	C.5083			; calculate double size character bit mask and pointer
 	CPL
-	LD	C,A
-	LD	B,D
+	LD	C,A			; clear mask
+	LD	B,D			; number of columns
 J$4F43:	LD	A,(HL)
 	AND	C			; clear bit
 	LD	(HL),A
 	RLC	C			; update bitmask
 	JR	C,J$4F4B
 	INC	HL
-J$4F4B:	DJNZ	J$4F43
+J$4F4B:	DJNZ	J$4F43			; next column
 	POP	AF
 	PUSH	DE
 	PUSH	AF
@@ -2938,7 +2962,7 @@ J$4F4B:	DJNZ	J$4F43
 ;	     Inputs  E = start column, D = number of column, A = line
 ;	     Outputs ________________________
 
-C$4F5E:	LD	C,0C0H			; vdp command = HMMV
+C$4F5E:	LD	C,0C0H			; vdp command = HMMV (high speed, VDP-VRAM)
 	PUSH	BC
 	LD	HL,(D.61AC)		; background color
 J$4F64:	LD	H,0			; command flags
@@ -3050,43 +3074,43 @@ J$4FE5:	ADD	HL,HL
 	ADD	HL,HL
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize double size character table, scroll offset
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4FE9:	XOR	A
-	LD	(D.61AF),A
+	LD	(D.61AF),A		; scroll offset = 0
 	LD	HL,I.61B3
 	LD	DE,I.61B3+1
 	LD	BC,26*(80/8)-1
 	LD	(HL),0
-	LDIR
+	LDIR				; initialize double size character table
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine increase scroll offset
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$4FFB:	LD	HL,D.61AF
-	LD	A,(HL)
+	LD	A,(HL)			; scroll offset
 	ADD	A,D
-	LD	(HL),A
-	SUB	26
-	RET	C
-	LD	(HL),A
+	LD	(HL),A			; update scroll offset
+	SUB	26			; warp around ?
+	RET	C			; nope, quit
+	LD	(HL),A			; update scroll offset (warp around)
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine decrease scroll offset
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$5006:	LD	HL,D.61AF
-	LD	A,(HL)
+	LD	A,(HL)			; scroll offset
 	SUB	D
-	LD	(HL),A
-	ADD	A,26
-	RET	NC
-	LD	(HL),A
+	LD	(HL),A			; update scroll offset
+	ADD	A,26			; warp around ?
+	RET	NC			; nope, quit
+	LD	(HL),A			; update scroll offset (warp around)
 	RET
 
 ;	  Subroutine __________________________
@@ -3208,31 +3232,31 @@ C.507C:	LD	A,(D.61B0)
 	RET
 
 ;	  Subroutine calculate double size character bit mask and pointer
-;	     Inputs  H = line, L = column
+;	     Inputs  H = column, L = line
 ;	     Outputs ________________________
 
 C.5083:	PUSH	BC
 	PUSH	DE
 	EX	DE,HL
 	LD	A,D
-	PUSH	AF			; store line
+	PUSH	AF			; store column
 	AND	07H
 	LD	C,A
 	LD	B,0
 	LD	HL,I$50B3
 	ADD	HL,BC
 	LD	D,(HL)			; bit mask
-	POP	AF			; restore line
+	POP	AF			; restore column
 	XOR	C
 	RRCA
 	RRCA
 	RRCA
 	LD	C,A
 	LD	A,(D.61AF)
-	ADD	A,E			; + column
-	CP	26
+	ADD	A,E			; scroll offset + line
+	CP	26			; wap around ?
 	JR	C,J$50A2
-	SUB	26
+	SUB	26			; yep
 J$50A2:	LD	E,A
 	ADD	A,A			; *2
 	ADD	A,A			; *4

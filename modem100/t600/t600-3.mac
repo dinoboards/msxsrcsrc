@@ -63,12 +63,11 @@ D.62E4	EQU	62E4H			; saved 6082
 D.62E5	EQU	62E5H			; file is open flag
 D.62E6	EQU	62E6H			; disk operation entered
 D.62E7	EQU	62E7H			; saved stack pointer disk operation entered
-D.62E9	EQU	62E9H	; --SL-
-D.62EA	EQU	62EAH	; --SL-
-D.62EB	EQU	62EBH	; --SL-
-D.62EC	EQU	62ECH	; --S-I
-D.62ED	EQU	62EDH	; --SL-
-D.62EE	EQU	62EEH	; --SL-
+D.62E9	EQU	62E9H			; download file raw flag
+D.62EA	EQU	62EAH			; offset in buffer
+D.62EB	EQU	62EBH			; current CRC16
+D.62ED	EQU	62EDH			; checksum/CRC16 flag
+D.62EE	EQU	62EEH			; block number
 D.62F0	EQU	62F0H			; wildcard flag
 
 
@@ -82,6 +81,10 @@ I$4052:	JP	C.4772			; open file
 I$4055:	JP	J$4781			; read byte from file
 ?.4058:	JP	C.4926                  ; close file
 
+	  Subroutine upload file
+	     Inputs  ________________________
+	     Outputs ________________________
+
 J$405B:	LD	A,(D.6048)
 	AND	80H			; X-modem ?
 	LD	A,(D.6048)
@@ -91,10 +94,10 @@ J$405B:	LD	A,(D.6048)
 	LD	HL,I$4BC3		; upload raw
 	JR	NZ,J.4072		; yep,
 	LD	HL,I$4BAB		; upload text
-J.4072:	CALL	C.4132
+J.4072:	CALL	C.4132			; show message, get file name and initialize FCB
 	JR	C,J.4081
 	JR	NZ,J$407E		; text/raw,
-	CALL	C$42B1
+	CALL	C$42B1			; upload file with X-modem
 	JR	J.4081
 
 J$407E:	CALL	C$456E
@@ -102,20 +105,24 @@ J.4081:	LD	HL,I$4C67		; end upload
 	JR	NC,J.4089
 	LD	HL,I$4C45		; upload aborted
 J.4089:	PUSH	HL
-	CALL	C,C.4E8A
+	CALL	C,C.4E8A		; error, translate and show error message
 	LD	A,(D.62E5)
-	OR	A
-	CALL	NZ,C.4926               ; close file (with stop/start sending)
-	CALL	C,C.4E8A
+	OR	A			; file open ?
+	CALL	NZ,C.4926               ; yep, close file (with stop/start sending)
+	CALL	C,C.4E8A		; error, translate and show error message
 	POP	HL
 	CALL	C.4EA8			; echo CAN and show message (with new line)
 	LD	A,(D.62E4)		; saved 6082
 	LD	(D.6082),A
 	RET
 
+	  Subroutine download file
+	     Inputs  ________________________
+	     Outputs ________________________
+
 J$40A2:	LD	A,(D.62E9)
-	OR	A
-	JR	NZ,J$40CB
+	OR	A			; download file raw ?
+	JR	NZ,J$40CB		; yep,
 	LD	A,(D.6048)
 	AND	80H			; X-modem ?
 	LD	A,(D.6048)
@@ -125,73 +132,79 @@ J$40A2:	LD	A,(D.62E9)
 	LD	HL,I$4C0F		; download raw
 	JR	NZ,J.40BF		; yep,
 	LD	HL,I$4BF5		; download text
-J.40BF:	CALL	C.4132
-	JR	C,J.4106
+J.40BF:	CALL	C.4132			; show message, get file name and initialize FCB
+	JR	C,J.4106		; abort download
 	JR	NZ,J$40EB		; text/raw,
-	CALL	C$4151
-	JR	J.4106
+	CALL	C$4151			; download file with X-modem
+	JR	J.4106			; end or abort download
 
 J$40CB:	XOR	A
-	LD	(D.62E9),A
+	LD	(D.62E9),A		; clear download file raw flag
 	LD	A,(D.62EA)
-	OR	A
-	JR	Z,J.4106
+	OR	A			; bytes in buffer ?
+	JR	Z,J.4106		; nope, end download
 	LD	HL,(NULBUF)
 	LD	C,A
-	LD	B,0
-	ADD	HL,BC
+	LD	B,0			; offset in buffer
+	ADD	HL,BC			; pointer in buffer
 	CALL	C.4792                  ; TMPFCB to diskdrive file ?
 	JR	NC,J$40E4		; nope,
-	LD	(HL),1AH
-	INC	C
+	LD	(HL),1AH		; CTRL-Z
+	INC	C			; update offset in buffrr
 J$40E4:	LD	E,C
-	LD	D,B
+	LD	D,B			; number of bytes = offset in buffer
 	CALL	C.48FB			; write random block to file (with stop/start sending)
-	JR	J.4106
+	JR	J.4106			; end or abort download
+
+; download file (text/raw)
 
 J$40EB:	LD	A,(D.6048)
 	AND	10H			; raw mode ?
 	JR	Z,J$4103		; nope,
-	LD	(D.62E9),A
-	CALL	C.44C7
+	LD	(D.62E9),A		; set download file raw flag
+	CALL	C.44C7			; create or append file
 	LD	A,0
-	LD	(D.62EA),A
-	RET	NC
+	LD	(D.62EA),A		; offset in buffer = 0
+	RET	NC			; no error, quit
 J$40FE:	XOR	A
-	LD	(D.62E9),A
-	SCF
-J$4103:	CALL	NC,C.44C7
+	LD	(D.62E9),A		; clear download file raw flag
+	SCF				; skip create/append
+J$4103:	CALL	NC,C.44C7		; create or append file
 J.4106:	LD	HL,J.4C76		; end download
 	JP	NC,J.4089
 	LD	HL,I$4C55		; download aborted
 	JP	J.4089
 
+	  Subroutine write byte to file
+	     Inputs  ________________________
+	     Outputs ________________________
+
 J$4112:	PUSH	AF
 	LD	HL,(NULBUF)
-	LD	A,(D.62EA)
+	LD	A,(D.62EA)		; offset in buffer
 	LD	C,A
 	LD	B,0
-	ADD	HL,BC
+	ADD	HL,BC			; pointer in buffer
 	POP	AF
 	LD	(HL),A
 	LD	A,C
 	INC	A
-	LD	(D.62EA),A
-	RET	P
+	LD	(D.62EA),A		; update offset in buffer
+	RET	P			; buffer not full, quit
 	CALL	C.48F8			; write to file
 	JR	C,J$40FE		; error,
 	CALL	C.4ED2			; initialize I/O channel buffer
 	XOR	A
-	LD	(D.62EA),A
+	LD	(D.62EA),A		; offset in buffer = 0
 	RET
 
-	  Subroutine __________________________
+	  Subroutine show message, get file name and initialize FCB
 	     Inputs  HL = pointer to message
 	     Outputs ________________________
 
 C.4132:	CALL	C.4B31			; initialize disk variables
 	CALL	C.4EA8			; echo CAN and show message (with new line)
-	CALL	C$4A30
+	CALL	C$4A30			; get file name, initialize FCB
 	RET	C
 	CALL	C.49FC			; get pointer to buffer
 	LD	A,(D.6048)
@@ -209,19 +222,19 @@ C.4148:	LD	A,(D.6082)
 	LD	(D.6082),A
 	RET
 
-	  Subroutine __________________________
+	  Subroutine download file with X-modem
 	     Inputs  ________________________
 	     Outputs ________________________
 
 C$4151:	XOR	A
 	LD	(D.62ED),A		; checksum mode
 	LD	DE,0
-	LD	(D.62EE),DE
+	LD	(D.62EE),DE		; block number = 0
 	CALL	C.4148
 	CALL	C.47B4			; check if file exists
 	RET	C			; error, quit
 	PUSH	AF
-	CALL	C.44B3
+	CALL	C.44B3			; echo filename if wildcard
 	POP	AF
 	AND	A			; file exists ?
 	JR	NZ,J.4184		; nope, create file
@@ -304,10 +317,10 @@ J.420B:	CALL	C.6000
 	DEFW	C.405E                  ; counter #1, clear
 	LD	HL,(NULBUF)
 	INC	HL
-	LD	B,83H
+	LD	B,128+3
 	LD	A,(D.62ED)
 	ADD	A,B
-	LD	B,A
+	LD	B,A			; CRC16 has 1 byte extra
 J$421C:	PUSH	HL
 	LD	HL,1*60
 	CALL	C.43FC			; initialize timer #0
@@ -340,18 +353,18 @@ J$4232:	LD	A,(D.6079)		; counter #1, number of seconds
 	JR	Z,J$4276		; nope,
 	PUSH	HL
 	POP	IX
-	LD	HL,0
+	LD	HL,0			; CRC16 = 0
 	LD	B,128
 J$425D:	LD	A,(IX+0)
 	INC	IX
-	CALL	C.4EF7
+	CALL	C.4EF7			; update CRC16
 	DJNZ	J$425D
 	LD	A,(IX+0)
-	CP	H
-	JR	NZ,J$4271
+	CP	H			; CRC16 correct ?
+	JR	NZ,J$4271		; nope,
 	LD	A,(IX+1)
-	CP	L
-J$4271:	JP	NZ,J.41D6
+	CP	L			; CRC16 correct ?
+J$4271:	JP	NZ,J.41D6		; nope,
 	JR	J$4281
 
 J$4276:	LD	B,128
@@ -359,8 +372,8 @@ J$4276:	LD	B,128
 J$4279:	ADD	A,(HL)
 	INC	HL
 	DJNZ	J$4279
-	CP	(HL)
-	JP	NZ,J.41D6
+	CP	(HL)			; checksum correct ?
+	JP	NZ,J.41D6		; nope,
 J$4281:	LD	HL,(NULBUF)
 	INC	HL
 	INC	HL
@@ -377,7 +390,7 @@ J$4281:	LD	HL,(NULBUF)
 	JR	NC,J$42A9		; nope, quit with wrong block received error
 	LD	(HL),B
 	OR	A			; expected block ?
-	CALL	NZ,C.521D		; nope,
+	CALL	NZ,C.521D		; nope, update and show block number
 	CALL	NZ,C.48F8		; nope, write to file
 	RET	C			; error, quit
 	LD	A,6			; ACK
@@ -393,18 +406,18 @@ J$42AD:	LD	E,3			; timeout
 	SCF
 	RET
 
-	  Subroutine __________________________
+	  Subroutine upload file with X-modem
 	     Inputs  ________________________
 	     Outputs ________________________
 
 C$42B1:	XOR	A
 	LD	(D.62ED),A		; checksum mode
 	LD	DE,0
-	LD	(D.62EE),DE
+	LD	(D.62EE),DE		; block number
 	CALL	C.4148
 	CALL	C.47B4			; check if file exists
 	RET	C
-	CALL	C.44B3
+	CALL	C.44B3			; echo filename if wildcard
 	CALL	C.4882                  ; open file (with stop/start sending)
 	RET	C
 	LD	A,1
@@ -457,24 +470,24 @@ J$430D:	LD	HL,(NULBUF)
 	PUSH	HL
 	POP	IX
 	LD	B,128
-	LD	HL,0
+	LD	HL,0			; CRC16 = 0
 J$4336:	LD	A,(IX+0)
 	INC	IX
-	CALL	C.4EF7
+	CALL	C.4EF7			; update CRC16
 	DJNZ	J$4336
 	LD	(IX+0),H
-	LD	(IX+1),L
+	LD	(IX+1),L		; store CRC16
 	JR	J.434F
 
 J$4348:	LD	B,128
 J$434A:	ADD	A,(HL)
 	INC	HL
 	DJNZ	J$434A
-	LD	(HL),A
+	LD	(HL),A			; store checksum
 J.434F:	LD	B,128+4
 	LD	A,(D.62ED)
 	ADD	A,B
-	LD	B,A
+	LD	B,A			; CRC16 has 1 extra byte
 	LD	HL,(NULBUF)
 J$4359:	LD	A,(HL)
 	CALL	C.4469			; send byte (if connected)
@@ -510,7 +523,7 @@ J$437A:	LD	A,(D.6079)		; counter #1, number of seconds
 	JR	NZ,J.436D		; nope, wait
 	LD	HL,D.62E1
 	INC	(HL)			; update X-modem block number
-	CALL	C.521D
+	CALL	C.521D			; update and show block number
 	JP	J$430D
 
 J$43A0:	LD	E,4			; cancel received
@@ -763,14 +776,14 @@ J$44BD:	LD	A,(HL)
 	DJNZ	J$44BD
 	JP	C.4EAB			; force new line
 
-	  Subroutine __________________________
+	  Subroutine create or append file
 	     Inputs  ________________________
 	     Outputs ________________________
 
 C.44C7:	CALL	C.47B4			; check if file exists
 	RET	C			; error, quit
 	PUSH	AF
-	CALL	C.44B3
+	CALL	C.44B3			; echo filename if wildcard
 	POP	AF
 	AND	A			; file exists ?
 	JR	NZ,J.44F5		; nope, create file
@@ -878,7 +891,7 @@ C$456E:	CALL	C$4579
 
 C$4579:	CALL	C.47B4			; check if file exists
 	RET	C
-	CALL	C.44B3
+	CALL	C.44B3			; echo filename if wildcard
 	CALL	C.4882                  ; open file (with stop/start sending)
 	RET	C
 J$4584:	CALL	C.4ED2			; initialize I/O channel buffer
@@ -1033,6 +1046,10 @@ C.4642:	PUSH	AF
 	OR	A
 	RET
 
+	  Subroutine save BSAVE file
+	     Inputs  ________________________
+	     Outputs ________________________
+
 J$465A:	PUSH	AF
 	PUSH	DE
 	CALL	C.4765			; initialize FCB and check if file exists
@@ -1148,13 +1165,17 @@ J$46E7:	EX	DE,HL
 	POP	BC
 	RET
 
+	  Subroutine load BSAVE file
+	     Inputs  ________________________
+	     Outputs ________________________
+
 J$46ED:	PUSH	DE
 	PUSH	BC
-	CALL	C.4772
-	JR	C,J$4761
+	CALL	C.4772			; open file
+	JR	C,J$4761		; error,
 	LD	DE,7
 	CALL	C.48D9			; read random block from file
-	JR	C,J.475C
+	JR	C,J.475C		; error,
 	LD	DE,7
 	SBC	HL,DE
 	LD	E,3DH
@@ -1162,29 +1183,29 @@ J$46ED:	PUSH	DE
 	JR	NZ,J.475C
 	CALL	C.49FC			; get pointer to buffer
 	LD	A,(HL)
-	CP	0FEH
+	CP	0FEH			; BSAVE file id ?
 	SCF
-	JR	NZ,J.475C
+	JR	NZ,J.475C		; nope,
 	INC	HL
 	LD	C,(HL)
 	INC	HL
-	LD	B,(HL)
+	LD	B,(HL)			; start address
 	INC	HL
 	LD	A,(HL)
 	INC	HL
 	LD	H,(HL)
-	LD	L,A
+	LD	L,A			; end address
 	OR	A
-	SBC	HL,BC
+	SBC	HL,BC			; size = end - start
 	POP	BC
 	POP	DE
-	ADD	HL,BC
+	ADD	HL,BC			; +size
 	OR	A
 	EX	DE,HL
 	SBC	HL,DE
 	EX	DE,HL
 	JR	NC,J.4728
-	LD	E,07H	; 7 
+	LD	E,07H
 	RET
 
 J.4728:	PUSH	HL
@@ -1196,7 +1217,7 @@ J.4728:	PUSH	HL
 	PUSH	HL
 	LD	DE,256
 	CALL	C.48D9			; read random block from file
-	JR	C,J.475C
+	JR	C,J.475C		; error,
 	EX	DE,HL
 	POP	HL
 	POP	BC
@@ -1785,7 +1806,7 @@ J$4A27:	EI
 J$4A2E:	POP	AF
 	RET
 
-	  Subroutine __________________________
+	  Subroutine get file name, initialize FCB
 	     Inputs  ________________________
 	     Outputs ________________________
 
@@ -2194,7 +2215,7 @@ I.4E5F:	DEFB	"Disk I/O error",0
 I.4E6E:	DEFB	"Disk offline",0
 I.4E7B:	DEFB	"Internal error",0
 
-	  Subroutine __________________________
+	  Subroutine translate and show error message
 	     Inputs  ________________________
 	     Outputs ________________________
 
@@ -2311,26 +2332,26 @@ C.4EEF:	CALL	C.6000
 	CCF
 	RET
 
-	  Subroutine __________________________
+	  Subroutine update CRC16
 	     Inputs  ________________________
 	     Outputs ________________________
 
 C.4EF7:	LD	(D.62EB),HL
-	LD	HL,D.62EC
+	LD	HL,D.62EB+1
 	XOR	(HL)
 	LD	D,0
 	LD	E,A
 	LD	HL,I$4F1A
 	ADD	HL,DE
-	LD	A,(D.62EB)
+	LD	A,(D.62EB+0)
 	LD	C,A
 	LD	A,(HL)
-	LD	(D.62EB),A
+	LD	(D.62EB+0),A
 	LD	HL,I$501A
 	ADD	HL,DE
 	LD	A,C
 	XOR	(HL)
-	LD	(D.62EC),A
+	LD	(D.62EB+1),A
 	LD	HL,(D.62EB)
 	RET
 
@@ -2931,7 +2952,7 @@ J$5214:	LD	L,A
 	LD	(TMPFCB+33+2),DE
 	RET
 
-	  Subroutine __________________________
+	  Subroutine update and show block number
 	     Inputs  ________________________
 	     Outputs ________________________
 
@@ -2939,18 +2960,18 @@ C.521D:	PUSH	HL
 	PUSH	AF
 	LD	HL,(D.62EE)
 	INC	HL
-	LD	(D.62EE),HL
+	LD	(D.62EE),HL		; update block number
 	LD	A,H
-	RL	A
-	JR	NC,J$522E
-	LD	HL,0
-J$522E:	LD	(D.62EE),HL
-	CALL	C$5237
+	RL	A			; =32768 ?
+	JR	NC,J$522E		; nope,
+	LD	HL,0			; block number = 0
+J$522E:	LD	(D.62EE),HL		; update block number
+	CALL	C$5237			; show block number
 	POP	AF
 	POP	HL
 	RET
 
-	  Subroutine __________________________
+	  Subroutine show block number
 	     Inputs  ________________________
 	     Outputs ________________________
 

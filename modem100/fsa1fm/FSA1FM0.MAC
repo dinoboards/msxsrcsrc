@@ -91,7 +91,7 @@ I$609D	EQU	609DH	; ----I
 D$609E	EQU	609EH	; ---L-
 I$609F	EQU	609FH	; ----I
 I$60A0	EQU	60A0H	; ----I
-D.60A1	EQU	60A1H	; --SLI
+D.60A1	EQU	60A1H                   ; carrier status
 D.60A3	EQU	60A3H	                ; i8255 port A register backup
 D.60A4	EQU	60A4H	                ; i8255 port B register backup
 D.60A5	EQU	60A5H	; --SL-
@@ -104,7 +104,7 @@ D.60B0	EQU	60B0H	                ; automatic dialer detection
 I.60B1	EQU	60B1H	; ----I
 D.60B2	EQU	60B2H	; --SL-
 D.60B4	EQU	60B4H	; --SL-
-D.60B5	EQU	60B5H	; --SL-
+D.60B5	EQU	60B5H                   ; dail tone handler
 D.60B6	EQU	60B6H	; --SL-
 D.60B7	EQU	60B7H                   ; modem mode
 D$615D	EQU	615DH                   ; comterm mode (b0 = interlace, b1 = full, b2 = chinese, b3/b4 = srceen mode, b5/b6 = kanji code, b7 = DEL operation)
@@ -141,8 +141,8 @@ D.7FC4	EQU	7FC4H	; i8255 port A, bank select register
 D$7FC5	EQU	7FC5H	; i8255 port B
 D.7FC6	EQU	7FC6H	; i8255 port C
 D$7FC7	EQU	7FC7H	; i8255 mode register
-D.7FC8	EQU	7FC8H	; --S--
-D.7FCC	EQU	7FCCH	; --SL-
+D.7FC8	EQU	7FC8H	; NCU register select
+D.7FCC	EQU	7FCCH	; NCU register data
 I$7FFF	EQU	7FFFH	; ----I
 
 DISKVE	EQU	0F323H	; --SL-
@@ -215,7 +215,7 @@ C.403C:	CALL	C.6039			; inter bank call
 
 ?.4045:	CALL	C.6039			; inter bank call
         DEFB	0
-        DEFW	C.44AB
+        DEFW	C.44AB                  ; vdp interrupt handler
         JP	J.6051
 
 ; EXTBIO handler
@@ -265,7 +265,7 @@ J.407F:	DI
         LD	A,89H
         LD	(D$7FC7),A              ; i8255 mode, I/O mode, mode 1, port A = output, port C = input, mode 0, port B = output
         LD	A,0C0H
-        LD	(D.7FC4),A
+        LD	(D.7FC4),A              ; segment = 0
         JP	J$4207                  ; firmware init
 
 	DEFS	4090H-$,0
@@ -280,30 +280,30 @@ I.4090:	JP	C.4437                  ; CTRL-STOP pressed (clear STOP flag) ?
 ?.409F:	JP	C.51CF			; RS232.SNDCHR
 ?.40A2:	JP	C.509D                  ; wait for received byte
 I$40A5:	JP	J$41C9                  ; echo to screen/printer (literal)
-I$40A8:	JP	J$55D7
-I$40AB:	JP	J$55EA
+I$40A8:	JP	J$55D7			; initialize dial tone detect
+I$40AB:	JP	J$55EA			; finish dial tone detect
 I.40AE:	JP	C.44DC                  ; counter #1, clear
 I$40B1:	JP	J$44EF			; counter #1, get number of seconds
 I$40B4:	JP	C.4466			; get my slotid
 I$40B7:	JP	J$41B4			; comterm
-I$40BA:	JP	J$41BB                  ; comterm ??
+I$40BA:	JP	J$41BB			; set comterm mode
 I$40BD:	JP	J$41C2			; set protocol and timer values
 I$40C0:	JP	C.557C                  ; get line status
-I.40C3:	JP	J$41EC
-I$40C6:	JP	J$41F3
+I.40C3:	JP	J$41EC			; save BSAVE file
+I$40C6:	JP	J$41F3			; load BSAVE file
 ?.40C9:	JP	J$4195			; MAIN BIOS CALL
 I$40CC:	JP	C.5190                  ; signal sender to resume sending
 ?.40CF:	JP	C.51A6                  ; signal sender to stop sending
-?.40D2:	JP	J$41FA
-?.40D5:	JP	J$419C                  ; initialize comterm mode
-?.40D8:	JP	J$41A6
-?.40DB:	JP	J$41AD
+?.40D2:	JP	J$41FA                  ; get phone book data info
+?.40D5:	JP	J$419C			; set comterm mode
+?.40D8:	JP	J$41A6			; echo to screen
+?.40DB:	JP	J$41AD			; revert to normal graphic screen
 ?.40DE:	JP	J$41D0                  ; open file
 ?.40E1:	JP	J$41D7			; read byte from file
 ?.40E4:	JP	J$41DE                  ; close file
-?.40E7:	JP	J$41E5
-?.40EA:	JP	J$52E2
-?.40ED:	JP	J$55FA
+?.40E7:	JP	J$41E5			; get usable screen size
+?.40EA:	JP	J$52E2			; dialtone ?? counter > 70 ?
+?.40ED:	JP	J$55FA                  ; get dial tone dectect flag
 ?.40F0:	JP	J$52E8                  ; send 300ms break
 ?.40F3:	JP	C.5077                  ; set communication mode
 ?.40F6:	JP	C.4449                  ; STOP pressed ?
@@ -332,7 +332,7 @@ I$40CC:	JP	C.5190                  ; signal sender to resume sending
 ?.413B:	JP	J$52DF
 ?.413E:	JP	J$502D                  ; receive buffer full ?
 ?.4141:	JP	C.5037                  ; determine number of bytes in receive buffer (version)
-?.4144:	JP	J$55F5
+?.4144:	JP	J$55F5                  ; disable dail tone handler
 
 ;
 ; BIOS table for RS232
@@ -404,17 +404,17 @@ J$4195:	CALL	C.6000			; interbank call (EI)
 J$419C:	LD	(D$615D),A              ; store comterm mode
         CALL	C.6000			; interbank call (EI)
         DEFB	2
-        DEFW	C.4090                  ; initialize comterm mode
+        DEFW	C.4090                  ; set comterm mode
         RET
 
 J$41A6:	CALL	C.6000			; interbank call (EI)
         DEFB	2
-        DEFW	C.4093
+        DEFW	C.4093			; echo to screen
         RET
 
 J$41AD:	CALL	C.6000			; interbank call (EI)
         DEFB	2
-        DEFW	C.4096
+        DEFW	C.4096                  ; revert to normal graphic screen
         RET
 
 ;	  Subroutine comterm
@@ -428,7 +428,7 @@ J$41B4:	CALL	C.6000			; interbank call (EI)
 
 J$41BB:	CALL	C.6000			; interbank call (EI)
         DEFB	1
-        DEFW	C.40B1                  ; comterm ??
+        DEFW	C.40B1                  ; set comterm mode
         RET
 
 J$41C2:	CALL	C.6000			; interbank call (EI)
@@ -458,22 +458,22 @@ J$41DE:	CALL	C.6000			; interbank call (EI)
 
 J$41E5:	CALL	C.6000			; interbank call (EI)
         DEFB	2
-        DEFW	C.40A8
+        DEFW	C.40A8			; get usable screen size
         RET
 
 J$41EC:	CALL	C.6000			; interbank call (EI)
         DEFB	3
-        DEFW	C.40AB
+        DEFW	C.40AB			; save BSAVE file
         RET
 
 J$41F3:	CALL	C.6000			; interbank call (EI)
         DEFB	3
-        DEFW	C.40AE
+        DEFW	C.40AE			; load BSAVE file
         RET
 
-J$41FA:	LD	A,100
-        LD	BC,I$6900
-        LD	DE,I$7C25
+J$41FA:	LD	A,100                   ; number of phone book entries
+        LD	BC,I$6900               ; start of phone book data
+        LD	DE,I$7C25               ; end of phone book data
         RET
 
 J$4203:	LD	(D.619C),A
@@ -983,7 +983,9 @@ J$44A5:	RRCA
         POP	BC
         RET
 
-; HTIMI handler
+;	  Subroutine vdp interrupt handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.44AB:	PUSH	AF
         CALL	C$44FB
@@ -993,7 +995,7 @@ C.44AB:	PUSH	AF
         CALL	C.44C2                  ; increase interrupt counter
         CALL	C$5682
         POP	AF
-        JP	J$4C8A
+        JP	J$4C8A			; modem interrupt handler
 
 ;	  Subroutine increase interrupt counter
 ;	     Inputs  ________________________
@@ -1690,7 +1692,7 @@ J.48E5:	PUSH	HL
         CALL	C.5352
         CALL	C.537B
 J.490C:	XOR	A
-        LD	(D.60A1),A
+        LD	(D.60A1),A              ; clear carrier status
         CALL	C.538D			; disable i8251 receiver
         EI
         LD	HL,D.6086
@@ -2326,12 +2328,20 @@ I$4C6E: DEFB    "1234567890HT<:"
 
 S4C6E   EQU     ($-I$4C6E)/2
 
+;	  Subroutine modem interrupt handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$4C8A: PUSH    AF
-        CALL    C.4C96
-        CALL	C$4E28
-        CALL	C$4E83
+        CALL    C.4C96                  ; update carrier status
+        CALL	C$4E28                  ; update incoming call/data status
+        CALL	C$4E83			; update dial tone status
         POP	AF
         RET
+
+;	  Subroutine update carrier status
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C.4C96:	CALL	C$4CA2
         CALL	C.55D2                  ; get carrier detect status
@@ -2344,9 +2354,9 @@ C.4C96:	CALL	C$4CA2
 
 C$4CA2:	LD	HL,D.60A1
         LD	A,(HL)
-        OR	A
-        JR	Z,J$4CB6
-        JP	P,J$4CD0
+        OR	A                       ; carrier status cleared ?
+        JR	Z,J$4CB6                ; yep,
+        JP	P,J$4CD0                ; no carrier,
         CALL	C$52B5
         INC	HL
 J$4CB0:	LD	A,(HL)
@@ -2357,17 +2367,16 @@ J$4CB4:	LD	(HL),A
 
 J$4CB6:	JP	C.44D6                  ; clear counter set #2
 
-J$4CB9:	CP	0FH	; 15 
+J$4CB9:	CP	0FH
         JR	Z,J$4CC0
         INC	A
         JR	J$4CB4
 
-J$4CC0:	LD	(HL),00H
-J$4CC1	EQU	$-1
+J$4CC0:	LD	(HL),0
         DEC	HL
         LD	A,(HL)
         AND	7FH
-        LD	(HL),A
+        LD	(HL),A                  ; no carrier
         CALL	C.538D			; disable i8251 receiver
         BIT	6,A
         RET	NZ
@@ -2576,7 +2585,7 @@ C.4E13:	CALL	C.54A3                  ; read 7FCC register (2)
         CALL	C.5385			; enable i8251 receiver
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine update incoming call/data status
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2631,7 +2640,7 @@ J$4E7C:	DEC	A
         XOR	A
         JR	J.4E6C
 
-;	  Subroutine __________________________
+;	  Subroutine update dial tone status
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2639,8 +2648,8 @@ C$4E83:	LD	A,(D.60A4)              ; i8255 port B register backup
         BIT	0,A                     ; off hook ?
         RET	NZ                      ; nope, quit
         LD	A,(D.60B5)
-        OR	A
-        RET	Z
+        OR	A			; dail tone handler = disabled ?
+        RET	Z                       ; yep, quit
         LD	IY,I.60B1
         LD	A,(IY+1)
         OR	A
@@ -2682,7 +2691,7 @@ J$4EDB:	LD	A,(IY+0)
         JR	NC,J.4F1E
         CP	24
         JR	C,J$4EEB
-        LD	A,0FEH
+        LD	A,0FEH                  ; dail tone handler = enabled, fase 1
 J$4EE8:	LD	(D.60B5),A
 J$4EEB:	LD	(IY+0),0
         RET
@@ -2694,13 +2703,13 @@ J$4EF0:	LD	A,(IY+2)
         CP	24
         JR	C,J.4F10
         LD	A,(D.60B5)
-        CP	0FEH
-        JR	NZ,J.4F10
+        CP	0FEH                    ; dail tone handler = enabled, fase 1 ?
+        JR	NZ,J.4F10               ; nope,
         LD	A,(IY+1)
         INC	A
         JP	M,J.4F10
         LD	(IY+1),A
-J.4F10:	LD	A,0FFH
+J.4F10:	LD	A,0FFH                  ; dail tone handler = enabled, fase 2
         LD	(D.60B5),A
         INC	(IY+0)
         LD	A,(IY+0)
@@ -3355,6 +3364,10 @@ J$52D6:	LD	(D.60B6),A
 J$52DF:	XOR	A
         JR	J$52D6
 
+;	  Subroutine dialtone ?? counter > 70 ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$52E2:	LD	A,(D.60B4)
         CP	70
         RET
@@ -3919,7 +3932,7 @@ C.557C:	PUSH	BC
         AND	08H                     ; b5 -> b3
         OR	B
         CPL
-        AND	8FH
+        AND	8FH                     ; clear b6-b4
         POP	BC
         RET
 
@@ -3990,6 +4003,11 @@ C.55D2:	LD	A,(D.60A1)
         RLCA
         RET
 
+
+;	  Subroutine initialize dial tone detect
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$55D7:	DI
         XOR	A
         LD	(D.6363),A
@@ -4003,8 +4021,12 @@ J$55D7:	DI
         LD	(HL),A
         INC	HL
         DEC	A
-        LD	(HL),A
+        LD	(HL),A                  ; dail tone handler = enabled, fase 2
         RET
+
+;	  Subroutine finish dial tone detect
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$55EA:	LD	A,(D.60B2)
         INC	A
@@ -4013,9 +4035,17 @@ J$55EA:	LD	A,(D.60B2)
         LD	(D.60B2),A
         RET
 
-J$55F5:	XOR	A
+;	  Subroutine disable dail tone handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$55F5:	XOR	A                       ; dail tone handler = disabled
         LD	(D.60B5),A
         RET
+
+;	  Subroutine get dial tone dectect flag
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$55FA:	LD	A,(D.60B2)
         RET

@@ -23,11 +23,21 @@ LPTSTT	EQU	00A8H	; -C---
 SNSMAT	EQU	0141H	; -C---
 KILBUF	EQU	0156H	; ----I
 
-I$0460	EQU	0460H	; ----I
-I$1128	EQU	1128H	; ----I
-I$1567	EQU	1567H	; ----I
-I$2136	EQU	2136H	; ----I
-I$3AFF	EQU	3AFFH	; ----I
+BUF     EQU     0F55EH
+RSTMP   EQU     BUF
+FILTAB	EQU	0F860H	; ---L-
+HOKVLD	EQU	0FB20H	; ----I
+INTFLG	EQU	0FC9BH	; --SL-
+EXPTBL	EQU	0FCC1H	; ----I
+H.KEYA	EQU	0FD9AH	; ----I
+H.TIMI	EQU	0FD9FH	; ----I
+H.STKE	EQU	0FEDAH	; --SLI
+H.NEWS	EQU	0FF3EH	; ----I
+H.ERRO	EQU	0FFB1H	; ----I
+H.LPTO	EQU	0FFB6H	; -C---
+EXTBIO	EQU	0FFCAH	; -C--I
+DISINT	EQU	0FFCFH	; ----I
+
 
 D.6047	EQU	6047H			; MSX modem disabled
 I$604A	EQU	604AH	; ----I
@@ -73,14 +83,14 @@ D.60B3	EQU	60B3H			; 7FC0 register backup
 D.60B4	EQU	60B4H			; NCU register 0 backup
 D.60B5	EQU	60B5H			; NCU register 1 backup
 D.60B6	EQU	60B6H			; NCU register 2 backup
-D.60B7	EQU	60B7H	; --SL-
-D.60B8	EQU	60B8H	; --SL-
+D.60B7	EQU	60B7H			; NCU register 3 backup (00xxxxxx)
+D.60B8	EQU	60B8H			; NCU register 3 backup (10xxxxxx)
 D.60B9	EQU	60B9H			; NCU register 0 backup before ?
 D.60BA	EQU	60BAH			; NCU register 1 backup before ?
 D.60BE	EQU	60BEH			; modem type
 I$60BF	EQU	60BFH	; ----I
 I$60C4	EQU	60C4H	; ----I
-D.60C5	EQU	60C5H	; --S--
+D.60C5	EQU	60C5H			; automatic equalizer
 D.60C6	EQU	60C6H	; --SL-
 I.60C7	EQU	60C7H	; ----I
 D.60C8	EQU	60C8H	; --SL-
@@ -89,7 +99,7 @@ D.60CB	EQU	60CBH	; --SL-
 D.60CC	EQU	60CCH	; --S-I
 D.60CD	EQU	60CDH	; --S--
 D.60CE	EQU	60CEH	; --SL-
-D.60CF	EQU	60CFH	; --SL-
+D.60CF	EQU	60CFH			; equalizer bits
 D$6175	EQU	6175H			; comterm mode
 D.6176	EQU	6176H			; flags before disable interrupts
 D.6189	EQU	6189H	; --SL-
@@ -98,31 +108,46 @@ D$634A	EQU	634AH	; ---L-
 D.6358	EQU	6358H	; --SL-
 D$6618	EQU	6618H	; ---L-
 I$6900	EQU	6900H	; ----I
-D.6BC3	EQU	6BC3H	; --SL-
+D.6BC3	EQU	6BC3H			; transmitter power bits
 D$6BC5	EQU	6BC5H	; ---L-
 I$7C25	EQU	7C25H	; ----I
-D.7F00	EQU	7F00H	; --SL-
-D.7F01	EQU	7F01H	; --SL-
-D.7F02	EQU	7F02H	; --SL-
-D.7F03	EQU	7F03H	; --SL-
-D.7FC0	EQU	7FC0H	; --SL-
+D.7F00	EQU	7F00H			; NCU register 0
+D.7F01	EQU	7F01H			; NCU register 1
+D.7F02	EQU	7F02H			; NCU register 2
+D.7F03	EQU	7F03H			; NCU register 3
+D.7FC0	EQU	7FC0H			; segment select / line status
 
-BUF     EQU     0F55EH
-RSTMP   EQU     BUF
-FILTAB	EQU	0F860H	; ---L-
-HOKVLD	EQU	0FB20H	; ----I
-INTFLG	EQU	0FC9BH	; --SL-
-EXPTBL	EQU	0FCC1H	; ----I
-H.KEYA	EQU	0FD9AH	; ----I
-H.TIMI	EQU	0FD9FH	; ----I
-H.STKE	EQU	0FEDAH	; --SLI
-H.NEWS	EQU	0FF3EH	; ----I
-H.ERRO	EQU	0FFB1H	; ----I
-H.LPTO	EQU	0FFB6H	; -C---
-EXTBIO	EQU	0FFCAH	; -C--I
-DISINT	EQU	0FFCFH	; ----I
+; 7FC0, read
+;   b3-b0 = line status
+; 7FC0, write
+;   b2-b0 = ROM segment (4000H-5FFFH)
 
-I$FFFF	EQU	0FFFFH	; ----I
+; NCU register 0, read
+;   b0 =
+;   b1 =
+;   b2 =
+;   b3 = break detected
+;   b4 = long loop detected
+;   b6 =
+;   b7 = dial tone detected
+; NCU register 1, read
+;   b3 = empty transmitter
+;   b2 = data in receiver
+;   b1 =
+;   b0 =
+; NCU register 2, read
+;   not used
+; NCU register 3, read
+;   receiver data
+
+; NCU register 0, write
+; NCU register 1, write
+;   b7 = send break disabled
+;   b3 = disable receiver
+; NCU register 2, write
+;   b7 = pulse dial
+; NCU register 3, write
+;   transmitter data
 
 ?.4000:	DEFB	"AB"
 	DEFW	C.404C
@@ -185,7 +210,7 @@ C.4035:	CALL	C.6000
 ?.404C:	DI
 	LD	A,08H
 	LD	(D.7FC0),A		; select segment 0
-	JP	J$41F9			; firmware initialization
+	JP	J$41F9			; intialize
 
 	DEFS	4060H-$,0
 
@@ -199,8 +224,8 @@ I.4060:	JP	C.43E9                  ; CTRL-STOP pressed ?
 ?.406F:	JP	C.50C6			; RS232.SNDCHR
 ?.4072:	JP	C.4FF8                  ; wait for received byte
 ?.4075:	JP	J$41BB			; echo to screen/printer (literal)
-I$4078:	JP	J$5408
-I$407B:	JP	J$5423
+I$4078:	JP	J$5408			; initialize dial tone detect
+I$407B:	JP	J$5423			; finish dial tone detect
 I$407E:	JP	C.448E                  ; counter #1, clear
 I$4081:	JP	J$44A1			; counter #1, get number of seconds
 I$4084:	JP	C.4418			; get my slotid
@@ -208,24 +233,24 @@ I$4087:	JP	J$41A6			; comterm
 ?.408A:	JP	J$41AD			; set comterm mode
 I$408D:	JP	J$41B4			; set protocol and timer values
 I$4090:	JP	C.4177                  ; get line status
-I.4093:	JP	J$41DE
-I$4096:	JP	J$41E5
+I.4093:	JP	J$41DE			; save BSAVE file
+I$4096:	JP	J$41E5			; load BSAVE file
 ?.4099:	JP	J$4187			; MAIN BIOS CALL (EI)
 ?.409C:	JP	C.508B			; signal sender to resume sending
 ?.409F:	JP	C.50A1			; signal sender to stop sending
-?.40A2:	JP	J$41EC
+?.40A2:	JP	J$41EC			; get phone book data info
 ?.40A5:	JP	J$418E			; set comterm mode
-?.40A8:	JP	J$4198
-?.40AB:	JP	J$419F
+?.40A8:	JP	J$4198			; echo to screen
+?.40AB:	JP	J$419F			; revert to normal graphic screen
 ?.40AE:	JP	J$41C2			; open file
 ?.40B1:	JP	J$41C9			; read byte from file
 ?.40B4:	JP	J$41D0			; close file
-?.40B7:	JP	J$41D7
-?.40BA:	JP	J$51E7
-?.40BD:	JP	C.464B
-?.40C0:	JP	C.4BAC
-?.40C3:	JP	C.4617
-?.40C6:	JP	J$5435
+?.40B7:	JP	J$41D7			; get usable screen size
+?.40BA:	JP	J$51E7			; dialtone ?? counter > 70 ?
+?.40BD:	JP	C.464B			; write NCU register 3
+?.40C0:	JP	C.4BAC			; initialize NCU registers 0-2, save NCU registers 0/1
+?.40C3:	JP	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
+?.40C6:	JP	J$5435			; get dial tone dectect flag
 ?.40C9:	JP	J$5200                  ; send 300ms break
 ?.40CC:	JP	C.4FD5                  ; set communication mode
 ?.40CF:	JP	C.43FB			; STOP pressed ?
@@ -304,11 +329,11 @@ I.4129:	DEFB	30H			; +00 MSX serial features (no TxReady INT, No Sync detect, No
 
 C.4177:	PUSH	BC
 	LD	A,(D.7FC0)
-	AND	03H
+	AND	03H			; b1-b0
 	LD	B,A
 	LD	A,(D.60B3)		; 7FC0 register backup
 	RRA
-	AND	08H
+	AND	08H			; b4->b3
 	OR	B
 	POP	BC
 	RET
@@ -330,8 +355,12 @@ J$418E:	LD	(D$6175),A		; update comterm mode
 
 J$4198:	CALL	C.6000
 	DEFB	2
-	DEFW	C.4063
+	DEFW	C.4063			; echo to screen
 	RET
+
+;	  Subroutine revert to normal graphic screen
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$419F:	CALL	C.6000
 	DEFB	2
@@ -391,34 +420,34 @@ J$41D0:	CALL	C.6000
 
 J$41D7:	CALL	C.6000
 	DEFB	2
-	DEFW	C.4078
+	DEFW	C.4078			; get usable screen size
 	RET
 
 J$41DE:	CALL	C.6000
 	DEFB	3
-	DEFW	C.407B
+	DEFW	C.407B			; save BSAVE file
 	RET
 
 J$41E5:	CALL	C.6000
 	DEFB	3
-	DEFW	C.407E
+	DEFW	C.407E			; load BSAVE file
 	RET
 
-J$41EC:	LD	A,100
-	LD	BC,I$6900
-	LD	DE,I$7C25
+J$41EC:	LD	A,100			; number of phone book entries
+	LD	BC,I$6900		; start of phone book data
+	LD	DE,I$7C25		; end of phone book data
 	RET
 
 J$41F5:	LD	(D.61AA),A
 	RET
 
-;	  Subroutine firmware initialization
+;	  Subroutine intialize
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 J$41F9:	LD	A,(D.61AA)
 	PUSH	AF
-	CALL	C$4508                  ; initialize MSX-modem
+	CALL	C$4508			; initialize modem
 	POP	AF
 	LD	(D.61AA),A
 	LD	A,8
@@ -790,7 +819,7 @@ C$4403:	XOR	A
 ;	     Outputs ________________________
 
 C.4409:	LD	A,(D.6097)
-	BIT	3,A
+	BIT	3,A			; port open ?
 	RET
 
 ;	  Subroutine __________________________
@@ -974,7 +1003,7 @@ C.6011:	EXX
 	EX	(SP),HL
 	LD	A,(D.60B3)
 	LD	B,A			; 7FC0 register backup
-	AND	0F8H			; clear b2-b0
+	AND	0F8H			; reset b2-b0
 	OR	(HL)
 	INC	HL
 	LD	E,(HL)
@@ -1026,7 +1055,7 @@ C$4508:	LD	A,08H
 	CALL	C.4DB8			; write 7FC0 register
 	LD	HL,C.6000
 	LD	DE,C.6000+1
-	LD	BC,I$0460
+	LD	BC,0461H-1
 	LD	(HL),0
 	LDIR
 	LD	A,08H
@@ -1174,38 +1203,38 @@ I$45C7:	ADC	A,B
 ;	     Outputs ________________________
 
 C$45DB:	LD	A,(D.60B4)		; NCU register 0 backup
-	AND	0C5H
-	OR	(HL)
+	AND	0C5H			; reset b5,b4,b3,b1
+	OR	(HL)			; OR mask
 	CALL	C.4633			; write NCU register 0
 	INC	HL
 	LD	A,(D.60B5)		; NCU register 1 backup
-	AND	9CH
-	OR	(HL)
+	AND	9CH			; reset b6,b5,b1,b0
+	OR	(HL)			; OR mask
 	CALL	C.463B			; write NCU register 1
 	INC	HL
 	LD	A,(D.60B6)		; NCU register 2 backup
-	OR	(HL)
+	OR	(HL)			; OR mask
 	CALL	C.4643			; write NCU register 2
 	CALL	C.4BAC
 	INC	HL
-	LD	A,(D.60CF)
-	XOR	(HL)
-	CALL	C.464B
+	LD	A,(D.60CF)		; equalizer bits
+	XOR	(HL)			; XOR mask NCU register 3
+	CALL	C.464B			; write NCU register 3
 	INC	HL
-	LD	A,(D.6BC3)
-	AND	30H	; "0"
-	OR	(HL)
-	CALL	C.464B
-	CALL	C.4617
+	LD	A,(D.6BC3)		; transmitter power bits
+	AND	30H			; keep transmitter power
+	OR	(HL)			; OR mask NCU register 3
+	CALL	C.464B			; write NCU register 3
+	CALL	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
 	CALL	C.4B65
 	CALL	C.4B7E
 	JP	C.4B96
 
-;	  Subroutine __________________________
+;	  Subroutine setup NCU registers 0-2 from saved NCU register 0/1
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4617:	CALL	C.467C
+C.4617:	CALL	C.467C			; wait for b3=1 NCU register 1
 	CALL	C.48C0
 	LD	A,(D.60B9)		; NCU register 0 backup before ?
 	CALL	C.4633			; write NCU register 0
@@ -1213,7 +1242,7 @@ C.4617:	CALL	C.467C
 	RES	2,A
 	CALL	C.463B			; write NCU register 1
 	LD	A,(D.60B6)		; NCU register 2 backup
-	SET	7,A
+	SET	7,A			; pulse dial
 	JP	C.4643			; write NCU register 2
 
 ;	  Subroutine write NCU register 0
@@ -1243,27 +1272,28 @@ C.4643:	DI
 	LD	(D.7F02),A
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine write NCU register 3
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.464B:	CALL	C.467C
-	BIT	6,A
-	JR	NZ,J.465E
+C.464B:	CALL	C.467C			; wait for b3=1 NCU register 1
+	BIT	6,A			; b6 = 0 ?
+	JR	NZ,J.465E		; nope, write NCU register 3 without backup
 	BIT	7,A
 	JR	NZ,J$465B
-	LD	(D.60B7),A
+	LD	(D.60B7),A		; NCU register 3 backup (00xxxxxx)
 	JR	J.465E
-J$465B:	LD	(D.60B8),A
-J.465E:	JR	C.4663
+
+J$465B:	LD	(D.60B8),A		; NCU register 3 backup (10xxxxxx)
+J.465E:	JR	C.4663			; write NCU register 3
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4660:	CALL	C.467C
+C.4660:	CALL	C.467C			; wait for b3=1 NCU register 1
 ;
-;	  Subroutine __________________________
+;	  Subroutine write NCU register 3
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1303,7 +1333,7 @@ C$4677:	DI
 	LD	A,(D.7F03)
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine wait for b3=1 NCU register 1
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1312,10 +1342,14 @@ J$467D:	EI
 	NOP
 	DI
 	CALL	C.466D			; read NCU register 1
-	BIT	3,A
-	JR	Z,J$467D
+	BIT	3,A			; b3 set ?
+	JR	Z,J$467D		; nope, wait
 	POP	AF
 	RET
+
+;	  Subroutine RS232.INIT
+;	     Inputs  A = modem type, C = 
+;	     Outputs ________________________
 
 J$4689:	EI
 	CP	0FFH
@@ -1334,11 +1368,11 @@ J$4692:	LD	(D.60BE),A              ; update modem type
 	LD	D,0C0H
 	INC	A
 	JR	Z,J.46B5
-	SUB	03H	; 3 
+	SUB	03H
 	LD	D,0C0H
 	JR	Z,J.46B5
 	DEC	A
-	LD	D,40H	; "@"
+	LD	D,40H
 	JR	Z,J.46B5
 	DEC	A
 	LD	D,80H
@@ -1371,11 +1405,11 @@ J$46D2:	POP	HL
 
 C.46D6:	LD	A,(IY+0)
 	SUB	"5"
-	CP	04H
+	CP	"8"-"5"+1
 	CCF
 	RET	C
-	LD	B,A
-	LD	D,A
+	LD	B,A			; data bits (b1-b0)
+	LD	D,A			; data bits (b1-b0)
 	CALL	C$53C9			; update receive data mask
 	LD	A,(IY+1)
 	CP	"E"
@@ -1392,31 +1426,31 @@ J$46F9:	SET	3,B
 	JR	J.4703
 
 J$46FD:	LD	A,B
-	CP	03H
+	CP	3			; 8 data bits ?
 	SCF
-	RET	Z
-	INC	B
+	RET	Z			; yep, quit with error
+	INC	B			; extra data bit (for ignore)
 J.4703:	LD	A,B
-	AND	A
+	AND	A			; 5 data bits ?
 	SCF
-	RET	Z
+	RET	Z			; yep, quit with error
 	RLC	B
-	RLC	B
+	RLC	B			; to b3-b2
 	LD	A,(IY+2)
 	SUB	"1"
-	CP	03H
+	CP	"3"-"1"+1
 	CCF
-	RET	C
+	RET	C			; yep, quit
 	INC	A
 	RRCA
-	RRCA
+	RRCA				; to b7-b6
 	OR	B
 	LD	B,A
-	LD	C,00H
+	LD	C,0
 	LD	A,(IY+3)
 	CP	"X"
 	JR	NZ,J$4726
-	SET	0,C
+	SET	0,C			; XON/XOFF mode
 	JR	J$472A
 
 J$4726:	CP	"N"
@@ -1436,7 +1470,7 @@ J$4740:	RES	1,C			; originate mode
 J$4742:	LD	A,(IY+5)
 	CP	"A"
 	JR	NZ,J$474D
-	SET	3,C
+	SET	3,C			; auto LF on receive
 	JR	J$4751
 
 J$474D:	CP	"N"
@@ -1445,7 +1479,7 @@ J$474D:	CP	"N"
 J$4751:	LD	A,(IY+6)
 	CP	"A"
 	JR	NZ,J$475C
-	SET	2,C
+	SET	2,C			; auto LF on transmit
 	JR	J$4760
 
 J$475C:	CP	"N"
@@ -1455,19 +1489,19 @@ J$4760:	LD	A,(IY+7)
 	CP	"S"
 	JR	NZ,J$4770
 	LD	A,D
-	CP	02H	; 2 
+	CP	2			; 7 data bits ?
 	SCF
-	RET	NZ
-	SET	4,C
+	RET	NZ			; nope, quit with error
+	SET	4,C			; SI/SO mode
 	JR	J$4774
 
 J$4770:	CP	"N"
 	SCF
 	RET	NZ
-J$4774:	LD	D,00H
+J$4774:	LD	D,0
 	LD	A,(D.6096)
 	PUSH	AF
-	AND	02H
+	AND	02H			; b1
 	XOR	C
 	AND	02H
 	ADD	A,D
@@ -1479,7 +1513,7 @@ J$4774:	LD	D,00H
 	LD	A,(D.60BE)
 	CP	0FFH              	; modem type = default ?
 	JR	NZ,J$4791		; nope,
-	LD	A,02H
+	LD	A,2
 J$4791:	AND	03H
 	OR	B
 	LD	B,A
@@ -1567,19 +1601,20 @@ J$4810:	LD	A,(D.6096)
 	DI
 	CALL	C$5252
 	LD	A,(D.60CE)
-	CP	03H	; 3 
+	CP	03H
 	CALL	NZ,C.48D1
 	LD	A,(HL)
 	CP	0A0H
 	JR	NZ,J$482C
-	LD	(HL),20H	; " "
+	LD	(HL),20H
 	JR	J.4879
-J$482C:	LD	(HL),10H	; 16 
+
+J$482C:	LD	(HL),10H
 	CALL	C.497D
 	JR	J.4879
 
 J$4833:	LD	A,(D.60CE)
-	CP	03H	; 3 
+	CP	03H
 	JR	Z,J.485E
 	DI
 	CALL	C.48A9
@@ -1626,7 +1661,7 @@ J.4879:	XOR	A
 	PUSH	HL
 	JR	NZ,J.489C
 	LD	A,(HL)
-	CP	02H	; 2 
+	CP	02H
 	JR	NZ,J.489C
 	CALL	C.53EF
 	CALL	C.4C32			; wait for 3 seconds
@@ -1654,15 +1689,15 @@ C$48A5:	LD	C,08H	; 8
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.48A9:	LD	C,0BH	; 11 
+C.48A9:	LD	C,0BH
 J.48AB:	CALL	C.4BAC
-	LD	A,(D.60B8)
+	LD	A,(D.60B8)		; NCU register 3 backup (10xxxxxx)
 	CALL	C.4660
-	LD	A,(D.60B7)
-	AND	30H	; "0"
+	LD	A,(D.60B7)		; NCU register 3 backup (00xxxxxx)
+	AND	30H			; keep power transmitter
 	OR	C
 	CALL	C.4660
-	JP	C.4617
+	JP	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1681,7 +1716,7 @@ C.48C0:	PUSH	BC
 C.48C8:	PUSH	AF
 	DI
 	LD	A,(D.60B4)		; NCU register 0 backup
-	SET	6,A
+	SET	6,A			; set b6
 	JR	J$48D8
 
 ;	  Subroutine __________________________
@@ -1691,7 +1726,7 @@ C.48C8:	PUSH	AF
 C.48D1:	PUSH	AF
 	DI
 	LD	A,(D.60B4)		; NCU register 0 backup
-	RES	6,A
+	RES	6,A			; reset b6
 J$48D8:	CALL	C.4633			; write NCU register 0
 	POP	AF
 	RET
@@ -1709,11 +1744,11 @@ J.48DD:	PUSH	HL
 	CP	02H	; 2 
 	LD	A,1AH
 	CALL	Z,C.50C6		; RS232.SNDCHR
-	CALL	C.467C
+	CALL	C.467C			; wait for b3=1 NCU register 1
 	LD	C,30			; 500 ms
 	CALL	C.4C34			; wait for number interrupts
 	LD	A,(D.60CE)
-	CP	03H	; 3 
+	CP	03H
 	JR	Z,J.4907
 	CALL	C$4985
 	CALL	C.48D1
@@ -1851,7 +1886,8 @@ J$4994:	PUSH	BC
 	LD	H,A
 	INC	A
 	JR	J.49B1
-J$49AD:	LD	HL,I$FFFF
+
+J$49AD:	LD	HL,-1
 	SCF
 J.49B1:	LD	A,B
 	POP	BC
@@ -1970,14 +2006,16 @@ J.4A4A:	EI
 C.4A4C:	CALL	C.4B65
 	CALL	C.4BE4
 	JP	C.4B96
+
 J$4A55:	PUSH	AF
 	CALL	C.4C46			; set dial mode
-	JR	C,J$4A6E
+	JR	C,J$4A6E		; error, quit with error
 	POP	AF
+
 J$4A5C:	PUSH	BC
 	PUSH	AF
 	CALL	C.4A9C			; translate dail character
-	JR	C,J$4A6A
+	JR	C,J$4A6A		; error, quit with error
 	CALL	C.4A71
 	POP	AF
 	POP	BC
@@ -2005,7 +2043,7 @@ C.4A6F:	SCF
 C.4A71:	PUSH	HL
 	PUSH	BC
 	LD	B,A
-	LD	A,(D.6BC3)
+	LD	A,(D.6BC3)		; transmitter power bits
 	PUSH	AF
 	PUSH	AF
 	LD	H,00H
@@ -2112,13 +2150,13 @@ C$4B06:	PUSH	DE
 	RRA
 	OR	E
 	LD	E,A
-	LD	A,(D.60B8)
-	AND	30H	; "0"
+	LD	A,(D.60B8)		; NCU register 3 backup (10xxxxxx)
+	AND	30H			; keep b5,b4
 	OR	E
 	DI
-	CALL	C.464B
+	CALL	C.464B			; write NCU register 3
 	LD	A,D
-	CALL	C.464B
+	CALL	C.464B			; write NCU register 3
 	EI
 	LD	C,5
 	CALL	C.4C34			; wait for number interrupts
@@ -2167,7 +2205,7 @@ C.4B65:	PUSH	AF
 	JR	NZ,J$4B7C		; yep,
 	DI
 	LD	A,(D.60B6)		; NCU register 2 backup
-	RES	7,A
+	RES	7,A			; tone dial
 	CALL	C.4643			; write NCU register 2
 	EI
 J$4B7C:	POP	AF
@@ -2179,14 +2217,14 @@ J$4B7C:	POP	AF
 
 C.4B7E:	PUSH	BC
 	PUSH	AF
-	LD	A,(D.60B8)
-	AND	30H	; "0"
-	OR	0C0H
-	CALL	C.464B
-	LD	A,(D.60B7)
-	AND	30H	; "0"
-	OR	40H	; "@"
-	CALL	C.464B
+	LD	A,(D.60B8)		; NCU register 3 backup (10xxxxxx)
+	AND	30H			; keep b5,b4
+	OR	0C0H			; set b7,b6
+	CALL	C.464B			; write NCU register 3
+	LD	A,(D.60B7)		; NCU register 3 backup (00xxxxxx)
+	AND	30H			; keep power transmitter
+	OR	40H			; set b6
+	CALL	C.464B			; write NCU register 3
 	JR	J$4BA9
 
 ;	  Subroutine __________________________
@@ -2196,25 +2234,25 @@ C.4B7E:	PUSH	BC
 C.4B96:	PUSH	BC
 	PUSH	AF
 	DI
-	LD	A,(D.60B8)
-	CALL	C.464B
-	LD	A,(D.60B7)
-	CALL	C.464B
-	CALL	C.4617
+	LD	A,(D.60B8)		; NCU register 3 backup (10xxxxxx)
+	CALL	C.464B			; write NCU register 3
+	LD	A,(D.60B7)		; NCU register 3 backup (00xxxxxx)
+	CALL	C.464B			; write NCU register 3
+	CALL	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
 	EI
 J$4BA9:	POP	AF
 	POP	BC
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize NCU registers 0-2, save NCU registers 0/1
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.4BAC:	CALL	C.467C
+C.4BAC:	CALL	C.467C			; wait for b3=1 NCU register 1
 	LD	A,(D.60B4)		; NCU register 0 backup
 	LD	(D.60B9),A		; NCU register 0 backup before ?
-	AND	0CAH
-	OR	10H
+	AND	0CAH			; reset b5,b4,b2,b0
+	OR	10H			; set b4
 	CALL	C.4633			; write NCU register 0
 	LD	A,(D.60B5)		; NCU register 1 backup
 	LD	(D.60BA),A		; NCU register 1 backup before ?
@@ -2474,7 +2512,7 @@ J$4D56:	ADD	A,10H	; 16
 J$4D5A:	CALL	C.51AE
 	JR	C,J.4D67
 	LD	A,(D.6090)		; counter #2, number of 1/10 seconds
-	CP	0CH	; 12 
+	CP	12
 	RET	C
 	JR	J.4D55
 
@@ -2483,12 +2521,12 @@ J.4D67:	CALL	C.48D1
 	JR	J$4D56
 
 J$4D6D:	CALL	C.4668			; read NCU register 0
-	BIT	1,A
-	JR	NZ,J$4D79
+	BIT	1,A			; b1 set ?
+	JR	NZ,J$4D79		; yep,
 	CALL	C.51AE
 	JR	C,J.4D67
 J$4D79:	LD	A,(D.6090)		; counter #2, number of 1/10 seconds
-	CP	19H
+	CP	25
 	RET	C
 	LD	(HL),0B0H
 J$4D81:	JP	J.5289			; enable receiver
@@ -2496,17 +2534,17 @@ J$4D81:	JP	J.5289			; enable receiver
 J$4D84:	LD	A,(D.6093)
 	RRA
 	JR	NC,J.4D9B
-	CALL	C$51F6
-	RET	Z
+	CALL	C$51F6			; read NCU register 0, is b0 set ?
+	RET	Z			; nope, quit
 	RRA
 	JR	NC,J.4D55
 	LD	A,(D.60B4)		; NCU register 0 backup
-	SET	3,A
+	SET	3,A			; set b3
 	CALL	C.4633			; write NCU register 0
 	JR	J.4D55
 
-J.4D9B:	CALL	C$51ED
-	RET	Z
+J.4D9B:	CALL	C$51ED			; read NCU register 0, is b1 set ?
+	RET	Z			; nope, quit
 	CALL	C.4488			; clear counter set #2
 	JR	NZ,J.4D55
 J$4DA4:	CALL	C.51AE
@@ -2604,14 +2642,14 @@ C$4E1B:	LD	A,(D.60B3)		; 7FC0 register backup
 	CP	L
 	JP	NZ,J.4ECA
 	DI
-	CALL	C$53C3
+	CALL	C$53C3			; read NCU register 0, is b7 set ?
 	LD	HL,D.60CC
-	JR	NZ,J$4E50
+	JR	NZ,J$4E50		; yep,
 	DEC	(HL)
 	JP	P,J.4E52
 	INC	(HL)
 	JR	J.4E52
-J$4E50:	LD	(HL),03H	; 3 
+J$4E50:	LD	(HL),3
 J.4E52:	LD	A,(HL)
 	OR	A
 	JR	NZ,J$4E9B
@@ -2671,8 +2709,8 @@ J.4ECA:	LD	A,0FEH
 	RET
 
 J$4ED0:	CALL	C.4668			; read NCU register 0
-	AND	04H	; 4 
-	JR	Z,J$4EDC
+	AND	04H			; b2 set ?
+	JR	Z,J$4EDC		; nope,
 	LD	A,(D.60CA)
 	INC	A
 	RET	Z
@@ -2711,22 +2749,22 @@ J$4EE0:	DI
 	AND	(HL)			; mask off
 	LD	C,A			; store received byte
 	CALL	C.466D			; read NCU register 1
-	AND	03H
+	AND	03H			; b1-b0
 	LD	B,A			; store received status
 	AND	01H
 	RLCA
+	RLCA				; b0 to b2
+	OR	B			; b2-b0
 	RLCA
-	OR	B
-	RLCA
-	RLCA
+	RLCA				; to b4-b2
 	LD	B,A
 	BIT	1,A
 	JR	NZ,J.4F5F
 	BIT	0,A
 	JR	NZ,J.4F5F
 	CALL	C.4668			; read NCU register 0
-	BIT	3,A
-	JR	NZ,J$4F3E
+	BIT	3,A			; b3 set ?
+	JR	NZ,J$4F3E		; yep,
 	LD	A,(D.6096)
 	BIT	0,A                     ; XON/XOFF handshake ?
 	JR	Z,J.4F47		; nope,
@@ -2736,15 +2774,15 @@ J$4EE0:	DI
 	JR	Z,J$4F3B		; yep,
 	CP	13H                     ; XOFF ?
 	JR	NZ,J.4F47		; nope,
-	SET	2,(HL)
+	SET	2,(HL)			; in XOFF
 	RET
 
-J$4F3B:	RES	2,(HL)
+J$4F3B:	RES	2,(HL)			; out of XOFF
 	RET
 
 J$4F3E:	LD	HL,D.6097
-	SET	4,(HL)
-	LD	B,00H
+	SET	4,(HL)			; break detected
+	LD	B,0			; no error
 	JR	J.4F5F
 
 J.4F47:	LD	A,(D.6096)
@@ -2754,12 +2792,12 @@ J.4F47:	LD	A,(D.6096)
 	LD	A,C
 	SUB	0FH                     ; SI ?
 	JR	NZ,J$4F59		; nope,
-	RES	7,(HL)
+	RES	7,(HL)			; out of SO
 I$4F58:	RET
 
 J$4F59:	INC	A                     	; SO ?
 	JR	NZ,J.4F5F		; nope,
-	SET	7,(HL)
+	SET	7,(HL)			; in SO
 	RET
 
 J.4F5F:	LD	A,C			; received byte
@@ -2779,10 +2817,10 @@ J$4F63:	CALL	C.4FD0                  ; determine number of bytes in receive buff
 	CP	20H
 	JR	C,J.4F88
 	LD	A,(D.6097)
-	BIT	7,A
+	BIT	7,A			; in SO ?
 	LD	A,C
-	JR	Z,J.4F88
-	OR	80H
+	JR	Z,J.4F88		; nope,
+	OR	80H			; set high bit
 J.4F88:	LD	(HL),A
 	PUSH	HL
 	CALL	C.4FD0			; determine number of bytes in receive buffer
@@ -2791,7 +2829,7 @@ J.4F88:	LD	(HL),A
 	OR	A
 	SBC	HL,DE
 	JR	NZ,J$4F98
-	SET	7,B
+	SET	7,B			; buffer overflow
 J$4F98:	EX	(SP),HL
 	SRL	H
 	RR	L
@@ -2804,17 +2842,17 @@ J$4F98:	EX	(SP),HL
 	POP	HL
 	CALL	C,C.50A1                ; signal sender to stop sending
 	DI
-	LD	A,B
+	LD	A,B			; receive status
 	INC	HL
 	LD	(HL),A
 	DEC	HL
-	AND	A
-	RET	NZ
+	AND	A			; any errors ?
+	RET	NZ			; yep, quit
 	LD	A,(D.6096)
 	BIT	3,A
 	RET	Z
 	LD	A,(D.6189)
-	SUB	0DH	; 13 
+	SUB	13
 	RET	NZ
 	LD	(D.6189),A
 	LD	BC,256*0+10
@@ -3004,7 +3042,7 @@ C.50A1:	DI
 	LD	C,13H	; 19 
 	CALL	C.50B9
 	POP	BC
-	JP	C.467C
+	JP	C.467C			; wait for b3=1 NCU register 1
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -3013,9 +3051,9 @@ C.50A1:	DI
 C.50B9:	LD	A,(D.6096)
 	BIT	0,A
 	RET	Z
-	CALL	C.467C
+	CALL	C.467C			; wait for b3=1 NCU register 1
 	LD	A,C
-	JP	C.4663
+	JP	C.4663			; write NCU register 3
 
 ;	  Subroutine RS232.SNDCHR
 ;	     Inputs  ________________________
@@ -3101,9 +3139,9 @@ J.5131:	PUSH	BC
 	JR	C,J.515D
 	JR	Z,J.515D
 	DI
-	CALL	C.467C
+	CALL	C.467C			; wait for b3=1 NCU register 1
 	LD	A,C
-	CALL	C.4663
+	CALL	C.4663			; write NCU register 3
 	EI
 	PUSH	HL
 	LD	HL,D.6097
@@ -3184,9 +3222,10 @@ C.51AE:	PUSH	HL
 	LD	HL,D.6093
 	BIT	0,(HL)
 	JR	NZ,J$51BF
-	BIT	2,A
+	BIT	2,A			; b2 set ?
 	JR	J$51C1
-J$51BF:	BIT	6,A
+
+J$51BF:	BIT	6,A			; b6 set ?
 J$51C1:	JR	NZ,J$51C4
 	SCF
 J$51C4:	LD	A,B
@@ -3210,28 +3249,32 @@ J$51DB:	LD	(D.60CE),A
 J$51E4:	XOR	A
 	JR	J$51DB
 
+;	  Subroutine dialtone ?? counter > 70 ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$51E7:	LD	A,(D.60CA)
-	CP	46H	; "F"
+	CP	70
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine read NCU register 0, is b1 set ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$51ED:	PUSH	BC
 	LD	B,A
 	CALL	C.4668			; read NCU register 0
-	BIT	1,A
+	BIT	1,A			; b1 set ?
 	JR	J$51FD
 
-;	  Subroutine __________________________
+;	  Subroutine read NCU register 0, is b0 set ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$51F6:	PUSH	BC
 	LD	B,A
 	CALL	C.4668			; read NCU register 0
-	BIT	0,A
+	BIT	0,A			; b0 set ?
 J$51FD:	LD	A,B
 	POP	BC
 	RET
@@ -3300,7 +3343,7 @@ C.5241:	DI
 
 C$524A:	PUSH	HL
 	LD	HL,I$5281
-	LD	B,08H	; 8 
+	LD	B,08H			; set b3
 	JR	J$5258
 
 ;	  Subroutine __________________________
@@ -3308,7 +3351,7 @@ C$524A:	PUSH	HL
 ;	     Outputs ________________________
 
 C$5252:	PUSH	HL
-	LD	B,00H
+	LD	B,00H			; reset b3
 	LD	HL,I$5285
 J$5258:	LD	A,(D.6093)
 	AND	03H			; current modem type
@@ -3316,18 +3359,17 @@ J$5258:	LD	A,(D.6093)
 	LD	E,A
 	ADD	HL,DE
 	LD	A,(D.60B4)		; NCU register 0 backup
-	AND	0C5H
+	AND	0C5H			; clear b5,b4,b3,b1
 	OR	(HL)
 	CALL	C.4633			; write NCU register 0
-	CALL	C.4BAC
-	LD	A,(D.60B8)
-	CALL	C.464B
-	LD	A,(D.60B7)
-	AND	0F7H
+	CALL	C.4BAC			; initialize NCU registers 0-2, save NCU registers 0/1
+	LD	A,(D.60B8)		; NCU register 3 backup (10xxxxxx)
+	CALL	C.464B			; write NCU register 3
+	LD	A,(D.60B7)		; NCU register 3 backup (00xxxxxx)
+	AND	0F7H			; reset b3
 	OR	B
-	CALL	C.464B
-	CALL	C.4617
-J$527D	EQU	$-2
+	CALL	C.464B			; write NCU register 3
+	CALL	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
 	POP	HL
 	RET
 
@@ -3447,9 +3489,9 @@ J$5313:	CALL	C.5403			; get carry detect status
 	SET	0,L
 J$531A:	CALL	C.4668			; read NCU register 0
 	EI
-	BIT	4,A
-	LD	H,0
-	JR	Z,J$5326
+	BIT	4,A			; b4 set ?
+	LD	H,0			; reset b9
+	JR	Z,J$5326		; nope,
 	LD	H,2			; set b9
 J$5326:	LD	A,(D.6098)
 	OR	H
@@ -3515,13 +3557,13 @@ J$537C:	JP	J.539D
 ;	     Outputs ________________________
 
 C.537F:	DI
-	CALL	C.4BAC
+	CALL	C.4BAC			; initialize NCU registers 0-2, save NCU registers 0/1
 	CALL	C.48C0
 	JR	J$538C
 J$5388:	DI
-	CALL	C.4BAC
+	CALL	C.4BAC			; initialize NCU registers 0-2, save NCU registers 0/1
 J$538C:	CALL	C.5394
-	CALL	C.4617
+	CALL	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
 	EI
 	RET
 
@@ -3544,19 +3586,19 @@ J.539D:	PUSH	AF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$53A5:	CALL	C.4BAC
+C$53A5:	CALL	C.4BAC			; initialize NCU registers 0-2, save NCU registers 0/1
 	CALL	C.53AE
-	JP	C.4617
+	JP	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.53AE:	LD	A,(D.60B8)
+C.53AE:	LD	A,(D.60B8)		; NCU register 3 backup (10xxxxxx)
 	CALL	C.4660
-	LD	A,(D.60B7)
+	LD	A,(D.60B7)		; NCU register 3 backup (00xxxxxx)
 J$53B7:	CALL	C.4660
-	CALL	C.467C
+	CALL	C.467C			; wait for b3=1 NCU register 1
 	JP	C.48C0
 
 ;	  Subroutine __________________________
@@ -3564,13 +3606,13 @@ J$53B7:	CALL	C.4660
 ;	     Outputs ________________________
 
 C.53C0:	CALL	C.48C0
-;
-;	  Subroutine __________________________
+
+;	  Subroutine read NCU register 0, is b7 set ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$53C3:	CALL	C.4668			; read NCU register 0
-	BIT	7,A
+	BIT	7,A			; b7 set ?
 	RET
 
 ;	  Subroutine update receive data mask
@@ -3630,6 +3672,10 @@ C.5403:	LD	A,(D.60B2)
 	RLCA
 	RET
 
+;	  Subroutine initialize dial tone detect
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$5408:	CALL	C.4FE6			; update current modem type
 	DI
 	XOR	A
@@ -3648,6 +3694,10 @@ J$5408:	CALL	C.4FE6			; update current modem type
 	LD	(HL),A
 	JP	J$5388
 
+;	  Subroutine finish dial tone detect
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$5423:	LD	A,(D.60C8)
 	INC	A
 	RET	Z
@@ -3658,6 +3708,10 @@ J$5423:	LD	A,(D.60C8)
 J$5430:	XOR	A
 	LD	(D.60CB),A
 	RET
+
+;	  Subroutine get dial tone dectect flag
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 J$5435:	LD	A,(D.60C8)
 	RET
@@ -3692,33 +3746,35 @@ J.5462:	LD	A,B
 	POP	HL
 	RET
 
+; set transmitter power
+
 J$5466:	LD	A,C
 	INC	A
-	CP	11H	; 17 
+	CP	11H
 	JP	NC,J.5461
 	AND	A
 	JR	Z,J$549F
-	CP	0BH	; 11 
-	LD	H,30H	; "0"
+	CP	0BH
+	LD	H,30H
 	JR	C,J.5484
-	CP	0DH	; 13 
-	LD	H,10H	; 16 
+	CP	0DH
+	LD	H,10H
 	JR	C,J.5484
-	CP	0FH	; 15 
-	LD	H,20H	; " "
+	CP	0FH
+	LD	H,20H
 	JR	C,J.5484
 	LD	H,00H
 J.5484:	DI
-	CALL	C.4BAC
+	CALL	C.4BAC			; initialize NCU registers 0-2, save NCU registers 0/1
 	LD	A,H
-	LD	(D.6BC3),A
-	LD	A,(D.60B8)
-	CALL	C.464B
-	LD	A,(D.60B7)
-	AND	0CFH
+	LD	(D.6BC3),A		; update transmitter power bits
+	LD	A,(D.60B8)		; NCU register 3 backup (10xxxxxx)
+	CALL	C.464B			; write NCU register 3
+	LD	A,(D.60B7)		; NCU register 3 backup (00xxxxxx)
+	AND	0CFH			; reset b5,b4
 	OR	H
-	CALL	C.464B
-	CALL	C.4617
+	CALL	C.464B			; write NCU register 3
+	CALL	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
 	EI
 J$549F:	OR	A
 	JP	J.5462
@@ -3730,50 +3786,56 @@ J$549F:	OR	A
 C.54A3:	PUSH	HL
 	PUSH	BC
 	JR	J.5484
+
 J$54A7:	JP	J.5461
+
+; set equalizer mode
+
 J$54AA:	XOR	A
-	LD	(D.60C5),A
+	LD	(D.60C5),A		; manual equalizer
 	INC	C
 	JR	Z,J$54E6
 	DEC	C
-	LD	H,03H	; 3 
+	LD	H,03H
 	JR	Z,J.54C8
 	DEC	C
 	LD	H,00H
 	JR	Z,J.54C8
 	DEC	C
-	LD	H,03H	; 3 
-	LD	A,01H	; 1 
-	LD	(D.60C5),A
+	LD	H,03H
+	LD	A,1
+	LD	(D.60C5),A		; automatic equalizer
 	JR	Z,J.54C8
 	JP	J.5461
+
 J.54C8:	LD	A,H
 	CPL
-	AND	03H	; 3 
-	LD	(D.60CF),A
+	AND	03H
+	LD	(D.60CF),A		; update equalizer bits
 	DI
-	CALL	C.4BAC
-	LD	A,(D.60B8)
-	AND	0FCH
+	CALL	C.4BAC			; initialize NCU registers 0-2, save NCU registers 0/1
+	LD	A,(D.60B8)		; NCU register 3 backup (10xxxxxx)
+	AND	0FCH			; reset b1,b0
 	OR	H
-	CALL	C.464B
-	LD	A,(D.60B7)
-	CALL	C.464B
-	CALL	C.4617
+	CALL	C.464B			; write NCU register 3
+	LD	A,(D.60B7)		; NCU register 3 backup (00xxxxxx)
+	CALL	C.464B			; write NCU register 3
+	CALL	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
 	EI
 J$54E6:	OR	A
 	JP	J.5462
+
 ?.54EA:	PUSH	BC
 	LD	B,A
-	CALL	C.4BAC
-	LD	A,(D.60B8)
+	CALL	C.4BAC			; initialize NCU registers 0-2, save NCU registers 0/1
+	LD	A,(D.60B8)		; NCU register 3 backup (10xxxxxx)
 	OR	B
-	CALL	C.464B
-	LD	A,(D.60B7)
-	CALL	C.464B
-	CALL	C.4617
+	CALL	C.464B			; write NCU register 3
+	LD	A,(D.60B7)		; NCU register 3 backup (00xxxxxx)
+	CALL	C.464B			; write NCU register 3
+	CALL	C.4617			; setup NCU registers 0-2 from saved NCU register 0/1
 	XOR	A
-	LD	(D.60C5),A
+	LD	(D.60C5),A		; manual equalizer
 	POP	BC
 	RET
 
@@ -3812,7 +3874,7 @@ C$551A:	PUSH	HL
 	JR	Z,J.554F
 	CALL	C.5553
 	LD	HL,I$5568
-	LD	D,00H
+	LD	D,0
 	RLCA
 	RLCA
 	LD	E,A
