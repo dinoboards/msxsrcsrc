@@ -17,17 +17,8 @@
 
         org     04000H
 
-I.0000	EQU	0000H	; ----I
-I.0001	EQU	0001H	; ----I
-I.0003	EQU	0003H	; ----I
-BDOS	EQU	0005H	; ----I
-I$0009	EQU	0009H	; ----I
 RDSLT	EQU	000CH	; -C---
-I$000D	EQU	000DH	; ----I
-I$000E	EQU	000EH	; ----I
-I.0010	EQU	0010H	; ----I
 WRSLT	EQU	0014H	; JC--I
-I$0018	EQU	0018H	; ----I
 ENASLT	EQU	0024H	; -C---
 INIFNK	EQU	003EH	; -C---
 WRTVDP	EQU	0047H	; JC--I
@@ -35,24 +26,7 @@ LPTSTT	EQU	00A8H	; -C---
 SNSMAT	EQU	0141H	; -C---
 KILBUF	EQU	0156H	; ----I
 
-D$0201	EQU	0201H	; ---L-
-I$0258	EQU	0258H	; ----I
-I$0363	EQU	0363H	; ----I
-I$0384	EQU	0384H	; ----I
-I$040F	EQU	040FH	; ----I
-I$0801	EQU	0801H	; ----I
-I$1128	EQU	1128H	; ----I
-I$11A7	EQU	11A7H	; ----I
-D$1211	EQU	1211H	; ---L-
-I.1511	EQU	1511H	; ----I
-I.1915	EQU	1915H	; ----I
-I$2136	EQU	2136H	; ----I
-D$3231	EQU	3231H	; ---L-
-I$3332	EQU	3332H	; ----I
-I$374D	EQU	374DH	; ----I
-I$3AFF	EQU	3AFFH	; ----I
-
-D.6048	EQU	6048H                   ; modem settings
+D.6048	EQU	6048H                   ; firmware exit code
 I$604A	EQU	604AH	; ----I
 I$604B	EQU	604BH	                ; b7-b4 = trap number, b3-b0 = com number
 J.604C	EQU	604CH	; J---I
@@ -109,8 +83,8 @@ D.60B6	EQU	60B6H	; --SL-
 D.60B7	EQU	60B7H                   ; modem mode
 D$615D	EQU	615DH                   ; comterm mode (b0 = interlace, b1 = full, b2 = chinese, b3/b4 = srceen mode, b5/b6 = kanji code, b7 = DEL operation)
 D.615F	EQU	615FH                   ; flags before interrupt disable
-D.6172	EQU	6172H	; --SL-
-D$6173	EQU	6173H	; ---L-
+D.6172	EQU	6172H                   ; received byte
+D$6173	EQU	6173H                   ; comterm activated
 D.619C	EQU	619CH	; --SL-
 D$619F	EQU	619FH	; --S--
 D$61A1	EQU	61A1H                   ; timer value
@@ -127,13 +101,13 @@ D.6360	EQU	6360H                   ; current slot id page 2
 D.6363	EQU	6363H	; --S-I
 D$6372	EQU	6372H	; --S--
 D$6373	EQU	6373H	; ---L-
-D$6374	EQU	6374H	; --S--
+D$6374	EQU	6374H			; BTELCOM operand
 I$6900	EQU	6900H	; ----I
 I$6FFF	EQU	6FFFH	; ----I
 I$7C25	EQU	7C25H	; ----I
 D.7EE7	EQU	7EE7H                   ; printer not ready counter
-D$7EE9	EQU	7EE9H	; --S--
-D$7EED	EQU	7EEDH	; ---L-
+D$7EE9	EQU	7EE9H                   ; printer output enabled
+D$7EED	EQU	7EEDH                   ; auto CR on receive
 
 D.7FC0	EQU	7FC0H	; i8251 dataport
 D.7FC1	EQU	7FC1H	; i8251 cmd/status
@@ -289,8 +263,8 @@ I$40B7:	JP	J$41B4			; comterm
 I$40BA:	JP	J$41BB			; set comterm mode
 I$40BD:	JP	J$41C2			; set protocol and timer values
 I$40C0:	JP	C.557C                  ; get line status
-I.40C3:	JP	J$41EC			; save BSAVE file
-I$40C6:	JP	J$41F3			; load BSAVE file
+I.40C3:	JP	J$41EC			; save phone book data to file
+I$40C6:	JP	J$41F3			; load phone book data from file
 ?.40C9:	JP	J$4195			; MAIN BIOS CALL
 I$40CC:	JP	C.5190                  ; signal sender to resume sending
 ?.40CF:	JP	C.51A6                  ; signal sender to stop sending
@@ -360,7 +334,7 @@ I$40CC:	JP	C.5190                  ; signal sender to resume sending
 ?.4147:	DEFB	030H			; +00 MSX serial features (no TxReady INT, No Sync detect, No Timer INT, Have CD, Have RI)
         DEFB	0			; +01 MSX serial version (version 1.0)
         DEFB	0			; +02 reserved
-        JP	J$46E9			; RS232.INIT
+?.414A: JP	J$46E9			; RS232.INIT
 ?.414D:	JP	J.47F1			; RS232.OPEN
 ?.4150:	JP	J$5508			; RS232.STAT
 ?.4153:	JP	C.4921			; RS232.GETCHR
@@ -463,12 +437,12 @@ J$41E5:	CALL	C.6000			; interbank call (EI)
 
 J$41EC:	CALL	C.6000			; interbank call (EI)
         DEFB	3
-        DEFW	C.40AB			; save BSAVE file
+        DEFW	C.40AB			; save phone book data to file
         RET
 
 J$41F3:	CALL	C.6000			; interbank call (EI)
         DEFB	3
-        DEFW	C.40AE			; load BSAVE file
+        DEFW	C.40AE			; load phone book data from file
         RET
 
 J$41FA:	LD	A,100                   ; number of phone book entries
@@ -484,10 +458,10 @@ J$4203:	LD	(D.619C),A
 ;	     Outputs ________________________
         
 J$4207:	LD	A,(D.619C)
-        PUSH	AF
+        PUSH	AF                      ; store 619C
         CALL	C$4658                  ; initialize MSX-modem
         POP	AF
-        LD	(D.619C),A
+        LD	(D.619C),A              ; restore 619C
         CALL	C$4351                  ; initialize additional firmware
         LD	A,8
         CALL	SNSMAT
@@ -525,11 +499,11 @@ J$4242:	OR	C
         CALL	C.6000			; interbank call (EI)
         DEFB	8
         DEFW	C.4090                  ; start panasonic firmware
-        LD	(D.6048),A
-        OR	A                       ; modem settings ?
-        JR	Z,J$4255                ; yep,
-        DEC	A                       ; quit to MSX BASIC ?
-        JR	Z,J$4264                ; yep,
+        LD	(D.6048),A              ; store exit code
+        OR	A                       ; TELCOM application ?
+        JR	Z,J$4255                ; yep, setup H.STKE
+        DEC	A                       ; quit firmware ?
+        JR	Z,J$4264                ; yep, skip setup H.STKE
 J$4255:	LD	HL,I$4314
         LD	(H.STKE+2),HL
         CALL	C.4466			; get my slotid
@@ -561,14 +535,14 @@ J$4264:	DI
         EI
         PUSH	AF
         LD	HL,HOKVLD
-        BIT	0,(HL)
-        JR	NZ,J$42B9
+        BIT	0,(HL)                  ; EXTBIO setup ?
+        JR	NZ,J$42B9               ; yep, skip initialize
         SET	0,(HL)
         LD	HL,EXTBIO
         LD	B,5
 J$42B4:	LD	(HL),0C9H
         INC	HL
-        DJNZ	J$42B4
+        DJNZ	J$42B4                  ; initialize EXTBIO
 J$42B9:	XOR	A
         LD	DE,00801H
         CALL	EXTBIO
@@ -589,10 +563,10 @@ J$42B9:	XOR	A
         LD	BC,I$430A
         CALL	C.42ED                  ; install handler with backup
         LD	(EXTBIO+1),A
-        LD	BC,I$0018
+        LD	BC,S.435C
         LD	HL,I$435C
         LD	DE,DISINT
-        LDIR
+        LDIR                            ; install DISINT,ENAINT handlers
         RET
 
 ;	  Subroutine install handler with backup
@@ -662,16 +636,16 @@ J$432F:	LD	B,H
         EX	DE,HL
         LD	SP,HL
         LD	A,(D.6048)
-        OR	A                       ; modem settings ?
+        OR	A                       ; TELCOM application ?
         JR	NZ,J$4346               ; nope,
         CALL	C.6000			; interbank call (EI)
         DEFB	1
-        DEFW	C.40AE
+        DEFW	C.40AE                  ; start TELCOM application
         JR	J$434C
 
 J$4346:	CALL	C.6000			; interbank call (EI)
         DEFB	8
-        DEFW	C.5000
+        DEFW	C.5000                  ; the links/document management
 J$434C:	POP	HL
         POP	DE
         POP	BC
@@ -707,6 +681,9 @@ J$4364:	LD	D,00H
         POP	IX
         POP	DE
         RET
+
+S.435C  EQU     $-I$435C
+
 
 ; BASIC DEVICE handler
 
@@ -1307,15 +1284,15 @@ C$4658:	LD	A,0C0H
         LD	HL,C.6000
         LD	DE,C.6000+1
         LD	BC,I$0363
-        LD	(HL),00H
+        LD	(HL),0
         LDIR				; initialize modem RAM
         XOR	A
         LD	L,A
         LD	H,A
-        LD	(D$7EE9),A
+        LD	(D$7EE9),A              ; printer output disabled
         LD	(D$6372),A
         LD	(D.7EE7),HL             ; reset printer not ready counter
-        LD	(D$6374),HL
+        LD	(D$6374),HL             ; BTELCOM operand = 0
         LD	A,0C0H
         CALL	C.540C			; update i8255 port A register (bank)
         LD	A,7BH
@@ -1323,13 +1300,13 @@ C$4658:	LD	A,0C0H
         LD	BC,S4604
         LD	HL,I$4604
         LD	DE,C.6000
-        LDIR				; initalize RAM
+        LDIR				; initalize bank switch routines
         LD	HL,I$464B
         LD	DE,I.6065
         PUSH	DE
         POP	IY
         LD	BC,13
-        LDIR
+        LDIR                            ; default serial parameters
         LD	A,0FFH
         LD	(D.60A9),A              ; modem type = default
         CALL	C.4739			; initialize serial
@@ -2086,20 +2063,20 @@ C$4AF2:	PUSH	DE
         LD	A,(D.60A6)
         PUSH	AF
         LD	A,19H
-        CALL	C.5480                  ; write 7FCC register (0)
+        CALL	C.5480                  ; write NCU register 0
         EI
         LD	A,B                     ; dial character
-        CALL	C.5491                  ; write 7FCC register (3)
+        CALL	C.5491                  ; write NCU register 3
         CALL	C.5349
         EI
         LD	C,5
         CALL	C.4BCA                  ; wait
         CALL	C.5352
         LD	A,00H
-        CALL	C.5491                  ; write 7FCC register (3)
+        CALL	C.5491                  ; write NCU register 3
         DI
         POP	AF
-        CALL	C.5480                  ; write 7FCC register (0)
+        CALL	C.5480                  ; write NCU register 0
         LD	A,(D.60A4)              ; i8255 port B register backup
         SET	1,A
         CALL	C.5414			; update i8255 port B register
@@ -2422,7 +2399,7 @@ I$4CFD: DEFW    C.4DB0
         DEFW    C.4DFD
         DEFW    C.4E13
 
-C.4D11: CALL	C.54A3                  ; read 7FCC register (2)
+C.4D11: CALL	C.54A3                  ; read NCU register 2
         BIT	4,A
         JR	Z,J$4D20
         BIT	3,A
@@ -2443,7 +2420,7 @@ J$4D20:	AND	0EH
         LD	(HL),3
         RET
 
-C.4D37:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4D37:	CALL	C.54A3                  ; read NCU register 2
         BIT	4,A
         JR	Z,J$4D4F
         LD	A,(D.607D)
@@ -2459,7 +2436,7 @@ J$4D4F:	CALL	C.5352
         DEC	(HL)
         RET
 
-C.4D54:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4D54:	CALL	C.54A3                  ; read NCU register 2
         BIT	4,A
         RET	NZ
         BIT	3,A
@@ -2468,7 +2445,7 @@ C.4D54:	CALL	C.54A3                  ; read 7FCC register (2)
         INC	(HL)
         RET
 
-C.4D62:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4D62:	CALL	C.54A3                  ; read NCU register 2
         BIT	3,A
         JR	Z,J$4D75
         LD	A,(D.607D)
@@ -2482,14 +2459,14 @@ J$4D75:	CALL	C.5352
         LD	(HL),1
         RET
 
-C.4D7B:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4D7B:	CALL	C.54A3                  ; read NCU register 2
         BIT	3,A
         RET	Z
         CALL	C.44D6                  ; clear counter set #2
         INC	(HL)
         RET
 
-C.4D86:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4D86:	CALL	C.54A3                  ; read NCU register 2
         BIT	3,A
         JR	Z,J.4D9B
         LD	A,(D.607D)
@@ -2503,7 +2480,7 @@ C.4D86:	CALL	C.54A3                  ; read 7FCC register (2)
 J.4D9B:	DEC	(HL)
         RET
 
-C.4D9D:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4D9D:	CALL	C.54A3                  ; read NCU register 2
         BIT	3,A
         JR	Z,J.4D9B
         LD	A,(D.607D)
@@ -2513,14 +2490,14 @@ C.4D9D:	CALL	C.54A3                  ; read 7FCC register (2)
         CALL	C.5385			; enable i8251 receiver
         RET
 
-C.4DB0:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4DB0:	CALL	C.54A3                  ; read NCU register 2
         BIT	3,A
         RET	Z
         CALL	C.44D6                  ; clear counter set #2
         INC	(HL)
         RET
 
-C.4DBB:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4DBB:	CALL	C.54A3                  ; read NCU register 2
         BIT	3,A
         JR	Z,J$4DCD
         LD	A,(D.607D)
@@ -2538,7 +2515,7 @@ C.4DD2:	CALL	C.44D6                  ; clear counter set #2
         INC	(HL)
         RET
 
-C.4DD7:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4DD7:	CALL	C.54A3                  ; read NCU register 2
         BIT	3,A
         JR	Z,J$4DEA
         LD	A,(D.607D)
@@ -2552,7 +2529,7 @@ J$4DEA:	CALL	C.5352
         LD	(HL),1
         RET
 
-C.4DF0:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4DF0:	CALL	C.54A3                  ; read NCU register 2
         AND	0EH	; 14 
         CP	08H	; 8 
         RET	NZ
@@ -2560,7 +2537,7 @@ C.4DF0:	CALL	C.54A3                  ; read 7FCC register (2)
         INC	(HL)
         RET
 
-C.4DFD:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4DFD:	CALL	C.54A3                  ; read NCU register 2
         AND	0EH	; 14 
         CP	08H	; 8 
         JR	NZ,J.4E11
@@ -2574,7 +2551,7 @@ C.4DFD:	CALL	C.54A3                  ; read 7FCC register (2)
 J.4E11:	DEC	(HL)
         RET
 
-C.4E13:	CALL	C.54A3                  ; read 7FCC register (2)
+C.4E13:	CALL	C.54A3                  ; read NCU register 2
         AND	0EH
         CP	08H
         JR	NZ,J.4E11
@@ -2719,7 +2696,7 @@ J.4F1E:	LD	A,0FEH
         LD	(IY+1),A
         RET
 
-J$4F24:	CALL	C.54A3                  ; read 7FCC register (2)
+J$4F24:	CALL	C.54A3                  ; read NCU register 2
         AND	08H
         JR	Z,J$4F30
         LD	A,(D.60B4)
@@ -2852,11 +2829,11 @@ J$4FE6:	EX	(SP),HL
         BIT	3,A                     ; auto LF on receive ?
         JR	NZ,J$501E               ; yep,
 J$5006:	LD	A,(D$6173)
-        OR	A
-        RET	Z
+        OR	A                       ; comterm activated ?
+        RET	Z                       ; nope, quit
         LD	A,(D$7EED)
-        OR	A
-        RET	Z
+        OR	A                       ; auto CR on receive ?
+        RET	Z                       ; nope, quit
         LD	A,(D.6172)              ; received byte
         LD	C,0AH
         SUB	C                       ; is LF ?
@@ -3339,7 +3316,7 @@ J$52B3:	POP	HL
 
 C$52B5:	PUSH	BC
         LD	B,A
-        CALL	C.54A3                  ; read 7FCC register (2)
+        CALL	C.54A3                  ; read NCU register 2
         OR	A
         BIT	3,A
         JR	NZ,J$52C0
@@ -3418,7 +3395,7 @@ C.531B:	DI
         PUSH	AF
         LD	A,(D.60A7)
         AND	3FH                     ; reset b7,b6
-J$5325:	CALL	C.5488                  ; write 7FCC register (1)
+J$5325:	CALL	C.5488                  ; write NCU register 1
         EI
         POP	AF
         RET
@@ -3472,7 +3449,7 @@ C.5352:	PUSH	AF
         DI
         LD	A,(D.60A6)
         RES	1,A                     ; reset b1
-J.5359:	CALL	C.5480                  ; write 7FCC register (0)
+J.5359:	CALL	C.5480                  ; write NCU register 0
         POP	AF
         RET
 
@@ -3494,7 +3471,7 @@ C$5367:	PUSH	AF
         DI
         LD	A,(D.60A7)
         SET	4,A                     ; set b4
-J$536E:	CALL	C.5488                  ; write 7FCC register (1)
+J$536E:	CALL	C.5488                  ; write NCU register 1
         POP	AF
         RET
 
@@ -3504,7 +3481,7 @@ J$536E:	CALL	C.5488                  ; write 7FCC register (1)
 
 C$5373:	PUSH	AF
         LD	A,21H
-J.5376:	CALL	C.5491                  ; write 7FCC register (3)
+J.5376:	CALL	C.5491                  ; write NCU register 3
         POP	AF
         RET
 
@@ -3697,15 +3674,15 @@ J$5430:	LD	B,A
         JR	Z,J$543A
         RES	0,B
 J$543A:	LD	A,B
-        CALL	C.5480                  ; write 7FCC register (0)
+        CALL	C.5480                  ; write NCU register 0
         LD	A,(D.60A7)
         AND	0F0H                    ; reset b3-b0
         OR	08H                     ; set b3
-        CALL	C.5488                  ; write 7FCC register (1)
+        CALL	C.5488                  ; write NCU register 1
         LD	A,(D.60A8)              ; 7FCC register backup
         AND	6FH
         OR	00H
-        CALL	C.5491                  ; write 7FCC register (3)
+        CALL	C.5491                  ; write NCU register 3
         POP	BC
         POP	DE
         POP	HL
@@ -3729,7 +3706,7 @@ J$5457:	CALL	C$53DA			; set b2,reset b3 7FC5
 I$5470: DEFB    11H,11H,15H,19H,11H,15H,19H,1DH
         DEFB    11H,11H,15H,19H,11H,15H,19H,1DH
 
-;	  Subroutine write 7FCC register (0)
+;	  Subroutine write NCU register 0
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3739,7 +3716,7 @@ C.5480:	PUSH	HL
         XOR	A
         JR	J.5498
 
-;	  Subroutine write 7FCC register (1)
+;	  Subroutine write NCU register 1
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3749,7 +3726,7 @@ C.5488:	PUSH	HL
         LD	A,1
         JR	J.5498
 
-;	  Subroutine write 7FCC register (3)
+;	  Subroutine write NCU register 3
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3765,7 +3742,7 @@ J.5498:	DI
         POP	HL
         RET
 
-;	  Subroutine read 7FCC register (2)
+;	  Subroutine read NCU register 2
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3861,7 +3838,7 @@ J$5513:	DI
 J$5522:	CALL	C.55D2                  ; get carrier detect status
         JR	NC,J$5529
         SET	0,L			; yep, CD=1
-J$5529:	CALL	C.54A3                  ; read 7FCC register (2)
+J$5529:	CALL	C.54A3                  ; read NCU register 2
         EI
         BIT	0,A
         LD	H,0			; b9 reset
@@ -3910,8 +3887,8 @@ J.555F:	LD	A,(D.7FC6)              ; i8255 port C
         JR	Z,J$5571                ; nope,
         SET	6,L                     ; detected 400 Hz
 J$5571:	LD	A,(D.7FC6)              ; i8255 port C
-        BIT	5,A
-        JR	NZ,J$557A
+        BIT	5,A                     ; on hook ?
+        JR	NZ,J$557A               ; yep, quit
         SET	7,L                     ; off hook
 J$557A:	POP	AF
         RET
@@ -3940,7 +3917,7 @@ C.557C:	PUSH	BC
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C.5592:	CALL	C.54A3                  ; read 7FCC register (2)
+C.5592:	CALL	C.54A3                  ; read NCU register 2
         BIT	1,A
         RET
 
@@ -4176,8 +4153,8 @@ I$5672:
         DEFB	0FFH                    ; other receiver speed
 
 C$5682:	LD	A,(D.7EE9)
-        OR	A
-        JR	Z,J$5694
+        OR	A                       ; printer output enabled ?
+        JR	Z,J$5694                ; nope, handle remaining buffer
         CALL	LPTSTT                  ; get printer status
         JR	Z,J$56AC                ; printer not ready,
         LD	HL,0

@@ -1292,7 +1292,7 @@ J7C08:	EI
         CALL	ENAINT
         JP	J7811		; reset controller and stop motor drive(s) and quit
 
-;	  Subroutine __________________________
+;	  Subroutine format track
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1304,8 +1304,8 @@ C7C0F:	CALL	C77F5			; wait for command ready
         LD	(D7FF8),A
         EX	(SP),HL
         EX	(SP),HL
-        LD	C,4EH	; "N"
-        LD	B,50H	; "P"
+        LD	C,4EH
+        LD	B,80
 J7C23:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1314,7 +1314,7 @@ J7C23:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C23
         LD	C,00H
-        LD	B,0CH	; 12 
+        LD	B,12
 J7C35:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1323,7 +1323,7 @@ J7C35:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C35
         LD	C,0F6H
-        LD	B,03H	; 3 
+        LD	B,3
 J7C47:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1341,7 +1341,7 @@ J7C58:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C58
         LD	C,4EH
-        LD	B,1AH
+        LD	B,26
 J7C6A:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1350,7 +1350,7 @@ J7C6A:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C6A
 J7C78:	LD	C,00H
-        LD	B,0CH	; 12 
+        LD	B,12
 J7C7C:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1359,7 +1359,7 @@ J7C7C:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C7C
         LD	C,0F5H
-        LD	B,03H	; 3 
+        LD	B,3
 J7C8E:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1424,8 +1424,8 @@ J7CF9:	LD	A,(D7FFF)
         LD	A,C
         LD	(D7FFB),A
         DJNZ	J7CF9
-        LD	C,4EH	; "N"
-        LD	B,16H
+        LD	C,4EH
+        LD	B,22
 J7D0B:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1434,7 +1434,7 @@ J7D0B:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7D0B
         LD	C,00H
-        LD	B,0CH	; 12 
+        LD	B,12
 J7D1D:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1443,7 +1443,7 @@ J7D1D:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7D1D
         LD	C,0F5H
-        LD	B,03H	; 3 
+        LD	B,3
 J7D2F:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1486,7 +1486,7 @@ J7D71:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7D71
         LD	C,4EH	; "N"
-        LD	B,36H	; "6"
+        LD	B,54
 J7D83:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1496,10 +1496,10 @@ J7D83:	LD	A,(D7FFF)
         DJNZ	J7D83
         INC	D
         LD	A,D
-        CP	0AH	; 10 
+        CP	9+1
         JP	NZ,J7C78
         LD	C,4EH	; "N"
-        LD	B,00H
+        LD	B,0
 J7D9C:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1523,24 +1523,13 @@ J7DB8:	LD	A,(D7FFF)
         DJNZ	J7DB8
         POP	HL
 
-I7DC7:	LD	A,(D7FF8)
+I7DC7:	LD	A,(D7FF8)               ; read status
 
 
-        IF	DRVVER EQ 206
+        IF	DRVVER GE 206
 
-        BIT	1,A
-        JP	Z,J7DD6
-        LD	B,A
-        LD	A,4EH
-        LD	(D7FFB),A
-        LD	A,B
-J7DD6:
-        ENDIF
-
-        IF	DRVVER EQ 207
-
-        BIT	1,A
-        JP	Z,J7DD6
+        BIT	1,A                     ; DRQ ?
+        JP	Z,J7DD6                 ; nope,
         LD	B,A
         LD	A,4EH
         LD	(D7FFB),A
@@ -1549,8 +1538,8 @@ J7DD6:
         ENDIF
 
 
-        AND	0C4H
-        RET	Z
+        AND	0C4H                    ; ready/write protect, lost data
+        RET	Z                       ; no errors, quit
         SCF	
         LD	E,A
         LD	A,2

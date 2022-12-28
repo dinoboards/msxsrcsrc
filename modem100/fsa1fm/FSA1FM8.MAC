@@ -4,7 +4,7 @@
 ;                            Palo Alto, CA
         .Z80
         ORG	4090H
-BDOS	EQU	0005H	; ----I
+
 RDSLT	EQU	000CH	; -C---
 INIFNK	EQU	003EH	; -C---
 WRTVDP	EQU	0047H	; -C---
@@ -78,27 +78,30 @@ I$802D	EQU	802DH	; ----I
 I$8030	EQU	8030H	; ----I
 I$8033	EQU	8033H	; ----I
 I$8036	EQU	8036H	; ----I
+
 I.C010	EQU	0C010H	; ----I
-D$C3B0	EQU	0C3B0H	; --S--
-D.C3BC	EQU	0C3BCH	; --SL-
+D$C3B0	EQU	0C3B0H                  ; saved current bank
+D.C3BC	EQU	0C3BCH                  ; saved key
 D.C3BE	EQU	0C3BEH	; --S-I
-I$C3BF	EQU	0C3BFH	; ----I
 D$C3C0	EQU	0C3C0H	; --S--
 D$C3C1	EQU	0C3C1H	; ---L-
 D$C3C3	EQU	0C3C3H	; ---L-
 D$C3C4	EQU	0C3C4H	; ---L-
 D$C3CA	EQU	0C3CAH	; --S--
 D$C3CC	EQU	0C3CCH	; --S--
+
 D$C518	EQU	0C518H	; --S--
 D$C520	EQU	0C520H	; --S--
 D$C521	EQU	0C521H	; --S--
-J.C6A5	EQU	0C6A5H	; J---I
-D.C6AA	EQU	0C6AAH	; --SL-
-D.C6AB	EQU	0C6ABH	; --S-I
-D.C6AD	EQU	0C6ADH	; --S-I
-D.C6AF	EQU	0C6AFH	; --S-I
+
+J.C6A5	EQU	0C6A5H                  ; previous H.TIMI
+D.C6AA	EQU	0C6AAH                  ; music handler flag
+D.C6AB	EQU	0C6ABH                  ; pointer play channel A
+D.C6AD	EQU	0C6ADH                  ; pointer play channel B
+D.C6AF	EQU	0C6AFH                  ; pointer play channel C
 D.C6B1	EQU	0C6B1H	; --SL-
 I.C6B4	EQU	0C6B4H	; ----I
+
 D.CEB4	EQU	0CEB4H	; --SL-
 J.CF00	EQU	0CF00H	; J---I
 
@@ -107,19 +110,14 @@ FORCLR	EQU	0F3E9H	; --S--
 BAKCLR	EQU	0F3EAH	; --S--
 BDRCLR	EQU	0F3EBH	; --S--
 FNKSTR	EQU	0F87FH	; ----I
-
-I$F959	EQU	0F959H	; ----I
-I$F95F	EQU	0F95FH	; ----I
-I$F965	EQU	0F965H	; ----I
-I$F975	EQU	0F975H	; ----I
-
+QUETAB	EQU	0F959H	; ----I
+VOICAQ	EQU	0F975H	; ----I
 MUSICF	EQU	0FB3FH	; ---L-
 PLYCNT	EQU	0FB40H	; --S--
 SCRMOD	EQU	0FCAFH	; --S--
 EXPTBL	EQU	0FCC1H	; ----I
 H.TIMI	EQU	0FD9FH	; --S-I
 H.STKE	EQU	0FEDAH	; ----I
-I$FFA0	EQU	0FFA0H	; ----I
 RG8SAV	EQU	0FFE7H	; ---L-
 D.FFFF	EQU	0FFFFH	; --SLI
 
@@ -136,23 +134,23 @@ D.FFFF	EQU	0FFFFH	; --SLI
         CALL	C$4906			; firmware switch on ?
         JP	C,J.419B		; nope, quit
         DI
-        CALL	C$4277
+        CALL	C$4277                  ; firmware 800C
         CALL	C$4208
         CALL	C$41E7                  ; define function keys
         CALL	C$424E                  ; initialize screen 1
-        CALL	C$427C
+        CALL	C$427C                  ; firmware 800F
         LD	A,2
-        CALL	C$4281
-        CALL	C$422F
+        CALL	C$4281                  ; firmware 8012
+        CALL	C$422F                  ; setup screen adjust from clockchip
         EI
-        CALL	C$4286
-        CALL	C$428B
-        CALL	C$4290
-        CALL	C$42A9
+        CALL	C$4286                  ; firmware 8015
+        CALL	C$428B                  ; firmware 8018
+        CALL	C$4290                  ; firmware 801B
+        CALL	C$42A9                  ; firmware 802A
         CALL	GICINI                  ; initialize PSG
-        CALL	C$444A
+        CALL	C$444A                  ; install H.TIMI handler
         LD	HL,I$4477
-        CALL	C$4392
+        CALL	C$4392                  ; initialize BGM
 J$40D9:	LD	A,93H
         LD	(D.CEB4),A
 J$40DE:	LD	A,(D.CEB4)
@@ -161,29 +159,29 @@ J$40DE:	LD	A,(D.CEB4)
         CALL	C$41DE                  ; key pressed ?
         JR	NC,J$40F1               ; yep,
         LD	A,6
-        CALL	C$42B8
+        CALL	C$42B8                  ; firmware 8033
         JR	J$40DE                  ; again
 
 J$40F1:	CALL	CHGET                   ; get key
         LD	(D.C3BC),A              ; store key
-        CALL	C$43BE
+        CALL	C$43BE                  ; disable music handler
         LD	A,8
         LD	B,3
         LD	E,0
 J$4100:	CALL	WRTPSG
         INC	A
         DJNZ	J$4100                  ; silence PSG
-        LD	HL,I$F975
+        LD	HL,VOICAQ
 J$4109:	LD	A,0FFH
         LD	(HL),A
         INC	HL
-        LD	DE,I$F975+3*80H
+        LD	DE,VOICAQ+3*80H
         EX	DE,HL
         OR	A
         SBC	HL,DE
         EX	DE,HL
         JR	NZ,J$4109
-        CALL	C$443C
+        CALL	C$443C                  ; restore H.TIMI
         CALL	C$42BD
         XOR	A
         LD	(D.C3BE),A
@@ -198,10 +196,10 @@ J$4109:	LD	A,0FFH
         CALL	C$429F
         JR	J$4147
 
-J.413E:	CALL	KILBUF
+J.413E:	CALL	KILBUF                  ; clear keyboard buffer
         CALL	CHGET
         LD	(D.C3BC),A              ; store key
-J$4147:	CALL	C$42A4
+J$4147:	CALL	C$42A4                  ; firmware 8027
         LD	A,(D.C3BC)              ; stored key
         CP	" "
         JR	Z,J$4175                ; change language
@@ -214,7 +212,7 @@ J$4147:	CALL	C$42A4
         CP	"4"
         JR	Z,J$4189                ; calendar
         CP	"5"
-        JR	Z,J$418E                ; modem settings
+        JR	Z,J$418E                ; TELCOM application
         CP	"6"
         JR	Z,J$4191                ; access link network
         CP	"7"
@@ -224,51 +222,53 @@ J$4147:	CALL	C$42A4
 
 ; MSX BASIC
 
-        LD	A,1
+        LD	A,1                     ; quit firmware
         JR	J.4197
 
 ; change language
 
-J$4175:	CALL	C$42B3
+J$4175:	CALL	C$42B3                  ; change language
         JR	J.413E
 
 ; clock settings
 
-J$417A:	CALL	C$4263
+J$417A:	CALL	C$4263                  ; clock settings
         JR	J.413E
 
 ; screen adjust
 
-J$417F:	CALL	C$4268
+J$417F:	CALL	C$4268                  ; screen adjust
         JR	J.413E
 
 ; clock
 
-J$4184:	CALL	C$426D
+J$4184:	CALL	C$426D                  ; clock
         JR	J.413E
 
 ; calendar
 
-J$4189:	CALL	C$4272
+J$4189:	CALL	C$4272                  ; calendar
         JR	J.413E
 
-; modem settings
+; TELCOM application
 
-J$418E:	XOR	A
+J$418E:	XOR	A                       ; TELCOM application
         JR	J.4197
 
 ; access link network
 
-J$4191:	LD	A,2
+J$4191:	LD	A,2                     ; the links
         JR	J.4197
 
 ; document management
 
-J$4195:	LD	A,4
+J$4195:	LD	A,4                     ; document management
 J.4197:	CALL	C$41A5
         RET
 
-J.419B:	LD	A,1
+; quit firmware
+
+J.419B:	LD	A,1                     ; quit firmware
         PUSH	AF
         LD	A,1
         CALL	CHGMOD
@@ -354,17 +354,17 @@ C$4208:	LD	HL,I.C6B4
         LD	HL,D.C3BE
         LD	(HL),A
         DEC	BC
-        LD	DE,I$C3BF
-        LDIR
+        LD	DE,D.C3BE+1
+        LDIR                            ; clear C3BE-C6B3
         LD	HL,I.0800
         LD	(D$C3CC),HL
-        LD	A,02H	; 2 
+        LD	A,2
         LD	(D$C3C0),A
         LD	HL,I$2020
         LD	(D$C3CA),HL
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine setup screen adjust from clockchip
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -558,7 +558,7 @@ J.42C2:	PUSH	AF
         LD	A,H
         LD	(DE),A                  ; add JP address
         POP	AF
-        JP	J.CF00
+        JP	J.CF00                  ; select firmware in page 1 and 2
 
 ;	  Subroutine select firmware in page 1 and 2
 ;	     Inputs  ________________________
@@ -684,7 +684,7 @@ I.42EB:	DI
         EI
 I$4391:	RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize BGM
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -698,36 +698,36 @@ C$4392:	LD	(D.C6B1),HL
         LD	L,A
         INC	DE
         LD	A,(DE)
-        LD	H,A
+        LD	H,A                     ; offset
         INC	DE
         ADD	HL,BC
-        LD	(D.C6AB),HL
+        LD	(D.C6AB),HL             ; pointer play channel A
         LD	A,(DE)
         LD	L,A
         INC	DE
         LD	A,(DE)
-        LD	H,A
+        LD	H,A                     ; offset
         INC	DE
         ADD	HL,BC
-        LD	(D.C6AD),HL
+        LD	(D.C6AD),HL             ; pointer play channel B
         LD	A,(DE)
         LD	L,A
         INC	DE
         LD	A,(DE)
-        LD	H,A
+        LD	H,A                     ; offset
         INC	DE
         ADD	HL,BC
-        LD	(D.C6AF),HL
-        LD	A,01H	; 1 
-        LD	(D.C6AA),A
+        LD	(D.C6AF),HL             ; pointer play channel C
+        LD	A,1
+        LD	(D.C6AA),A              ; enable music handler
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine disable music handler
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$43BE:	XOR	A
-        LD	(D.C6AA),A
+        LD	(D.C6AA),A              ; disable music handler
         RET
 
 ;	  Subroutine __________________________
@@ -735,11 +735,11 @@ C$43BE:	XOR	A
 ;	     Outputs ________________________
 
 C$43C3:	LD	A,(MUSICF)
-        AND	A
-        JR	NZ,J$43D0
+        AND	A                       ; channel active ?
+        JR	NZ,J$43D0               ; yep, quit
         LD	A,(D.C6AA)
-        AND	A
-        CALL	NZ,C$43D1
+        AND	A                       ; music handler enabled ?
+        CALL	NZ,C$43D1               ; yep,
 J$43D0:	RET
 
 ;	  Subroutine __________________________
@@ -748,24 +748,24 @@ J$43D0:	RET
 
 C$43D1:	XOR	A
         EX	AF,AF'
-        LD	IX,D.C6AB
-        LD	DE,I$F959
+        LD	IX,D.C6AB               ; pointer play channel A
+        LD	DE,QUETAB+0*6           ; queue play channel A
         CALL	C.4402
-        LD	IX,D.C6AD
-        LD	DE,I$F95F
+        LD	IX,D.C6AD               ; pointer play channel B
+        LD	DE,QUETAB+1*6           ; queue play channel B
         CALL	C.4402
-        LD	IX,D.C6AF
-        LD	DE,I$F965
+        LD	IX,D.C6AF               ; pointer play channel C
+        LD	DE,QUETAB+2*6           ; queue play channel C
         CALL	C.4402
         EX	AF,AF'
-        OR	A
-        JR	NZ,J$43F9
-        LD	(D.C6AA),A
+        OR	A                       ; any music packets ?
+        JR	NZ,J$43F9               ; yep,
+        LD	(D.C6AA),A              ; disable music handler
         RET
 
-J$43F9:	LD	A,01H	; 1 
-        LD	(PLYCNT),A
-        CALL	STRTMS
+J$43F9:	LD	A,1
+        LD	(PLYCNT),A              ; 1 string left
+        CALL	STRTMS                  ; starting the music
         RET
 
 ;	  Subroutine __________________________
@@ -778,7 +778,7 @@ C.4402:	LD	L,(IX+0)
         OR	H
         RET	Z
         EX	AF,AF'
-        INC	A
+        INC	A                       ; update music packets
         EX	AF,AF'
         LD	A,(HL)
         INC	HL
@@ -804,7 +804,7 @@ J$4421:	POP	AF
         DEC	A
         LD	(HL),A
         INC	HL
-        LD	(HL),00H
+        LD	(HL),0
         INC	HL
         INC	HL
         INC	HL
@@ -812,35 +812,35 @@ J$4432:	LD	B,(HL)
         INC	HL
         LD	H,(HL)
 J$4435:	LD	L,B
-        LD	B,00H
+        LD	B,0
         EX	DE,HL
         LDIR
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine restore H.TIMI
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$443C:	DI
-J$443D:	LD	DE,H.TIMI
-J$4440:	LD	HL,J.C6A5
+        LD	DE,H.TIMI
+        LD	HL,J.C6A5
         LD	BC,5
         LDIR
-J$4448:	EI
+        EI
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine install H.TIMI handler
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C$444A:	XOR	A
-J$444B:	LD	(D.C6AA),A
+        LD	(D.C6AA),A              ; disable music handler
         DI
         LD	DE,J.C6A5
         LD	HL,H.TIMI
         LD	BC,5
-        LDIR
-        LD	A,87H
+        LDIR                            ; store H.TIMI
+        LD	A,87H                   ; slot 3-1
         LD	(H.TIMI+1),A
         LD	A,0F7H
         LD	(H.TIMI+0),A
@@ -848,16 +848,17 @@ J$444B:	LD	(D.C6AA),A
         LD	(H.TIMI+2),HL
         LD	A,0C9H
         LD	(H.TIMI+4),A
-        EI
+        EI                              ; install H.TIMI handler
         RET
 
 I$4471:	CALL	C$43C3
-        JP	J.C6A5
+        JP	J.C6A5                  ; previous H.TIMI
 
-I$4477:	LD	BC,I.0007
-        INC	C
-        NOP
-        LD	DE,I$0200
+I$4477: DEFB    1
+        DEFW    7                       ; offset
+        DEFW    12                      ; offset
+        DEFW    17                      ; offset
+        DEFB    2
         LD	D,00H
         RST	38H
         RST	38H
@@ -1622,7 +1623,7 @@ J$45AE:	ADC	A,H
         LD	DE,C.FF00
         RST	38H
 
-;	  Subroutine __________________________
+;	  Subroutine H.STKE hooked ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1744,7 +1745,7 @@ J.48B0:	POP	AF
         SCF
 J$48B4:	RET
 
-;	  Subroutine __________________________
+;	  Subroutine ASCII or Panasonic firmware ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1760,14 +1761,14 @@ C$48B5:	LD	HL,I.C010
         RET
 
 J$48CD:	LD	A,(D.48FF)
-        LD	B,A
+        LD	B,A                     ; size of MSX
         LD	HL,I.C010
         CALL	C.48F9                  ; clear
         SCF
         RET
 
 J$48D9:	LD	A,(D.4903)
-        LD	B,A
+        LD	B,A                     ; size of JW
         LD	HL,I.C010
         CALL	C.48F9                  ; clear
         SCF
@@ -1826,13 +1827,13 @@ J$490F:	AND	A
 
         DEFS	05000H-$,0FFH
 
-; firmware
+; firmware function
 
 C.5000:	CP	2                       ; access link network ?
         JR	Z,J$500A                ; yep,
         CALL	X.6000
         DEFB    9
-        DEFW    I$4090                  ; other firmware option
+        DEFW    I$4090                  ; document management
 
 J$500A:	CALL	X.6000
         DEFB    13

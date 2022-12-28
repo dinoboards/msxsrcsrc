@@ -21,32 +21,7 @@ TRPENA  EQU     631BH                   ; enable trap
 TRPDIS  EQU     632BH                   ; disable trap
 TRPSTP  EQU     6331H                   ; stop trap
 
-I$0209	EQU	0209H	; ----I
-I$021E	EQU	021EH	; ----I
-I.0258	EQU	0258H	; ----I
-I$02CD	EQU	02CDH	; ----I
-I$02FF	EQU	02FFH	; ----I
-I.04B0	EQU	04B0H	; ----I
-I$051E	EQU	051EH	; ----I
-I$081E	EQU	081EH	; ----I
-I$0A0E	EQU	0A0EH	; ----I
-I$0D1E	EQU	0D1EH	; ----I
-I$0FD4	EQU	0FD4H	; ----I
-I$1000	EQU	1000H	; ----I
-I$131E	EQU	131EH	; ----I
-J.1840	EQU	1840H	; J----
-I$2058	EQU	2058H	; ----I
-J$2140	EQU	2140H	; J----
-I.322C	EQU	322CH	; ----I
-I$331E	EQU	331EH	; ----I
-D$332C	EQU	332CH	; --S--
-I$3333	EQU	3333H	; ----I
-I$361E	EQU	361EH	; ----I
-I$381E	EQU	381EH	; ----I
-I$3A1E	EQU	3A1EH	; ----I
-I$3B1E	EQU	3B1EH	; ----I
 C.6000	EQU	6000H	; -C---
-
 D$6047	EQU	6047H	                ; MSX modem disabled
 D.6049	EQU	6049H                   ; b7,b6,b2 = terminal mode
 D.604B	EQU	604BH	                ; b7-b4 = trap number, b3-b0 = com number
@@ -129,7 +104,7 @@ D.7EEA	EQU	7EEAH                   ; store foreground/background color
 D$7EEC	EQU	7EECH                   ; store border color
 D$7EF9	EQU	7EF9H	; ---L-
 D.7EFA	EQU	7EFAH                   ; store function key display
-D.7EFC	EQU	7EFCH	; --SL-
+D.7EFC	EQU	7EFCH                   ; duplex mode
 
 I$C000	EQU	0C000H	; ----I
 D$C008	EQU	0C008H	; ---L-
@@ -173,8 +148,8 @@ I.FFFF	EQU	0FFFFH	; ----I
 C.40A5:	JP	C.40FF                  ; print and send byte
 C.40A8:	JP	C.5BC8		        ; MAIN BIOS
 C.40AB:	JP	C.5BC3		        ; MAIN BIOS (EI)
-C.40AE:	JP	C.57A6
-C.40B1:	JP	J$49C7
+C.40AE:	JP	C.57A6                  ; TELCOM
+C.40B1:	JP	J$49C7                  ; set comterm mode
 C.40B4:	JP	C.4BEA                  ; comterm
 C.40B7:	JP	J$473C
 C.40BA:	JP	J$488C                  ; BASIC error
@@ -1684,6 +1659,10 @@ C.49B8:	PUSH	HL
         POP	HL
         RET
 
+;	  Subroutine set comterm mode
+;	     Inputs  A = comterm mode, C = ?, HL = pointer to auto login string
+;	     Outputs ________________________
+
 J$49C7:	PUSH	HL
         PUSH	AF
         LD	(D.615D),A              ; update comterm mode
@@ -1815,7 +1794,7 @@ J$4A70:	PUSH	HL
         LD	H,A
         LD	L,A
         LD	(D.6162),HL             ; end auto login
-        LD	(D.7EFC),A
+        LD	(D.7EFC),A              ; full duplex mode
         CALL	C.6000
         DEFB    0
         DEFW    I$4177                  ; MODEM.LINSEL (off hook)
@@ -2092,7 +2071,7 @@ C.4BEA:	CALL	C.4BBD                  ; store PROMPT hook and disable
         LD	(D.61A6),HL
         CPL
         LD	(D.6173),A              ; comterm activated
-        LD	A,(D.7EFC)
+        LD	A,(D.7EFC)              ; duplex mode
         LD	(D.6077),A              ; set duplex mode
         LD	HL,CNSDFG
         LD	DE,D.7EFA
@@ -3770,7 +3749,7 @@ C.57A6:	PUSH	HL                      ; store BASIC pointer
         CALL	C.49B8                  ; store foreground, background and border color
         CALL	C.6000
         DEFB    4
-        DEFW    C$4090                  ; telcom
+        DEFW    C$4090                  ; telcom application
         CALL	C.49E4                  ; restore foreground, background and border color
         XOR	A
         LD	(INTFLG),A              ; clear STOP status
@@ -3793,7 +3772,7 @@ C.57BC:	CALL	C.5B6E			; check for BASIC character
         POP	HL                      ; restore operand
         CALL	C.6000
         DEFB    4
-        DEFW    C$4093                  ; btelcom
+        DEFW    C$4093                  ; btelcom application
         CALL	C.49E4                  ; restore foreground, background and border color
         POP	HL
         XOR	A

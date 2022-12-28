@@ -99,7 +99,7 @@ CLSFIL	EQU	6B24H	; ----I
 FILOUT	EQU	6C48H	; ----I
 INDSKC	EQU	6C71H	; ----I
 D.7EE7	EQU	7EE7H                   ; printer not ready counter
-D.7EED	EQU	7EEDH	; --SL-
+D.7EED	EQU	7EEDH                   ; auto CR on receive
 
 BDOS	EQU	0F37DH	; -C---
 CSRX	EQU	0F3DDH	; ---LI
@@ -130,8 +130,8 @@ I.409F:	JP	C.416F
 I.40A2:	JP	J$4234                  ; stop upload log/text
 I$40A5:	JP	J$4105                  ; stop download log/text
 ?.40A8:	JP	J$4C51
-I$40AB:	JP	J$461A
-?.40AE:	JP	J$46A1
+I$40AB:	JP	J$461A			; save phone book data to file
+?.40AE:	JP	J$46A1                  ; load phone book data from file
 ?.40B1:	JP	C.47DF
 ?.40B4:	JP	C.47F2                  ; get byte from disk buffer
 ?.40B7:	JP	C.49C4                  ; close file (with stop/start sending)
@@ -396,7 +396,7 @@ C.423A:	CALL	C.4A9A                  ; get pointer to buffer
 
 J$4245:	LD	L,10                    ; text id = download X-modem
         CALL	C.4278
-        CALL	C.4FDE
+        CALL	C.4FDE                  ; restore LF and CR conversions
         LD	C,14                    ; text id = download aborted
         LD	L,18                    ; text id = end of download
         JP	C.411B
@@ -407,7 +407,7 @@ J$4245:	LD	L,10                    ; text id = download X-modem
 
 C$4254:	LD	L,8                     ; text id = upload X-modem
         CALL	C.4278
-        CALL	C.4FDE
+        CALL	C.4FDE                  ; restore LF and CR conversions
         PUSH	AF
         PUSH	DE
         CALL	C.5074                  ; output to modem ?
@@ -436,7 +436,7 @@ C.4278:	CALL	C.4FCC                  ; disable XON/XOFF handshake
         LD	D,A
         LD	E,A
         LD	(D.6359),DE
-        CALL	C.4FD0                  ; disable auto LF on send and receive
+        CALL	C.4FD0                  ; disable LF and CR conversions
         CALL	C.4A9A                  ; get pointer to buffer
         CALL	C.4857                  ; check if file exists
         RET	C                       ; error, quit
@@ -675,7 +675,7 @@ C.444B:	CALL	C.5074                  ; output to modem ?
 
 J$4452:	LD	L,8                     ; text id = upload X-modem
         CALL	C.4470
-        CALL	C.4FDE
+        CALL	C.4FDE                  ; restore LF and CR conversions
         LD	C,12                    ; text id = upload aborted
         LD	L,16                    ; text id = end of upload
         JP	C.411B
@@ -686,7 +686,7 @@ J$4452:	LD	L,8                     ; text id = upload X-modem
 
 C$4461:	LD	L,10                    ; text id = download X-modem
         CALL	C.4470
-        CALL	C.4FDE
+        CALL	C.4FDE                  ; restore LF and CR conversions
         LD	C,14                    ; text id = download aborted
         LD	L,18                    ; text id = end of download
         JP	C.411B
@@ -702,7 +702,7 @@ C.4470:	CALL	C.4FCC                  ; disable XON/XOFF handshake
         LD	(D.6358),A
         LD	DE,0
         LD	(D.6359),DE
-        CALL	C.4FD0                  ; disable auto LF on send and receive
+        CALL	C.4FD0                  ; disable LF and CR conversions
         CALL	C.4A9A                  ; get pointer to buffer
         CALL	C.4857                  ; check if file exists
         RET	C                       ; error, quit
@@ -961,16 +961,20 @@ I$45FA:	DEFB	0,0
         RST	28H
         POP	AF
 
+;	  Subroutine save phone book data to file
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$461A:	CALL	C.6000
         DEFB    1
         DEFW    I$40E4                  ; store PROMPT hook and disable
-        CALL	C$462A
+        CALL	C$462A                  ; save BSAVE file
         CALL	C.6000
         DEFB    1
         DEFW    I$40E7                  ; restore PROMPT hook
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine save BSAVE file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1065,16 +1069,20 @@ J.469E:	POP	HL
         POP	HL
         RET
 
+;	  Subroutine load BSAVE file
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 J$46A1:	CALL	C.6000
         DEFB    1
         DEFW    I$40E4                  ; store PROMPT hook and disable
-        CALL	C$46B1
+        CALL	C$46B1                  ; load BSAVE file
         CALL	C.6000
         DEFB    1
         DEFW    I$40E7                  ; restore PROMPT hook
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine load BSAVE file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2250,7 +2258,7 @@ C.4D07:	XOR	A
         LD	(D.635B),A              ; reset wildcard flag
         LD	A,(D.6085)
         LD	(D.634C),A              ; saved 6085
-        LD	A,(D.7EED)
+        LD	A,(D.7EED)              ; auto CR on receive
         LD	(D.6174),A              ; saved 7EED
         RET
 
@@ -2832,26 +2840,26 @@ C.4FBC:	CALL	C.4E45                  ; ensure carrier detect
 C.4FCC:	LD	B,0FEH                  ; clear b0
         JR	J$4FD6
 
-;	  Subroutine disable auto LF on send and receive
+;	  Subroutine disable LF and CR conversions
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4FD0:	XOR	A
-        LD	(D.7EED),A
+        LD	(D.7EED),A              ; disable auto CR on receive
         LD	B,0F3H                  ; clear b3 and b2
 J$4FD6:	LD	A,(D.6085)
         AND	B
         LD	(D.6085),A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine restore LF and CR conversions
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.4FDE:	LD	A,(D.634C)              ; saved 6085
         LD	(D.6085),A
         LD	A,(D.6174)              ; saved 7EED
-        LD	(D.7EED),A
+        LD	(D.7EED),A              ; update auto CR on receive
         RET
 
 ;	  Subroutine __________________________
@@ -4558,7 +4566,7 @@ J.5B56:	XOR	A
         LD	(D.F65B),A              ; clear ring counter
         CALL	C.5FE8
         CALL	C$5B0E                  ; wait 1 second
-        CALL	KILBUF
+        CALL	KILBUF                  ; clear keyboard buffer
         CALL	C.6000
         DEFB	0
         DEFW    C.40FC                  ; get ring status (reset ring status)
@@ -4647,8 +4655,8 @@ J.5C04:	CALL	C.6000
         DEFB	0
         DEFW    C.4177                  ; MODEM.LINSEL
         LD	A,(D$6370)
-        OR	A
-        JP	Z,J$5B24
+        OR	A                       ; ? flag set ?
+        JP	Z,J$5B24                ; nope,
         RET
 
 J$5C1A:	CALL	C.6000
