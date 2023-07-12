@@ -1,0 +1,2604 @@
+; COMMAND.COM
+
+; COMMAND.COM 1.11 (Tim Paterson 03/06/84)
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by Microsoft and may be others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+	TITLE	MSX-DOS version 2.2 by Tim Paterson  03/06/84
+
+	.Z80
+        ASEG
+	ORG	0100H
+
+; MSX-DOS entries
+
+WBOOT	EQU	0000H			; warm boot
+BDOS	EQU	0005H			; DOS function entry
+FCB1	EQU	005CH			; first FCB
+FCB2	EQU	006CH			; second FCB
+DBUF	EQU	0080H			; command line
+TPA	EQU	0100H			; start of TPA
+
+; MSX BIOS entries
+
+CALSLT	EQU	001CH			; inter slot call
+INITXT	EQU	006CH			; select screen mode 0
+INIT32	EQU	006FH			; select screen mode 1
+
+; DOS entries
+
+BASENT	EQU	4022H			; start Disk BASIC
+FORENT	EQU	4025H			; format disk
+
+; DOS system
+
+COUNTR	EQU	0F30EH			; country code
+TIMFLG	EQU	0F338H			; system has a real time device
+$DOSON	EQU	0F368H			; enable DOS kernel
+$DOSOF	EQU	0F36BH			; disable DOS kernel
+
+; MSX system
+
+LINL40	EQU	0F3AEH			; screen width mode 0
+LINL32	EQU	0F3AFH			; screen width mode 1
+LINLEN	EQU	0F3B0H			; screen width
+CSRX	EQU	0F3DDH			; cursor column position
+EXBRSA	EQU	0FAF8H			; slotid subrom
+EXPTBL	EQU	0FCC1H			; slot expansion flag, first entry is also slotid ROM BIOS
+
+
+_CALL	MACRO	O1,O2
+	IFNB	<O2>
+	CALL	O1,O2
+	ELSE
+	CALL	O1
+	ENDIF
+	MK
+	ENDM
+
+_JP	MACRO	O1,O2
+	IFNB	<O2>
+	JP	O1,O2
+	ELSE
+	JP	O1
+	ENDIF
+	MK
+	ENDM
+
+_DEFW	MACRO	O1
+	DEFW	O1
+	MK
+	ENDM
+
+_LD	MACRO	O1,O2
+	LD	O1,O2
+	MK
+	ENDM
+
+_SUB	MACRO	O1
+	SUB	O1
+	MK
+	ENDM
+
+
+MK	MACRO
+	MK1	%(MK_COU)
+	ENDM
+
+MK1	MACRO	AA
+MKP&AA	EQU	$-501H
+MK_COU	ASET	MK_COU+1
+	ENDM
+
+RELW	MACRO	DD
+	DEFW	MKP&DD
+	ENDM
+
+	IF1
+MK_COU	ASET	1
+	ENDIF
+
+
+	JP	J.0500
+
+; relocation table
+
+I$0103:
+
+	IF2
+
+TT_COU	ASET	MK_COU
+MKP_2	ASET	1
+
+	REPT	TT_COU-1
+	RELW	%(MKP_2)
+MKP_2	ASET	MKP_2+1
+	ENDM
+	
+	DEFW	0
+MK_COU	ASET	1
+
+	ENDIF
+
+
+	DEFS	0500H-$,0
+
+; command interpreter initialization (copy to high TPA)
+
+J.0500:	LD	A,(BDOS+2)		; high byte top of MSX-DOS TPA
+	LD	BC,I.1A00-I.0600	; size of transient part of COMMAND.COM
+	SUB	B
+	LD	D,A
+	LD	E,0			; start of transient part of COMMAND.COM in TPA
+	_LD	HL,I.0600
+	LDIR				; copy transient part
+	LD	B,A
+	DEC	B			; J.0500 in high TPA
+	_SUB	06H
+	LD	C,A			; 0 in high TPA
+	LD	HL,I$0103
+J$0517:	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)			; relocation entry (offset to J.0500)
+	INC	HL
+	LD	A,D
+	OR	E			; end of relocation table ?
+	JR	Z,J$0529		; yep, start command interpreter
+	EX	DE,HL
+	LD	A,H
+	ADD	A,B			; J.0500 in high TPA
+	LD	H,A			; entry + offset
+	LD	A,(HL)
+	ADD	A,C			; 0 in high TPA
+	LD	(HL),A
+	EX	DE,HL
+	JR	J$0517			; next entry
+
+J$0529:	INC	B
+	LD	H,B
+	LD	L,0			; I.0600 in high TPA
+	JP	(HL)			; command interpreter cold start
+
+
+	DEFS	0600H-$,0
+
+
+; command interpreter cold start
+
+I.0600:	_LD	SP,I.1A00
+	_LD	HL,J.0700
+	_LD	(D$1A13),HL		; start command interpreter
+	LD	BC,S.0700		; number of bytes
+	SRL	B
+	RR	C			; /2
+	_LD	(D$1A15),BC		; number of entries
+	LD	DE,0
+J$0617:	LD	A,(HL)
+	INC	HL
+	ADD	A,E
+	LD	E,A
+	LD	A,(HL)
+	INC	HL
+	ADC	A,D
+	LD	D,A
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J$0617		; next entry
+	_LD	(D$1A17),DE		; store checksum
+	_LD	A,(D.1A1A)
+	OR	A			; cold boot ?
+	_JP	NZ,J.0700		; nope, start command interpreter
+	INC	A
+	_LD	(D.1A1A),A		; next time no cold boot
+	_LD	DE,I$0684		; welcome message
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	_LD	HL,I$0677		; autoexec.bat
+	_LD	DE,I.1A2F
+	LD	BC,1+8+3+1
+	LDIR				; copy to batch file FCB
+	_LD	DE,I.1A2F		; batch file FCB
+	LD	C,0FH
+	CALL	BDOS			; open file (FCB)
+	OR	A			; error ?
+	JR	NZ,J$0666		; yep,
+	LD	HL,0
+	_LD	(I.1A2F+33+0),HL
+	_LD	(I.1A2F+33+2),HL	; random record = 0
+	INC	HL
+	_LD	(I.1A2F+14),HL		; record size = 1
+	LD	A,1
+	_LD	(D.1A19),A		; batch file running
+	_JP	J.0700			; command interpreter
+
+J$0666:	LD	A,13
+	LD	(DBUF+1),A
+	LD	A,(TIMFLG)
+	AND	A			; system has a real time device ?
+	JR	NZ,J$0674		; yep, skip
+	_CALL	C.0F96			; retrieve date
+J$0674:	_JP	J.0700			; start command interpreter
+
+I$0677:	DEFB	0			; default drive
+	DEFB	"AUTOEXECBAT"
+	DEFB	0			; EX = 0
+
+I$0684:	DEFB	13,10
+	DEFB	"COMMAND version 1.11",13,10
+	DEFB	"$"
+
+
+	DEFS	0700H-$,0
+
+
+; command interpreter warm start
+
+J.0700:	_LD	SP,I.1A00
+	LD	E,0FFH			; illegal drive
+	LD	C,0EH
+	CALL	BDOS			; select drive
+	_LD	(D.1831),A		; store number of drives
+	_CALL	C.1470			; cr/lf to console output
+	_LD	DE,I$1746		; hide cursor string
+	_CALL	C.148A			; string to console output
+
+; command interpreter head loop
+
+I$0716:	_LD	HL,I$0716
+	PUSH	HL			; after this, return to the interpreter head loop
+	LD	C,19H
+	CALL	BDOS			; get current drive
+	_LD	(D.1830),A		; store current drive id
+	ADD	A,"A"			; translate to drive letter
+	_CALL	C.147B			; character to console output
+	LD	A,">"
+	_CALL	C.147B			; character to console output
+	_LD	HL,(I.174E+1)
+	_LD	(D.17E0),HL		; store buffered command line size and first character
+	_LD	A,(D.1A19)
+	OR	A			; batch file running ?
+	JR	NZ,J$0757		; yep,
+	_LD	DE,I.174E
+	LD	A,128
+	LD	(DE),A			; buffer size = 128
+	LD	C,0AH
+	CALL	BDOS			; get console buffered input
+	_LD	A,(I.174E+1)
+	CP	128			; buffer full ?
+	JR	C,J$0754		; nope,
+	LD	A,127
+	_LD	(I.174E+1),A		; size of string in buffer
+	LD	A,13
+	_LD	(I.174E+2+127),A
+J$0754:	_JP	J.07F2			; execute command line
+
+J$0757:	_LD	DE,I.1A2F		; batch file FCB
+	LD	C,0FH
+	CALL	BDOS			; open file (FCB)
+	OR	A			; error ?
+	_LD	DE,I.152E		; insert disk with batch file
+	_JP	NZ,J.13E7		; yep, string to console output, wait for key and quit
+	LD	HL,1
+	_LD	(I.1A2F+14),HL		; record size = 1
+	_LD	DE,D.182F		; batch file byte buffer
+	LD	C,1AH
+	CALL	BDOS			; set transfer address
+	_LD	DE,I.174E+2		; buffered string
+
+J.0777:	_CALL	C.07BF			; read byte from batch file
+	CP	"%"			; possible dummy parameter ?
+	JR	NZ,J.07AC		; nope,
+	_CALL	C.07BF			; read byte from batch file
+	CP	"%"
+	JR	Z,J.07AC
+	CP	13
+	JR	Z,J.07AC
+	SUB	"0"			; valid dummy parameter ?
+	JR	C,J.0777		; nope, ignore and continue
+	CP	9+1			; valid dummy parameter ?
+	JR	NC,J.0777		; nope, ignore and continue
+	ADD	A,A
+	_LD	HL,I.1A1B		; dummy parameters pointers
+	ADD	A,L
+	LD	L,A
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)			; pointer to parameter
+	LD	L,A
+	OR	H			; parameter has a value ?
+	JR	Z,J.0777		; nope, ignore and continue
+
+; replace parameter with value
+
+J$079E:	LD	A,(HL)
+	INC	HL
+	_CALL	C.12BC			; is seperator character
+	JR	Z,J.0777		; yep, ignore and continue
+	JR	C,J.0777		; control character, ignore and continue
+	_CALL	C.07E0			; copy parameter char and output to console
+	JR	J$079E			; next
+
+; command line character (no parameter)
+
+J.07AC:	_CALL	C.07E0			; copy parameter char and output to console
+	CP	13			; CR ?
+	JR	NZ,J.0777		; nope, continue
+	LD	A,E
+	SUB	LOW (I.174E+2+1)
+	_LD	(I.174E+1),A		; update size of command line
+	_CALL	C.07BF			; read byte from batch file
+	_JP	J.07F2			; execute command line
+
+;	  Subroutine read byte from batch file
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.07BF:	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	_LD	DE,I.1A2F		; batch file FCB
+	LD	HL,1
+	LD	C,27H
+	CALL	BDOS			; random block read
+	POP	BC
+	POP	DE
+	POP	HL
+	OR	A
+	JR	NZ,J$07D9
+	_LD	A,(D.182F+0)
+	CP	1AH			; EOF character ?
+	RET	NZ			; nope, quit
+J$07D9:	XOR	A
+	_LD	(D.1A19),A		; batch file not running
+	LD	A,13			; return CR
+	RET
+
+;	  Subroutine copy parameter char and output to console
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.07E0:	PUSH	HL
+	_LD	HL,I.174E+2+126
+	OR	A
+	SBC	HL,DE			; past end of buffered command line ?
+	POP	HL
+	JR	NC,J$07ED		; nope, copy and print character
+	CP	13			; CR ?
+	RET	NZ			; nope, quit
+J$07ED:	LD	(DE),A
+	INC	DE
+	_JP	C.147B			; character to console output
+
+; execute command line (with empty check)
+
+J.07F2:	_CALL	C.1475			; lf to console output
+	_LD	A,(I.174E+1)
+	OR	A			; empty string in buffer ?
+	JR	NZ,J$080A		; nope,
+	_LD	HL,(D.17E0)
+	_LD	(I.174E+1),HL		; restore buffered command line size and first character.
+					; buffered line before this empty one could be reused
+C.0801:	RET
+
+;	  Subroutine string + cr/lf to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J.0802:	LD	C,09H
+	CALL	BDOS			; string to console output
+	_JP	C.1470			; cr/lf to console output
+
+; execute command line
+
+J$080A:	_LD	HL,I.174E+2		; buffered string
+	_LD	DE,I.17E5		; search FCB
+	XOR	A			; clear flags
+	_CALL	C.1168			; parse filespec and setup search FCB
+	PUSH	HL			; store pointer
+	LD	DE,DBUF+1
+	LD	B,-1
+J$081A:	LD	A,(HL)
+	LD	(DE),A
+	INC	B
+	INC	HL
+	INC	DE
+	CP	13			; CR ?
+	JR	NZ,J$081A		; nope, next
+	LD	A,B
+	LD	(DBUF+0),A		; store size
+	POP	HL			; restore pointer
+	_CALL	C.1218			; parse switch(es)
+	_LD	(D.17E2),A		; store command switch flags
+	LD	DE,FCB1
+	LD	A,1			; allow seperator at start
+	_CALL	C.1168			; parse filespec and setup search FCB
+	_CALL	C.1218			; parse switch(es)
+	_LD	(D.17E3),A		; store first argument switch flags
+	LD	DE,FCB2
+	LD	A,1			; allow seperator at start
+	_CALL	C.1168			; parse filespec and setup search FCB
+	_CALL	C.1218			; parse switch(es)
+	_LD	(D.17E4),A		; store second argument switch flags
+	XOR	A
+	LD	(FCB1+32),A		; CR = 0
+	_LD	HL,I.17E5		; search FCB
+	LD	A,(HL)
+	OR	A			; default drive ?
+	JR	NZ,J$087B		; nope, no command
+	INC	HL
+	LD	A,(HL)
+	CP	" "			; no command specified ?
+	RET	Z			; yep, quit
+	_LD	HL,I$1498		; table with internal commands
+	LD	C,0FH			; number of commands
+J$085F:	LD	B,8
+	_LD	DE,I.17E5+1
+J$0864:	LD	A,(DE)
+	CP	(HL)			; match ?
+	JR	NZ,J.0871		; nope, next command
+	INC	HL
+	INC	DE
+	DJNZ	J$0864
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)			; handler
+	EX	DE,HL
+	JP	(HL)			; start handler
+
+J.0871:	INC	HL
+	DJNZ	J.0871
+	INC	HL
+	INC	HL
+	DEC	C
+	JR	NZ,J$085F		; next command
+	JR	J.0891			; not an internal command, try COM or BAT
+
+J$087B:	CP	0FFH			; invalid drive ?
+	_LD	DE,I.1585		; invalid drive
+	_JP	Z,J.0802		; yep, string + cr/lf to console output and quit
+	LD	E,A
+	DEC	E			; driveid
+	INC	HL
+	LD	A,(HL)
+	CP	" "			; filename specified ?
+	JR	NZ,J.0891		; yep, try COM or BAT
+	LD	C,0EH
+	CALL	BDOS			; select drive
+	RET
+
+; try COM or BAT
+
+J.0891:	_LD	A,(I.17E5+1+8)
+	CP	" "			; fileextension specified ?
+	JR	NZ,J.08C7		; yep, bad command or filename
+	_LD	DE,I.17E5+1+8
+	LD	B,3
+	_CALL	C.120A			; fill remainer of filename with wildcard
+	_LD	DE,I.180A		; search result buffer
+	LD	C,1AH
+	CALL	BDOS			; set transfer address
+	LD	C,11H			; search first
+J$08AA:	_LD	DE,I.17E5		; search FCB
+	CALL	BDOS
+	OR	A			; error ?
+	JR	NZ,J.08C7		; yep
+	_LD	HL,I.173F		; default extension = BAT
+	_CALL	C.08CD			; check if correct fileextension and open file
+	JR	Z,J$08ED		; correct fileextension, execute batch file
+	_LD	HL,I.173C		; default extension = COM
+	_CALL	C.08CD			; check if correct fileextension and open file
+	JR	Z,J$093F		; correct fileextension, execute command file
+	LD	C,12H			; search next
+	JR	J$08AA			; next search
+
+J.08C7:	_LD	DE,I$15A1		; bad command or file name
+	_JP	J.0802			; string + cr/lf to console output and quit
+
+;	  Subroutine check if correct fileextension and open file
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.08CD:	_LD	DE,I.180A+1+8		; fileextension
+	LD	B,3
+	_CALL	C.0E06			; compare
+	RET	NZ			; not equal, quit
+	_LD	DE,I.180A		; search result as FCB
+	LD	C,0FH
+	CALL	BDOS			; open file (FCB)
+	LD	HL,0
+	_LD	(I.180A+33+0),HL
+	_LD	(I.180A+33+2),HL	; random record = 0
+	INC	HL
+	_LD	(I.180A+14),HL		; record size = 1
+	XOR	A
+	RET
+
+; execute batch file
+
+J$08ED:	_LD	HL,I.1A1B		; dummy parameters pointers
+	LD	B,10*2
+	XOR	A
+J$08F3:	LD	(HL),A
+	INC	HL
+	DJNZ	J$08F3			; initialize
+	_LD	DE,I.1A54		; buffered command line in transient data area
+	_LD	HL,I.174E+1
+	LD	C,(HL)			; size of string in buffer
+	LD	B,0
+	INC	BC			; include CR
+	INC	HL
+	LDIR				; copy string to transient data area
+	_LD	HL,I.1A54		; buffered command line in transient data area
+	_LD	DE,I.1A1B		; dummy parameters pointers
+	LD	B,10			; 10 dummy parameters
+	JR	J.0920			; determine dummy parameters pointers
+
+J.090E:	INC	HL
+	LD	A,(HL)
+	_CALL	C.12BC			; is seperator character
+	JR	C,J.092E		; control character, quit
+	JR	NZ,J.090E		; nope,	ignore
+	_CALL	C.1290			; skip white space characters
+	_CALL	C.12BC			; is seperator character
+	JR	NZ,J.0920		; nope,
+	INC	HL			; yep, skip seperator
+J.0920:	_CALL	C.1290			; skip white space characters
+	JR	C,J.092E		; control character, quit
+	EX	DE,HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	EX	DE,HL			; update pointer to parameter
+	DEC	HL
+	DJNZ	J.090E			; next parameter
+J.092E:	_LD	HL,I.180A		; search result
+	_LD	DE,I.1A2F		; batch file FCB
+	LD	BC,37
+	LDIR
+	LD	A,1
+	_LD	(D.1A19),A		; batch file running
+	RET
+
+; execute command file
+
+J$093F:	_LD	DE,I$1742		; show cursor string
+	_CALL	C.148A			; string to console output
+	_LD	HL,(I.180A+16+2)
+	LD	A,L
+	OR	H			; file size > 64 KB ?
+	JR	NZ,J.097E		; yep, program too big
+	_LD	HL,(I.180A+16+0)	; file size
+	_LD	DE,I$19CD-255
+	SBC	HL,DE			; does program fit ?
+	JR	NC,J.097E		; nope, program too big
+	_LD	HL,I$19CD
+	LD	SP,HL			; setup temporary stack
+	EX	DE,HL
+	_LD	HL,I$0984
+	LD	BC,S.0984
+	LDIR				; install start COM file handler
+	_LD	HL,I.180A		; search result
+	LD	BC,37
+	LDIR				; initialize COM file FCB
+	LD	DE,TPA			; start of TPA
+	LD	C,1AH
+	CALL	BDOS			; set transfer address
+	_LD	HL,(I.180A+16+0)	; file size
+	_LD	DE,I$19DB		; COM file FCB
+	LD	C,27H
+	JP	BDOS			; random block read and start COM file handler
+
+J.097E:	_LD	DE,I.15BA		; program too big
+	_JP	J.0802			; string + cr/lf to console output and quit
+
+COMHDL	EQU	I$19CD + (I.098A-I$0984)
+
+I$0984:	_DEFW	COMHDL			; start COM file handler
+	DEFW	TPA			; start of COM file
+	DEFW	WBOOT			; if COM file returns, do a warm start
+
+I.098A:	LD	DE,DBUF
+	LD	C,1AH
+	JP	BDOS			; set transfer address
+
+S.0984	EQU	$-I$0984
+
+;	  Subroutine DIR
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0992:	_CALL	C.12CB			; quit if invalid drive
+	LD	DE,FCB1+1
+	_CALL	C.1208			; fill filename with wildcard (= default)
+	LD	HL,DBUF+1
+	_CALL	C.1218			; parse switch(es)
+	LD	DE,FCB1
+	LD	A,1101B			; allow seperator at start, filename defaults to spaces, fileextension defaults to space
+	_CALL	C.1168			; parse filespec and setup search FCB
+	_LD	A,(D.17E3)		; first argument switch flags
+	_LD	HL,D.17E2		; command switch flags
+	OR	(HL)
+	LD	(HL),A			; combine switches
+	AND	01H			; /W ?
+	LD	A,1			; number of tabular areas per line = 1
+	JR	Z,J.09C5		; nope,
+	LD	A,(LINLEN)
+	ADD	A,4
+	RRCA
+	RRCA
+	RRCA
+	RRCA
+	AND	0FH
+	JR	NZ,J.09C5
+	INC	A
+J.09C5:	_LD	(D.1833),A		; number of tabular areas per line
+	_LD	(D.1834),A		; update number of tabular areas left
+	LD	A,24-1
+	_LD	(D.1835),A		; lines count = 23
+	XOR	A
+	_LD	(D.1832),A		; file count = 0
+	LD	A,(FCB1+0)
+	OR	80H
+	LD	(FCB1+0),A		; all directory entries
+	LD	C,11H			; search first
+	_CALL	C.12E1			; search on FCB1
+
+; dir entry loop
+
+J$09E1:	_JP	NZ,J$0ADF		; not found, finish dir
+	_LD	A,(I.180A+13)
+	AND	0EH			; hidden, system or volume attribute ?
+	_JP	NZ,J.0AD9		; yep, skip
+	_LD	HL,D.1832
+	INC	(HL)			; update file count
+	_CALL	C.13F4			; filename and fileextension to console output
+	_LD	A,(D.17E2)		; command switch flags
+	AND	01H			; /W ?
+	_JP	NZ,J.0AA5		; yep, next entry (only filename and fileextension)
+	_LD	A,(I.180A+13)
+	AND	10H			; directory attribute ?
+	JR	Z,J$0A0C		; nope,
+	_LD	DE,I$15DB		; dir
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	JR	J$0A26
+
+J$0A0C:	LD	A,(CSRX)
+	DEC	A			; cursor at start of line ?
+	_JP	Z,J.0AA5		; yep, next entry
+	ADD	A,7
+	LD	HL,LINLEN
+	CP	(HL)			; does filesize fit ?
+	_JP	NC,J.0AA5		; nope, next entry
+	_LD	HL,(I.180A+1+28+0)
+	_LD	DE,(I.180A+1+28+2)	; DEHL = file size
+	_CALL	C.1426			; 32bit integer to console output
+J$0A26:	_LD	HL,(I.180A+1+24)	; date of file
+	LD	A,L
+	OR	H			; date specified ?
+	JR	Z,J.0AA5		; nope, next entry
+	LD	A,(CSRX)
+	DEC	A			; cursor at start of line ?
+	JR	Z,J.0AA5		; yep, next entry
+	ADD	A,8
+	PUSH	HL
+	LD	HL,LINLEN
+	CP	(HL)			; does date fit ?
+	POP	HL
+	JR	NC,J.0AA5		; nope, next entry
+	_CALL	C.1479			; space to console output
+	LD	A,L
+	AND	1FH
+	LD	E,A
+	LD	C,H
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL
+	LD	A,H
+	AND	0FH
+	LD	D,A
+	LD	B,0
+	SRL	C
+	LD	HL,1980
+	ADD	HL,BC
+	_CALL	C.1300			; date to ASCII string
+	LD	A,(COUNTR)
+	OR	A			; japanese ?
+	LD	B,8			; year (short), month, day
+	JR	Z,J$0A66		; yep,
+	LD	B,6			; day and month or month and day
+	_CALL	C.1401			; fixed sized string to console output
+	LD	B,2			; year (short)
+J$0A66:	INC	HL
+	INC	HL			; pointer to year (short)
+	_CALL	C.1401			; fixed sized string to console output
+	_LD	HL,(I.180A+1+22)	; time of file
+	LD	A,L
+	OR	H			; time specified ?
+	JR	Z,J.0AA5		; nope, next entry
+	LD	A,(CSRX)
+	DEC	A			; cursor at start of line ?
+	JR	Z,J.0AA5		; yep, next entry
+	ADD	A,6
+	PUSH	HL
+	LD	HL,LINLEN
+	CP	(HL)			; does time fit ?
+	POP	HL
+	JR	NC,J.0AA5		; nope, next entry
+	_CALL	C.1479			; space to console output
+	LD	DE,0
+	LD	B,H
+	SRL	B
+	SRL	B
+	SRL	B
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL
+	LD	A,H
+	AND	3FH
+	LD	L,A
+	LD	H,B
+	_CALL	C.1351			; time to ASCII string
+	LD	B,5			; only hours and minutes
+	_CALL	C.1401			; fixed sized string to console output
+	_LD	A,(I.17D3+11)		; a or p
+	_CALL	C.147B			; character to console output
+J.0AA5:	_LD	HL,D.1834
+	DEC	(HL)			; update number of tabular areas left
+	JR	Z,J$0AB2		; line full, fresh line
+	LD	A,9
+	_CALL	C.147B			; character to console output
+	JR	J.0AD9			; next
+
+J$0AB2:	_LD	A,(D.1833)		; number of tabular areas per line
+	_LD	(D.1834),A		; update number of tabular areas left
+	LD	A,(CSRX)
+	DEC	A			; cursor at start of line ?
+	JR	NZ,J$0AC4		; nope,
+	_LD	DE,I$174A		; move cursor up string
+	_CALL	C.148A			; string to console output
+J$0AC4:	_CALL	C.1470			; cr/lf to console output
+	_LD	A,(D.17E2)		; command switch flags
+	AND	02H			; /P ?
+	JR	Z,J.0AD9		; nope, continue
+	_LD	HL,D.1835
+	DEC	(HL)			; update lines count
+	JR	NZ,J.0AD9		; page not full, continue
+	LD	(HL),24-1
+	_CALL	C.0B71			; pause
+J.0AD9:	_CALL	C.12D7			; search next on FCB1 if "?" in filename
+	_JP	J$09E1			; dir entry loop
+
+; finish dir
+
+J$0ADF:	_LD	A,(D.1832)
+	OR	A			; any files ?
+	_LD	DE,I.15F6		; file not found
+	_JP	Z,J.0802		; nope, string + cr/lf to console output and quit
+	_LD	HL,(D.1833)
+	LD	A,H
+	CP	L			; no tabular areas used ?
+	JR	Z,J$0AF3		; yep, skip new line
+	_CALL	C.1470			; cr/lf to console output
+J$0AF3:	_CALL	C.1409			; number of files to console output
+	LD	A,(LINLEN)
+	CP	34
+	PUSH	AF
+	_CALL	NC,C.1479		; space to console output
+	POP	AF
+	_CALL	C,C.1470		; cr/lf to console output
+	LD	A,(FCB1+0)
+	AND	7FH
+	LD	E,A			; drive id
+	LD	C,1BH
+	CALL	BDOS			; get allocation information
+	PUSH	HL			; store free clusters
+	LD	E,A
+	LD	D,0			; sectors per cluster
+	_CALL	C.13B0			; multiply (bytes per sector * sectors per cluster)
+	POP	DE			; restore free clusters
+	_CALL	C.13B0			; multiply (bytes per cluster * free clusters)
+	EX	DE,HL
+	LD	L,C
+	LD	H,B			; DEHL = bytes free
+	_CALL	C.1426			; 32bit integer to console output
+	_LD	DE,I$15EA		; bytes free
+	_JP	J.0802			; string + cr/lf to console output and quit
+
+;	  Subroutine TYPE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0B25:	_CALL	C.12CB			; quit if invalid drive
+	LD	DE,TPA
+	LD	C,1AH
+	CALL	BDOS			; set transfer address
+	LD	DE,FCB1
+	LD	C,0FH
+	CALL	BDOS			; open file (FCB)
+	OR	A			; error ?
+	_LD	DE,I.15F6		; file not found
+	_JP	NZ,J.0802		; yep, string + cr/lf to console output and quit
+	LD	HL,0
+	LD	(FCB1+33+0),HL
+	LD	(FCB1+33+2),HL		; random record = 0
+	INC	HL
+	LD	(FCB1+14),HL		; record size = 1
+J$0B4C:	LD	DE,FCB1
+	_LD	HL,J.0700-TPA		; size of buffer
+	LD	C,27H
+	CALL	BDOS			; random block read
+	LD	A,L
+	OR	H			; bytes read ?
+	JR	Z,J.0B6E		; nope, finish type
+	LD	DE,TPA
+J$0B5E:	LD	A,(DE)
+	INC	DE
+	CP	1AH			; EOF ?
+	JR	Z,J.0B6E		; yep, finish type
+	_CALL	C.147B			; character to console output
+	DEC	HL
+	LD	A,L
+	OR	H
+	JR	NZ,J$0B5E		; next byte
+	JR	J$0B4C			; next block
+
+; finish type
+
+J.0B6E:	_JP	C.1470			; cr/lf to console output
+
+;	  Subroutine PAUSE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0B71:	_LD	DE,I.156C		; strik a key when ready
+	_JP	J.13E7			; string to console output, wait for key and quit
+
+;	  Subroutine REN/RENAME
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0B77:	_CALL	C.12CB			; quit if invalid drive
+	LD	DE,FCB1
+	LD	C,17H
+	CALL	BDOS			; rename file (FCB)
+	OR	A			; error ?
+	RET	Z			; nope, quit
+	_LD	DE,I$161A		; rename error
+	_JP	J.0802			; string + cr/lf to console output and quit
+
+;	  Subroutine DEL/ERASE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0B8A:	_CALL	C.12CB			; quit if invalid drive
+	LD	B,8+3
+	LD	HL,FCB1+1
+	LD	A,"?"
+J$0B94:	CP	(HL)			; wildcard character ?
+	INC	HL
+	JR	NZ,J$0BB5		; not all, delete file
+	DJNZ	J$0B94
+J$0B9A:	_LD	DE,I$1605		; are you sure
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	LD	C,01H
+	CALL	BDOS			; get console input
+	PUSH	AF
+	_CALL	C.1470			; cr/lf to console output
+	POP	AF
+	AND	5FH			; to upper
+	CP	"N"			; no ?
+	RET	Z			; yep, quit
+	CP	"Y"			; yes ?
+	JR	NZ,J$0B9A		; nope, ask again
+J$0BB5:	LD	DE,FCB1
+	LD	C,13H
+	CALL	BDOS			; delete file (FCB)
+	OR	A			; error ?
+	RET	Z			; nope, quit
+	_LD	DE,I.15F6		; file not found
+	_JP	J.0802			; string + cr/lf to console output and quit
+
+;	  Subroutine VERIFY
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0BC5:	LD	HL,FCB1+1
+	LD	A,(HL)
+	CP	"O"			; valid parameter ?
+	JR	NZ,J.0BEA		; nope, invalid parameter
+	INC	HL
+	LD	A,(HL)
+	CP	"N"			; ON ?
+	LD	E,1			; verify = on
+	JR	Z,J$0BDE		; yep,
+	CP	"F"			; valid parameter ?
+	JR	NZ,J.0BEA		; nope, invalid parameter
+	INC	HL
+	CP	(HL)			; OFF ?
+	JR	NZ,J.0BEA		; nope, invalid parameter
+	DEC	E			; verify = off
+J$0BDE:	INC	HL
+	LD	A,(HL)
+	CP	" "			; end of parameter ?
+	JR	NZ,J.0BEA		; nope, invalid parameter
+	LD	C,2EH
+	CALL	BDOS			; set/reset verify flag 
+	RET
+
+J.0BEA:	_LD	DE,I.1627		; invalid parameter
+	_JP	J.0802			; string + cr/lf to console output and quit
+
+; file block, used in copy operations
+; +0	37	FCB
+; +37	2	pointer to next file block
+; +39	1	open destination file flag
+; +40	1	?? flag
+; +41	4	time and date
+
+;	  Subroutine COPY
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0BF0:	_LD	(D.183A),SP		; store stackpointer
+	XOR	A
+	_LD	(D.1852),A		; reset concat flag
+	_LD	(D.1832),A		; file count = 0
+	LD	HL,TPA
+	_LD	(D.183C),HL		; update pointer to current file block
+	_LD	(D.184A),HL		; update pointer to free memory
+	LD	HL,DBUF+1
+	_CALL	C.1218			; parse switch(es)
+	LD	DE,FCB1			; destination file in FCB1
+	_CALL	C.0D6B			; parse filespec and setup FCB, update file mode
+	_LD	(D.184C),HL		; store pointer to possible concat filespec
+J$0C13:	_CALL	C.0D5B			; if concat, parse filespec, setup source file FCB and update file mode
+	JR	NZ,J$0C13		; concat and filename specified, skip over
+	_LD	DE,I.180A		; source file FCB
+	_CALL	C.0D6B			; parse filespec and setup FCB, update file mode
+	LD	A,C
+	_LD	(D.17E4),A		; update second argument switch flags
+	JR	NZ,J$0C28		; filename specified, skip wilcard
+	INC	DE
+	_CALL	C.1208			; fill filename with wildcard
+J$0C28:	_LD	HL,I.180A		; orginal target filespec = source file FCB
+	_LD	DE,I.183E		; new target filespec =
+	LDI				; copy drive
+	LD	IX,FCB1+1		; source filespec = FCB1
+	_CALL	C.0D93			; replace wildcard characters by actual characters
+	_LD	HL,I.183E+1		; target filespec
+	_CALL	C.12F3			; check if "?" character in filename
+	LD	E,A			; store wilcard flag
+	XOR	01H
+	LD	C,A			; store specific file flag
+	LD	HL,FCB1+1
+	_CALL	C.12F3			; check if "?" character in filename
+	AND	C
+	LD	C,A			; source wildcard flag AND target specific file flag
+	_LD	A,(D.1852)		; concat flag
+	OR	C			; (source wildcard flag AND target specific file flag) OR concat
+	_LD	(D.1851),A		; update ascii file mode flag
+	_LD	(D.184E),A		; update modify timestamp of file flag
+	ADD	A,A			; to b1
+	OR	E			; wildcard flag in b0
+	_LD	(D.1853),A		; update copy flags
+	_LD	A,(D.17E2)		; command switch flags
+	_CALL	C.0DA5			; update ascii file mode flag
+	_LD	A,(D.17E3)		; first argument switch flags
+	_CALL	C.0DA5			; update ascii file mode flag
+	_LD	(D.17E2),A		; update command switch flags
+	LD	C,11H			; search first
+	_CALL	C.12E1			; search on FCB1
+	_LD	DE,I.15F6		; file not found
+	_JP	NZ,J.0802		; not found, string + cr/lf to console output and quit
+
+J$0C72:	_LD	A,(D.1853)
+	AND	01H			; wildcard ?
+	JR	Z,J$0C7F		; nope, skip console output
+	_CALL	C.13F4			; filename and fileextension to console output
+	_CALL	C.1470			; cr/lf to console output
+J$0C7F:	_CALL	C$0DB9			; add file block
+					; new target filespec = FCB file block
+	_LD	HL,I.183E		; orginal target filespec =
+	LDI				; copy drive
+	_LD	IX,I.180A+1		; source filespec = source file FCB
+	_CALL	C.0D93			; replace wildcard characters by actual characters
+	XOR	A
+	LD	(DE),A			; EX = 0
+	_LD	(D.184F),A		; clear concat on destination flag
+	_LD	(D.1850),A		; clear update random record after end of file flag
+	_CALL	C.0DFE			; compare current file block with source file
+	JR	NZ,J$0CD6		; not equal,
+	_LD	A,(D.1853)
+	AND	02H			; concat flag ?
+	_LD	DE,I$1639		; file can not copied to itself
+	_JP	Z,J.0D47		; nope,
+	LD	A,1
+	_LD	(D.184F),A		; set concat on destination flag
+	_LD	IY,(D.183C)		; pointer to current file block
+	LD	(IY+39),1		; set open destination file flag
+	_LD	A,(D.1851)
+	OR	A			; ascii file mode ?
+	JR	NZ,J$0CD3		; yep,
+	_LD	DE,I.180A		; source file FCB
+	LD	C,0FH
+	CALL	BDOS			; open file (FCB)
+	_LD	HL,(D.183C)		; pointer to current file block
+	LD	DE,33
+	ADD	HL,DE
+	EX	DE,HL
+	_LD	HL,I.180A+16		; file size
+	LD	BC,4
+	LDIR				; update random record
+	JR	J$0CD9
+
+J$0CD3:	_LD	(D.1850),A		; set update random record after end of file flag
+J$0CD6:	_CALL	C.0E0E			; read file content in buffer
+J$0CD9:	_LD	A,(D.1853)
+	AND	01H			; wildcard flag ?
+	JR	Z,J$0D25		; nope,
+	_LD	HL,I.180A+1
+	_LD	DE,I.1854
+	LD	BC,8+3
+	LDIR				; copy source filename and fileextension
+	_LD	HL,(D.184C)		; pointer to concat filespec
+
+; handle concat
+
+J$0CEE:	_CALL	C.0D5B			; if concat, parse filespec, setup source file FCB and update file mode
+	JR	Z,J$0D06		; no concat, finish concat
+	PUSH	HL			; store pointer to filespec
+	_LD	HL,I.180A+1		; orginal target filespec = source filespec
+	LD	E,L
+	LD	D,H			; new target filespec
+	_LD	IX,I.1854		; source filespec =
+	_CALL	C.0D93			; replace wildcard characters by actual characters
+	_CALL	C.0DEB			; read file content if current file block <> source file
+	POP	HL			; restore pointer to filespec
+	JR	J$0CEE			; handle concat
+
+; finish concat
+
+J$0D06:	_CALL	C.0F77			; set ?? flag, add EOF if in ascii file mode
+	_LD	A,(D.17E2)		; command switch flags
+	_LD	(D.1851),A		; update ascii file mode flag
+	_CALL	C.12D7			; search next on FCB1 if "?" in filename
+	_JP	Z,J$0C72		; found,
+	JR	J.0D3B			; finish copy
+
+J$0D17:	LD	C,11H			; search first
+	_CALL	C.12E1			; search on FCB1
+	_LD	DE,I.15F6		; file not found
+	_JP	NZ,J.0802		; not found, string + cr/lf to console output and quit
+J$0D22:	_CALL	C.0DEB			; read file content if current file block <> source file
+J$0D25:	_CALL	C.12D7			; search next on FCB1 if "?" in filename
+	JR	Z,J$0D22		; found, next file
+	_LD	HL,(D.184C)		; pointer to concat filespec
+	LD	DE,FCB1
+	_CALL	C$0D5E			; if concat, parse filespec, setup FCB and update file mode
+	_LD	(D.184C),HL		; update pointer to concat filespec
+	JR	NZ,J$0D17		; concat and filename specified, next
+	_CALL	C.0F77			; set ?? flag, add EOF if in ascii file mode
+
+; finish copy
+
+J.0D3B:	_CALL	C.0EBF			; end file block chain, write file block buffers
+	_CALL	C.1409			; number of files to console output
+	_LD	DE,I$16BD		; copied
+	_JP	J.0802			; string + cr/lf to console output and quit
+
+; quit with error
+
+J.0D47:	_LD	SP,(D.183A)		; restore stackpointer
+	_LD	HL,(D.183C)		; pointer to current file block
+	_LD	(D.184A),HL		; update pointer to free memory
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	_CALL	C.1470			; cr/lf to console output
+	JR	J.0D3B			; finish copy
+
+;	  Subroutine if concat, parse filespec, setup source file FCB and update file mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0D5B:	_LD	DE,I.180A		; source file FCB
+
+;	  Subroutine if concat, parse filespec, setup FCB and update file mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$0D5E:	_CALL	C.1290			; skip white space characters
+	CP	"+"
+	JR	NZ,J$0D8B		; no concat, quit
+	LD	A,1
+	_LD	(D.1852),A		; set concat flag
+	INC	HL
+
+;	  Subroutine parse filespec and setup FCB, update file mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0D6B:	PUSH	DE
+	LD	A,1			; allow seperator at start
+	_CALL	C.1168			; parse filespec and setup search FCB
+	POP	DE
+	LD	A,(DE)
+	CP	0FFH			; invalid drive ?
+	JR	Z,J$0D8D		; yep, quit with invalid drive error
+	OR	A			; default drive ?
+	JR	NZ,J$0D7F		; nope,
+	_LD	A,(D.1830)		; current drive
+	INC	A
+	LD	(DE),A			; update drive
+J$0D7F:	_CALL	C.1218			; parse switch(es)
+	_CALL	C.0DA5			; update ascii file mode flag
+	INC	DE
+	LD	A,(DE)
+	DEC	DE
+	CP	" "			; filename specified ?
+	RET
+
+J$0D8B:	XOR	A
+	RET
+
+J$0D8D:	_LD	DE,I.1585		; invalid drive
+	_JP	J.0D47
+
+;	  Subroutine replace wildcard characters by actual characters
+;	     Inputs  HL = orginal target filespec (with wildcards), DE = new target filespec, IX = source filespec
+;	     Outputs ________________________
+
+C.0D93:	LD	B,8+3
+J$0D95:	LD	A,(HL)
+	INC	HL
+	CP	"?"
+	JR	NZ,J$0D9E
+	LD	A,(IX+0)
+J$0D9E:	LD	(DE),A
+	INC	DE
+	INC	IX
+	DJNZ	J$0D95
+	RET
+
+;	  Subroutine update ascii file mode flag
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0DA5:	AND	18H			; binary + ascii file or none specified ?
+	_JP	PE,J.0DB4		; yep, do not change
+	AND	08H
+	_LD	(D.1851),A		; update ascii file flag
+	JR	Z,J.0DB4		; ascii not specified,
+	_LD	(D.184E),A		; set modify timestamp of file flag
+J.0DB4:	_LD	A,(D.1851)
+	OR	A
+	RET
+
+;	  Subroutine add file block
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$0DB9:	_LD	HL,(D.184A)		; pointer to free memory
+	_LD	DE,TPA+1234
+	OR	A
+	SBC	HL,DE
+	_CALL	NC,C.0EBF		; end file block chain, write file block buffers
+	_LD	HL,(D.184A)		; pointer to free memory
+	_LD	(D.183C),HL		; update pointer to current file block
+	EX	DE,HL
+	LD	HL,45
+	ADD	HL,DE
+	_LD	(D.184A),HL		; update pointer to free memory
+	LD	HL,33
+	ADD	HL,DE
+	LD	B,8
+	XOR	A
+J$0DDA:	LD	(HL),A
+	INC	HL
+	DJNZ	J$0DDA			; random record = 0, pointer to next file block, clear ? flag, clear ?? flag
+	PUSH	DE
+	POP	IY
+	_LD	HL,(D.184A)		; pointer to free memory
+	LD	(IY+37),L
+	LD	(IY+38),H		; update pointer to next file block
+	RET
+
+;	  Subroutine read file content if current file block <> source file
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0DEB:	_CALL	C.0DFE			; compare current file block with source file
+	JR	NZ,C.0E0E		; not equal, read file content in buffer and quit
+	_LD	A,(D.184F)
+	OR	A			; concat on destination flag ?
+	RET	NZ			; yep, quit
+	_LD	DE,I$165B		; content lost before copy
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	RET
+
+;	  Subroutine compare current file block with source file
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0DFE:	_LD	HL,(D.183C)		; pointer to current file block
+	_LD	DE,I.180A		; source file FCB
+	LD	B,1+8+3
+
+;	  Subroutine compare
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0E06:	LD	A,(DE)
+	CP	(HL)
+	RET	NZ
+	INC	HL
+	INC	DE
+	DJNZ	C.0E06
+	RET
+
+;	  Subroutine read file content in buffer
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0E0E:	LD	HL,0
+	_LD	(I.180A+33+0),HL
+	_LD	(I.180A+33+2),HL	; random record = 0
+J.0E17:	XOR	A
+	_LD	(I.180A+12),A		; EX = 0
+	_LD	DE,I.180A
+	LD	C,0FH
+	CALL	BDOS			; open file (FCB)
+	OR	A			; error ?
+	RET	NZ			; yep, quit
+	_LD	HL,(D.183C)		; pointer to current file block
+	LD	DE,45-4
+	ADD	HL,DE
+	EX	DE,HL
+	_LD	HL,I.180A+20
+	LD	BC,4
+	LDIR				; copy time and date
+	LD	HL,1
+	_LD	(I.180A+14),HL		; record size = 1
+	_LD	DE,(D.184A)		; pointer to free memory
+	PUSH	DE			; store start of buffer
+	LD	C,1AH
+	CALL	BDOS			; set transfer address
+	POP	DE			; restore start of buffer
+	_LD	HL,J.0700-1
+	OR	A
+	SBC	HL,DE			; max size of buffer
+	_LD	DE,I.180A
+	LD	C,27H			; random block read
+	CALL	BDOS
+	EX	DE,HL
+	_LD	HL,(D.184A)		; pointer to free memory
+	ADD	HL,DE			; end of used buffer
+	_LD	A,(D.1851)
+	OR	A			; ascii file mode ?
+	JR	Z,J.0E6F		; nope, skip eof detection
+	LD	A,E
+	OR	D			; nothing read ?
+	JR	Z,J.0E6F		; yep, skip eof detection
+	_LD	HL,(D.184A)		; pointer to free memory
+	LD	B,D
+	LD	C,E
+	LD	A,1AH			; EOF
+	CPIR				; search for EOF
+	JR	NZ,J.0E6F		; not found, use all in buffer
+	DEC	HL			; use up to EOF
+J.0E6F:	_LD	IY,(D.183C)		; pointer to current file block
+	_LD	A,(D.1850)
+	OR	A			; update random record after end of file flag ?
+	JR	NZ,J$0E8D		; yep,
+	_LD	(D.184A),HL		; update pointer to free memory
+	LD	(IY+37),L
+	LD	(IY+38),H		; update pointer to next file block
+	_LD	DE,J.0700-1
+	SBC	HL,DE			; buffer full ?
+	RET	NZ			; nope, quit
+	_CALL	C.0EBF			; end file block chain, write file block buffers
+	JR	J.0E17			; next part of file
+
+J$0E8D:	PUSH	HL			; store end of buffer
+	_LD	HL,(D.183C)		; pointer to current file block
+	LD	DE,45
+	ADD	HL,DE
+	EX	DE,HL
+	POP	HL			; restore end of buffer
+	PUSH	HL			; store end of buffer
+	SBC	HL,DE			; size of buffer
+	LD	E,(IY+33)
+	LD	D,(IY+34)
+	ADD	HL,DE
+	LD	(IY+33),L
+	LD	(IY+34),H		; update random record
+	JR	NC,J.0EB1		; no overflow,
+	INC	(IY+35)			; update random record
+	JR	NZ,J.0EB1		; no overflow, 
+	INC	(IY+36)			; update random record
+J.0EB1:	POP	HL			; restore end of buffer
+	_LD	DE,J.0700-1
+	SBC	HL,DE			; end of buffer ?
+	_JP	Z,J.0E17		; yep, next part of file
+	XOR	A
+	_LD	(D.1850),A		; clear update random record after end of file flag
+	RET
+
+;	  Subroutine end file block chain, write file block buffers
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0EBF:	_LD	HL,(D.184A)		; pointer to free memory
+	LD	(HL),0FFH		; end marker
+	LD	HL,TPA
+	_LD	(D.184A),HL		; update pointer to free memory
+J$0ECA:	LD	A,(HL)
+	INC	A			; end marker ?
+	RET	Z			; yep, quit
+	_LD	(D.183C),HL		; update pointer to current file block
+	LD	DE,TPA
+	LD	BC,45
+	LDIR
+	_CALL	C$0EFA			; write buffer to first file block
+	LD	A,(TPA+40)
+	OR	A			; ?? flag ?
+	JR	Z,J$0EEA		; nope, free file blocks and quit
+	_LD	HL,D.1832
+	INC	(HL)			; update file count
+	LD	HL,(TPA+37)		; pointer to next file block
+	JR	J$0ECA			; next
+
+J$0EEA:	LD	HL,TPA
+	_LD	(D.183C),HL		; update pointer to current file block
+	LD	HL,TPA+45
+	LD	(TPA+37),HL		; update pointer to next file block
+	_LD	(D.184A),HL		; update pointer to free memory
+	RET
+
+;	  Subroutine write buffer to first file block
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$0EFA:	LD	A,(TPA+39)
+	OR	A			; open destination file flag ?
+	JR	NZ,J$0F15		; yep,
+	INC	A
+	LD	(TPA+39),A		; set open destination file flag
+	LD	DE,TPA
+	LD	C,16H
+	CALL	BDOS			; create file (FCB)
+	OR	A			; error ?
+	_LD	DE,I$1685		; file create error
+	_JP	NZ,J.0D47		; yep,
+	JR	J$0F24			; continue
+
+J$0F15:	LD	DE,TPA
+	LD	C,0FH
+	CALL	BDOS			; open file (FCB)
+	OR	A			; error ?
+	_LD	DE,I$1699		; write error
+	_JP	NZ,J.0D47		; yep,
+J$0F24:	LD	HL,1
+	LD	(TPA+14),HL		; record size = 1
+	_LD	HL,(D.183C)		; pointer to current file block
+	LD	DE,45
+	ADD	HL,DE			; pointer to buffer
+	EX	DE,HL
+	LD	HL,(TPA+37)		; pointer to next file block
+	SBC	HL,DE			; size of buffer used
+	PUSH	HL			; store number of bytes
+	LD	C,1AH
+	CALL	BDOS			; set transfer address
+	POP	HL			; restore number of bytes
+	LD	DE,TPA
+	LD	C,26H
+	CALL	BDOS			; random block write
+	PUSH	AF			; store write result
+	_LD	A,(D.184E)
+	OR	A			; modify timestamp of file ?
+	JR	NZ,J$0F58		; nope, skip
+	LD	HL,TPA+41
+	LD	DE,TPA+20
+	LD	BC,4
+	LDIR				; copy time and date
+J$0F58:	LD	DE,TPA
+	LD	C,10H
+	CALL	BDOS			; close file (FCB)
+	POP	AF			; restore write result
+	OR	A			; error ?
+	RET	Z			; nope, quit
+	_LD	A,(D.184F)
+	OR	A			; concat on destination flag ?
+	JR	NZ,J$0F71		; yep, skip delete file
+	LD	DE,TPA
+	LD	C,13H
+	CALL	BDOS			; delete file (FCB)
+J$0F71:	_LD	DE,I$16A5		; out of disk space
+	_JP	J.0D47
+
+;	  Subroutine set ?? flag, add EOF if in ascii file mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0F77:	_LD	IY,(D.183C)		; pointer to current file block
+	LD	(IY+40),1		; set ?? flag
+	_LD	A,(D.17E4)		; second argument switch flags
+	_CALL	C.0DA5			; update ascii file mode flag
+	RET	Z			; binairy file mode, quit
+	_LD	HL,(D.184A)		; pointer to free memory
+	LD	(HL),1AH		; EOF
+	INC	HL
+	_LD	(D.184A),HL		; update pointer to free memory
+	LD	(IY+37),L
+	LD	(IY+38),H		; update pointer to next file block
+	RET
+
+;	  Subroutine DATE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0F96:	LD	HL,DBUF+1
+	_CALL	C.1267			; get value of digits
+	JR	NZ,J$0FDF		; valid digits, skip input
+	_LD	DE,I$16C5		; current date
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	LD	C,2AH
+	CALL	BDOS			; get date
+	PUSH	HL			; store year
+	LD	C,A
+	ADD	A,A
+	ADD	A,C
+	LD	C,A			; day of week * 3
+	LD	B,0
+	_LD	HL,I$1727
+	ADD	HL,BC			; pointer to day name string
+	LD	B,3
+	_CALL	C.1401			; fixed sized string to console output
+	_CALL	C.1479			; space to console output
+	POP	HL			; restore year
+	_CALL	C.1300			; date to ASCII string
+	LD	B,10
+	LD	A,(COUNTR)
+	OR	A			; japanese ?
+	JR	NZ,J.0FD5		; nope,
+	LD	A,(LINLEN)
+	CP	30			; small screen width ?
+	JR	NC,J.0FD5		; nope,
+	LD	B,8
+	INC	HL
+	INC	HL			; use short year
+J.0FD5:	_CALL	C.1401			; fixed sized string to console output
+J$0FD8:	_LD	DE,I$16E3		; enter new date
+	_CALL	C.1251			; string to console ouput, get buffered input and check for digit
+	RET	Z			; empty input, quit
+J$0FDF:	JR	C,J.1032		; no digit, invalid date
+	LD	B,A			; store value
+	LD	A,(COUNTR)
+	OR	A			; japanese ?
+	LD	A,B
+	JR	NZ,J$1001		; nope,
+	_CALL	C$1040			; expand value to year
+	JR	C,J.1032		; error, invalid date
+	_CALL	C.1073			; check for seperator and get value of digits
+	JR	C,J.1032		; error, invalid date
+	LD	D,A			; store month
+	LD	A,(HL)
+	INC	HL
+	CP	B			; seperator ?
+	JR	NZ,J.1032		; nope, invalid date
+	_CALL	C.126D			; convert ASCII digits to decimal
+	JR	C,J.1032		; not digit, invalid date
+	LD	E,A			; store day
+	JR	J.101E
+
+J$1001:	LD	D,A			; store value1 (assume month)
+	_CALL	C.1073			; check for seperator and get value of digits
+	JR	C,J.1032		; error, invalid date
+	LD	E,A			; store value2 (assume day)
+	LD	A,(HL)
+	INC	HL
+	CP	B			; seperator ?
+	JR	NZ,J$1014		; nope,
+	_CALL	C$103C			; get value of digits (year)
+	JR	C,J.1032		; error, invalid date
+	JR	J.101E
+
+J$1014:	PUSH	DE			; store value1, value2
+	LD	C,2AH
+	CALL	BDOS			; get date
+	PUSH	HL
+	POP	IX			; year
+	POP	DE			; restore value1, value2
+J.101E:	LD	A,(COUNTR)
+	CP	2			; american ?
+	JR	C,J$1028		; nope,
+	LD	A,E
+	LD	E,D
+	LD	D,A			; swap day with month
+J$1028:	PUSH	IX			; store year
+	POP	HL			; restore year
+	LD	C,2BH
+	CALL	BDOS			; set date
+	OR	A			; error ?
+	RET	Z			; nope, quit
+J.1032:	_LD	DE,I$16D6		; invalid date
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	JR	J$0FD8
+
+;	  Subroutine get value of digits (year)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$103C:	_CALL	C.126D			; convert ASCII digits to decimal
+	RET	C			; no digit, quit
+
+;	  Subroutine expand value to year
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$1040:	LD	B,A			; store value
+	_CALL	C.1286			; is digit character
+	JR	C,J$105E		; nope, handle short year
+	DEC	HL
+	_CALL	C.126D			; convert ASCII digits to decimal
+	RET	C			; no digit, quit
+	PUSH	HL
+	LD	C,A
+	PUSH	BC
+	LD	C,B
+	LD	B,0			; value
+	PUSH	DE
+	LD	DE,100
+	_CALL	C.13B0			; multiply
+	POP	DE
+	POP	HL
+	LD	H,0
+	JR	J.106D
+
+J$105E:	PUSH	HL			; store pointer
+	LD	C,B
+	LD	B,0			; store short year
+	LD	HL,1900			; assume 19xx
+	LD	A,C
+	CP	80			; >79 ?
+	JR	NC,J.106D		; yep, 19xx
+	LD	HL,2000			; nope, 20xx
+J.106D:	ADD	HL,BC
+	PUSH	HL
+	POP	IX			; year
+	POP	HL			; restore pointer
+	RET
+
+;	  Subroutine check for seperator and get value of digits
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1073:	LD	A,(HL)
+	INC	HL
+	LD	B,A
+	CP	"/"
+	JR	Z,J.1082
+	CP	"."
+	JR	Z,J.1082
+	CP	"-"
+	SCF
+	RET	NZ			; no valid seperator, quit with error
+J.1082:	_JP	C.126D			; convert ASCII digits to decimal
+
+;	  Subroutine TIME
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1085:	LD	HL,DBUF+1
+	_CALL	C.1267			; get value of digits
+	JR	NZ,J$10AF		; valid digits, skip input
+	_LD	DE,I$16F6		; current time
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	LD	C,2CH
+	CALL	BDOS			; get time
+	_CALL	C.1351			; time to ASCII string
+	LD	B,12
+	_CALL	C.1401			; fixed sized string to console output
+J$10A2:	_LD	HL,(I.17D3+11)		; a or p + cr
+	_LD	(I.17D3+8),HL		; remove centiseconds
+	_LD	DE,I$1714		; enter new time
+	_CALL	C.1251			; string to console ouput, get buffered input and check for digit
+	RET	Z			; empty sting, quit
+J$10AF:	JR	C,J.10F2		; no digit, invalid time
+	LD	B,A			; store value
+	LD	DE,0
+	LD	A,(HL)
+	INC	HL
+	CP	":"			; seperator ?
+	JR	NZ,J.10CE		; nope,
+	_CALL	C.126D			; convert ASCII digits to decimal
+	JR	C,J.10F2		; no digit,
+	LD	E,A			; store value
+	LD	A,(HL)
+	INC	HL
+	CP	":"			; seperator ?
+	JR	NZ,J.10CE		; nope,
+	_CALL	C.126D			; convert ASCII digits to decimal
+	JR	C,J.10F2
+	LD	D,A			; store value
+	LD	A,(HL)
+J.10CE:	LD	L,E
+	LD	H,B
+	LD	E,0
+	CP	0DH			; CR ?
+	JR	Z,J.10EB		; yep, change time
+	AND	5FH			; to upper
+	CP	"A"
+	JR	Z,J$10FC
+	CP	"P"
+	JR	NZ,J.10F2
+	LD	A,H
+	CP	12
+	JR	NC,J.10EB		; change time
+	OR	A
+	JR	Z,J.10F2
+	ADD	A,12
+	LD	H,A
+J.10EB:	LD	C,2DH
+	CALL	BDOS			; set time
+	OR	A			; error ?
+	RET	Z			; nope, quit
+J.10F2:	_LD	DE,I$1707		; invalid time
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	JR	J$10A2
+
+J$10FC:	LD	A,H
+	CP	12+1
+	JR	NC,J.10F2
+	SUB	12
+	JR	NZ,J.10EB		; change time
+	LD	H,A
+	JR	J.10EB			; change time
+
+;	  Subroutine MODE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1108:	LD	HL,DBUF+1
+	_CALL	C.1290			; skip white space characters
+	_CALL	C.126D			; convert ASCII digits to decimal
+	JR	C,J.114A		; no digit,
+	OR	A			; 0 ?
+	JR	Z,J.114A		; yep, invalid parameter
+	CP	80+1			; >80 ?
+	JR	NC,J.114A		; yep, invalid parameter
+	CP	40+1			; 80 column mode ?
+	JR	C,J$1126		; nope, skip MSX2 check
+	LD	B,A
+	LD	A,(EXBRSA)
+	OR	A			; MSX1 ?
+	JR	Z,J.114A		; yep, invalid parameter
+	LD	A,B
+J$1126:	LD	B,A
+	_CALL	C.1290			; skip white space characters
+	CP	0DH
+	JR	NZ,J.114A
+	LD	A,B
+	CP	32+1			; 32 column mode ?
+	JR	NC,J$113C		; nope, 40/80 column mode
+	LD	(LINL32),A		; set 32 column width
+	LD	IX,INIT32
+	JR	J$1143			; set 32 column mode
+
+J$113C:	LD	(LINL40),A		; set 40/80 column width
+	LD	IX,INITXT
+J$1143:	LD	IY,(EXPTBL+0-1)
+	JP	CALSLT
+
+J.114A:	_LD	DE,I.1627		; invalid parameter
+	_JP	J.0802			; string + cr/lf to console output and quit
+
+;	  Subroutine BASIC
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1150:	CALL	$DOSON			; enable DOS kernel
+	JP	BASENT			; start Disk BASIC
+
+;	  Subroutine FORMAT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1156:	LD	HL,TPA			; start of the format work area
+	_LD	BC,J.0700-TPA		; size of the format work area
+	CALL	$DOSON			; enable DOS kernel
+	CALL	FORENT			; format disk
+	CALL	$DOSOF			; disable DOS kernel
+	_JP	C.1470			; cr/lf to console output
+
+;	  Subroutine parse filespec and setup search FCB
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1168:	PUSH	DE			; store pointer to FCB
+	EX	DE,HL
+	BIT	1,A
+	JR	NZ,J$1170
+	LD	(HL),0			; drive = default drive
+J$1170:	INC	HL
+	LD	BC,8			; filename length
+	BIT	2,A
+	_CALL	Z,C.1211		; fill remainer of filename with space
+	ADD	HL,BC
+	LD	C,3			; fileextension length
+	BIT	3,A
+	_CALL	Z,C.1211		; fill remainer of filename with space
+	ADD	HL,BC
+	LD	(HL),B
+	INC	HL
+	LD	(HL),B
+	INC	HL
+	LD	(HL),B
+	INC	HL
+	LD	(HL),B
+	EX	DE,HL
+	POP	DE			; restore pointer to FCB
+	BIT	0,A
+	JR	Z,J$1198
+	_CALL	C.1290			; skip white space characters
+	_CALL	C.12BC			; is seperator character
+	JR	NZ,J$119B		; nope,
+	INC	HL			; yep, skip it
+J$1198:	_CALL	C.1290			; skip white space characters
+J$119B:	_CALL	C.1299			; to upper, is filespec seperator character
+	JR	C,J.11BF		; control character, skip drive
+	JR	Z,J.11BF		; yep, skip drive
+	LD	C,A			; store possible drive letter
+	INC	HL
+	LD	A,(HL)
+	DEC	HL
+	CP	":"			; drive seperator ?
+	LD	A,C			; restore possible drive letter
+	JR	NZ,J.11BF		; nope, skip drive
+	INC	HL
+	INC	HL			; past drive spec
+	SUB	"A"			; to driveid (0 based)
+	JR	C,J$11B9		; invalid, use invalid drive
+	PUSH	HL
+	_LD	HL,D.1831
+	CP	(HL)			; valid driveid ?
+	POP	HL
+	JR	C,J$11BD		; yep,
+J$11B9:	LD	A,0FFH			; invalid drive
+	JR	J$11BE
+
+J$11BD:	INC	A			; to driveid (1 based)
+J$11BE:	LD	(DE),A
+J.11BF:	INC	DE
+	LD	C,0			; reset wildcard flag
+	LD	B,8			; filename length
+	_CALL	C$11D4
+	LD	A,(HL)
+	CP	"."			; filename seperator ?
+	JR	NZ,J$11D2		; nope, quit
+	INC	HL
+	LD	B,3			; fileextension length
+	_CALL	C.11DB
+J$11D2:	LD	A,C			; wilcard flag
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$11D4:	_CALL	C.1299			; to upper, is filespec seperator character
+	JR	C,J.11FB		; control character, end it
+	JR	Z,J.11FB		; yep, end it
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.11DB:	_CALL	C.1299			; to upper, is filespec seperator character
+	JR	Z,J.1201		; yep,
+	JR	C,J.1201		; control character,
+	INC	HL
+	INC	B
+	DEC	B
+	JR	Z,C.11DB
+	CP	"*"			; wildcard character ?
+	JR	Z,J$11F4		; yep, fill remainer with wildcard, set wildcard flag and continue
+	LD	(DE),A
+	INC	DE
+	DEC	B
+	CP	"?"
+	JR	Z,J$11F7		; yep, set wildcard flag and continue
+	JR	C.11DB			; continue
+
+J$11F4:	_CALL	C.120A			; fill remainer of filename with wildcard
+J$11F7:	LD	C,1			; set wildcard flag
+	JR	C.11DB			; continue
+
+J.11FB:	LD	A,E
+	ADD	A,B
+	LD	E,A
+	RET	NC
+	INC	D
+	RET
+
+J.1201:	INC	B
+	DEC	B
+	RET	Z
+	LD	A," "
+	JR	J.120C			; fill remainer of filename with space
+
+;	  Subroutine fill filename with wildcard
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1208:	LD	B,8+3
+
+;	  Subroutine fill remainer of filename with wildcard
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.120A:	LD	A,"?"
+J.120C:	LD	(DE),A
+	INC	DE
+	DJNZ	J.120C
+	RET
+
+;	  Subroutine fill remainer of filename with space
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1211:	LD	(HL)," "
+	INC	HL
+	DEC	C
+	JR	NZ,C.1211
+	RET
+
+;	  Subroutine parse switch(es)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1218:	LD	C,0			; clear flags
+J.121A:	_CALL	C.1290			; skip white space characters
+	_CALL	C.12BC			; is seperator character
+	JR	NZ,J$1226		; nope,
+	INC	HL
+	_CALL	C.1290			; skip white space characters
+J$1226:	CP	"/"
+	JR	NZ,J.124A
+	INC	HL
+	_CALL	C.1299			; to upper, is filespec seperator character
+	JR	Z,J.124A		; yep,
+	JR	C,J.124A		; control character,
+	INC	HL
+	PUSH	HL
+	_LD	HL,I$124C
+	LD	B,00010000B
+J$1239:	CP	(HL)
+	JR	Z,J$1244
+	INC	HL
+	SRL	B
+	JR	NC,J$1239
+	POP	HL
+	JR	J.121A
+
+J$1244:	LD	A,B
+	OR	C
+	LD	C,A			; update flags
+	POP	HL
+	JR	J.121A
+
+J.124A:	LD	A,C
+	RET
+
+I$124C:	DEFB	"B"			; b4, binary file
+	DEFB	"A"			; b3, ascii file
+	DEFB	"V"			; b2, 
+	DEFB	"P"			; b1, page mode
+	DEFB	"W"			; b0, wide display
+
+;	  Subroutine string to console ouput, get buffered input
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1251:	LD	C,09H
+	CALL	BDOS			; string to console output
+	_LD	DE,I$17D1
+	LD	A,12
+	LD	(DE),A			; size of buffer = 12
+	LD	C,0AH
+	CALL	BDOS			; get console buffered input
+	_CALL	C.1475			; lf to console output
+	_LD	HL,I.17D3
+
+;	  Subroutine get value of digits
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1267:	_CALL	C.1290			; skip white space characters
+	CP	0DH			; CR ?
+	RET	Z			; yep, quit
+
+;	  Subroutine convert ASCII digits to decimal
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.126D:	_CALL	C.1286			; is digit character
+	RET	C			; nope, quit
+	LD	C,A
+	_CALL	C.1286			; is digit character
+	JR	C,J$1282		; nope,
+	PUSH	AF
+	LD	A,C
+	ADD	A,A
+	ADD	A,A
+	ADD	A,C
+	ADD	A,A			; *10
+	LD	C,A
+	POP	AF
+	ADD	A,C
+	INC	C
+	RET
+
+J$1282:	OR	01H			; clear Zx
+	LD	A,C
+	RET
+
+;	  Subroutine is digit character
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1286:	LD	A,(HL)
+	SUB	"0"
+	RET	C
+	CP	9+1
+	CCF
+	RET	C
+	INC	HL
+	RET
+
+;	  Subroutine skip white space characters
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1290:	LD	A,(HL)
+	INC	HL
+	_CALL	C$12C5			; is white space character
+	JR	Z,C.1290		; yep, skip
+	DEC	HL
+	RET
+
+;	  Subroutine to upper, is filespec seperator character
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1299:	LD	A,(HL)
+	CP	"a"
+	JR	C,J.12A4
+	CP	"z"+1
+	JR	NC,J.12A4
+	SUB	20H			; to upper
+J.12A4:	CP	":"
+	RET	Z
+	CP	"."
+	RET	Z
+	CP	'"'
+	RET	Z
+	CP	"["
+	RET	Z
+	CP	"]"
+	RET	Z
+	CP	"_"
+	RET	Z
+	CP	"/"
+	RET	Z
+	CP	"+"
+	RET	Z
+
+;	  Subroutine is seperator character
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.12BC:	CP	"="
+	RET	Z
+	CP	";"
+	RET	Z
+	CP	","
+	RET	Z
+
+;	  Subroutine is white space character
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$12C5:	CP	09H
+	RET	Z
+	CP	20H
+	RET
+
+;	  Subroutine quit if invalid drive
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.12CB:	LD	A,(FCB1+0)
+	INC	A			; invalid drive ?
+	RET	NZ			; nope, quit
+	POP	DE
+	_LD	DE,I.1585		; invalid drive
+	_JP	J.0802			; string + cr/lf to console output and quit
+
+;	  Subroutine search next on FCB1 if "?" in filename
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.12D7:	LD	HL,FCB1+1
+	_CALL	C.12F3			; check if "?" character in filename
+	DEC	A			; found "?" ?
+	RET	NZ			; nope, quit
+	LD	C,12H			; search next
+
+;	  Subroutine search on FCB1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.12E1:	PUSH	BC
+	_LD	DE,I.180A
+	LD	C,1AH
+	CALL	BDOS			; set transfer address
+	POP	BC
+	LD	DE,FCB1
+	CALL	BDOS
+	OR	A			; error ?
+	RET
+
+;	  Subroutine check if "?" character in filename
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.12F3:	LD	B,8+3
+J$12F5:	LD	A,"?"
+	CP	(HL)
+	INC	HL
+	LD	A,1
+	RET	Z
+	DJNZ	J$12F5
+	DEC	A
+	RET
+
+;	  Subroutine date to ASCII string
+;	     Inputs  HL = year, D = month, E = day
+;	     Outputs ________________________
+
+C.1300:	PUSH	DE			; store month, day
+	LD	DE,100
+	LD	C,L
+	LD	B,H
+	_CALL	C$13C6			; divide
+	LD	E,L			; store centuries
+	LD	D,C			; store years
+	POP	BC			; restore month, day
+	LD	A,(COUNTR)
+	CP	1			; japanese ?
+	JR	NC,J$1335		; nope,
+	PUSH	DE			; store centuries, years
+	LD	D,B
+	LD	E,C
+	POP	BC			; restore centuries, years
+	_CALL	C.1384			; convert 'time' to ASCII
+	_CALL	C$1348			; adjust buffer for date
+	PUSH	HL			; store pointer
+	_LD	DE,I.17D3+2
+	_LD	HL,I.17D3+3
+	LD	BC,8
+	LDIR				; remove 'hour' seperator
+	LD	A,"-"
+	_LD	(I.17D3+7),A		; replace 'centisecond' seperator
+	LD	A,13
+	_LD	(I.17D3+10),A		; leave out a or p
+	POP	HL			; restore pointer
+	RET
+
+J$1335:	JR	Z,J$133A		; european,
+	LD	A,B
+	LD	B,C
+	LD	C,A			; swap month and day
+J$133A:	_CALL	C.1384			; convert 'time' to ASCII
+	_LD	HL,(I.17D3+9)
+	_LD	(I.17D3+8),HL		; leave out 'centiseconds' seperator
+	LD	A,13
+	_LD	(I.17D3+10),A		; leave out a or p
+
+;	  Subroutine adjust buffer for date
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$1348:	LD	A,10
+	_LD	(D.17D2),A		; actual size = 10
+	LD	A,"-"			; date separator
+	JR	J$137A			; add seperator and quit
+
+;	  Subroutine time to ASCII string
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1351:	LD	A,H
+	CP	12			; hours <12 ?
+	LD	A,"a"
+	JR	C,J$135A		; yep, am
+	LD	A,"p"			; nope, pm
+J$135A:	_LD	(I.17D3+11),A
+	LD	A,H
+	CP	12+1			; hours > 12 ?
+	JR	NC,J$1367		; yep,
+	OR	A			; hour = 0 ?
+	JR	NZ,J$1369		; nope,
+	ADD	A,24			; hour = 12
+J$1367:	SUB	12
+J$1369:	LD	C,L			; minutes
+	LD	B,A			; hours
+	_CALL	C.1384			; convert time to ASCII
+	LD	A,"."
+	_LD	(I.17D3+8),A		; centiseconds seperator
+	LD	A,9 
+	_LD	(D.17D2),A		; actual size = 9
+	LD	A,":"			; time seperator
+
+; add seperator
+
+J$137A:	_LD	(I.17D3+2),A
+	_LD	(I.17D3+5),A
+	_LD	HL,I.17D3
+	RET
+
+;	  Subroutine convert time to ASCII
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1384:	_LD	HL,I.17D3
+	LD	A,B			; hours
+	_CALL	C.13A1			; convert to decimal ASCII
+	LD	A,C			; minutes
+	_CALL	C.13A1			; convert to decimal ASCII
+	LD	A,D			; seconds
+	_CALL	C.13A1			; convert to decimal ASCII
+	LD	A,E			; centiseconds
+	_CALL	C.13A1			; convert to decimal ASCII
+	LD	A,"0"
+	_LD	HL,I.17D3+0
+	CP	(HL)
+	RET	NZ
+	LD	(HL)," "
+	RET
+
+;	  Subroutine convert to decimal ASCII
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.13A1:	LD	B,"0"-1
+J$13A3:	INC	B
+	SUB	10
+	JR	NC,J$13A3
+	ADD	A,"0"+10
+	LD	(HL),B
+	INC	HL
+	LD	(HL),A
+	INC	HL
+	INC	HL
+	RET
+
+;	  Subroutine multiply
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.13B0:	LD	HL,0
+	LD	A,B
+	LD	B,17
+	JR	J$13BF
+
+J$13B8:	JR	NC,J$13BB
+	ADD	HL,DE
+J$13BB:	RR	H
+	RR	L
+J$13BF:	RRA
+	RR	C
+	DJNZ	J$13B8
+	LD	B,A
+	RET
+
+;	  Subroutine divide
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$13C6:	LD	HL,0
+	LD	A,B
+	LD	B,16
+	RL	C
+	RLA
+J$13CF:	RL	L
+	RL	H
+	JR	C,J$13E2
+	SBC	HL,DE
+	JR	NC,J$13DA
+	ADD	HL,DE
+J$13DA:	CCF
+J$13DB:	RL	C
+	RLA
+	DJNZ	J$13CF
+	LD	B,A
+	RET
+
+J$13E2:	OR	A
+	SBC	HL,DE
+	JR	J$13DB
+
+;	  Subroutine string to console output, wait for key
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J.13E7:	LD	C,09H
+	CALL	BDOS			; string to console output
+	LD	C,08H
+	CALL	BDOS			; get console input without echo
+	_JP	C.1470			; cr/lf to console output
+
+;	  Subroutine filename and fileextension to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.13F4:	_LD	HL,I.180A+1
+	LD	B,8
+	_CALL	C.1401			; fixed sized string to console output
+	_CALL	C.1479			; space to console output
+	LD	B,3
+
+;	  Subroutine fixed sized string to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1401:	LD	A,(HL)
+	INC	HL
+	_CALL	C.147B			; character to console output
+	DJNZ	C.1401
+	RET
+
+;	  Subroutine number of files to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1409:	_LD	A,(D.1832)		; file count
+	LD	L,A
+	LD	H,0
+	LD	DE,0			; DEHL = number of files
+	_CALL	C.1426			; 32bit integer to console output
+	_LD	DE,I$15E4		; file
+	LD	C,09H
+	CALL	BDOS			; string to console output
+	_LD	A,(D.1832)
+	DEC	A			; 1 file ?
+	RET	Z			; yep, quit
+	LD	A,"s"
+	JR	C.147B			; character to console output
+
+;	  Subroutine 32bit integer to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1426:	LD	BC,0
+	_LD	(D.1836+0),BC
+	_LD	(D.1836+2),BC		; 4 bytes BCD = 0
+	LD	C,32			; 32 bits
+J.1433:	ADD	HL,HL
+	RL	E
+	RL	D			; shift high bit in Cx
+	PUSH	HL
+	_LD	HL,D.1836
+	LD	B,4
+J$143E:	LD	A,(HL)
+	ADC	A,A
+	DAA
+	LD	(HL),A
+	INC	HL
+	DJNZ	J$143E
+	POP	HL
+	DEC	C
+	JR	NZ,J.1433		; next bit
+	LD	BC,4*256 + '0' - ' '	; 4 bytes, do not display 0
+	_LD	HL,D.1836+3
+J.144F:	LD	A,(HL)
+	RRA
+	RRA
+	RRA
+	RRA				; high nibble
+	_CALL	C.1465			; BCD nibble to console output
+	LD	A,1
+	SUB	B			; last byte ?
+	JR	NZ,J$145D		; nope, skip
+	LD	C,A			; display 0
+J$145D:	LD	A,(HL)			; low nibble
+	DEC	HL
+	_CALL	C.1465			; BCD nibble to console output
+	DJNZ	J.144F			; next byte
+	RET
+
+;	  Subroutine BCD nibble to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1465:	AND	0FH
+	JR	Z,J$146B
+	LD	C,0
+J$146B:	OR	"0"
+	SUB	C
+	JR	C.147B			; character to console output
+
+;	  Subroutine cr/lf to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1470:	LD	A,0DH
+	_CALL	C.147B			; character to console output
+
+;	  Subroutine lf to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1475:	LD	A,0AH
+	JR	C.147B			; character to console output
+
+;	  Subroutine space to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.1479:	LD	A," "
+
+;	  Subroutine character to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.147B:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	E,A
+	LD	C,02H
+	CALL	BDOS			; console output
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+	RET
+
+;	  Subroutine string to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.148A:	LD	A,(DE)
+	INC	DE
+	OR	A
+	RET	Z
+	PUSH	DE
+	LD	E,A
+	LD	C,06H
+	CALL	BDOS			; direct console I/O
+	POP	DE
+	JR	C.148A
+
+I$1498:	DEFB	"DIR     "
+	_DEFW	C.0992
+
+	DEFB	"COPY    "
+	_DEFW	C.0BF0
+
+	DEFB	"TYPE    "
+	_DEFW	C.0B25
+
+	DEFB	"REN     "
+	_DEFW	C.0B77
+
+	DEFB	"DEL     "
+	_DEFW	C.0B8A
+
+	DEFB	"DATE    "
+	_DEFW	C.0F96
+
+	DEFB	"TIME    "
+	_DEFW	C.1085
+
+	DEFB	"RENAME  "
+	_DEFW	C.0B77
+
+	DEFB	"ERASE   "
+	_DEFW	C.0B8A
+
+	DEFB	"PAUSE   "
+	_DEFW	C.0B71
+
+	DEFB	"REM     "
+	_DEFW	C.0801
+
+	DEFB	"VERIFY  "
+	_DEFW	C.0BC5
+
+	DEFB	"MODE    "
+	_DEFW	C.1108
+
+	DEFB	"BASIC   "
+	_DEFW	C.1150
+
+	DEFB	"FORMAT  "
+	_DEFW	C.1156
+
+I.152E:	DEFB	13,10
+	DEFB	"Insert disk with batch file",13,10
+	DEFB	"and strike any key when ready "
+	DEFB	"$"
+
+I.156C:	DEFB	"Strike a key when ready "
+	DEFB	"$"
+
+I.1585:	DEFB	"Invalid drive specification"
+	DEFB	"$"
+
+I$15A1:	DEFB	"Bad command or file name"
+	DEFB	"$"
+
+I.15BA:	DEFB	"Program too big to fit in memory"
+	DEFB	"$"
+
+I$15DB:	DEFB	"  <DIR> "
+	DEFB	"$"
+
+I$15E4:	DEFB	" file"
+	DEFB	"$"
+
+I$15EA:	DEFB	" bytes free"
+	DEFB	"$"
+
+I.15F6:	DEFB	"File not found"
+	DEFB	"$"
+
+I$1605:	DEFB	"Are you sure (Y/N)? "
+	DEFB	"$"
+
+I$161A:	DEFB	"Rename error"
+	DEFB	"$"
+
+I.1627:	DEFB	"Invalid parameter"
+	DEFB	"$"
+
+I$1639:	DEFB	"File cannot be copied onto itself"
+	DEFB	"$"
+
+I$165B:	DEFB	"Content of destination lost before copy",13,10
+	DEFB	"$"
+
+I$1685:	DEFB	"File creation error"
+	DEFB	"$"
+
+I$1699:	DEFB	"Write error"
+	DEFB	"$"
+
+I$16A5:	DEFB	"Insufficient disk space"
+	DEFB	"$"
+
+I$16BD:	DEFB	" copied"
+	DEFB	"$"
+
+I$16C5:	DEFB	"Current date is "
+	DEFB	"$"
+
+I$16D6:	DEFB	"Invalid date"
+	DEFB	"$"
+
+I$16E3:	DEFB	13,10
+	DEFB	"Enter new date: "
+	DEFB	"$"
+
+I$16F6:	DEFB	"Current time is "
+	DEFB	"$"
+
+I$1707:	DEFB	"Invalid time"
+	DEFB	"$"
+
+I$1714:	DEFB	13,10
+	DEFB	"Enter new time: "
+	DEFB	"$"
+
+I$1727:	DEFB	"Sun"
+	DEFB	"Mon"
+	DEFB	"Tue"
+	DEFB	"Wed"
+	DEFB	"Thu"
+	DEFB	"Fri"
+	DEFB	"Sat"
+
+I.173C:	DEFB	"COM"
+
+I.173F:	DEFB	"BAT"
+
+I$1742:	DEFB	27,"y5"
+	DEFB	0
+
+I$1746:	DEFB	27,"x5"
+	DEFB	0
+
+I$174A:	DEFB	27,"A"
+	DEFB	0
+	DEFB	0
+
+S.0700	EQU	$-J.0700
+
+I.174E:	DEFB	128			; size of buffer
+	DEFB	0			; actual size used
+	DEFS	128,0			; buffer
+	DEFB	13			; make sure it always end with a cr
+
+I$17D1:	DEFB	12			; size of buffer
+D.17D2:	DEFB	0			; actual size used
+I.17D3:	DEFS	12,0			; buffer
+	DEFB	13			; make sure it always end with a cr
+
+D.17E0:	DEFB	0,0			; buffered command line size and first character
+D.17E2:	DEFB	0			; command switch flags
+D.17E3:	DEFB	0			; first argument switch flags
+D.17E4:	DEFB	0			; second argument switch flags
+I.17E5:	DEFS	37,0			; search FCB
+I.180A:	DEFS	37,0			; search result (33 bytes), search FCB (37 bytes)
+D.182F:	DEFB	0			; batch file byte buffer
+D.1830:	DEFB	0			; current drive
+D.1831:	DEFB	0			; number of drives
+D.1832:	DEFB	0			; file count
+D.1833:	DEFB	0			; number of tabular areas per line
+D.1834:	DEFB	0			; number of tabular areas left
+D.1835:	DEFB	0			; lines count
+D.1836:	DEFW	0,0			; 32bit conversion
+D.183A:	DEFW	0			; saved stackpointer
+D.183C:	DEFW	0			; update pointer to current file block
+I.183E:	DEFS	1+8+3,0			; drive + filename + fileextension
+D.184A:	DEFW	0			; pointer to free memory
+D.184C:	DEFW	0			; pointer to concat filespec
+D.184E:	DEFB	0			; modify timestamp of file
+D.184F:	DEFB	0			; concat on destination flag
+D.1850:	DEFB	0			; update random record after end of file flag
+D.1851:	DEFB	0			; ascii file mode flag
+D.1852:	DEFB	0			; concat flag
+D.1853:	DEFB	0			; copy flags
+
+I.1854:	DEFS	1+8+3,0			; drive + filename + fileextension
+
+	DEFS	1A00H-$-S.0984-37,0	; reserved for future use ?
+
+I$19CD:	DEFS	S.0984,0		; start COM file handler
+I$19DB:	DEFS	37,0			; COM file FCB
+
+; non intialized COMMAND.COM transient data area, garbage data
+; but for some reason (same M80 version?) garbage contains the title in the orginal MAC
+; file at 1A38H
+
+I.1A00:	DEFS	19			; area filled by MSX-DOS
+D$1A13:	DEFS	2			; start of transient part of COMMAND.COM
+D$1A15:	DEFS	2			; number of words
+D$1A17:	DEFS	2			; word checksum
+D.1A19:	DEFS	1			; batch file running flag
+D.1A1A:	DEFS	1			; cold boot flag
+I.1A1B:	DEFS	10*2,0			; dummy parameters pointers
+I.1A2F:	DEFS	1A38H-$,' '		; batch file FCB
+	DEFB	"MSX-DOS version 2.2 by Tim Paterson  03/06/84"
+	DEFS	1B00H-$,0
+
+I.1A54	EQU	I.1A2F+37		; buffered command line
+
+	END

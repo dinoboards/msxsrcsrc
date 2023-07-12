@@ -1,0 +1,693 @@
+; MSXDOS
+
+; MSXDOS 1.03
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by Microsoft and may be others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+	.Z80
+        ASEG
+	ORG	0100H
+
+WBOOT	EQU	0000H			; CP/M WBOOT
+BDOS	EQU	0005H			; CP/M BDOS
+
+; DOS kernel entry points
+
+$INIT	EQU	4030H
+$$BIOS	EQU	4034H
+$IN	EQU	4078H
+$OUT	EQU	408FH
+CPMVER	EQU	41EFH
+DELETE	EQU	436CH
+RENAME	EQU	4392H
+OPEN	EQU	4462H
+CLOSE	EQU	456FH
+CREATE	EQU	461DH
+ABSREA	EQU	46BAH
+ABSWRI	EQU	4720H
+SEQRD	EQU	4775H
+SEQWRT	EQU	477DH
+RNDRD	EQU	4788H
+RNDWRT	EQU	4793H
+BLKRD	EQU	47B2H
+BLKWRT	EQU	47BEH
+ZWRITE	EQU	47D1H
+SRCHFR	EQU	4FB8H
+SRCHNX	EQU	5006H
+FILESI	EQU	501EH
+LOGIN	EQU	504EH
+SETDMA	EQU	5058H
+GETEFA	EQU	505DH
+DSKRES	EQU	509FH
+WRTFAT	EQU	50A9H
+GETDRV	EQU	50C4H
+SETRND	EQU	50C8H
+SELDSK	EQU	50D5H
+BUFIN	EQU	50E0H
+CRLF	EQU	5183H
+BUFOUT	EQU	535DH
+CONOUT	EQU	53A7H
+CONSTA	EQU	543CH
+CONIN	EQU	5445H
+IN	EQU	544EH
+RAWIO	EQU	5454H
+RAWINP	EQU	5462H
+LIST	EQU	5465H
+READER	EQU	546EH
+PUNCH	EQU	5474H
+GETDAT	EQU	553CH
+SETDAT	EQU	5552H
+GETTIM	EQU	55DBH
+SETTIM	EQU	55E6H
+SETRAW	EQU	55FFH
+
+I$9000	EQU	8000H+4096		; temporary stack in page 2
+
+; DOS static area
+
+DATABA	EQU	0F1C9H			; start static DOS data area
+PRTBUF	EQU	0F1C9H			; print string
+PFLAG	EQU	0F23BH			; console to printer flag
+DMAADD	EQU	0F23DH			; transfer address
+SPSAVE	EQU	0F304H			; MSX-DOS save stackpointer
+CPMCAL	EQU	0F306H			; CP/M function
+SRCHFC	EQU	0F307H			; search first FCB
+DISKVE	EQU	0F323H			; pointer to disk error handler
+BREAKV	EQU	0F325H			; pointer to break handler
+NOTFIR	EQU	0F340H			; cold boot flag
+$DOSON	EQU	0F368H			; enable DOS kernel
+$DOSOF	EQU	0F36BH			; disable DOS kernel
+
+CPMCL   MACRO   X,Y
+        DEFB    X
+        DEFW    Y
+        ENDM
+
+_CPMCL  MACRO   X,Y
+        DEFB    X
+        DEFW    Y
+	MK
+        ENDM
+
+_CALL	MACRO	O1,O2
+	IFNB	<O2>
+	CALL	O1,O2
+	ELSE
+	CALL	O1
+	ENDIF
+	MK
+	ENDM
+
+_JP	MACRO	O1,O2
+	IFNB	<O2>
+	JP	O1,O2
+	ELSE
+	JP	O1
+	ENDIF
+	MK
+	ENDM
+
+_DEFW	MACRO	O1
+	DEFW	O1
+	MK
+	ENDM
+
+_LD	MACRO	O1,O2
+	LD	O1,O2
+	MK
+	ENDM
+
+MK	MACRO
+	MK1	%(MK_COU)
+	ENDM
+
+MK1	MACRO	AA
+MKP&AA	EQU	$-201H
+MK_COU	ASET	MK_COU+1
+	ENDM
+
+RELW	MACRO	DD
+	DEFW	MKP&DD
+	ENDM
+
+	IF1
+MK_COU	ASET	1
+	ENDIF
+
+
+J.0100:	JP	J.0200
+
+I$0103:
+
+	IF2
+
+TT_COU	ASET	MK_COU
+MKP_2	ASET	1
+
+	REPT	TT_COU-1
+	RELW	%(MKP_2)
+MKP_2	ASET	MKP_2+1
+	ENDM
+	
+	DEFW	0
+MK_COU	ASET	1
+
+	ENDIF
+
+
+	DEFS	0200H-$,0
+
+; MSX-DOS initialization
+
+J.0200:	JR	J$0238			; jump over init message
+
+I$0202:	DEFB	13,10
+	DEFB	"MSX-DOS version 1.03",13,10
+	DEFB	"Copyright 1984 by Microsoft",13,10
+	DEFB	"$"
+
+J$0238:	LD	SP,I$9000
+	LD	HL,DATABA		; start DOS static area
+	CALL	$INIT			; get DOS system bottom
+	PUSH	HL			; store DOS system bottom
+	PUSH	DE			; store ?
+	_LD	DE,I$0202		; MSX-DOS init message
+	LD	A,(NOTFIR)
+	AND	A			; cold boot ?
+	_CALL	Z,C.0317		; yep, print string to console
+	POP	HL			; restore ?
+	_LD	HL,I.0A00+80H		; upper
+	_LD	BC,I.0300		; lower
+	XOR	A
+	SBC	HL,BC
+	EX	DE,HL			; size of transient area
+	POP	HL			; restore DOS system bottom
+	SBC	HL,DE
+	LD	L,A			; force 256 byte boundery
+	PUSH	HL			; destination = MSX-DOS bottom
+	PUSH	DE			; size = size of transient area
+	PUSH	BC			; source = 
+	LD	A,H
+	SUB	B
+	LD	C,A			; address offset (high byte)
+	DEC	B			; offset (high byte)
+	LD	HL,I$0103
+J$0266:	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)			; offset
+	INC	HL
+	LD	A,D
+	OR	E			; end of table ?
+	JR	Z,J$0278		; yep,
+	EX	DE,HL
+	LD	A,H
+	ADD	A,B
+	LD	H,A			; offset +
+	LD	A,(HL)
+	ADD	A,C
+	LD	(HL),A
+	EX	DE,HL
+	JR	J$0266			; next entry
+
+J$0278:	POP	HL			; source
+	POP	BC			; size
+	POP	DE			; destination
+	PUSH	DE
+	LDIR
+	RET
+
+
+	DEFS	0300H-$,0
+
+; MSX-DOS setup and start
+
+I.0300:	_LD	HL,I.0409
+	LD	(DISKVE),HL
+	_LD	HL,I.0411
+	LD	(BREAKV),HL
+	LD	HL,NOTFIR
+	LD	A,(HL)
+	LD	(HL),H			; next time not a cold boot
+	_LD	(D.041A),A		; initialize cold boot flag
+	_JP	J.05B0			; start MSX-DOS
+
+;	  Subroutine print string to console
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0317:	LD	A,(DE)
+	CP	"$"
+	RET	Z
+	PUSH	DE
+	LD	E,A
+	CALL	RAWIO
+	POP	DE
+	INC	DE
+	JR	C.0317
+
+
+	DEFS	0400H-$,0
+
+; COMMAND.COM transient data area
+
+I.0400:	DEFS	6,0			; BDOS handler seems to be aligned to XX06. Is this a CP/M 'requirement' ?
+
+; BDOS handler
+
+I.0406:	_JP	J$0631			; BDOS handler
+
+I.0409:	_DEFW	I.0500			; disk error handler
+I.040B:	_DEFW	I.0500
+I.040D:	_DEFW	I.0500
+I.040F:	_DEFW	I.0500
+I.0411:	_DEFW	I.056D			; break handler
+D.0413:	_DEFW	I.0406			; start of transient part of COMMAND.COM
+D.0415:	DEFW	1			; number of entries
+D.0417:	DEFW	-1			; word checksum
+D.0419:	DEFB	0			; batch file running flag
+D.041A:	DEFB	0			; cold boot flag
+
+
+	DEFS	0500H-$,0
+
+; MSX-DOS transient code
+
+; disk error handler
+
+I.0500:	ADD	A,"A"			; drive id to drive letter
+	BIT	7,C			; bad FAT ?
+	JR	NZ,J$0561		; yep,
+	_LD	(D$0822),A		; store drive letter in error message
+	_LD	HL,I$07C9		; read string
+	_LD	DE,I$0814
+	LD	A,C
+	BIT	0,A			; read ?
+	LD	BC,4
+	JR	Z,J$051A
+	_LD	HL,I$07CD		; writ string
+J$051A:	LDIR
+	CP	0AH			; write fault while reading ?
+	_LD	DE,I$07ED		; unsupported media message
+	PUSH	AF			; store error
+	JR	Z,J.0535		; yep, handle error
+	AND	0FEH			; ignore read/write flag
+	_LD	DE,I$07D1		; write protect message
+	JR	Z,J.0535		; write proctect, handle error
+	CP	2			; not ready ?
+	_LD	DE,I$07E1		; not ready message
+	JR	Z,J.0535		; yep, handle error
+	_LD	DE,I$0806		; disk message
+J.0535:	CALL	PRTBUF
+	_LD	DE,I$080D		; error drive message
+	CALL	PRTBUF
+	POP	AF			; restore error
+	LD	C,2			; abort
+	RET	Z			; unsupported media, abort
+J$0542:	_LD	DE,I$0826		; abort/retry/ignore message
+	CALL	PRTBUF
+	CALL	CONIN
+	PUSH	AF
+	CALL	CRLF
+	POP	AF
+	AND	5FH			; to upper
+	LD	C,0			; ignore
+	CP	"I"
+	RET	Z
+	INC	C			; retry
+	CP	"R"
+	RET	Z
+	INC	C			; abort
+	CP	"A"
+	RET	Z
+	JR	J$0542			; invalid input, retry
+
+; handle bad FAT
+
+J$0561:	_LD	(D$07C5),A		; store drive letter in message
+	_LD	DE,I$07B4		; bad FAT message
+	CALL	PRTBUF
+	LD	C,2			; abort
+	RET
+
+; break handler
+
+I.056D:	CALL	$DOSON			; enable DOS kernel on page 1
+	EI
+	_LD	SP,I.0A00
+	LD	A,(PFLAG)
+	OR	A			; console to printer ?
+	JR	Z,J$0587		; nope, skip
+	LD	BC,1200
+J$057D:	PUSH	BC
+	CALL	CONSTA
+	POP	BC
+	DEC	BC
+	LD	A,C
+	OR	B
+	JR	NZ,J$057D
+J$0587:	LD	A,3			; CTRL-C
+	CALL	BUFOUT			; console output (with ^ for control characters)
+	_LD	A,(D.0419)
+	OR	A			; running a batch file ?
+	JR	Z,J.05A9		; nope, skip
+J$0592:	_LD	DE,I$0751		; terminate batch file message
+	CALL	PRTBUF
+	CALL	CONIN
+	AND	5FH			; to upper
+	CP	"N"
+	JR	Z,J.05A9
+	CP	"Y"
+	JR	NZ,J$0592
+	XOR	A
+	_LD	(D.0419),A		; not running a batch file
+J.05A9:	CALL	$DOSOF			; enable RAM on page 1
+	EI
+	JP	WBOOT			; start command processor
+
+; BOOT/WBOOT CP/M BIOS handler
+
+J.05B0:	_LD	SP,I.0A00
+	CALL	$DOSON			; enable DOS kernel on page 1
+	EI
+	_LD	HL,I.0A03
+	LD	(WBOOT+1),HL		; initialize WBOOT
+	_LD	HL,I.0406
+	LD	(BDOS+1),HL		; intialize BDOS
+	LD	A,0C3H
+	LD	(WBOOT+0),A
+	LD	(BDOS+0),A
+	CALL	WRTFAT			; flush buffers
+	_LD	HL,(D.0413)		; BDOS handler
+	_LD	BC,(D.0415)		; number of entries
+	LD	DE,0
+J$05D8:	LD	A,(HL)
+	INC	HL
+	ADD	A,E
+	LD	E,A
+	LD	A,(HL)
+	INC	HL
+	ADC	A,D
+	LD	D,A
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J$05D8
+	_LD	HL,(D.0417)		; checksum
+	SBC	HL,DE			; checksum correct ?
+	JR	NZ,J.05F4		; nope, load COMMAND.COM
+	_LD	HL,(D.0413)		; BDOS handler
+	CALL	$DOSOF			; enable RAM on page 1
+	EI
+	JP	(HL)
+
+J.05F4:	_LD	DE,I.0A5B		; COMMAND.COM FCB
+	CALL	OPEN
+	OR	A			; error ?
+	JR	Z,J$0608		; nope,
+
+; handle error
+
+J$05FD:	_LD	DE,I$0770		; insert DOS disk message
+	CALL	PRTBUF
+	CALL	IN
+	JR	J.05F4			; retry
+
+J$0608:	LD	HL,0
+	_LD	(I.0A5B+33+0),HL
+	_LD	(I.0A5B+33+2),HL	; random record = 0
+	INC	HL
+	_LD	(I.0A5B+14),HL		; record size = 1
+	LD	HL,J.0100
+	LD	(DMAADD),HL		; initialize DMA address
+	_LD	DE,I.0A5B		; COMMAND.COM FCB
+	_LD	HL,I.0400-J.0100
+	CALL	BLKRD
+	OR	A
+	JR	Z,J$05FD		; nope, handle error
+	CALL	$DOSOF			; enable RAM on page 1
+	EI
+	JP	J.0100			; start COMMAND.COM
+
+; unsupported function
+
+C.062E:	XOR	A
+	LD	B,A
+	RET
+
+; BDOS handler
+
+J$0631:	LD	A,1
+	LD	(CPMCAL),A		; assume CP/M function
+	LD	A,C
+	CP	30H+1			; valid function ?
+	JR	NC,C.062E		; nope, quit with result = ok
+	LD	(SPSAVE),SP
+	_LD	SP,I.0A00
+	CP	11H			; search for first ?
+	JR	NZ,J$064A		; nope,
+	LD	(SRCHFC),DE		; yep, store pointer to FCB
+J$064A:	CP	12H			; search for next ?
+	JR	NZ,J$0652		; nope,
+	LD	DE,(SRCHFC)		; yep, restore pointer to FCB
+J$0652:	PUSH	HL
+	_LD	HL,I$068A
+	EX	(SP),HL
+	PUSH	HL			; after this,
+	_LD	HL,I$06BE
+	LD	B,0
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	A,(HL)			; function with pointer to data
+	INC	HL
+	LD	B,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,B			; pointer to BDOS function
+	EX	(SP),HL			; BDOS function handler
+	_LD	(D.083D),A		; store size of data structure
+	OR	A			; function has a data structure ?
+	JR	Z,J$0685		; nope, skip temporary data buffer
+	PUSH	HL
+	EX	DE,HL
+	_LD	(D.083E),HL		; store pointer to data structure
+	_LD	DE,I.0840		; destination = temporary data structure
+	LD	B,0
+	LD	C,A
+	INC	A			; buffered console input ?
+	JR	NZ,J$067F		; nope,
+	LD	A,(HL)
+	LD	C,A			; size of console input buffer
+	INC	BC
+	INC	BC			; include size and len bytes
+J$067F:	LDIR
+	POP	HL
+	_LD	DE,I.0840		; temporary data structure
+J$0685:	CALL	$DOSON			; enable DOS kernel on page 1
+	EI
+	RET
+
+; finish BDOS function
+
+I$068A:	PUSH	AF
+	CALL	$DOSOF			; enable RAM on page 1
+	EI
+	_LD	A,(D.083D)		; size of data structure
+	OR	A			; function has a data structure ?
+	JR	Z,J$06AA		; nope, skip temporary data buffer
+	LD	C,A
+	LD	B,0
+	PUSH	HL
+	_LD	DE,(D.083E)		; restore pointer to data structure
+	_LD	HL,I.0840		; source = temporary data structure
+	INC	A			; buffered console input ?
+	JR	NZ,J$06A7		; nope,
+	LD	A,(DE)
+	LD	C,A			; size of console input buffer
+	INC	BC
+	INC	BC			; include size and len bytes
+J$06A7:	LDIR
+	POP	HL
+J$06AA:	LD	A,(CPMCAL)
+	OR	A			; CP/M function ?
+	JR	Z,J$06B8		; nope, quit
+	POP	AF
+	LD	L,A
+	LD	H,B			; result in HL, CP/M compatible
+	LD	SP,(SPSAVE)
+	RET
+
+J$06B8:	POP	AF
+	LD	SP,(SPSAVE)
+	RET
+
+I$06BE:	CPMCL	0,WBOOT			; 0
+	CPMCL	0,CONIN			; 1
+	CPMCL	0,CONOUT		; 2
+	CPMCL	0,READER		; 3
+	CPMCL	0,PUNCH			; 4
+	CPMCL	0,LIST			; 5
+	CPMCL	0,RAWIO			; 6
+	CPMCL	0,RAWINP		; 7
+	CPMCL	0,IN			; 8
+	CPMCL	0,PRTBUF		; 9
+	CPMCL	-1,BUFIN		; 10
+	CPMCL	0,CONSTA		; 11
+	CPMCL	0,CPMVER		; 12
+	CPMCL	0,DSKRES		; 13
+	CPMCL	0,SELDSK		; 14
+	CPMCL	32,OPEN			; 15
+	CPMCL	32,CLOSE		; 16
+	CPMCL	15,SRCHFR		; 17
+	CPMCL	15,SRCHNX		; 18
+	CPMCL	32,DELETE		; 19
+	CPMCL	33,SEQRD		; 20
+	CPMCL	33,SEQWRT		; 21
+	CPMCL	32,CREATE		; 22
+	CPMCL	32,RENAME		; 23
+	CPMCL	0,LOGIN			; 24
+	CPMCL	0,GETDRV		; 25
+	CPMCL	0,SETDMA		; 26
+	CPMCL	0,GETEFA		; 27
+	_CPMCL	0,C.062E		; 28
+	_CPMCL	0,C.062E		; 29
+	_CPMCL	0,C.062E		; 30
+	_CPMCL	0,C.062E		; 31
+	_CPMCL	0,C.062E		; 32
+	CPMCL	36,RNDRD		; 33
+	CPMCL	36,RNDWRT		; 34
+	CPMCL	36,FILESI		; 35
+	CPMCL	36,SETRND		; 36
+	_CPMCL	0,C.062E		; 37
+	CPMCL	37,BLKWRT		; 38
+	CPMCL	37,BLKRD		; 39
+	CPMCL	36,ZWRITE		; 40
+	_CPMCL	0,C.062E		; 41
+	CPMCL	0,GETDAT		; 42
+	CPMCL	0,SETDAT		; 43
+	CPMCL	0,GETTIM		; 44
+	CPMCL	0,SETTIM		; 45
+	CPMCL	0,SETRAW		; 46
+	CPMCL	0,ABSREA		; 47
+	CPMCL	0,ABSWRI		; 48
+
+I$0751:	DEFB	13,10
+	DEFB	"Terminate batch file (Y/N)? "
+	DEFB	"$"
+
+I$0770:	DEFB	13,10
+	DEFB	"Insert DOS disk in default drive",13,10
+	DEFB	"and strike any key when ready",13,10
+	DEFB	"$"
+
+I$07B4:	DEFB	13,10
+	DEFB	"Bad FAT, drive "
+D$07C5:	DEFB	"A"
+	DEFB	13,10
+	DEFB	"$"
+
+I$07C9:	DEFB	"read"
+
+I$07CD:	DEFB	"writ"
+
+I$07D1:	DEFB	13,10
+	DEFB	"Write protect"
+	DEFB	"$"
+
+I$07E1:	DEFB	13,10
+	DEFB	"Not ready"
+	DEFB	"$"
+
+I$07ED:	DEFB	13,10
+	DEFB	"Unsupported media type"
+	DEFB	"$"
+
+I$0806:	DEFB	13,10
+	DEFB	"Disk"
+	DEFB	"$"
+
+I$080D:	DEFB	" error "
+I$0814:	DEFB	"read"
+	DEFB	"ing drive "
+D$0822:	DEFB	"A"
+	DEFB	13,10
+	DEFB	"$"
+
+I$0826:	DEFB	"Abort, Retry, Ignore? "
+	DEFB	"$"
+
+D.083D:	DEFB	0			; size of data structure
+D.083E:	DEFW	0			; pointer to data structure
+I.0840:	DEFS	128,0			; temporary data structure
+
+
+	DEFS	0A00H-$,0
+
+; MSX-DOS transient CP/M BIOS
+
+; CP/M style BIOS jump table
+
+I.0A00:	_JP	J.05B0			; BOOT entry
+I.0A03:	_JP	J.05B0			; WBOOT entry
+I.0A06:	_JP	J$0A0F			; CONST entry
+I.0A09:	_JP	J$0A2C			; CONIN entry
+I.0A0C:	_JP	J$0A43			; CONOUT entry
+
+; CONST CP/M BIOS handler
+
+J$0A0F:	LD	(SPSAVE),SP
+	_LD	SP,I.0A00
+	CALL	$DOSON			; enable DOS kernel on page 1
+	EI
+	CALL	$$BIOS			; check if keyboard input available
+	PUSH	AF			; store status
+	CALL	$DOSOF			; enable RAM on page 1
+	EI
+	POP	AF			; restore status
+	LD	SP,(SPSAVE)
+	LD	A,0
+	RET	Z			; no keyboard input, return 0
+	DEC	A			; keyboard input, return -1
+	RET
+
+; CONIN CP/M BIOS handler
+
+J$0A2C:	LD	(SPSAVE),SP
+	_LD	SP,I.0A00
+	CALL	$DOSON			; enable DOS kernel on page 1
+	EI
+	CALL	$IN			; get keyboard input
+	CALL	$DOSOF			; enable RAM on page 1
+	EI
+	LD	SP,(SPSAVE)
+	RET
+
+; CONOUT CP/M BIOS handler
+
+J$0A43:	LD	A,C
+	LD	(SPSAVE),SP
+	_LD	SP,I.0A00
+	CALL	$DOSON			; enable DOS kernel on page 1
+	EI
+	CALL	$OUT			; output to screen
+	CALL	$DOSOF			; enable RAM on page 1
+	EI
+	LD	SP,(SPSAVE)
+	RET
+
+I.0A5B:	DEFB	0
+	DEFB	"COMMAND COM"
+	DEFB	0,0
+	DEFW	0
+	DEFB	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	DEFW	0
+	DEFW	0
+
+	END
