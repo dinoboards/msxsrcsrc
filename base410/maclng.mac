@@ -43,8 +43,12 @@ MCLPTR  EQU     0FB3CH
         EXTRN   ISLET2
         EXTRN   ISVAR
         EXTRN   FRCINT
-        EXTRN   MOVRM
         EXTRN   PLYHDL
+        IF      OPTM EQ 0
+        EXTRN   MOVRM
+        ELSE
+        EXTRN   GETBCD
+        ENDIF
 
 
 _RST    MACRO   X
@@ -71,119 +75,151 @@ _RST    MACRO   X
 
 ; START	SUBTTL	MACLNG
 
+;       Subroutine      macro language parser
+;       Inputs          HL = BASIC pointer, DE = pointer to macro language command table
+;       Outputs         ________________________
+
 MACLNG:
-J566C:  LD      (MCLTAB),DE
+J566C:  LD      (MCLTAB),DE             ; macro language command table
         CALL    FRMEVL                  ; evaluate expression
-        PUSH    HL
+        PUSH    HL                      ; store BASIC pointer
         LD      DE,0
-        PUSH    DE
-        PUSH    AF
+        PUSH    DE                      ; null macro string pointer (stops marco string parser)
+        PUSH    AF                      ; dummy size of macro string
 J5679:  CALL    FRESTR                  ; free temporary string with type check
+
+        IF      OPTM EQ 0
         CALL    MOVRM                   ; load from HL (single)
         LD      B,C
         LD      C,D                     ; pointer to string
         LD      D,E                     ; size of string
-        LD      A,B
-        OR      C                       ; zero pointer ?
-        JR      Z,J568C                 ; yep,
-        LD      A,D
-        OR      A                       ; size of string zero ?
-        JR      Z,J568C                 ; yep,
-        PUSH    BC
-        PUSH    DE
-J568C:  POP     AF
-        LD      (MCLLEN),A
-        POP     HL
-        LD      A,H
-        OR      L
-        JR      NZ,J569F
-        LD      A,(MCLFLG)
-        OR      A
-        JP      Z,J5709
-        JP      PLYHDL
+        ELSE
+        CALL    GETBCD
+        ENDIF
 
-J569F:  LD      (MCLPTR),HL
+        LD      A,B
+        OR      C                       ; undefined string ?
+        JR      Z,J568C                 ; yep, resume macro string behind X command (if any)
+        LD      A,D
+        OR      A                       ; empty string ?
+        JR      Z,J568C                 ; yep, resume macro string behind X command (if any)
+        PUSH    BC                      ; store pointer to string
+        PUSH    DE                      ; store size of string
+J568C:  POP     AF                      ; restore size of string
+        LD      (MCLLEN),A
+        POP     HL                      ; restore pointer to string
+        LD      A,H
+        OR      L                       ; null macro string pointer ?
+        JR      NZ,J569F                ; nope, continue with macro string
+        LD      A,(MCLFLG)
+        OR      A                       ; macro language for DRAW ?
+        JP      Z,J5709                 ; yep, restore BASIC pointer and quit
+        JP      PLYHDL                  ; PLAY macro language handler
+
+J569F:  LD      (MCLPTR),HL             ; update macro string pointer
+
+;       Subroutine      execute macro command (if any)
+;       Inputs          ________________________
+;       Outputs         ________________________
 
 MCLSCN:
-J56A2:  CALL    FETCHR
-        JR      Z,J568C
+J56A2:  CALL    FETCHR                  ; fetch macro string character
+        JR      Z,J568C                 ; end of macro string,
         ADD     A,A
-        LD      C,A
-        LD      HL,(MCLTAB)
+        LD      C,A                     ; command character shift left
+        LD      HL,(MCLTAB)             ; macro language command table
 J56AC:  LD      A,(HL)
-        ADD     A,A
-J56AE:  CALL    Z,FCERR                 ; illegal function call
-        CP      C
-        JR      Z,J56B9
+        ADD     A,A                     ; end of table ?
+J56AE:
+        IF      OPTM EQ 0
+        CALL    Z,FCERR                 ; yep, illegal function call
+        ELSE
+        JP      Z,FCERR
+        ENDIF
+
+        CP      C                       ; found command ?
+        JR      Z,J56B9                 ; yep, handle
         INC     HL
         INC     HL
         INC     HL
-        JR      J56AC
+        JR      J56AC                   ; next command
 
 J56B9:  LD      BC,MCLSCN
-        PUSH    BC
+        PUSH    BC                      ; after command, continue with next command
         LD      A,(HL)
         LD      C,A
-        ADD     A,A
-        JR      NC,J56E2
+        ADD     A,A                     ; command with parameter(s) ?
+        JR      NC,J56E2                ; nope, execute handle
         OR      A
         RRA
         LD      C,A
-        PUSH    BC
-        PUSH    HL
-        CALL    FETCHR
+        PUSH    BC                      ; store command character
+        PUSH    HL                      ; store pointer
+        CALL    FETCHR                  ; fetch macro string character
         LD      DE,1
-        JP      Z,J56DF
+
+        IF      OPTM EQ 0
+        JP      Z,J56DF                 ; end of macro string, use default value 1
+        ELSE
+        JR      Z,J56DF                 ; end of macro string, use default value 1
+        ENDIF
+
         CALL    ISLET2                  ; is upcase letter character ?
-        JP      NC,J56DC
-        CALL    C571C
-        SCF
+
+        IF      OPTM EQ 0
+        JP      NC,J56DC                ; yep,
+        ELSE
+        JR      NC,J56DC                ; yep,
+        ENDIF
+
+        CALL    C571C                   ; parse numeric operand in macro string (first character fetched)
+        SCF                             ; value specified
         JR      J56E0
 
-J56DC:  CALL    DECFET
-J56DF:  OR      A
-J56E0:  POP     HL
-        POP     BC
+J56DC:  CALL    DECFET                  ; to previous macro string character
+J56DF:  OR      A                       ; value not specified
+J56E0:  POP     HL                      ; restore pointer
+        POP     BC                      ; restore command
 J56E2:  INC     HL
         LD      A,(HL)
         INC     HL
         LD      H,(HL)
-        LD      L,A
-        JP      (HL)
+        LD      L,A                     ; address command handler
+        JP      (HL)                    ; execute command handler
 
-;       Subroutine      __________________________
+;       Subroutine      fetch macro string character, error if end of macro string
 ;       Inputs          ________________________
-;       Outputs         ________________________
+;       Outputs         A = character
 
 FETCHZ:
-C56E8:  CALL    FETCHR
-        JR      Z,J56AE
+C56E8:  CALL    FETCHR                  ; fetch macro string character
+        JR      Z,J56AE                 ; end of macro string, illegal function call
         RET
 
-;       Subroutine      __________________________
+;       Subroutine      fetch macro string character
 ;       Inputs          ________________________
-;       Outputs         ________________________
+;       Outputs         A = character, Zx = set if no character
 
 FETCHR:
 C56EE:  PUSH    HL
 J56EF:  LD      HL,MCLLEN
         LD      A,(HL)
-        OR      A
-        JR      Z,J5709
-        DEC     (HL)
+        OR      A                       ; end of macro string ?
+        JR      Z,J5709                 ; yep, quit
+        DEC     (HL)                    ; update size left in macro string
         LD      HL,(MCLPTR)
         LD      A,(HL)
         INC     HL
-        LD      (MCLPTR),HL
-        CP      " "
-        JR      Z,J56EF
-        CP      60H
-        JR      C,J5709
-        SUB     20H
+        LD      (MCLPTR),HL             ; update pointer in macro string
+        CP      " "                     ; space ?
+        JR      Z,J56EF                 ; yep, ignore and fetch next
+        CP      60H                     ; lower case ?
+        JR      C,J5709                 ; nope, quit
+        SUB     20H                     ; to upper
 J5709:  POP     HL
         RET
 
-;       Subroutine      __________________________
+;       Subroutine      to previous macro string character
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -197,93 +233,106 @@ C570B:  PUSH    HL
         POP     HL
         RET
 
-;       Subroutine      __________________________
+;       Subroutine      parse numeric operand in macro string
 ;       Inputs          ________________________
-;       Outputs         ________________________
+;       Outputs         DE = value
 
 VALSCN:
-C5719:  CALL    FETCHZ
+C5719:  CALL    FETCHZ                  ; fetch macro string character, error if end of macro string
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
-;       Outputs         ________________________
+;       Subroutine      parse numeric operand in macro string (first character fetched)
+;       Inputs          A = first character of numeric operand string
+;       Outputs         DE = value
 
 VALSC3:
-C571C:  CP      "="
-        JP      Z,J577A
+C571C:  CP      "="                     ; numeric operand a variable ?
+        JP      Z,J577A                 ; yep, parse variable name and fetch value
         CP      "+"
-        JR      Z,VALSCN
+        JR      Z,VALSCN                ; parse numeric operand in macro string
         CP      "-"
-        JR      NZ,C572F
+        JR      NZ,C572F                ; nope, parse optional numeric constant value in macro string
         LD      DE,C5795
-        PUSH    DE
-        JR      VALSCN
+        PUSH    DE                      ; after parse, negate value
+        JR      VALSCN                  ; parse numeric operand in macro string
 
-;       Subroutine      __________________________
+;       Subroutine      parse optional numeric constant value in macro string
 ;       Inputs          ________________________
-;       Outputs         ________________________
+;       Outputs         DE = value
 
 VALSC2:
-C572F:  LD      DE,0
+C572F:  LD      DE,0                    ; default value = 0
 J5732:  CP      ","
-        JR      Z,DECFET
+        JR      Z,DECFET                ; to previous macro string character and quit
         CP      ";"
         RET     Z
-        CP      "9"+1
-        JR      NC,DECFET
-        CP      "0"
-        JR      C,DECFET
+        CP      "9"+1                   ; digit ?
+        JR      NC,DECFET               ; nope, to previous macro string character and quit
+        CP      "0"                     ; digit ?
+        JR      C,DECFET                ; nope, to previous macro string character and quit
         LD      HL,0
         LD      B,10
 J5746:  ADD     HL,DE
-        JR      C,J5773
-        DJNZ    J5746
+        JR      C,J5773                 ; overflow, illegal function call
+        DJNZ    J5746                   ; value = value *10
         SUB     "0"
         LD      E,A
         LD      D,0
-        ADD     HL,DE
-        JR      C,J5773
+        ADD     HL,DE                   ; + digit
+        JR      C,J5773                 ; overflow, illegal function call
         EX      DE,HL
-        CALL    FETCHR
-        JR      NZ,J5732
+        CALL    FETCHR                  ; fetch macro string character
+        JR      NZ,J5732                ; not end of macro string, continue with value
         RET
 
-;       Subroutine      __________________________
+;       Subroutine      parse variable name and fetch value
 ;       Inputs          ________________________
-;       Outputs         ________________________
+;       Outputs         DE = value
 
 SCNVR2:
-C575A:  CALL    FETCHZ
+C575A:  CALL    FETCHZ                  ; fetch macro string character, error if end of macro string
         LD      DE,BUF
-        PUSH    DE
-        LD      B,40
+        PUSH    DE                      ; store pointer to BUF
+        LD      B,40                    ; variable name is max 40 characters
         CALL    ISLET2                  ; is upcase letter character ?
         JR      C,J5773                 ; nope, illegal function call
 J5768:  LD      (DE),A
         INC     DE
         CP      ";"                     ; end of variablename ?
         JR      Z,J5776                 ; yep,
-        CALL    FETCHZ
+        CALL    FETCHZ                  ; fetch macro string character, error if end of macro string
         DJNZ    J5768
-J5773:  CALL    FCERR                   ; illegal function call
+J5773:
+        IF      OPTM EQ 0
+        CALL    FCERR                   ; illegal function call
+        ELSE
+        JP      FCERR
+        ENDIF
 
-J5776:  POP     HL
+J5776:  POP     HL                      ; restore pointer to BUF
         JP      ISVAR                   ; get variable value
 
-J577A:  CALL    C575A
+J577A:  CALL    C575A                   ; parse variable name, fetch value and convert to integer
         CALL    FRCINT                  ; convert DAC to integer
-        EX      DE,HL
+        EX      DE,HL                   ; value in DE
         RET
 
+;       Subroutine      macro language X command
+;       Inputs          ________________________
+;       Outputs         ________________________
+
 MCLXEQ:
-C5782:  CALL    C575A
+C5782:  CALL    C575A                   ; parse variable name and fetch value
         LD      A,(MCLLEN)
         LD      HL,(MCLPTR)
-        EX      (SP),HL
-        PUSH    AF
+        EX      (SP),HL                 ; store current macro string pointer, discard return address
+        PUSH    AF                      ; store current macro string size
         LD      C,2
         CALL    GETSTK                  ; check if enough stackspace for 2 words
-        JP      J5679
+        JP      J5679                   ; continue parsing with string
+
+;       Subroutine      negate value
+;       Inputs          DE = value
+;       Outputs         DE = -value
 
 NEGD:
 C5795:  XOR     A
