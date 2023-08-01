@@ -132,27 +132,27 @@ _RST    MACRO   X
 
 PAINT:
 C59C5:  CALL    SCAN1                   ; evaluate complex graphic coordinatepair
-J59C8:  PUSH    BC
-        PUSH    DE
+J59C8:  PUSH    BC                      ; store Y
+        PUSH    DE                      ; store X
         CALL    ATRSCN
         LD      A,(ATRBYT)
-        LD      E,A
+        LD      E,A                     ; default paint border color = current color
         DEC     HL
         _RST    CHRGTR                  ; end of statement ?
         JR      Z,J59DA			; yep,
         _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    GETBYT                  ; evaluate byte operand
-J59DA:  LD      A,E
-        CALL    PNTINI
-        JP      C,FCERR                 ; illegal function call
-        POP     DE
-        POP     BC
-        PUSH    HL
-        CALL    C5E91
+J59DA:  LD      A,E                     ; paint border color
+        CALL    PNTINI                  ; initialize for paint
+        JP      C,FCERR                 ; invalid, illegal function call
+        POP     DE                      ; restore X
+        POP     BC                      ; restore Y
+        PUSH    HL                      ; store BASIC pointer
+        CALL    C5E91                   ; check for in range
         CALL    MAPXYC
         LD      DE,1
-        LD      B,00H
+        LD      B,0
         CALL    C5ADC
         JR      Z,J5A08
         PUSH    HL
@@ -197,7 +197,7 @@ J5A26:  LD      A,B
 J5A35:  CALL    TDOWNC
 J5A38:  POP     DE
         JR      C,J5A1F
-        LD      B,00H
+        LD      B,0
         CALL    C5ADC
         JP      Z,J5A1F
         XOR     A
@@ -233,7 +233,7 @@ J5A7A:  LD      HL,(SKPCNT)
         JR      Z,J5ABF
         JR      C,J5AA4
         EX      DE,HL
-        LD      B,01H
+        LD      B,1
         CALL    C5ADC
         JR      Z,J5ABF
         OR      A
@@ -291,10 +291,10 @@ C5ACE:  LD      B,A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C5AD3:  EX      (SP),HL
+C5AD3:  EX      (SP),HL                 ; restore return address
         PUSH    BC
         PUSH    DE
-        PUSH    HL
+        PUSH    HL                      ; store return address
         LD      C,2
         JP      GETSTK                  ; check if enough stackspace for 2 words and quit
 
@@ -437,10 +437,10 @@ J5BBD:  CALL    CKCNTC
         PUSH    HL
         INC     HL
         EX      DE,HL
-        CALL    HLFDE
+        CALL    HLFDE                   ; divide by 2
         EX      DE,HL
         INC     DE
-        CALL    HLFDE
+        CALL    HLFDE                   ; divide by 2
         CALL    C5C06
         POP     DE
         POP     HL
@@ -563,8 +563,8 @@ J5C80:  LD      A,(CLINEF)
         JR      NC,J5C9A
 J5C86:  POP     DE
         POP     HL
-        CALL    C5CDC
-        CALL    C5CCD
+        CALL    C5CDC                   ; to absolute using GRPAC
+        CALL    C5CCD                   ; draw line
         JR      J5CAA
 
 J5C90:  LD      A,(CPLOTF)
@@ -576,7 +576,7 @@ J5C96:  POP     DE
 
 J5C9A:  POP     DE
         POP     HL
-        CALL    C5CDC
+        CALL    C5CDC                   ; to absolute using GRPAC
         CALL    SCALXY
         JR      NC,J5CAA
         CALL    MAPXYC
@@ -602,8 +602,8 @@ J5CAA:  POP     DE
         POP     AF
         JP      J5C4A
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+;       Subroutine      draw line
+;       Inputs          GRPACX = X start, GRPACY = Y end, BC = X end, DE = Y end
 ;       Outputs         ________________________
 
 CLINE2:
@@ -613,9 +613,9 @@ C5CCD:  LD      HL,(GRPACX)
         LD      (GYPOS),HL
         JP      DOGRPH
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
-;       Outputs         ________________________
+;       Subroutine      to absolute using GRPAC
+;       Inputs          HL = X offset, DE = Y offset
+;       Outputs         BC = X, DE = Y
 
 GTABSC:
 C5CDC:  PUSH    DE
@@ -737,218 +737,275 @@ C5D63:  LD      BC,1041H
 
 DRAW:
 C5D6E:  LD      A,(SCRMOD)
-        CP      2
-        JP      C,FCERR                 ; illegal function call
-        LD      DE,I5D83
+        CP      2                       ; in a graphic mode ?
+        JP      C,FCERR                 ; nope, illegal function call
+        LD      DE,I5D83                ; macro language DRAW
         XOR     A
-        LD      (DRWFLG),A
+        LD      (DRWFLG),A              ; clear DRWFLG
         LD      (MCLFLG),A              ; graphic MCL
-        JP      MACLNG
+        JP      MACLNG                  ; macro language parser
 
-I5D83:  DEFB    "U"+128
+; macro language DRAW command table
+
+I5D83:  DEFB    "U"+128                 ; move up, optional value
         DEFW    C5DB1
-        DEFB    "D"+128
+        DEFB    "D"+128                 ; move down, optional value
         DEFW    C5DB4
-        DEFB    "L"+128
+        DEFB    "L"+128                 ; move left, optional value
         DEFW    C5DB9
-        DEFB    "R"+128
+        DEFB    "R"+128                 ; move right, optional value
         DEFW    C5DBC
-        DEFB    "M"
+        DEFB    "M"                     ; move
         DEFW    C5DD8
-        DEFB    "E"+128
+        DEFB    "E"+128                 ; move up+right, optional value
         DEFW    C5DCA
-        DEFB    "F"+128
+        DEFB    "F"+128                 ; move down+right, optional value
         DEFW    C5DC6
-        DEFB    "G"+128
+        DEFB    "G"+128                 ; move down+left, optional value
         DEFW    C5DD1
-        DEFB    "H"+128
+        DEFB    "H"+128                 ; move up+left, optional value
         DEFW    C5DC3
-        DEFB    "A"+128
+        DEFB    "A"+128                 ; change angle, optional value
         DEFW    C5E4E
-        DEFB    "B"
+        DEFB    "B"                     ; moves, but no plot
         DEFW    C5E46
-        DEFB    "N"
+        DEFB    "N"                     ; moves, but returns to start
         DEFW    C5E42
-        DEFB    "X"
+        DEFB    "X"                     ; macro substring
         DEFW    MCLXEQ
-        DEFB    "C"+128
+        DEFB    "C"+128                 ; change color, optional value
         DEFW    C5E87
-        DEFB    "S"+128
+        DEFB    "S"+128                 ; change scale, optional value
         DEFW    C5E59
         DEFB    0
 
+;       Subroutine      DRAW: move up
+;       Inputs          DE = X offset
+;       Outputs         ________________________
+
 DRUP:
-C5DB1:  CALL    C5B0B                   ; negate DE
+C5DB1:  CALL    C5B0B                   ; negate DE (offset = - value)
+
+;       Subroutine      DRAW: move down
+;       Inputs          DE = X offset
+;       Outputs         ________________________
 
 DRDOWN:
-C5DB4:  LD      BC,0
-        JR      J5DFF
+C5DB4:  LD      BC,0                    ; Y offset = 0
+        JR      J5DFF                   ; move
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+;       Subroutine      DRAW: move left
+;       Inputs          DE = Y offset
 ;       Outputs         ________________________
 
 DRLEFT:
-C5DB9:  CALL    C5B0B                   ; negate DE
+C5DB9:  CALL    C5B0B                   ; negate DE (value = - value)
+
+;       Subroutine      DRAW: move right
+;       Inputs          DE = Y offset
+;       Outputs         ________________________
 
 DRIGHT:
 C5DBC:  LD      B,D
-        LD      C,E
-        LD      DE,0
-        JR      J5DFF
+        LD      C,E                     ; Y offset = value
+        LD      DE,0                    ; X offset = 0
+        JR      J5DFF                   ; move
+
+;       Subroutine      DRAW: move up+left
+;       Inputs          ________________________
+;       Outputs         ________________________
 
 DRWHHH:
-C5DC3:  CALL    C5B0B                   ; negate DE
+C5DC3:  CALL    C5B0B                   ; negate DE (value = -value)
+
+;       Subroutine      DRAW: move down+right
+;       Inputs          ________________________
+;       Outputs         ________________________
 
 DRWFFF:
 C5DC6:  LD      B,D
-        LD      C,E
-        JR      J5DFF
+        LD      C,E                     ; Y offset = X offsset = value
+        JR      J5DFF                   ; move
+
+;       Subroutine      DRAW: move up+right
+;       Inputs          ________________________
+;       Outputs         ________________________
 
 DRWEEE:
 C5DCA:  LD      B,D
-        LD      C,E
-J5DCC:  CALL    C5B0B                   ; negate DE
-        JR      J5DFF
+        LD      C,E                     ; Y offset = X offset = value
+J5DCC:  CALL    C5B0B                   ; negate DE (X offset = - value)
+        JR      J5DFF                   ; move
+
+;       Subroutine      DRAW: move down+left
+;       Inputs          ________________________
+;       Outputs         ________________________
 
 DRWGGG:
-C5DD1:  CALL    C5B0B                   ; negate DE
+C5DD1:  CALL    C5B0B                   ; negate DE (value = -value)
         LD      B,D
-        LD      C,E
-        JR      J5DCC
+        LD      C,E                     ; X offset = Y offset = -value
+        JR      J5DCC                   ; negate X offset and move
+
+;       Subroutine      DRAW: move
+;       Inputs          ________________________
+;       Outputs         ________________________
 
 DMOVE:
-C5DD8:  CALL    FETCHZ
-        LD      B,00H
+C5DD8:  CALL    FETCHZ                  ; fetch macro string character, error if end of macro string
+        LD      B,0                     ; assume sign
         CP      "+"
-        JR      Z,J5DE6
+        JR      Z,J5DE6                 ; yep, it is
         CP      "-"
         JR      Z,J5DE6
-        INC     B
+        INC     B                       ; no sign specified
 J5DE6:  LD      A,B
-        PUSH    AF
-        CALL    DECFET
-        CALL    VALSCN
-        PUSH    DE
-        CALL    FETCHZ
+        PUSH    AF                      ; store sign flag
+        CALL    DECFET                  ; to previous macro string character
+        CALL    VALSCN                  ; parse numeric operand in macro string
+        PUSH    DE                      ; store X offset
+        CALL    FETCHZ                  ; fetch macro string character, error if end of macro string
         CP      ","
         JP      NZ,FCERR                ; illegal function call
-        CALL    VALSCN
-        POP     BC
-        POP     AF
-        OR      A
-        JR      NZ,J5E22
-J5DFF:  CALL    C5E66
-        PUSH    DE
+        CALL    VALSCN                  ; parse numeric operand in macro string
+        POP     BC                      ; restore X offset
+        POP     AF                      ; restore sign flag
+        OR      A                       ; sign specified ?
+        JR      NZ,J5E22                ; nope,
+
+; move
+
+J5DFF:  CALL    C5E66                   ; scale (Y offset)
+        PUSH    DE                      ; store scaled Y offset
         LD      D,B
-        LD      E,C
-        CALL    C5E66
+        LD      E,C                     ; X offset
+        CALL    C5E66                   ; scale (X offset)
         EX      DE,HL
-        POP     DE
+        POP     DE                      ; restore scaled Y offset
         LD      A,(DRWANG)
-        RRA
-        JR      NC,J5E16
-        PUSH    AF
-        CALL    NEGHL
+        RRA                             ; angle 1 or 3 ?
+        JR      NC,J5E16                ; nope,
+        PUSH    AF                      ; store angle
+        CALL    NEGHL                   ; negate (scaled X offset)
         EX      DE,HL
-        POP     AF
-J5E16:  RRA
-        JR      NC,J5E1F
-        CALL    NEGHL
+        POP     AF                      ; restore angle
+J5E16:  RRA                             ; angle 2 or 3 ?
+        JR      NC,J5E1F                ; nope, angle 0 or 1
+        CALL    NEGHL                   ; negate (scaled Y offset)
         CALL    C5B0B                   ; negate DE
-J5E1F:  CALL    C5CDC
+J5E1F:  CALL    C5CDC                   ; to absolute using GRPAC
 J5E22:  LD      A,(DRWFLG)
-        ADD     A,A
-        JR      C,J5E31
-        PUSH    AF
-        PUSH    BC
-        PUSH    DE
-        CALL    C5CCD
-        POP     DE
-        POP     BC
-        POP     AF
-J5E31:  ADD     A,A
-        JR      C,J5E3D
+        ADD     A,A                     ; do not plot flag ?
+        JR      C,J5E31                 ; yep, skip draw line
+        PUSH    AF                      ; store flags
+        PUSH    BC                      ; store X end
+        PUSH    DE                      ; store Y end
+        CALL    C5CCD                   ; draw line
+        POP     DE                      ; restore Y end
+        POP     BC                      ; restore X end
+        POP     AF                      ; restore flag
+J5E31:  ADD     A,A                     ; do not move flag ?
+        JR      C,J5E3D                 ; yep, skip GRPAC update, clear DRWFLG and quit
         LD      (GRPACY),DE
         LD      H,B
         LD      L,C
-        LD      (GRPACX),HL
+        LD      (GRPACX),HL             ; update GRPAC
 J5E3D:  XOR     A
-        LD      (DRWFLG),A
+        LD      (DRWFLG),A              ; clear DRWFLG
         RET
 
+;       Subroutine      DRAW: moves, but returns to start
+;       Inputs          ________________________
+;       Outputs         ________________________
+
 DNOMOV:
-C5E42:  LD      A,40H
-        JR      J5E48
+C5E42:  LD      A,40H                   ; no move flag
+        JR      J5E48                   ; update DRWFLG
+
+;       Subroutine      DRAW: moves, but no plot
+;       Inputs          ________________________
+;       Outputs         ________________________
 
 DNOPLT:
-C5E46:  LD      A,80H
+C5E46:  LD      A,80H                   ; no plot flag
 J5E48:  LD      HL,DRWFLG
         OR      (HL)
         LD      (HL),A
         RET
 
-DANGLE:
-C5E4E:  JR      NC,C5E59
-        LD      A,E
-        CP      04H
-        JR      NC,C5E59
-        LD      (DRWANG),A
-        RET
-
-NCFCER:
-C5E59:  JP      NC,FCERR                ; illegal function call
-        LD      A,D
-        OR      A
-        JP      NZ,FCERR                ; illegal function call
-        LD      A,E
-        LD      (DRWSCL),A
-        RET
-
-;       Subroutine      __________________________
+;       Subroutine      DRAW: change angle
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+DANGLE:
+C5E4E:  JR      NC,C5E59                ; no value specified, illegal function call
+        LD      A,E
+        CP      3+1                     ; valid angle value ?
+        JR      NC,C5E59                ; nope, illegal function call
+        LD      (DRWANG),A              ; update angle
+        RET
+
+;       Subroutine      DRAW: change scale factor
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+NCFCER:
+C5E59:  JP      NC,FCERR                ; no value specified, illegal function call
+        LD      A,D
+        OR      A                       ; value < 256 ?
+        JP      NZ,FCERR                ; nope, illegal function call
+        LD      A,E
+        LD      (DRWSCL),A              ; update scale
+        RET
+
+;       Subroutine      scale
+;       Inputs          DE = offset
+;       Outputs         DE = scaled offset
+
 DSCLDE:
 C5E66:  LD      A,(DRWSCL)
-        OR      A
-        RET     Z
+        OR      A                       ; scale = 0 ?
+        RET     Z                       ; yep, quit (no scale)
         LD      HL,0
 J5E6E:  ADD     HL,DE
         DEC     A
         JR      NZ,J5E6E
         EX      DE,HL
         LD      A,D
-        ADD     A,A
-        PUSH    AF
-        JR      NC,J5E79
+        ADD     A,A                     ; negative ?
+        PUSH    AF                      ; store sign
+        JR      NC,J5E79                ; nope,
         DEC     DE
-J5E79:  CALL    HLFDE
-        CALL    HLFDE
-        POP     AF
-        RET     NC
+J5E79:  CALL    HLFDE                   ; divide by 2
+        CALL    HLFDE                   ; divide by 2
+        POP     AF                      ; restore sign
+        RET     NC                      ; positive, quit
         LD      A,D
         OR      0C0H
         LD      D,A
         INC     DE
         RET
 
+;       Subroutine      DRAW: change color
+;       Inputs          DE = value
+;       Outputs         ________________________
+
 DCOLR:
-C5E87:  JR      NC,C5E59
-        LD      A,E
-        CALL    SETATR
-        JP      C,FCERR                 ; illegal function call
+C5E87:  JR      NC,C5E59                ; no value specified, illegal function call
+        LD      A,E                     ; color = value
+        CALL    SETATR                  ; set color
+        JP      C,FCERR                 ; error, illegal function call
         RET
 
-;       Subroutine      __________________________
+;       Subroutine      check for in range
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 CHKRNG:
-C5E91:  PUSH    HL
+C5E91:  PUSH    HL                      ; store
         CALL    SCALXY
         JP      NC,FCERR                ; illegal function call
-        POP     HL
+        POP     HL                      ; restore
         RET
 
 ; END	SUBTTL	ADVGRP

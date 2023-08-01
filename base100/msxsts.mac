@@ -115,7 +115,7 @@ H.PLAY  EQU     0FFC5H
 
 
         PUBLIC  TRPHDL
-        PUBLIC  PLYHDL
+        PUBLIC  PLYEOS
         PUBLIC  GETCSP
         PUBLIC  CSRLIN
         PUBLIC  PLAY
@@ -168,7 +168,11 @@ H.PLAY  EQU     0FFC5H
 
         EXTRN   DECDIV
         EXTRN   MOVFM
+        IF      OPTM EQ 0
         EXTRN   MOVRM
+        ELSE
+        EXTRN   GETBCD
+        ENDIF
         EXTRN   VMOVAF
         EXTRN   FRCINT
         EXTRN   UMULT
@@ -267,604 +271,718 @@ J73E1:  JP      WRTPSG                  ; write PSG register
 
 I73E4:  DEFB    " "
 
+; PSG VCB structure:
+;
+;       +0,2    timer
+;       +2      size of macro string
+;       +3,2    pointer to macro string
+;       +5,2    top of stack
+;       +7      size music packet
+;       +8,7    music packet
+;               +0, high byte duration counter + music packet size (b7-b5)
+;               +1, low byte duration counter
+;               +2, music data. b7+b6 = type
+;                       type 00hhhhhh = frequency packet, h = high byte frequency, next byte = low byte frequency
+;                       type 1x0svvvv = volume/envelope specified, s = shape bit, vvvv = volume/shape
+;                       type x10svvvv = envelope period specified, next byte = low byte period, next byte = high byte period
+;       +15     octave
+;       +16     note length
+;       +17     tempo
+;       +18     volume
+;       +19,2   envelope period
+;       +21,16  stack (8 words, maximium of 3 macro sub strings)
+
 ;       Subroutine      PLAY statement
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 PLAY:
 C73E5:  CALL    H.PLAY
-        PUSH    HL
+        PUSH    HL                      ; store BASIC pointer
         LD      HL,I752E
-        LD      (MCLTAB),HL
-        LD      A,0
-        LD      (PRSCNT),A
+        LD      (MCLTAB),HL             ; macro language command table = play macro language
+        LD      A,0                     ; voice = 0
+        LD      (PRSCNT),A              ; no macro string of any voice finished, music dequeueing not in progress
         LD      HL,-10
         ADD     HL,SP
-        LD      (SAVSP),HL
-        POP     HL
-        PUSH    AF
+        LD      (SAVSP),HL              ; during PLAY, 5 words extra are on stack
+        POP     HL                      ; restore BASIC pointer
+        PUSH    AF                      ; store voice
 J73FD:  CALL    FRMEVL                  ; evaluate expression
-        EX      (SP),HL
-        PUSH    HL
+        EX      (SP),HL                 ; store BASIC pointer, restore voice
+        PUSH    HL                      ; store voice
         CALL    FRESTR                  ; free temporary string with type check
+
+        IF      OPTM EQ 0
         CALL    MOVRM                   ; load from HL
         LD      A,E
         OR      A                       ; stringsize zero ?
         JR      NZ,J7413                ; nope,
-        LD      E,1
-        LD      BC,I73E4
+        LD      E,1                     ; string size = 1
+        LD      BC,I73E4                ; string with space
         LD      D,C
         LD      C,B
-J7413:  POP     AF
-        PUSH    AF
-        CALL    GETVCP
-        LD      (HL),E                  ; stringsize
+J7413:  POP     AF                      ; restore voice
+        PUSH    AF                      ; store voice
+        CALL    GETVCP                  ; get pointer to macro string info voice buffer
+        LD      (HL),E                  ; size of macro string
         INC     HL
         LD      (HL),D
         INC     HL
-        LD      (HL),C                  ; pointer
+        LD      (HL),C                  ; pointer to macro string
+
+        ELSE
+        CALL    GETBCD                  ; load from HL
+        LD      A,D
+        OR      A                       ; stringsize zero ?
+        JR      NZ,J7413                ; nope,
+        LD      D,1                     ; string size = 1
+        LD      BC,I73E4                ; string with space
+J7413:  POP     AF                      ; restore voice
+        PUSH    AF                      ; store voice
+        CALL    GETVCP                  ; get pointer to macro string info voice buffer
+        LD      (HL),D                  ; size of macro string
+        INC     HL
+        LD      (HL),C
+        INC     HL
+        LD      (HL),B                  ; pointer to macro string
+        ENDIF
+
         INC     HL
         LD      D,H
-        LD      E,L
-        LD      BC,001CH
+        LD      E,L                     ; pointer to top of stack
+        LD      BC,36-3-5
         ADD     HL,BC
-        EX      DE,HL
+        EX      DE,HL                   ; null pointer macor string and dummy size of macro string on stack
         LD      (HL),E
         INC     HL
-        LD      (HL),D
-        POP     BC
-        POP     HL
-        INC     B
+        LD      (HL),D                  ; initialize stack
+        POP     BC                      ; restore voice
+        POP     HL                      ; restore BASIC pointer
+        INC     B                       ; update voice
         LD      A,B
-        CP      03H
-        JR      NC,J7446
+        CP      2+1                     ; done all voices ?
+        JR      NC,J7446                ; yep, finish
         DEC     HL
         _RST    CHRGTR                  ; end of statement ?
         JR      Z,J7439			; yep,
-        PUSH    BC
+        PUSH    BC                      ; store voice
         _RST    SYNCHR
         DEFB    ","                     ; check for ,
-        JR      J73FD
+        JR      J73FD                   ; next voice
 
 J7439:  LD      A,B
-        LD      (VOICEN),A
-        CALL    C7507
-        INC     B
+        LD      (VOICEN),A              ; update current voice
+        CALL    C7507                   ; end of queue mark in current voice queue
+        INC     B                       ; update voice
         LD      A,B
-        CP      03H
-        JR      C,J7439
+        CP      2+1                     ; done all voices ?
+        JR      C,J7439                 ; nope, next voice
 J7446:  DEC     HL
         _RST    CHRGTR                  ; end of statement ?
         JP      NZ,SNERR                ; nope, syntax error
-        PUSH    HL
-J744C:  XOR     A
-J744D:  PUSH    AF
-        LD      (VOICEN),A
-        LD      B,A
-        CALL    C7521
-        JP      C,J74D6
-        LD      A,B
-        CALL    GETVCP
+        PUSH    HL                      ; store BASIC pointer
+
+; start processing macro strings
+
+J744C:  XOR     A                       ; voice = 0
+J744D:  PUSH    AF                      ; store voice
+        LD      (VOICEN),A              ; update current voice
+        LD      B,A                     ; store voice
+        CALL    C7521                   ; current voice queue full ?
+        JP      C,J74D6                 ; yep, skip to next voice
+        LD      A,B                     ; restore voice
+        CALL    GETVCP                  ; get pointer to macro string info voice buffer
         LD      A,(HL)
-        OR      A
-        JP      Z,J74D6
-        LD      (MCLLEN),A
+        OR      A                       ; macro string size = 0 ?
+        JP      Z,J74D6                 ; yep, skip to next voice
+        LD      (MCLLEN),A              ; update macro string size
         INC     HL
         LD      E,(HL)
         INC     HL
-        LD      D,(HL)
+        LD      D,(HL)                  ; pointer to macro string
         INC     HL
-        LD      (MCLPTR),DE
+        LD      (MCLPTR),DE             ; update macro string pointer
         LD      E,(HL)
         INC     HL
-        LD      D,(HL)
+        LD      D,(HL)                  ; source start = top of stack
         INC     HL
-        PUSH    HL
-        LD      L,24H
-        CALL    GETVC2
+        PUSH    HL                      ; store pointer to size of packet
+        LD      L,36                    ; offset = start of stack
+        CALL    GETVC2                  ; get pointer in current voice buffer
         PUSH    HL
         LD      HL,(SAVSP)
-        DEC     HL
-        POP     BC
-        DI
-        CALL    BLTUC                   ; move data
-        POP     DE
+        DEC     HL                      ; destination end = below current Z80 stack
+        POP     BC                      ; source end =
+        DI                              ; no interrupts during stack manupilation
+        CALL    BLTUC                   ; move data (copy stack data from VCB to Z80 stack)
+        POP     DE                      ; restore pointer to size of packet
         LD      H,B
         LD      L,C
-        LD      SP,HL
-        EI
+        LD      SP,HL                   ; stack pointer = destination start
+        EI                              ; finished stack manupilation
         LD      A,0FFH
-        LD      (MCLFLG),A              ; music MCL
-        JP      MCLSCN
+        LD      (MCLFLG),A              ; MCL = music
+        JP      MCLSCN                  ; execute macro command (if any)
+
+; queue is full
 
 J748E:  LD      A,(MCLLEN)
-        OR      A
-        JR      NZ,J7497
-PLYHDL:
-J7494:  CALL    C7507
-J7497:  LD      A,(VOICEN)
-        CALL    GETVCP
+        OR      A                       ; end of macro string ?
+        JR      NZ,J7497                ; nope, skip end of queue marker
+
+; end of macro string
+
+PLYEOS:
+J7494:  CALL    C7507                   ; end of queue mark in current voice queue
+
+; update VCB, remove VCB stack and continue with next voice
+
+J7497:  LD      A,(VOICEN)              ; current voice
+        CALL    GETVCP                  ; get pointer to macro string info voice buffer
         LD      A,(MCLLEN)
-        LD      (HL),A
+        LD      (HL),A                  ; update size of macro string
         INC     HL
         LD      DE,(MCLPTR)
         LD      (HL),E
         INC     HL
-        LD      (HL),D
+        LD      (HL),D                  ; update pointer to macro string
         LD      HL,0
         ADD     HL,SP
-        EX      DE,HL
+        EX      DE,HL                   ; source start = top of stack
         LD      HL,(SAVSP)
-        DI
-        LD      SP,HL
+        DI                              ; no interrupts during stack manupilation
+        LD      SP,HL                   ; restore to Z80 stack
         POP     BC
         POP     BC
-        POP     BC
-        PUSH    HL
+        POP     BC                      ; cleanup stack
+        PUSH    HL                      ; store stack pointer
         OR      A
-        SBC     HL,DE
-        JR      Z,J74D4
+        SBC     HL,DE                   ; stack empty ?
+        JR      Z,J74D4                 ; yep, continue with next voice
         LD      A,0F0H
         AND     L
-        OR      H
-        JP      NZ,FCERR                ; illegal function call
-        LD      L,24H
-        CALL    GETVC2
-        POP     BC
+        OR      H                       ; size on stack < 16 bytes ?
+        JP      NZ,FCERR                ; nope, illegal function call
+        LD      L,36                    ; offset = start of stack
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        POP     BC                      ; source end = start of stack
         DEC     BC
-        CALL    BLTUC                   ; move data
-        POP     HL
+        CALL    BLTUC                   ; move data (copy stack data from Z80 stack to VCB)
+        POP     HL                      ; restore pointer to size of packet
         DEC     HL
         LD      (HL),B
         DEC     HL
-        LD      (HL),C
-        JR      J74D6
+        LD      (HL),C                  ; update top of stack
+        JR      J74D6                   ; next voice
 
 J74D4:  POP     BC
-        POP     BC
-J74D6:  EI
-        POP     AF
-        INC     A
-        CP      03H
-        JP      C,J744D
-        DI
+        POP     BC                      ; clean up stack
+
+; next voice
+
+J74D6:  EI                              ; finished stack manupilation
+        POP     AF                      ; restore voice
+        INC     A                       ; update voice
+        CP      2+1                     ; done all voices ?
+        JP      C,J744D                 ; nope, next voice
+        DI                              ; no interrupts
         LD      A,(INTFLG)
-        CP      03H
-        JR      Z,J7502
+        CP      3                       ; CTRL/STOP pressed ?
+        JR      Z,J7502                 ; yep, silence PSG and quit
         LD      A,(PRSCNT)
-        RLCA
-        JR      C,J74F3
+        RLCA                            ; music dequeueing in progress ?
+        JR      C,J74F3                 ; yep, skip start music dequeueing
         LD      HL,PLYCNT
-        INC     (HL)
-        CALL    STRTMS
+        INC     (HL)                    ; increase number of play sequences
+        CALL    STRTMS                  ; start music dequeuing
 J74F3:  EI
         LD      HL,PRSCNT
         LD      A,(HL)
         OR      80H
-        LD      (HL),A
-        CP      83H
-        JP      NZ,J744C
-J7500:  POP     HL
+        LD      (HL),A                  ; set music dequeueing in progress flag
+        CP      80H+3                   ; macro strings of all voices finished ?
+        JP      NZ,J744C                ; nope, continue processing macro strings
+J7500:  POP     HL                      ; restore BASIC pointer
         RET
 
-J7502:  CALL    GICINI
-        JR      J7500
+J7502:  CALL    GICINI                  ; initialize PSG (silence)
+        JR      J7500                   ; restore BASIC pointer and quit
 
-;       Subroutine      __________________________
+;       Subroutine      end of queue mark in current voice queue
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 C7507:  LD      A,(PRSCNT)
         INC     A
-        LD      (PRSCNT),A
-        LD      E,0FFH
+        LD      (PRSCNT),A              ; increase macro string voice finished
+        LD      E,0FFH                  ; end of queue mark
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+;       Subroutine      put in current voice queue
+;       Inputs          E = byte
 ;       Outputs         ________________________
 
 C7510:  PUSH    HL
         PUSH    BC
 J7512:  PUSH    DE
-        LD      A,(VOICEN)
-        DI
-        CALL    PUTQ
-        EI
+        LD      A,(VOICEN)              ; current voice
+        DI                              ; no interrupts during queue operation
+        CALL    PUTQ                    ; put byte in queue
+        EI                              ; queue operation finished, allow interrupts
         POP     DE
-        JR      Z,J7512
+        JR      Z,J7512                 ; queue is full, retry
         POP     BC
         POP     HL
         RET
 
-;       Subroutine      __________________________
+;       Subroutine      current voice queue full ?
 ;       Inputs          ________________________
-;       Outputs         ________________________
+;       Outputs         Cx set if queue full
 
-C7521:  LD      A,(VOICEN)
+C7521:  LD      A,(VOICEN)              ; current voice
         PUSH    BC
-        DI
+        DI                              ; no interrupts during queue operation
         CALL    LFTQ
-        EI
+        EI                              ; queue operation finished, allow interrupts
         POP     BC
         CP      8
         RET
 
-I752E:  DEFB    "A"
+I752E:  DEFB    "A"                     ; note A
         DEFW    C763E
-        DEFB    "B"
+        DEFB    "B"                     ; note B
         DEFW    C763E
-        DEFB    "C"
+        DEFB    "C"                     ; note C
         DEFW    C763E
-        DEFB    "D"
+        DEFB    "D"                     ; note D
         DEFW    C763E
-        DEFB    "E"
+        DEFB    "E"                     ; note E
         DEFW    C763E
-        DEFB    "F"
+        DEFB    "F"                     ; note F
         DEFW    C763E
-        DEFB    "G"
+        DEFB    "G"                     ; note G
         DEFW    C763E
-        DEFB    "M"+128
+        DEFB    "M"+128                 ; change envelope period, numeric operand
         DEFW    C759E
-        DEFB    "V"+128
+        DEFB    "V"+128                 ; change volume, numeric operand
         DEFW    C7586
-        DEFB    "S"+128
+        DEFB    "S"+128                 ; change shape, numeric operand
         DEFW    C75BE
-        DEFB    "N"+128
+        DEFB    "N"+128                 ; note number, numeric operand
         DEFW    C7621
-        DEFB    "O"+128
+        DEFB    "O"+128                 ; change octave, numeric operand
         DEFW    C75EF
-        DEFB    "R"+128
+        DEFB    "R"+128                 ; rest note, numeric operand
         DEFW    C75FC
-        DEFB    "T"+128
+        DEFB    "T"+128                 ; change tempo, numeric operand
         DEFW    C75E2
-        DEFB    "L"+128
+        DEFB    "L"+128                 ; change note length, numeric operand
         DEFW    C75C8
-        DEFB    "X"
+        DEFB    "X"                     ; macro substring
         DEFW    MCLXEQ
         DEFB    0
 
-I755F:  DEFB    010H,012H,014H,016H,000H,000H,002H,004H
-        DEFB    006H,008H,00AH,00AH,00CH,00EH,010H
+I755F:  DEFB    8*2                     ; A-
+        DEFB    9*2                     ; A
+        DEFB    10*2                    ; A# or B-
+        DEFB    11*2                    ; B or C-
+        DEFB    0*2                     ; B#
+        DEFB    0*2                     ; C
+        DEFB    1*2                     ; C# or D-
+        DEFB    2*2                     ; D
+        DEFB    3*2                     ; D# or E-
+        DEFB    4*2                     ; E or F-
+        DEFB    5*2                     ; E#
+        DEFB    5*2                     ; F
+        DEFB    6*2                     ; F# or G-
+        DEFB    7*2                     ; G
+        DEFB    8*2                     ; G#
 
-I756E:  DEFW    00D5DH
-        DEFW    00C9CH
-        DEFW    00BE7H
-        DEFW    00B3CH
-        DEFW    00A9BH
-        DEFW    00A02H
-        DEFW    00973H
-        DEFW    008EBH
-        DEFW    0086BH
-        DEFW    007F2H
-        DEFW    00780H
-        DEFW    00714H
+I756E:  DEFW    00D5DH                  ; C
+        DEFW    00C9CH                  ; C#
+        DEFW    00BE7H                  ; D
+        DEFW    00B3CH                  ; D#
+        DEFW    00A9BH                  ; E
+        DEFW    00A02H                  ; F
+        DEFW    00973H                  ; F#
+        DEFW    008EBH                  ; G
+        DEFW    0086BH                  ; G#
+        DEFW    007F2H                  ; A
+        DEFW    00780H                  ; A#
+        DEFW    00714H                  ; B
 
-C7586:  JR      C,J758A
-        LD      E,08H
-J758A:  LD      A,0FH
-        CP      E
-        JR      C,J75DF
+;       Subroutine      change volume
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+C7586:  JR      C,J758A                 ; value specified,
+        LD      E,8                     ; use default volume
+J758A:  LD      A,15
+        CP      E                       ; valid volume ?
+        JR      C,J75DF                 ; nope, illegal function call
 J758F:  XOR     A
-        OR      D
-        JR      NZ,J75DF
-        LD      L,12H
-        CALL    GETVC2
+        OR      D                       ; volume > 255 ?
+        JR      NZ,J75DF                ; yep, illegal function call
+        LD      L,18                    ; offset = volume
+        CALL    GETVC2                  ; get pointer in current voice buffer
         LD      A,40H
-        AND     (HL)
+        AND     (HL)                    ; clear volume bits, clear must include volume, keep envelope flag
         OR      E
         LD      (HL),A
         RET
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+;       Subroutine      change envelope period
+;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
 C759E:  LD      A,E
-        JR      C,J75A4
+        JR      C,J75A4                 ; value specified,
         CPL
         INC     A
-        LD      E,A
+        LD      E,A                     ; use default envelope period = 255
 J75A4:  OR      D
-        JR      Z,J75DF
-        LD      L,13H
-        CALL    GETVC2
+        JR      Z,J75DF                 ; illegal function call
+        LD      L,19                    ; offset = envelope period
+        CALL    GETVC2                  ; get pointer in current voice buffer
         PUSH    HL
         LD      A,(HL)
         INC     HL
         LD      H,(HL)
-        LD      L,A
-        _RST    DCOMPR
+        LD      L,A                     ; get current envelope period
+        _RST    DCOMPR                  ; same envelope periode ?
         POP     HL
-        RET     Z
+        RET     Z                       ; yep, quit
         LD      (HL),E
         INC     HL
-        LD      (HL),D
+        LD      (HL),D                  ; update envelope period
         DEC     HL
         DEC     HL
         LD      A,40H
         OR      (HL)
-        LD      (HL),A
+        LD      (HL),A                  ; set envelope flag
         RET
+
+;       Subroutine      change shape
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
 
 C75BE:  LD      A,E
-        CP      10H
-        JR      NC,J75DF
-        OR      10H
+        CP      15+1                    ; valid shape value ?
+        JR      NC,J75DF                ; nope, illegal function call
+        OR      10H                     ; set MODE bit
         LD      E,A
-        JR      J758F
+        JR      J758F                   ; continue in volume
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+;       Subroutine      change note length
+;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
-C75C8:  JR      C,J75CC
-        LD      E,4
+C75C8:  JR      C,J75CC                 ; value specified,
+        LD      E,4                     ; use default note length
 J75CC:  LD      A,E
-        CP      64+1
-        JR      NC,J75DF
-        LD      L,10H
-J75D3:  CALL    GETVC2
+        CP      64+1                    ; valid note length ?
+        JR      NC,J75DF                ; nope, illegal function call
+        LD      L,16                    ; offset = note length
+
+; get pointer in current voice buffer, check for <256 and <>0, update value
+
+J75D3:  CALL    GETVC2                  ; get pointer in current voice buffer
         XOR     A
-        OR      D
-        JR      NZ,J75DF
-        OR      E
-        JR      Z,J75DF
-        LD      (HL),A
+        OR      D                       ; value > 255 ?
+        JR      NZ,J75DF                ; yep, illegal function call
+        OR      E                       ; value = 0 ?
+        JR      Z,J75DF                 ; yep, illegal function call
+        LD      (HL),A                  ; update value
         RET
 
-J75DF:  CALL    FCERR                   ; illegal function call
+; illegal function call
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+J75DF:
+        IF      OPTM EQ 0
+        CALL    FCERR                   ; illegal function call
+        ELSE
+        JP      FCERR
+        ENDIF
+
+;       Subroutine      change tempo
+;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
-C75E2:  JR      C,J75E6
-        LD      E,120
+C75E2:  JR      C,J75E6                 ; value specified,
+        LD      E,120                   ; use default tempo
 J75E6:  LD      A,E
-        CP      32
-        JR      C,J75DF
-        LD      L,11H
-        JR      J75D3
+        CP      32                      ; valid tempo ?
+        JR      C,J75DF                 ; nope, illegal function call
+        LD      L,17                    ; offset = tempo
+        JR      J75D3                   ; get pointer in current voice buffer, check for <256 and <>0, update value
 
-C75EF:  JR      C,J75F3
-        LD      E,4
+;       Subroutine      change octave
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+C75EF:  JR      C,J75F3                 ; value specified,
+        LD      E,4                     ; use default octave
 J75F3:  LD      A,E
-        CP      8+1
-        JR      NC,J75DF
-        LD      L,0FH
-        JR      J75D3
+        CP      8+1                     ; valid octave ?
+        JR      NC,J75DF                ; nope, illegal function call
+        LD      L,15                    ; offset = octave
+        JR      J75D3                   ; get pointer in current voice buffer, check for <256 and <>0, update value
 
-C75FC:  JR      C,J7600
-        LD      E,4
+;       Subroutine      rest note
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+C75FC:  JR      C,J7600                 ; value specified,
+        LD      E,4                     ; use default rest length
 J7600:  XOR     A
-        OR      D
-        JR      NZ,J75DF
-        OR      E
-        JR      Z,J75DF
-        CP      64+1
-        JR      NC,J75DF
-J760B:  LD      HL,0
-        PUSH    HL
-        LD      L,10H
-        CALL    GETVC2
-        PUSH    HL
+        OR      D                       ; rest value > 255 ?
+        JR      NZ,J75DF                ; yep, illegal function call
+        OR      E                       ; rest value = 0 ?
+        JR      Z,J75DF                 ; yep, illegal function call
+        CP      64+1                    ; valid rest value ?
+        JR      NC,J75DF                ; nope, illegal function call
+
+; rest note
+
+J760B:  LD      HL,0                    ; frequency = 0 (rest note)
+        PUSH    HL                      ; store frequency
+        LD      L,16                    ; offset = note length
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        PUSH    HL                      ; store pointer to note length
         INC     HL
         INC     HL
-        LD      A,(HL)
-        LD      (SAVVOL),A
-        LD      (HL),80H
+        LD      A,(HL)                  ; current volume
+        LD      (SAVVOL),A              ; store current volume
+        LD      (HL),80H                ; update volume = 0, must include volume in packet
         DEC     HL
         DEC     HL
         JR      J769C
 
-C7621:  JR      NC,J75DF
+;       Subroutine      play note number
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+C7621:  JR      NC,J75DF                ; value not specified, illegal function call
         XOR     A
-        OR      D
-        JR      NZ,J75DF
-        OR      E
-        JR      Z,J760B
-        CP      96+1
-        JR      NC,J75DF
+        OR      D                       ; note number > 255 ?
+        JR      NZ,J75DF                ; yep, illegal function call
+        OR      E                       ; note number = 0 ?
+        JR      Z,J760B                 ; yep, rest note
+        CP      96+1                    ; valid note number ?
+        JR      NC,J75DF                ; nope, illegal function call
         LD      A,E
-        LD      B,00H
-        LD      E,B
+        LD      B,0                     ; high byte frequency offset = 0
+        LD      E,B                     ; octave = 0
 J7632:  SUB     12
         INC     E
         JR      NC,J7632
         ADD     A,12
         ADD     A,A
-        LD      C,A
-        JP      J7673
+        LD      C,A                     ; frequency offset
+        JP      J7673                   ; continue with play frequency
 
-C763E:  LD      B,C
+;       Subroutine      play note
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+C763E:  LD      B,C                     ; store note letter
         LD      A,C
-        SUB     40H
+        SUB     'A'-1
         ADD     A,A
-        LD      C,A
-        CALL    FETCHR
-        JR      Z,J7665
-        CP      "#"
-        JR      Z,J7666
-        CP      "+"
-        JR      Z,J7666
-        CP      "-"
-        JR      Z,J765A
-        CALL    DECFET
-        JR      J7665
+        LD      C,A                     ; note letter to note table offset (assumes sharp)
+        CALL    FETCHR                  ; fetch macro string character
+        JR      Z,J7665                 ; end of macro string,
+        CP      "#"                     ; sharp ?
+        JR      Z,J7666                 ; yep, note offset is already sharp
+        CP      "+"                     ; plus ?
+        JR      Z,J7666                 ; yep, note offset is already sharp
+        CP      "-"                     ; minus ?
+        JR      Z,J765A                 ; yep, adjust note offset
+        CALL    DECFET                  ; to previous macro string character
+        JR      J7665                   ; no note extender
 
-J765A:  DEC     C
-        LD      A,B
-        CP      "C"
-        JR      Z,J7664
-        CP      "F"
-        JR      NZ,J7665
+J765A:  DEC     C                       ; decrease note table offset
+        LD      A,B                     ; restore note letter
+        CP      "C"                     ; C- ?
+        JR      Z,J7664                 ; yep, from C# to C- is note table offset -3
+        CP      "F"                     ; F- ?
+        JR      NZ,J7665                ; nope, note table offset -2
 J7664:  DEC     C
 J7665:  DEC     C
-J7666:  LD      L,0FH
-        CALL    GETVC2
-        LD      E,(HL)
-        LD      B,00H
-        LD      HL,I755F
+J7666:  LD      L,15                    ; offset = octave
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        LD      E,(HL)                  ; store current octave
+        LD      B,0
+        LD      HL,I755F                ; note table
+        ADD     HL,BC                   ; + note offset
+        LD      C,(HL)                  ; frequency offset
+
+; play frequency
+
+J7673:  LD      HL,I756E                ; frequency table
         ADD     HL,BC
-        LD      C,(HL)
-J7673:  LD      HL,I756E
-        ADD     HL,BC
-        LD      A,E
+        LD      A,E                     ; restore current octave
         LD      E,(HL)
         INC     HL
-        LD      D,(HL)
-J767B:  DEC     A
-        JR      Z,J7687
+        LD      D,(HL)                  ; base frequency
+J767B:  DEC     A                       ; done octaves ?
+        JR      Z,J7687                 ; yep,
         SRL     D
-        RR      E
+        RR      E                       ; frequency = frequency / 2
         JR      J767B
 
-J7684:  CALL    FCERR                   ; illegal function call
+J7684:
+        IF      OPTM EQ 0
+        CALL    FCERR                   ; illegal function call
+        ELSE
+        JP      FCERR
+        ENDIF
+
 J7687:  ADC     A,E
         LD      E,A
         ADC     A,D
         SUB     E
-        LD      D,A
-        PUSH    DE
-        LD      L,10H
-        CALL    GETVC2
-        LD      C,(HL)
-        PUSH    HL
-        CALL    FETCHR
-        JR      Z,J76A9
-        CALL    VALSC2
-J769C:  LD      A,40H
-        CP      E
-        JR      C,J7684
+        LD      D,A                     ; frequency +1 if Cx
+        PUSH    DE                      ; store frequency
+        LD      L,16                    ; offset = note length
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        LD      C,(HL)                  ; store current note length
+        PUSH    HL                      ; store pointer to note length
+        CALL    FETCHR                  ; fetch macro string character
+        JR      Z,J76A9                 ; end of macro string,
+        CALL    VALSC2                  ; parse optional numeric constant value in macro string
+J769C:  LD      A,63+1
+        CP      E                       ; valid note length ?
+        JR      C,J7684                 ; nope, illegal function call
         XOR     A
-        OR      D
-        JR      NZ,J7684
-        OR      E
-        JR      Z,J76A9
-        LD      C,E
-J76A9:  POP     HL
-        LD      D,00H
-        LD      B,D
+        OR      D                       ; note length > 255 ?
+        JR      NZ,J7684                ; yep, illegal function call
+        OR      E                       ; note length = 0 ?
+        JR      Z,J76A9                 ; yep, use current note length
+        LD      C,E                     ; note length
+J76A9:  POP     HL                      ; restore pointer to note length
+        LD      D,0
+        LD      B,D                     ; BC = note length
         INC     HL
-        LD      E,(HL)
-        PUSH    HL
+        LD      E,(HL)                  ; current tempo
+        PUSH    HL                      ; store pointer to tempo
         CALL    UMULT                   ; unsigned integer multiply
         EX      DE,HL
         CALL    CONSIH                  ; convert to single precision real
         CALL    VMOVAF                  ; ARG = DAC
-        LD      HL,I7754
+        LD      HL,I7754                ; number of ticks * tempo (120) * note length (4) *0.5 seconds
         CALL    MOVFM                   ; DAC = (single)
         CALL    DECDIV                  ; DAC / ARG
         CALL    FRCINT                  ; convert DAC to integer
         LD      D,H
-        LD      E,L
-J76C8:  CALL    FETCHR
-        JR      Z,J76E3
-        CP      "."
-        JR      NZ,J76E0
+        LD      E,L                     ; store duration (ticks)
+J76C8:  CALL    FETCHR                  ; fetch macro string character
+        JR      Z,J76E3                 ; end of macro string,
+        CP      "."                     ; dot ?
+        JR      NZ,J76E0                ; nope, duration determined
         SRL     D
         RR      E
-        ADC     HL,DE
+        ADC     HL,DE                   ; duration = duration*1.5
         LD      A,0E0H
-        AND     H
-        JR      Z,J76C8
+        AND     H                       ; duration high byte still fits in b4-b0 ?
+        JR      Z,J76C8                 ; yep, continue
         XOR     H
-        LD      H,A
-        JR      J76E3
+        LD      H,A                     ; clear b7-b5
+        JR      J76E3                   ; duration is determined
 
-J76E0:  CALL    DECFET
+J76E0:  CALL    DECFET                  ; to previous macro string character
 J76E3:  LD      DE,5
-        _RST    DCOMPR
-        JR      C,J76EA
-        EX      DE,HL
-J76EA:  LD      BC,-9
-        POP     HL
-        PUSH    HL
+        _RST    DCOMPR                  ; duration < 5 ?
+        JR      C,J76EA                 ; yep, use duration = 5
+        EX      DE,HL                   ; duration in DE
+J76EA:  LD      BC,8-17
+        POP     HL                      ; restore pointer to tempo
+        PUSH    HL                      ; store pointer to tempo
         ADD     HL,BC
-        LD      (HL),D
+        LD      (HL),D                  ; high byte duration counter
         INC     HL
-        LD      (HL),E
+        LD      (HL),E                  ; low byte duration counter
         INC     HL
-        LD      C,02H
-        EX      (SP),HL
+        LD      C,2                     ; packet length = 2 bytes (duration bytes)
+        EX      (SP),HL                 ; store pointer in packet, restore pointer to tempo
         INC     HL
-        LD      E,(HL)
+        LD      E,(HL)                  ; store current volume
         LD      A,E
         AND     0BFH
-        LD      (HL),A
-        EX      (SP),HL
-        LD      A,80H
+        LD      (HL),A                  ; clear must include volume in packet flag
+        EX      (SP),HL                 ; store pointer to volume, restore pointer in packet
+        LD      A,80H                   ; volume specified in packet
         OR      E
-        LD      (HL),A
+        LD      (HL),A                  ; packet has volume specified
         INC     HL
-        INC     C
-        EX      (SP),HL
+        INC     C                       ; packet size +1
+        EX      (SP),HL                 ; store pointer in packet, restore pointer to volume
         LD      A,E
-        AND     40H
-        JR      Z,J7716
+        AND     40H                     ; envelope specified ?
+        JR      Z,J7716                 ; nope, skip envelope
         INC     HL
         LD      E,(HL)
         INC     HL
-        LD      D,(HL)
-        POP     HL
+        LD      D,(HL)                  ; envelop period
+        POP     HL                      ; restore pointer in packet
         LD      (HL),D
         INC     HL
         LD      (HL),E
-        INC     HL
+        INC     HL                      ; put envelop period in packet
         INC     C
-        INC     C
+        INC     C                       ; packet size +2
         DEFB    0FEH                    ; CP xx, trick to skip next instruction
-J7716:  POP     HL
-        POP     DE
+J7716:  POP     HL                      ; restore pointer in packet
+        POP     DE                      ; restore frequency
         LD      A,D
-        OR      E
-        JR      Z,J7721
+        OR      E                       ; rest note ?
+        JR      Z,J7721                 ; yep, skip frequency
         LD      (HL),D
         INC     HL
-        LD      (HL),E
+        LD      (HL),E                  ; put frequency in packet
         INC     C
-        INC     C
-J7721:  LD      L,07H
-        CALL    GETVC2
-        LD      (HL),C
+        INC     C                       ; packet size +2
+J7721:  LD      L,7                     ; offset = size of packet
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        LD      (HL),C                  ; update size of packet
         LD      A,C
-        SUB     02H
+        SUB     2                       ; size with duration bytes
         RRCA
         RRCA
-        RRCA
+        RRCA                            ; put in b7-b5
         INC     HL
         OR      (HL)
-        LD      (HL),A
+        LD      (HL),A                  ; include in high byte duration
         DEC     HL
         LD      A,D
-        OR      E
-        JR      NZ,J7741
-        PUSH    HL
+        OR      E                       ; rest note ?
+        JR      NZ,J7741                ; nope, skip volume restore
+        PUSH    HL                      ; store pointer to size of packet
         LD      A,(SAVVOL)
-        OR      80H
-        LD      BC,11
+        OR      80H                     ; include volume in packet
+        LD      BC,18-7
         ADD     HL,BC
-        LD      (HL),A
-        POP     HL
-J7741:  POP     DE
-        LD      B,(HL)
+        LD      (HL),A                  ; restore volume before rest
+        POP     HL                      ; restore pointer to size of packet
+J7741:  POP     DE                      ; restore
+        LD      B,(HL)                  ; size of packet
         INC     HL
 J7744:  LD      E,(HL)
         INC     HL
-        CALL    C7510
+        CALL    C7510                   ; put in current voice queue
         DJNZ    J7744
-        CALL    C7521
-        JP      C,J748E
-        JP      MCLSCN
+        CALL    C7521                   ; current voice queue full ?
+        JP      C,J748E                 ; yep, wait for the queue to empty
+        JP      MCLSCN                  ; execute next macro command (if any)
 
 
         IF INTHZ EQ 60
 
-I7754:  DEFB    040H,000H,045H,014H             ; 14400
+I7754:  DEFB    040H,000H,045H,014H             ; 14400 (60*120*4*0.5)
 
         ELSE
 
-I7754:  DEFB    000H,000H,045H,012H             ; 12000
+I7754:  DEFB    000H,000H,045H,012H             ; 12000 (50*120*4*0.5)
 
         ENDIF
 
@@ -1255,24 +1373,24 @@ PLAY$:
 J791B:  _RST    CHRGTR                  ; get next BASIC character
         LD      A,3                     ; max is 3
         CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
-        PUSH    HL
-        LD      A,(MUSICF)
-        DEC     E
-        JP      M,J7938
-J7929:  RRCA
-        DEC     E
-        JP      P,J7929
+        PUSH    HL                      ; store BASIC pointer
+        LD      A,(MUSICF)              ; voice active flags
+        DEC     E                       ; operand = 0 ?
+        JP      M,J7938                 ; yep,
+J7929:  RRCA                            ; this voice active ?
+        DEC     E                       ; this voice ?
+        JP      P,J7929                 ; nope, next
         LD      A,0
-        JR      NC,J7933
+        JR      NC,J7933                ; voice not active, return 0
 J7932:  DEC     A
 J7933:  CALL    CONIA
         POP     HL
         RET
 
-J7938:  AND     07H
-        JR      Z,J7933
+J7938:  AND     07H                     ; all voices inactive ?
+        JR      Z,J7933                 ; yep, return 0
         LD      A,0FFH
-        JR      J7933
+        JR      J7933                   ; return 255
 
 ;       Subroutine      STICK function
 ;       Inputs          ________________________

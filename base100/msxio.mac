@@ -577,44 +577,44 @@ A04C7:  ld      (hl),a
         inc     hl
         djnz    A04C7			; clear MUSICF, PLYCNT, VCBA, VCBB and VCBC
         ld      de,VOICAQ
-        ld      b,07FH
+        ld      b,128-1                 ; queue size
         ld      hl,128
 A04D3:  push    hl
         push    de
         push    bc
-        push    af
-        call    INITQ
-        pop     af
+        push    af                      ; store voice
+        call    INITQ                   ; initialize queue
+        pop     af                      ; restore voice
         add     a,8
-        ld      e,0
+        ld      e,0                     ; volume = 0 (silence)
         call    WRTPSG                  ; WRTPSG
-        sub     008H
-        push    af
-        ld      l,00FH
-        call    A1477
+        sub     8
+        push    af                      ; store voice
+        ld      l,15                    ; offset = octave
+        call    A1477                   ; get pointer in voice buffer
         ex      de,hl
         ld      hl,T0508
         ld      bc,6
-        ldir
-        pop     af
+        ldir                            ; initialize octave, tone length, tempo, volume and envelope period
+        pop     af                      ; restore voice
         pop     bc
         pop     hl
         pop     de
         add     hl,de
         ex      de,hl
         inc     a
-        cp      003H
-        jr      c,A04D3
+        cp      2+1                     ; all voice done ?
+        jr      c,A04D3                 ; nope, next voice
         ld      a,7
         ld      e,0B8H
         call    WRTPSG                  ; WRTPSG
-        jp      A08DA
+        jp      A08DA                   ; quit
 ;
-T0508:  defb    4
-        defb    4
-        defb    120
-        defb    8+128
-        defw    255
+T0508:  defb    4                       ; default octave = 4
+        defb    4                       ; default tone length = 4
+        defb    120                     ; default tempo = 120
+        defb    8+128                   ; default volume = 8
+        defw    255                     ; default envelope period = 255
 
 ;       Subroutine      INITXT
 ;       Inputs          ________________________
@@ -2003,17 +2003,17 @@ A0C73:  ld      (INTCNT),hl
         inc     hl
         ld      (JIFFY),hl              ; timecounter
         ld      a,(MUSICF)
-        ld      c,a
-        xor     a                       ; playchannel
-A0C82:  rr      c                       ; handle this channel ?
+        ld      c,a                     ; voice active flags
+        xor     a                       ; voice = 0
+A0C82:  rr      c                       ; voice active ?
         push    af
         push    bc
-        call    c,A113B                 ; yep, do it
+        call    c,A113B                 ; yep, timer countdown, decode new packet from queue if needed
         pop     bc
         pop     af
         inc     a
-        cp      3
-        jr      c,A0C82                 ; all 3 channels
+        cp      2+1                     ; done all voices ?
+        jr      c,A0C82                 ; nope, next voice
         ld      hl,SCNCNT
         dec     (hl)                    ; do i have to scan ?
         jr      nz,A0D02                ; nop, quit KEYINT
@@ -2356,7 +2356,7 @@ A10EB:  ld      hl,(GETPNT)
         call    C10C2
         ld      (GETPNT),hl
         ld      a,c
-        jp      A08DB
+        jp      A08DB                   ; quit
 
 ;       Subroutine      CKCNTC
 ;       Inputs          ________________________
@@ -2412,9 +2412,13 @@ A1113:  xor     a
         inc     a
         call    WRTPSG                  ; WRTPSG
         ld      bc,2000
-        call    A1133
+        call    A1133                   ; wait
         jp      A04BD                   ; GICINI
-;
+
+;       Subroutine      wait
+;       Inputs          ________________________
+;       Outputs         ________________________
+
 A1133:  dec     bc
         ex      (sp),hl
         ex      (sp),hl
@@ -2422,123 +2426,131 @@ A1133:  dec     bc
         or      c
         jr      nz,A1133
         ret
-;
-A113B:  ld      b,a                     ; channel
-        call    GETVCP                  ; GETVCP (get voice pointer)
+
+;       Subroutine      timer countdown, decode new packet from queue if needed
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+A113B:  ld      b,a                     ; store voice
+        call    GETVCP                  ; get pointer to macro string info voice buffer
         dec     hl
         ld      d,(hl)
         dec     hl
-        ld      e,(hl)
+        ld      e,(hl)                  ; timer
         dec     de
         ld      (hl),e
         inc     hl
-        ld      (hl),d                  ; decrease voice counter
+        ld      (hl),d                  ; decrease timer
         ld      a,d
-        or      e                       ; counter expires ?
+        or      e                       ; timer expires ?
         ret     nz                      ; nop, quit
-        ld      a,b
-        ld      (QUEUEN),a
-        call    A11E2                   ; get byte
-        cp      0FFH
-        jr      z,A11B0                 ; end byte,
-        ld      d,a
+        ld      a,b                     ; restore voice
+        ld      (QUEUEN),a              ; current queue = voice
+        call    A11E2                   ; get byte from current queue
+        cp      0FFH                    ; end of queue mark ?
+        jr      z,A11B0                 ; yep,
+        ld      d,a                     ; store queue byte
         and     0E0H
         rlca
         rlca
         rlca
-        ld      c,a                     ; length of packet
-        ld      a,d
+        ld      c,a                     ; size of packet
+        ld      a,d                     ; restore queue byte
         and     01FH
-        ld      (hl),a                  ; MSB of counter
-        call    A11E2                   ; get byte
+        ld      (hl),a                  ; MSB of duration in b4-b0
+        call    A11E2                   ; get byte from current queue
         dec     hl
-        ld      (hl),a                  ; LSB of counter
+        ld      (hl),a                  ; LSB of duration
         inc     c
 A1166:  dec     c                       ; packet ends ?
         ret     z                       ; yep, quit
-        call    A11E2                   ; get byte
-        ld      d,a
-        and     0C0H
-        jr      nz,A1181                ; not a freqency packet
-        call    A11E2                   ; get byte
-        ld      e,a
-        ld      a,b
-        rlca                            ; freqency register
+        call    A11E2                   ; get byte from current queue
+        ld      d,a                     ; store packet byte
+        and     0C0H                    ; packet flags in b7-b6
+        jr      nz,A1181                ; not a frequency packet
+        call    A11E2                   ; get byte from current queue
+        ld      e,a                     ; low byte frequency
+        ld      a,b                     ; restore voice
+        rlca                            ; frequency register
         call    WRTPSG                  ; WRTPSG
         inc     a
-        ld      e,d
+        ld      e,d                     ; high byte frequency
         call    WRTPSG                  ; WRTPSG
-        dec     c
+        dec     c                       ; update packet size left
         jr      A1166                   ; next
-;
-A1181:  ld      h,a
-        and     080H
-        jr      z,A1195                 ; not a amplitude packet
-        ld      e,d
-        ld      a,b
+
+A1181:  ld      h,a                     ; store packet flags
+        and     080H                    ; volume/shape flag ?
+        jr      z,A1195                 ; nope, skip volume
+        ld      e,d                     ; restore packet byte
+        ld      a,b                     ; restore voice
         add     a,8                     ; amplitude register
         call    WRTPSG                  ; WRTPSG
         ld      a,e
-        and     010H                    ; modulate ?
+        and     010H                    ; shape ?
         ld      a,13
         call    nz,WRTPSG               ; yep, WRTPSG
-A1195:  ld      a,h
-        and     040H
-        jr      z,A1166                 ; there is no envelope packet, next
-        call    A11E2                   ; get byte
+A1195:  ld      a,h                     ; restore packet flags
+        and     040H                    ; envelope flag ?
+        jr      z,A1166                 ; nope, skip envelope
+        call    A11E2                   ; get byte from current queue
         ld      d,a
-        call    A11E2                   ; get byte
-        ld      e,a
+        call    A11E2                   ; get byte from current queue
+        ld      e,a                     ; low byte envelope period
         ld      a,11
         call    WRTPSG                  ; WRTPSG
         inc     a
-        ld      e,d
+        ld      e,d                     ; high byte envelope period
         call    WRTPSG                  ; WRTPSG
         dec     c
-        dec     c
+        dec     c                       ; update packet size left
         jr      A1166                   ; next
-;
-A11B0:  ld      a,b
+
+A11B0:  ld      a,b                     ; restore voice
         add     a,8                     ; amplitude register
-        ld      e,0
+        ld      e,0                     ; volume = 0 (silence)
         call    WRTPSG                  ; WRTPSG
         inc     b
         ld      hl,MUSICF
         xor     a
         scf
 A11BE:  rla
-        djnz    A11BE
+        djnz    A11BE                   ; calculate voice mask
         and     (hl)
         xor     (hl)
-        ld      (hl),a                  ; channel not active
+        ld      (hl),a                  ; voice not active
 
-;       Subroutine      STRTMS
+;       Subroutine      STRTMS (start music dequeuing)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 STRTMS:
 A11C4:  ld      a,(MUSICF)
-        or      a                       ; no channel active ?
-        ret     nz                      ; nop, quit
+        or      a                       ; any voice active ?
+        ret     nz                      ; yep, quit
         ld      hl,PLYCNT
         ld      a,(hl)
-        or      a                       ; strings left ?
-        ret     z                       ; nop, quit
+        or      a                       ; play sequences left ?
+        ret     z                       ; nope, quit
         dec     (hl)
         ld      hl,1
-        ld      (VCBA+0),hl
-        ld      (VCBB+0),hl
-        ld      (VCBC+0),hl
+        ld      (VCBA+0),hl             ; timer VCB voice 0 = 1 (fetches packet in queue)
+        ld      (VCBB+0),hl             ; timer VCB voice 1 = 1 (fetches packet in queue)
+        ld      (VCBC+0),hl             ; timer VCB voice 2 = 1 (fetches packet in queue)
         ld      a,111B
-        ld      (MUSICF),a
+        ld      (MUSICF),a              ; all voices active
         ret
-;
-A11E2:  ld      a,(QUEUEN)
+
+;       Subroutine      get byte from current queue
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+A11E2:  ld      a,(QUEUEN)              ; current queue
         push    hl
         push    de
         push    bc
-        call    GETQ
-        jp      A08DB
+        call    GETQ                    ; get byte from queue
+        jp      A08DB                   ; quit
 
 ;       Subroutine      GTSTCK
 ;       Inputs          ________________________
@@ -2925,17 +2937,17 @@ A146A:  ld      a,h
         sub     e
         ret
 
-;       Subroutine      GETVCP
-;       Inputs          ________________________
+;       Subroutine      GETVCP (get pointer to macro string info voice buffer)
+;       Inputs          A = voice
 ;       Outputs         ________________________
 
 GETVCP:
-A1470:  ld      l,2
+A1470:  ld      l,2                     ; offset = macro string info
         jr      A1477
 
 ;       Subroutine      GETVC2
-;       Inputs          ________________________
-;       Outputs         ________________________
+;       Inputs          L = offset in voice buffer
+;       Outputs         HL = pointer in voice buffer
 
 GETVC2:
 A1474:  ld      a,(VOICEN)
