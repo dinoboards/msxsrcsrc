@@ -10,9 +10,16 @@ MSXVER  EQU     0                       ; MSX version
 
 OPTM    EQU     0
 
+;       BTSCNT
+;               6 = normal boot screen wait counter
+;               2 = national MSX 1 boot screen wait counter
+
+BTSCNT  EQU     6
+
 ;       NDEVFIX
 ;               0 = device bug
 ;               1 = fix device bug
+
 
 NDEVFIX EQU     1
 
