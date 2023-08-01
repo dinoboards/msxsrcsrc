@@ -118,16 +118,16 @@ H.PLAY  EQU     0FFC5H
         PUBLIC  PLYEOS
         PUBLIC  GETCSP
         PUBLIC  CSRLIN
-        PUBLIC  PLAY
-        PUBLIC  PLAY$
-        PUBLIC  TIME
-        PUBLIC  TIME$
+        PUBLIC  PLAYS
+        PUBLIC  PLAYF
+        PUBLIC  TIMES
+        PUBLIC  TIMEF
         PUBLIC  SPRITE
-        PUBLIC  SPRIT$
-        PUBLIC  VDP
-        PUBLIC  VDP$
-        PUBLIC  BASE
-        PUBLIC  BASE$
+        PUBLIC  SPRITF
+        PUBLIC  VDPS
+        PUBLIC  VDPF
+        PUBLIC  BASES
+        PUBLIC  BASEF
         PUBLIC  DSKO$
         PUBLIC  SETS
         PUBLIC  NAME
@@ -296,7 +296,7 @@ I73E4:  DEFB    " "
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-PLAY:
+PLAYS:
 C73E5:  CALL    H.PLAY
         PUSH    HL                      ; store BASIC pointer
         LD      HL,I752E
@@ -549,39 +549,40 @@ C7521:  LD      A,(VOICEN)              ; current voice
         RET
 
 I752E:  DEFB    "A"                     ; note A
-        DEFW    C763E
+        DEFW    PLYNOT
         DEFB    "B"                     ; note B
-        DEFW    C763E
+        DEFW    PLYNOT
         DEFB    "C"                     ; note C
-        DEFW    C763E
+        DEFW    PLYNOT
         DEFB    "D"                     ; note D
-        DEFW    C763E
+        DEFW    PLYNOT
         DEFB    "E"                     ; note E
-        DEFW    C763E
+        DEFW    PLYNOT
         DEFB    "F"                     ; note F
-        DEFW    C763E
+        DEFW    PLYNOT
         DEFB    "G"                     ; note G
-        DEFW    C763E
+        DEFW    PLYNOT
         DEFB    "M"+128                 ; change envelope period, numeric operand
-        DEFW    C759E
+        DEFW    PENVLP
         DEFB    "V"+128                 ; change volume, numeric operand
-        DEFW    C7586
+        DEFW    PVOLUM
         DEFB    "S"+128                 ; change shape, numeric operand
-        DEFW    C75BE
+        DEFW    PSHAPE
         DEFB    "N"+128                 ; note number, numeric operand
-        DEFW    C7621
+        DEFW    PLYNUM
         DEFB    "O"+128                 ; change octave, numeric operand
-        DEFW    C75EF
+        DEFW    POCTAV
         DEFB    "R"+128                 ; rest note, numeric operand
-        DEFW    C75FC
+        DEFW    PLYRST
         DEFB    "T"+128                 ; change tempo, numeric operand
-        DEFW    C75E2
+        DEFW    PTEMPO
         DEFB    "L"+128                 ; change note length, numeric operand
-        DEFW    C75C8
+        DEFW    PLYLEN
         DEFB    "X"                     ; macro substring
         DEFW    MCLXEQ
         DEFB    0
 
+NOTXLT:
 I755F:  DEFB    8*2                     ; A-
         DEFB    9*2                     ; A
         DEFB    10*2                    ; A# or B-
@@ -598,6 +599,7 @@ I755F:  DEFB    8*2                     ; A-
         DEFB    7*2                     ; G
         DEFB    8*2                     ; G#
 
+NOTTAB:
 I756E:  DEFW    00D5DH                  ; C
         DEFW    00C9CH                  ; C#
         DEFW    00BE7H                  ; D
@@ -615,6 +617,7 @@ I756E:  DEFW    00D5DH                  ; C
 ;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
+PVOLUM:
 C7586:  JR      C,J758A                 ; value specified,
         LD      E,8                     ; use default volume
 J758A:  LD      A,15
@@ -635,6 +638,7 @@ J758F:  XOR     A
 ;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
+PENVLP:
 C759E:  LD      A,E
         JR      C,J75A4                 ; value specified,
         CPL
@@ -666,6 +670,7 @@ J75A4:  OR      D
 ;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
+PSHAPE:
 C75BE:  LD      A,E
         CP      15+1                    ; valid shape value ?
         JR      NC,J75DF                ; nope, illegal function call
@@ -677,6 +682,7 @@ C75BE:  LD      A,E
 ;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
+PLYLEN:
 C75C8:  JR      C,J75CC                 ; value specified,
         LD      E,4                     ; use default note length
 J75CC:  LD      A,E
@@ -708,6 +714,7 @@ J75DF:
 ;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
+PTEMPO:
 C75E2:  JR      C,J75E6                 ; value specified,
         LD      E,120                   ; use default tempo
 J75E6:  LD      A,E
@@ -720,6 +727,7 @@ J75E6:  LD      A,E
 ;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
+POCTAV:
 C75EF:  JR      C,J75F3                 ; value specified,
         LD      E,4                     ; use default octave
 J75F3:  LD      A,E
@@ -732,6 +740,7 @@ J75F3:  LD      A,E
 ;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
+PLYRST:
 C75FC:  JR      C,J7600                 ; value specified,
         LD      E,4                     ; use default rest length
 J7600:  XOR     A
@@ -762,6 +771,7 @@ J760B:  LD      HL,0                    ; frequency = 0 (rest note)
 ;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
+PLYNUM:
 C7621:  JR      NC,J75DF                ; value not specified, illegal function call
         XOR     A
         OR      D                       ; note number > 255 ?
@@ -785,6 +795,7 @@ J7632:  SUB     12
 ;       Inputs          DE = value, Cx set if value specified
 ;       Outputs         ________________________
 
+PLYNOT:
 C763E:  LD      B,C                     ; store note letter
         LD      A,C
         SUB     'A'-1
@@ -813,13 +824,13 @@ J7666:  LD      L,15                    ; offset = octave
         CALL    GETVC2                  ; get pointer in current voice buffer
         LD      E,(HL)                  ; store current octave
         LD      B,0
-        LD      HL,I755F                ; note table
+        LD      HL,NOTXLT               ; note table
         ADD     HL,BC                   ; + note offset
         LD      C,(HL)                  ; frequency offset
 
 ; play frequency
 
-J7673:  LD      HL,I756E                ; frequency table
+J7673:  LD      HL,NOTTAB               ; frequency table
         ADD     HL,BC
         LD      A,E                     ; restore current octave
         LD      E,(HL)
@@ -1336,7 +1347,7 @@ J78FA:  LD      (HL),C
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TIME$:
+TIMEF:
 J7900:  _RST    CHRGTR                  ; get next BASIC character
         PUSH    HL
         LD      HL,(JIFFY)
@@ -1358,7 +1369,7 @@ J790A:  _RST    CHRGTR                  ; get next BASIC character
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TIME:
+TIMES:
 C7911:  _RST    SYNCHR
         DEFB    0EFH                    ; check for =
         CALL    GETUIN                  ; evaluate address operand
@@ -1369,7 +1380,7 @@ C7911:  _RST    SYNCHR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-PLAY$:
+PLAYF:
 J791B:  _RST    CHRGTR                  ; get next BASIC character
         LD      A,3                     ; max is 3
         CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
@@ -1623,7 +1634,7 @@ J7A7D:  EX      DE,HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-SPRIT$:
+SPRITF:
 J7A84:  CALL    C7A9F
         PUSH    HL
         PUSH    DE
@@ -1753,7 +1764,7 @@ J7B2F:  EX      (SP),HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-VDP:
+VDPS:
 C7B37:  ld      a,7
         call    C7C08
         push    de
@@ -1768,7 +1779,7 @@ C7B37:  ld      a,7
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-VDP$:
+VDPF:
 J7B47:  _RST    CHRGTR
         ld      a,8
         call    C7C08
@@ -1785,7 +1796,7 @@ J7B47:  _RST    CHRGTR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-BASE:
+BASES:
 C7B5A:  ld      a,19
         call    C7C08
         ld      d,000H
@@ -1858,7 +1869,7 @@ T7BA3:  dw      003FFH
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-BASE$:
+BASEF:
 J7BCB:  _RST    CHRGTR
         ld      a,19
         call    C7C08
