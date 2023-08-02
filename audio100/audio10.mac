@@ -36,7 +36,7 @@
 ; +21	stack
 ; +38	division value
 
-M0006	EQU	0006H	; -C-LI
+VDP.DR	EQU	0006H	; -C-LI
 RDSLT	EQU	000CH	; -C--I
 WRSLT	EQU	0014H	; -C---
 CALSLT	EQU	001CH	; JC--I
@@ -44,18 +44,18 @@ ENASLT	EQU	0024H	; JC---
 IDBYT0	EQU	002BH	; ----I
 KEYINT	EQU	0038H	; -C--I
 GICINI	EQU	0090H	; -C--I
-M2F8A	EQU	2F8AH	; convert to integer
-M406F	EQU	406FH	; BASIC error
-M4666	EQU	4666H	; get BASIC char
-M4C64	EQU	4C64H	; evaluate expression
-M4E9B	EQU	4E9BH	; get variable value
-M517A	EQU	517AH	; convert DAC
-M521C	EQU	521CH	; evaluate byte operand
-M542F	EQU	542FH	; evaluate address operand
-M5EA4	EQU	5EA4H	; search variable
-M67D0	EQU	67D0H	; free temporary string
-M6A0E	EQU	6A0EH	; evaluate filespec
-M73E5	EQU	73E5H	; PLAY statement handler
+FRCINT	EQU	2F8AH	; convert to integer
+ERROR	EQU	406FH	; BASIC error
+CHRGTR	EQU	4666H	; get BASIC char
+FRMEVL	EQU	4C64H	; evaluate expression
+ISVAR	EQU	4E9BH	; get variable value
+DOCNVF	EQU	517AH	; convert DAC
+GETBYT	EQU	521CH	; evaluate byte operand
+GETUIN	EQU	542FH	; evaluate address operand
+PTRGET	EQU	5EA4H	; search variable
+FRESTR	EQU	67D0H	; free temporary string
+FILEVL	EQU	6A0EH	; evaluate filespec
+PLAYS	EQU	73E5H	; PLAY statement handler
 
 C0090	EQU	0090H	; initialize AUDIO workspace
 C0099	EQU	0099H	; write AUDIO register (EI)
@@ -296,7 +296,7 @@ C403E:	XOR	A
         INC	DE
         LD	BC,10-1
         LDIR				; initialize midi and audio keyboard hook
-        LD	HL,(M0006)
+        LD	HL,(VDP.DR)
         LD	(D7B0C),HL		; vdp i/o dataport addresses
         CALL	C4D83			; MSX-AUDIO in page 0
         CALL	C0090			; initialize AUDIO workspace
@@ -5811,7 +5811,7 @@ I5F6B:	LD	A,(D7B0E)		; slotid MSX-AUDIO
         POP	HL
         POP	DE
         POP	BC
-        CALL	M2F8A
+        CALL	FRCINT
         POP	AF
         PUSH	AF
         PUSH	BC
@@ -5842,7 +5842,7 @@ J5FA1:	ADD	HL,SP
         LD	E,(HL)
         INC	HL
         LD	D,(HL)
-        LD	HL,M73E5+3
+        LD	HL,PLAYS+3
         OR	A
         SBC	HL,DE			; H.PLAY called by PLAY statement ?
         JP	NZ,J6E9F		; nope, internal error
@@ -8704,7 +8704,7 @@ J6EB6:	LD	A,(D7B13)
         PUSH	DE
         CALL	NZ,C6CDC		; yep, stop background music
         POP	DE
-        LD	IX,M406F
+        LD	IX,ERROR
         JR	J6F08
 
 J6EC6:	LD	IX,GICINI
@@ -8715,7 +8715,7 @@ J6EC6:	LD	IX,GICINI
 ;	     Outputs ________________________
 
 
-J6ECC:	LD	IX,M4E9B
+J6ECC:	LD	IX,ISVAR
         JR	J6F08
 
 ;	  Subroutine evaluate filespec
@@ -8723,7 +8723,7 @@ J6ECC:	LD	IX,M4E9B
 ;	     Outputs ________________________
 
 
-C6ED2:	LD	IX,M6A0E
+C6ED2:	LD	IX,FILEVL
         JR	J6F08
 
 ;	  Subroutine search variable
@@ -8731,7 +8731,7 @@ C6ED2:	LD	IX,M6A0E
 ;	     Outputs ________________________
 
 
-C6ED8:	LD	IX,M5EA4
+C6ED8:	LD	IX,PTRGET
         JR	J6F08
 
 ;	  Subroutine convert DAC
@@ -8739,7 +8739,7 @@ C6ED8:	LD	IX,M5EA4
 ;	     Outputs ________________________
 
 
-C6EDE:	LD	IX,M517A
+C6EDE:	LD	IX,DOCNVF
         JR	J6F08
 
 ;	  Subroutine check for
@@ -8759,7 +8759,7 @@ C6EE4:	LD	A,(HL)
 ;	     Outputs ________________________
 
 
-C6EEC:	LD	IX,M4666
+C6EEC:	LD	IX,CHRGTR
         JR	J6F08
 
 ;	  Subroutine evaluate expression
@@ -8767,7 +8767,7 @@ C6EEC:	LD	IX,M4666
 ;	     Outputs ________________________
 
 
-C6EF2:	LD	IX,M4C64
+C6EF2:	LD	IX,FRMEVL
         JR	J6F08
 
 ;	  Subroutine evaluate adres operand 
@@ -8775,7 +8775,7 @@ C6EF2:	LD	IX,M4C64
 ;	     Outputs ________________________
 
 
-C6EF8:	LD	IX,M542F
+C6EF8:	LD	IX,GETUIN
         JR	J6F08
 
 ;	  Subroutine evaluate byte operand
@@ -8783,7 +8783,7 @@ C6EF8:	LD	IX,M542F
 ;	     Outputs ________________________
 
 
-C6EFE:	LD	IX,M521C
+C6EFE:	LD	IX,GETBYT
         JR	J6F08
 
 ;	  Subroutine free temporary string
@@ -8791,7 +8791,7 @@ C6EFE:	LD	IX,M521C
 ;	     Outputs ________________________
 
 
-C6F04:	LD	IX,M67D0
+C6F04:	LD	IX,FRESTR
 
 ;	  Subroutine start MAIN-ROM routine
 ;	     Inputs  ________________________

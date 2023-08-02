@@ -82,11 +82,11 @@ H.STKE          EQU     0FEDAH
         PUBLIC  ISLET
         PUBLIC  ISLET2
         PUBLIC  GTMPRT
-        PUBLIC  TRPEXE
-        PUBLIC  TRPENA
-        PUBLIC  TRPDIS
-        PUBLIC  TRPSTP
-        PUBLIC  TRPRSM
+        PUBLIC  GOTRP
+        PUBLIC  ONTRP
+        PUBLIC  OFFTRP
+        PUBLIC  STPTRP
+        PUBLIC  RSTTRP
         PUBLIC  RESFIN
         PUBLIC  ENDCON
         PUBLIC  ENDS
@@ -352,7 +352,7 @@ C6317:  LD      HL,(TEMP)
 ;       Inputs          HL = pointer to trap block
 ;       Outputs         ________________________
 
-TRPENA:
+ONTRP:
 J631B:  DI
         LD      A,(HL)
         AND     04H                     ; keep trap occured flag
@@ -369,7 +369,7 @@ J6329:  EI
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TRPDIS:
+OFFTRP:
 J632B:  DI
         LD      A,(HL)
         LD      (HL),0                  ; clear trap occured, trap not paused, trap disabled
@@ -379,7 +379,7 @@ J632B:  DI
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TRPSTP:
+STPTRP:
 C6331:  DI
         LD      A,(HL)
         PUSH    AF
@@ -395,7 +395,7 @@ J6338:  XOR     05H                     ; trap occured AND trap was not paused A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TRPRSM:
+RSTTRP:
 C633E:  DI
         LD      A,(HL)
         AND     05H                     ; keep trap occured and trap enabled flags
@@ -405,6 +405,7 @@ C633E:  DI
         EI
         RET
 
+SETCHK:
 J6348:  XOR     05H                     ; trap occured AND trap enabled ?
         JR      Z,J634F                 ; yep, increase trap counter and quit
         EI
@@ -415,13 +416,14 @@ J6348:  XOR     05H                     ; trap occured AND trap enabled ?
 ;       Outputs         ________________________
 ;       Unused Code     Not called from anywhere
 
+SETTRP:
 ?634E:  DI
 
 ;       Subroutine      increase trap counter
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TRPINC:
+SETTP2:
 J634F:  LD      A,(ONGSBF)
         INC     A
         LD      (ONGSBF),A
@@ -432,7 +434,7 @@ J634F:  LD      A,(ONGSBF)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TRPACK:
+FRETRP:
 C6358:  DI
         LD      A,(HL)
         AND     03H                     ; keep trap paused and trap enabled flags
@@ -446,7 +448,7 @@ J6360:  EI
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TRPDEC:
+FRETP2:
 J6362:  LD      A,(ONGSBF)
         SUB     01H
         JR      C,J6360                 ; already zero, quit
@@ -458,7 +460,7 @@ J6362:  LD      A,(ONGSBF)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TRPINI:
+INITRP:
 C636E:  LD      HL,TRPTBL
         LD      B,26
         XOR     A
@@ -481,7 +483,7 @@ J6381:  LD      (HL),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TRPEXE:
+GOTRP:
 C6389:  LD      A,(ONEFLG)
         OR      A                       ; in ERROR handling routine ?
         RET     NZ                      ; yep, quit

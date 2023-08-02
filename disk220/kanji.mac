@@ -50,18 +50,18 @@ M0DE3   EQU     0DE3H                   ; Table		keycodes for keys -,^,yen,@,[,;
 
 C4092   EQU     4092H                   ; DOS2 bankswitch
 
-M406F	EQU     406FH                   ; BASIC error
-M409B   EQU     409BH                   ; warm start BASIC
-M4601   EQU     4601H                   ; execution loop
-M4666   EQU     4666H                   ; get next BASIC character
-M4C64   EQU     4C64H                   ; evaluate expression
-M517A   EQU     517AH                   ; convert DAC to new type
-M521C   EQU     521CH                   ; evaluate byte operand
+ERROR	EQU     406FH                   ; BASIC error
+READYR  EQU     409BH                   ; warm start BASIC
+NEWSTT  EQU     4601H                   ; execution loop
+CHRGTR  EQU     4666H                   ; get next BASIC character
+FRMEVL  EQU     4C64H                   ; evaluate expression
+DOCNVF  EQU     517AH                   ; convert DAC to new type
+GETBYT  EQU     521CH                   ; evaluate byte operand
 M5284   EQU     5284H                   ; decode BASIC line
-M5EA4   EQU     5EA4H                   ; locate variable
-M6627   EQU     6627H                   ; allocate temporary string
-M67D0   EQU     67D0H                   ; free temporary string with type check
-M6C1C   EQU     6C1CH                   ; close all i/o channels
+PTRGET  EQU     5EA4H                   ; locate variable
+STRINI  EQU     6627H                   ; allocate temporary string
+FRESTR  EQU     67D0H                   ; free temporary string with type check
+CLSALL  EQU     6C1CH                   ; close all i/o channels
 
 
 IF247   EQU     0F247H                  ; unused DOS2 workspace, used because SLTWKR entry already used by DOS2
@@ -651,7 +651,7 @@ J43B6:  CALL    C442D                   ; calculate and set kanji screenwidth
         JR      NZ,C4418                ; KANJI already enabled,
         LD      (SWPTMP+0),HL           ; save BASIC pointer
         CALL    C422A                   ; nothing (was hook EXTBIO)
-        LD      IX,M6C1C
+        LD      IX,CLSALL
         CALL    C41FE                   ; close all i/o channels
         CALL    C6800                   ; initialize MSX-JE (when available)
         CALL    C,C7474                 ; no MSX-JE, initialize own simple japanese input frontend processor (do nothing)
@@ -682,7 +682,7 @@ J43B6:  CALL    C442D                   ; calculate and set kanji screenwidth
         LD      (BUF+0),HL
         LD      (HL),A
         LD      HL,HOLD8
-        LD      IX,M4601
+        LD      IX,NEWSTT
         JP      C41FE                   ; execute BASIC routine in HOLD8 (to reinitialize buffers)
 
 
@@ -3732,7 +3732,7 @@ J54AB:  LD      A,C
         LD      A,(NEWKEY+6)
         CP      0E8H
         JR      NZ,J54C9
-        LD      IX,M409B
+        LD      IX,READYR
         JP      CALBAS
 
 J54C9:  LD      DE,NEWKEY
@@ -8716,7 +8716,7 @@ J712D:  LD      E,15
 J7130:  LD      E,5
         DEFB    001H
 J7133:  LD      E,2
-        LD      IX,M406F
+        LD      IX,ERROR
         JP      C41FE                  ; BASIC error
 
 
@@ -8727,7 +8727,7 @@ J7133:  LD      E,2
 
 C713C:  CALL    C7152
         DEFB    "("
-        LD      IX,M5EA4
+        LD      IX,PTRGET
         CALL    C41FE                  ; locate variable
         EI
         CALL    C7152
@@ -8753,7 +8753,7 @@ C7152:  LD      A,(HL)
 ;            Outputs ________________________
 
 
-C7159:  LD      IX,M4666
+C7159:  LD      IX,CHRGTR
         JR      J716F
 
 ;         Subroutine convert DAC to new type
@@ -8761,7 +8761,7 @@ C7159:  LD      IX,M4666
 ;            Outputs ________________________
 
 
-C715F:  LD      IX,M517A
+C715F:  LD      IX,DOCNVF
         JR      J716F
 
 ;         Subroutine evaluate expression
@@ -8769,7 +8769,7 @@ C715F:  LD      IX,M517A
 ;            Outputs ________________________
 
 
-C7165:  LD      IX,M4C64
+C7165:  LD      IX,FRMEVL
         JR      J716F
 
 ;         Subroutine evaluate byte operand
@@ -8777,7 +8777,7 @@ C7165:  LD      IX,M4C64
 ;            Outputs ________________________
 
 
-C716B:  LD      IX,M521C
+C716B:  LD      IX,GETBYT
 J716F:  CALL    C41FE
         EI
         RET
@@ -8797,7 +8797,7 @@ C7174:  CALL    C7165                  ; evaluate expression
 
 
 C7177:  PUSH    HL
-        LD      IX,M67D0
+        LD      IX,FRESTR
         CALL    C41FE                  ; free temporary string with type check
         EI
         LD      B,(HL)
@@ -8815,7 +8815,7 @@ C7177:  PUSH    HL
 
 C7188:  PUSH    HL
         PUSH    AF
-        LD      IX,M6627
+        LD      IX,STRINI
         CALL    C41FE                  ; allocate temporary string
         EI
         LD      DE,(DSCTMP+1)

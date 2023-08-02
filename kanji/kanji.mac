@@ -19,8 +19,8 @@
 
 INTRET  EQU     0D02H
 
-D0004	EQU	0004H	; address pattern generator
-D0006	EQU	0006H	; address vdp dataport (read)
+CGTABL	EQU	0004H	; address pattern generator
+VDP.DR	EQU	0006H	; address vdp dataport (read)
 CALSLT	EQU	001CH
 IDBYT2	EQU	002DH
 WRTVDP	EQU	0047H
@@ -52,25 +52,11 @@ CHRGTR  equ     04666H                  ; CHRGTR
 FRMEVL  equ     04C64H                  ; evaluate expression
 DOCNVF  equ     0517AH                  ; convert DAC to other type
 GETBYT  equ     0521CH                  ; evaluate byte operand
-
+M5284   EQU     05284H                  ; decode BASIC line
 PTRGET  equ     05EA4H                  ; get address of variable
 STRINI  equ     06627H                  ; allocate temp string
 FRESTR  equ     067D0H                  ; free temporary string
 CLSALL  equ     06C1CH                  ; close all i/o channels
-
-M406F	EQU     406FH                   ; BASIC error
-M409B   EQU     409BH                   ; warm start BASIC
-M4601   EQU     4601H                   ; execution loop
-M4666   EQU     4666H                   ; get next BASIC character
-M4C64   EQU     4C64H                   ; evaluate expression
-M517A   EQU     517AH                   ; convert DAC to new type
-M521C   EQU     521CH                   ; evaluate byte operand
-M5284   EQU     5284H                   ; decode BASIC line
-M5EA4   EQU     5EA4H                   ; locate variable
-M6627   EQU     6627H                   ; allocate temporary string
-M67D0   EQU     67D0H                   ; free temporary string with type check
-M6C1C   EQU     6C1CH                   ; close all i/o channels
-
 
 CBFF0	EQU	0BFF0H
 
@@ -655,7 +641,7 @@ J4336:	CALL	C43AD			; calculate and set kanji screenwidth
         JR	NZ,C4398		; reset CHPUT variables and quit
         LD	(SWPTMP),HL		; save BASIC pointer
         CALL	C40CB			; hook EXTBIO
-        LD	IX,M6C1C
+        LD	IX,CLSALL
         CALL	CALBAS			; close all i/o channels
         CALL	C67A5			; initialize MSX-JE if available
         CALL	C,C7951			; not available, own 'MSX-JE'
@@ -686,7 +672,7 @@ J4336:	CALL	C43AD			; calculate and set kanji screenwidth
         LD	(BUF+0),HL		; i/o channel 0 control block
         LD	(HL),A			; i/o channel 0 is not open
         LD	HL,HOLD8
-        LD	IX,M4601
+        LD	IX,NEWSTT
         JP	CALBAS			; execute new statement
 
 ;	  Subroutine reset CHPUT variables
@@ -1602,7 +1588,7 @@ J48E5:	LD	A,L
         RET	C
         LD	A,C
         CALL	C4908			; double byte header character ?
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         IN	C,(C)
         INC	H
@@ -2395,7 +2381,7 @@ J4CB3:	POP	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4CB9:	LD	A,(D0006)
+C4CB9:	LD	A,(VDP.DR)
         LD	C,A
         LD	A,H
         RES	6,H
@@ -2405,7 +2391,7 @@ C4CB9:	LD	A,(D0006)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4CC2:	LD	A,(D0006)
+C4CC2:	LD	A,(VDP.DR)
         LD	C,A
         LD	A,H
         SET	6,H
@@ -3630,7 +3616,7 @@ J5435:	LD	A,C
         LD	A,(NEWKEY+6)
         CP	0E8H
         JR	NZ,J5453
-        LD	IX,M409B
+        LD	IX,READYR
         JP	CALBAS			; warm start MSX BASIC
 
 J5453:	LD	DE,OLDKEY+11
@@ -5734,7 +5720,7 @@ C610E:	LD	A,24H	; "$"
 ;	     Outputs ________________________
 
 C6110:	PUSH	AF
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         POP	AF
@@ -5750,7 +5736,7 @@ J6121:	OUT	(C),A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C6123:	LD	A,(D0006)
+C6123:	LD	A,(VDP.DR)
         LD	C,A
         INC	C
 J6128:	LD	A,02H	; 2 
@@ -6046,7 +6032,7 @@ C62AA:	LD	H,0
         ADD	HL,HL
         ADD	HL,HL
         ADD	HL,HL
-        LD	BC,(D0004)
+        LD	BC,(CGTABL)
         ADD	HL,BC
         RET
 
@@ -6178,7 +6164,7 @@ J636B:	LD	A,L
         ADD	A,A
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         LD	A,E
@@ -6211,7 +6197,7 @@ J63AA:	LD	B,A
         ADD	A,B
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         LD	A,E
@@ -6366,7 +6352,7 @@ J647F:	LD	A,L
         CALL	C6744
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         DEC	E
         LD	DE,HOLD8+0
@@ -6466,7 +6452,7 @@ J6502:	CP	02H	; 2
         ADD	A,A
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         BIT	0,E
@@ -6517,7 +6503,7 @@ J6553:	LD	B,A
         ADD	A,B
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         BIT	1,E
@@ -6609,7 +6595,7 @@ J65D2:	LD	A,L
         CALL	C6744
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         LD	A,(FORCLR)
@@ -6690,7 +6676,7 @@ J6640:	PUSH	AF
         ADD	A,A
         LD	H,A
         LD	L,00H
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         POP	AF
@@ -6734,7 +6720,7 @@ J6674:	PUSH	AF
         DEC	A
         LD	H,A
         LD	L,0E0H
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         POP	AF
@@ -6765,7 +6751,7 @@ J66A6:	DEC	E
         JR	NZ,C6695
         RET
 
-J66AA:	LD	BC,(D0006)
+J66AA:	LD	BC,(VDP.DR)
         INC	C
         CP	02H	; 2 
         JR	Z,J66F0
@@ -8536,7 +8522,7 @@ J70D4:	LD	E,15
 J70D7:	LD	E,5
         DEFB	1
 J70DA:	LD	E,2
-        LD	IX,M406F
+        LD	IX,ERROR
         JP	CALBAS			; BASIC error
 
 ;	  Subroutine __________________________
@@ -8545,7 +8531,7 @@ J70DA:	LD	E,2
 
 C70E3:	CALL	C70FA
         DEFB	"("
-        LD	IX,M5EA4
+        LD	IX,PTRGET
         CALL	CALBAS			; locate variable
         EI
         NOP
@@ -8570,28 +8556,28 @@ C70FA:	LD	A,(HL)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7101:	LD	IX,M4666
+C7101:	LD	IX,CHRGTR
         JR	J7117
 
 ;	  Subroutine convert to DAC to new type
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7107:	LD	IX,M517A
+C7107:	LD	IX,DOCNVF
         JR	J7117
 
 ;	  Subroutine evaluate expression
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C710D:	LD	IX,M4C64
+C710D:	LD	IX,FRMEVL
         JR	J7117
 
 ;	  Subroutine evaluate byte operand
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7113:	LD	IX,M521C
+C7113:	LD	IX,GETBYT
 J7117:	CALL	CALBAS
         EI
         RET
@@ -8607,7 +8593,7 @@ C711C:	CALL	C710D			; evaluate expression
 ;	     Outputs ________________________
 
 C711F:	PUSH	HL
-        LD	IX,M67D0
+        LD	IX,FRESTR
         CALL	CALBAS			; free temporary string
         EI
         LD	B,(HL)
@@ -8625,7 +8611,7 @@ C711F:	PUSH	HL
 
 C7130:	PUSH	HL
         PUSH	AF
-        LD	IX,M6627
+        LD	IX,STRINI
         CALL	CALBAS			; allocate temporary string
         EI
         NOP
@@ -8777,8 +8763,8 @@ J71E8:	OUTI
 
 C71F1:	LD	C,10H	; 16 
         CALL	WRTVDP
-        LD	A,(D0006)
-        ADD	A,02H	; 2 
+        LD	A,(VDP.DR)
+        ADD	A,2
         LD	C,A
         RET
 
