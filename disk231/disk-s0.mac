@@ -170,20 +170,20 @@ LF37A	EQU	0F37AH			; interslot call to BDOS handler in BDOS code segment
 BDOS	EQU	0F37DH			; BDOS entry
 
 
-M268C	EQU	0268CH			; subtract double
-M269A	EQU	0269AH			; add double
-M289F	EQU	0289FH			; divide double
-M2EF3	EQU	02EF3H			; copy to HL
-M2F08	EQU	02F08H			; copy variable content to DAC
-M2F10	EQU	02F10H			; copy variable content from DAC
-M2F99	EQU	02F99H			; integer to DAC
-M3042	EQU	03042H			; convert DAC from sgn to dbl
-M30D1	EQU	030D1H			; dbl to integer
-M325C	EQU	0325CH			; sgn multiply
-M3FD6	EQU	03FD6H			; empty string
+DECSUB	EQU	0268CH			; subtract double
+DECADD	EQU	0269AH			; add double
+DECDIV	EQU	0289FH			; divide double
+VMOVE	EQU	02EF3H			; copy to HL
+VMOVFM	EQU	02F08H			; copy variable content to DAC
+VMOVMF	EQU	02F10H			; copy variable content from DAC
+MAKINT	EQU	02F99H			; integer to DAC
+$CDS	EQU	03042H			; convert DAC from sgn to dbl
+INT	EQU	030D1H			; dbl to integer
+SGNMUL	EQU	0325CH			; sgn multiply
+NULSTR	EQU	03FD6H			; empty string
 ERROR   equ     0406FH          ; BASIC error
 READYR  equ     0409BH          ; restart BASIC
-M4173   equ     04173H          ; execute statement
+NTSTOP  equ     04173H          ; execute statement
 LINKER  equ     04253H          ; recalculate linepointers
 NEWSTT  equ     04601H          ; execution loop
 CHRGTR  equ     04666H          ; CHRGTR
@@ -200,7 +200,7 @@ GETBYT  equ     0521CH          ; evaluate byte operand
 CONINT  equ     0521FH          ; convert to byte
 M537B   EQU     537BH           ; convert DAC to text, unformatted
 GETUIN  equ     0542FH          ; evaluate address operand
-M5432   equ     05432H          ; convert address to integer
+GETUI   equ     05432H          ; convert address to integer
 SCCPTR  equ     054F7H          ; convert pointers to linenumbers
 GETYPR  equ     05597H          ; GETYPR
 PTRGET  equ     05EA4H          ; get address of variable
@@ -1357,7 +1357,7 @@ J4BBD:	LD	BC,0*256+061H		; Rejoin parent process
 	LD	DE,I413A		; DiskBASIC version string
 	CALL	C4DA5			; print string
 	CALL	C4D89			; print newline
-	LD	HL,M4173
+	LD	HL,NTSTOP
 	PUSH	HL			; execute BASIC statement
 	LD	HL,BUF+10+2-1
 	PUSH	HL			; BASIC text pointer to prepared RUN statement
@@ -4142,7 +4142,7 @@ C5EBB:	CALL	C6890			; take control from hook caller
 	CALL	C6654			; check for BASIC character
 	DEFB	")"
 	PUSH	HL
-	LD	HL,M3FD6		; empty string
+	LD	HL,NULSTR		; empty string
 	LD	(DAC+2),HL
 	LD	A,3
 	LD	(VALTYP),A
@@ -4522,7 +4522,7 @@ C60EC:	LD	A,8
 	LD	IX,STRINI
 	CALL	C664F			; allocate temp string
 	LD	HL,(DSCTMP+1)
-	CALL	M2F10			; copy variable content from DAC
+	CALL	VMOVMF			; copy variable content from DAC
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -4533,7 +4533,7 @@ C6107:	LD	DE,DSCTMP
 	LD	(DAC+2),HL
 	LD	A,3
 	LD	(VALTYP),A
-	CALL	M2EF3			; copy stringdescriptor
+	CALL	VMOVE			; copy stringdescriptor
 	LD	DE,FRETOP
 	RST	DCOMPR
 	LD	(TEMPPT),HL
@@ -4573,7 +4573,7 @@ C6129:	LD	A,7
 	LD	H,(HL)
 	LD	L,C
 	LD	(VALTYP),A
-	JP	M2F08			; copy variable content to DAC
+	JP	VMOVFM			; copy variable content to DAC
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -4594,19 +4594,19 @@ C6147:	LD	IX,GETYPR
 	LD	DE,ARG
 	LD	C,8
 	LDIR
-	CALL	M289F			; divide double
+	CALL	DECDIV			; divide double
 	AND	A
-	CALL	M30D1			; dbl to integer
-	LD	IX,M5432
+	CALL	INT			; dbl to integer
+	LD	IX,GETUI
 	CALL	C664F			; convert to address
 	PUSH	DE
 	EX	DE,HL
 	LD	IX,FLTLIN
 	CALL	C664F			; convert unsigned integer to single
-	CALL	M3042			; convert DAC from sgn to dbl
+	CALL	$CDS			; convert DAC from sgn to dbl
 	LD	BC,06545H
 	LD	DE,06053H		; 65536
-	CALL	M325C			; sgn multiply
+	CALL	SGNMUL			; sgn multiply
 	LD	HL,DAC
 	PUSH	HL
 	LD	DE,ARG
@@ -4616,8 +4616,8 @@ C6147:	LD	IX,GETYPR
 	POP	DE
 	LD	C,8
 	LDIR
-	CALL	M268C			; subtract double
-	LD	IX,M5432
+	CALL	DECSUB			; subtract double
+	LD	IX,GETUI
 	CALL	C664F			; convert to address
 	LD	C,E
 	LD	B,D
@@ -4644,7 +4644,7 @@ C61C8:	CALL	C6890			; take control from hook caller
 	JR	NC,J61D5		; not at end of file, continue
 	DEC	HL			; end of file
 J61D5:	PUSH	AF
-	CALL	M2F99			; integer to DAC
+	CALL	MAKINT			; integer to DAC
 	POP	AF
 	POP	HL
 	INC	HL
@@ -4972,7 +4972,7 @@ C63BA:	PUSH	BC
 	CALL	C664F			; convert unsigned integer to single
 	LD	BC,06545H
 	LD	DE,06053H		; 65536
-	CALL	M325C			; sgn multiply
+	CALL	SGNMUL			; sgn multiply
 	LD	HL,DAC
 	LD	DE,ARG
 	LD	BC,8
@@ -4980,8 +4980,8 @@ C63BA:	PUSH	BC
 	POP	HL
 	LD	IX,FLTLIN
 	CALL	C664F			; convert unsigned integer to single
-	CALL	M3042			; convert DAC from sgn to dbl
-	JP	M269A			; add double
+	CALL	$CDS			; convert DAC from sgn to dbl
+	JP	DECADD			; add double
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -5035,7 +5035,7 @@ C640D:	CALL	C6890			; take control from hook caller
 	LD	E,A
 	LD	C,1BH			; Get allocation information
 	CALL	BDOS			; DiskBASIC BDOS call
-	JP	M2F99			; integer to DAC
+	JP	MAKINT			; integer to DAC
 
 ;	  Subroutine H.COPY handler
 ;	     Inputs  ________________________

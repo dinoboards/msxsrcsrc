@@ -60,19 +60,19 @@ I$101E  EQU     101EH   ; ----I
 C$175E  EQU     175EH   ; -C---
 D.2020  EQU     2020H   ; ---L-
 I$243E  EQU     243EH   ; ----I
-C$268C  EQU     268CH   ; -C---
-J$269A  EQU     269AH   ; J----
+DECSUB  EQU     268CH   ; -C---
+DECADD  EQU     269AH   ; J----
 I$26FE  EQU     26FEH   ; ----I
-C$289F  EQU     289FH   ; -C---
+DECDIV  EQU     289FH   ; -C---
 D.2A2A  EQU     2A2AH   ; ---L-
-C$2EF3  EQU     2EF3H   ; -C---
-J$2F08  EQU     2F08H   ; J----
-C$2F10  EQU     2F10H   ; -C---
-C.2F99  EQU     2F99H   ; JC---
-C.3042  EQU     3042H   ; -C---
-C$30D1  EQU     30D1H   ; -C---
+VMOVE   EQU     2EF3H   ; -C---
+VMOVFM  EQU     2F08H   ; J----
+VMOVMF  EQU     2F10H   ; -C---
+MAKINT  EQU     2F99H   ; JC---
+$CDS    EQU     3042H   ; -C---
+INT     EQU     30D1H   ; -C---
 I$321E  EQU     321EH   ; ----I
-C.325C  EQU     325CH   ; -C---
+SGNMUL  EQU     325CH   ; -C---
 I$341E  EQU     341EH   ; ----I
 I$351E  EQU     351EH   ; ----I
 I$361E  EQU     361EH   ; ----I
@@ -87,12 +87,12 @@ I$3D1E  EQU     3D1EH   ; ----I
 I$3E1E  EQU     3E1EH   ; ----I
 I$3F00  EQU     3F00H   ; ----I
 I$3F1E  EQU     3F1EH   ; ----I
-I$3FD6  EQU     3FD6H   ; ----I
+NULSTR  EQU     3FD6H   ; ----I
 
 
 ERROR   equ     0406FH          ; BASIC error
 READYR  equ     0409BH          ; restart BASIC
-M4173   equ     04173H          ; execute statement
+NTSTOP  equ     04173H          ; execute statement
 LINKER  equ     04253H          ; recalculate linepointers
 NEWSTT  equ     04601H          ; execution loop
 CHRGTR  equ     04666H          ; CHRGTR
@@ -108,7 +108,7 @@ GETBYT  equ     0521CH          ; evaluate byte operand
 CONINT  equ     0521FH          ; convert to byte
 M537B   EQU     537BH           ; convert DAC to text, unformatted
 GETUIN  equ     0542FH          ; evaluate address operand
-M5432   equ     05432H          ; convert address to integer
+GETUI   equ     05432H          ; convert address to integer
 SCCPTR  equ     054F7H          ; convert pointers to linenumbers
 GETYPR  equ     05597H          ; GETYPR
 PTRGET  equ     05EA4H          ; get address of variable
@@ -1405,7 +1405,7 @@ J4B95:  LD      BC,0061H
         LD      DE,I413A
         CALL    C4D7D
         CALL    C4D61
-        LD      HL,M4173
+        LD      HL,NTSTOP
         PUSH    HL
         LD      HL,BUF+11
         PUSH    HL
@@ -3719,7 +3719,7 @@ C5EBB:  CALL    C6888
         CALL    C6654
         DEFB    ")"
         PUSH    HL
-        LD      HL,I$3FD6
+        LD      HL,NULSTR
         LD      (DAC+2),HL
         LD      A,03H   ; 3 
         LD      (VALTYP),A
@@ -4064,7 +4064,7 @@ C60EC:  LD      A,8
         LD      IX,STRINI
         CALL    C664F
         LD      HL,(DSCTMP+1)
-        CALL    C$2F10
+        CALL    VMOVMF
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
@@ -4075,7 +4075,7 @@ C6107:  LD      DE,DSCTMP
         LD      (DAC+2),HL
         LD      A,03H   ; 3 
         LD      (VALTYP),A
-        CALL    C$2EF3
+        CALL    VMOVE
         LD      DE,FRETOP
         RST     20H
         LD      (TEMPPT),HL
@@ -4101,7 +4101,7 @@ C6129:  LD      A,7
         LD      H,(HL)
         LD      L,C
         LD      (VALTYP),A
-        JP      J$2F08
+        JP      VMOVFM
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
@@ -4122,19 +4122,19 @@ C6147:  LD      IX,GETYPR
         LD      DE,ARG
         LD      C,8
         LDIR    
-        CALL    C$289F
+        CALL    DECDIV
         AND     A
-        CALL    C$30D1
-        LD      IX,M5432
+        CALL    INT
+        LD      IX,GETUI
         CALL    C664F
         PUSH    DE
         EX      DE,HL
         LD      IX,FLTLIN
         CALL    C664F
-        CALL    C.3042
+        CALL    $CDS
         LD      BC,06545H
         LD      DE,06053H
-        CALL    C.325C
+        CALL    SGNMUL
         LD      HL,DAC
         PUSH    HL
         LD      DE,ARG
@@ -4144,8 +4144,8 @@ C6147:  LD      IX,GETYPR
         POP     DE
         LD      C,08H   ; 8 
         LDIR    
-        CALL    C$268C
-        LD      IX,M5432
+        CALL    DECSUB
+        LD      IX,GETUI
         CALL    C664F
         LD      C,E
         LD      B,D
@@ -4168,7 +4168,7 @@ C61C8:  CALL    C6888
         JR      NC,J61D5
         DEC     HL
 J61D5:  PUSH    AF
-        CALL    C.2F99
+        CALL    MAKINT
         POP     AF
         POP     HL
         INC     HL
@@ -4500,7 +4500,7 @@ C63BA:  PUSH    BC
         CALL    C664F
         LD      BC,06545H
         LD      DE,06053H
-        CALL    C.325C
+        CALL    SGNMUL
         LD      HL,DAC
         LD      DE,ARG
         LD      BC,8
@@ -4508,8 +4508,8 @@ C63BA:  PUSH    BC
         POP     HL
         LD      IX,FLTLIN
         CALL    C664F
-        CALL    C.3042
-        JP      J$269A
+        CALL    $CDS
+        JP      DECADD
 
 
 	IF DOS201 EQ 1
@@ -4562,7 +4562,7 @@ C640D:  CALL    C6888
         LD      E,A
         LD      C,1BH
         CALL    B.BDOS
-        JP      C.2F99
+        JP      MAKINT
 
 C6424:  CALL    C6888
         CALL    C6350

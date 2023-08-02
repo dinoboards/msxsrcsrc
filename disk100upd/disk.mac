@@ -323,17 +323,17 @@ YFFFF	equ	0FFFFH
 
 ; Basic routines
 
-M.4173	equ	04173H		; return to after statement
+NTSTOP	equ	04173H		; return to after statement
 DECSUB	equ	0268CH		; dbl subtract
 DECADD	equ	0269AH		; dbl add
 DECDIV	equ	0289FH		; dbl divide
 VMOVE	equ	02EF3H		; copy variable
 VMOVFM	equ	02F08H		; copy variable
-M.2F10	equ	02F10H		; copy variable
-M.2F99	equ	02F99H		; integer to DAC
-M.3042	equ	03042H		; convert sgn to dbl
-M.30D1	equ	030D1H		; dbl to integer
-M.325C	equ	0325CH		; sgn multiply
+VMOVMF	equ	02F10H		; copy variable
+MAKINT	equ	02F99H		; integer to DAC
+$CDS	equ	03042H		; convert sgn to dbl
+INT	equ	030D1H		; dbl to integer
+SGNMUL	equ	0325CH		; sgn multiply
 CLSALL	equ	06C1CH		; close all channels
 NEWSTT	equ	04601H		; execution loop
 BADRES	equ	06F0BH		; evaluate adres operand
@@ -342,40 +342,40 @@ GETYPR	equ	05597H		; get operand type
 FRESTR	equ	067D0H		; free temporary string
 FILEVL	equ	06A0EH		; evaluate filespec
 EVADR	equ	0542FH		; evaluate adres operand
-CNVADR	equ	05432H		; convert to adres
-EVWORD	equ	04756H		; evaluate word operand
-NEVBYT	equ	0521BH		; evaluate next byte operand
+GETUI	equ	05432H		; convert to adres
+INTID2	equ	04756H		; evaluate word operand
+GTBYTC	equ	0521BH		; evaluate next byte operand
 GETBYT	equ	0521CH		; evaluate byte operand
-CNVBYT	equ	0521FH		; convert to byte
-OUTNL	equ	07328H		; newline to OUTDO
-PTOLN	equ	054F7H		; convert pointers to linenumbers
-CLOCHN	equ	06B24H		; close channel
-MKPTRS	equ	04253H		; recalc linepointers
-OPNCHN	equ	06AFAH		; open channel
-SCROUT	equ	04AFFH		; output back to screen
+CONINT	equ	0521FH		; convert to byte
+CRDO	equ	07328H		; newline to OUTDO
+SCCPTR	equ	054F7H		; convert pointers to linenumbers
+CLSFIL	equ	06B24H		; close channel
+LINKER	equ	04253H		; recalc linepointers
+OPNFIL	equ	06AFAH		; open channel
+FINPRT	equ	04AFFH		; output back to screen
 FRMEVL	equ	04C64H		; evaluate expression
-GTCHNP	equ	06A6DH		; get channel pointer
-EVLEXP	equ	04C5FH		; evaluate =expression
-ALSSPC	equ	0668EH		; allocate stringspace
+FILIDX	equ	06A6DH		; get channel pointer
+FRMEQL	equ	04C5FH		; evaluate =expression
+GETSPA	equ	0668EH		; allocate stringspace
 STRINI	equ	06627H		; allocate temp string
 DOCNVF	equ	0517AH		; convert DAC to other type
-CSNG	equ	046FFH		; convert to SNG
-COUTNL	equ	07323H		; newline to OUTDO if not at start of line
+FLTLIN	equ	046FFH		; convert to SNG
+CRDONZ	equ	07323H		; newline to OUTDO if not at start of line
 ERROR	equ	0406FH		; error
 CHRGTR	equ	04666H		; CHRGTR
 READYR	equ	0409BH		; restart BASIC
 QUITLD	equ	0739AH		; quit loading & start (headloop/executing)
 SKPCHK	equ	06F1DH		; skip strong cassette devicecheck
-M.6E41	equ	06E41H		; resume character putback routine
+NOSKCR	equ	06E41H		; resume character putback routine
 
 BASSCR	equ	07D2FH		; adres init screen for BASIC
 SKPROM	equ	07D17H		; start MSX-BASIC
 RSTCLR	equ	07E14H		; start MSX-BASIC program in ROM
 TXTINI	equ	07D31H		; BASIC initscreen (without INITXT & CNSDFG)
 
-CALBSV	equ	06E92H		; start of BSAVE routine
-CALBLD	equ	06EC6H		; start of BLOAD routine
-EXEBLD	equ	06EF4H		; finish BLOAD
+BSAVE	equ	06E92H		; start of BSAVE routine
+BLOAD	equ	06EC6H		; start of BLOAD routine
+BLDFIN	equ	06EF4H		; finish BLOAD
 
 RETRTN	equ	0F38BH		; adres with a RET instruction, allways available
 
@@ -4822,7 +4822,7 @@ A5BA0:	ld	sp,0C200H
         call	CALBAS			; setup basic startup screen
         call	A5F86
         defb	13,10,"Disk BASIC version 1.0",13,10,0
-        ld	hl,M.4173
+        ld	hl,NTSTOP
         push	hl			; after the RUN command completes
         ld	hl,BUF+9
         push	hl
@@ -5796,17 +5796,17 @@ T62E8:	inc	sp
 ;
 T62ED:	ld	a,d
         cp	009H
-        jp	nc,CALBLD+3
+        jp	nc,BLOAD+3
         rst	030H
         defb	000H
         defw	A6AA7
         push	hl
-        jp	EXEBLD
+        jp	BLDFIN
 ;
 ;
         ld	a,d
         cp	009H
-        jp	nc,CALBSV+3
+        jp	nc,BSAVE+3
         rst	030H
         defb	000H
         defw	A69E7
@@ -6510,7 +6510,7 @@ A66CD:	add	hl,sp
         defb	092H
         call	A72D0
         defb	0EFH			; check for LEN=
-        ld	ix,EVWORD
+        ld	ix,INTID2
         call	A731E			; evaluate word operand
         dec	de
         inc	d
@@ -6776,9 +6776,9 @@ A6875:	ei
         jr	nc,A6882
         ld	l,010H
 A6882:	add	hl,sp
-        ld	(hl),LOW M.6E41
+        ld	(hl),LOW NOSKCR
         inc	hl
-        ld	(hl),HIGH M.6E41
+        ld	(hl),HIGH NOSKCR
         pop	hl
         inc	hl
         inc	hl
@@ -6879,7 +6879,7 @@ A68F4:	push	hl
 
 A690E:	call	A7380
         push	hl
-        ld	ix,PTOLN
+        ld	ix,SCCPTR
         call	A731E
         ld	a,0FFH
         call	A69C7
@@ -6892,7 +6892,7 @@ A690E:	call	A7380
         call	A718B
         ld	(NLONLY),a
         pop	hl
-        ld	ix,CLOCHN
+        ld	ix,CLSFIL
         jp	A731E
 
 ;	  Subroutine Binary Load  (H.BINL)
@@ -6943,7 +6943,7 @@ A6939:	ld	ix,QUITLD
         ld	de,(TXTTAB)
         add	hl,de
         ld	(VARTAB),hl
-        ld	ix,MKPTRS
+        ld	ix,LINKER
         call	A731E
         ld	a,(FILNAM+0)
         and	a
@@ -7025,7 +7025,7 @@ A6A23:	pop	de
         push	af
         xor	a
         ld	e,002H
-        ld	ix,OPNCHN
+        ld	ix,OPNFIL
         call	A731E
         ld	a,0FEH
         call	A69C7
@@ -7052,7 +7052,7 @@ A6A23:	pop	de
 A6A5D:	ld	a,0FFH
         ld	(FLBMEM),a
         xor	a
-        ld	ix,CLOCHN
+        ld	ix,CLSFIL
         call	A731E
         jp	A6EF8
 ;
@@ -7117,7 +7117,7 @@ A6AD0:	pop	de
         ld	(FLBMEM),a
         xor	a
         ld	e,001H
-        ld	ix,OPNCHN
+        ld	ix,OPNFIL
         call	A731E
         ld	de,(YF353)
         call	A69D0
@@ -7140,7 +7140,7 @@ A6AD0:	pop	de
         cp	"S"
         jr	z,A6B1A
         call	A47B2			; random block read
-A6B11:	ld	ix,SCROUT
+A6B11:	ld	ix,FINPRT
         call	A731E
         pop	hl
         ret
@@ -7205,7 +7205,7 @@ A6B75:	call	A7380
         call	A72D0
         defb	")"
         push	hl
-        ld	hl,03FD6H
+        ld	hl,NULSTR
         ld	(DAC+2),hl
         pop	hl
         ld	a,003H
@@ -7326,7 +7326,7 @@ A6C49:	call	A7380
         call	A731E
         jp	z,A7318
         push	hl
-        ld	ix,GTCHNP
+        ld	ix,FILIDX
         call	A731E
         ld	e,l
         ld	d,h
@@ -7357,7 +7357,7 @@ A6C8B:	ex	de,hl
         cp	","
         ret	nz
         push	de
-        ld	ix,NEVBYT
+        ld	ix,GTBYTC
         call	A731E
         push	af
         call	A72D0
@@ -7404,7 +7404,7 @@ A6CD7:	scf
         call	A731E
         jp	nz,A72FA
         push	de
-        ld	ix,EVLEXP
+        ld	ix,FRMEQL
         call	A731E
         pop	bc
         ex	(sp),hl
@@ -7442,7 +7442,7 @@ A6CD7:	scf
         jr	c,A6D7D
         pop	af
 A6D2A:	ld	a,c
-        ld	ix,ALSSPC
+        ld	ix,GETSPA
         call	A731E
         pop	hl
         pop	bc
@@ -7548,7 +7548,7 @@ A6DB5:	ld	a,008H
         ld	ix,STRINI
         call	A731E
         ld	hl,(DSCTMP+1)
-        call	M.2F10
+        call	VMOVMF
         jp	A61F1
 
 ; Unused code, patched code ??
@@ -7597,17 +7597,17 @@ A6DFB:	ld	ix,GETYPR
         ldir
         call	DECDIV
         and	a
-        call	M.30D1
-        ld	ix,CNVADR
+        call	INT
+        ld	ix,GETUI
         call	A731E
         push	de
         ex	de,hl
-        ld	ix,CSNG
+        ld	ix,FLTLIN
         call	A731E
-        call	M.3042
+        call	$CDS
         ld	bc,06545H
         ld	de,06053H
-        call	M.325C
+        call	SGNMUL
         ld	hl,DAC
         ld	de,ARG
         ld	bc,00008H
@@ -7617,7 +7617,7 @@ A6DFB:	ld	ix,GETYPR
         ld	c,008H
         ldir
         call	DECSUB
-        ld	ix,CNVADR
+        ld	ix,GETUI
         call	A731E
         ld	c,e
         ld	b,d
@@ -7633,7 +7633,7 @@ A6E70:	call	A7380
         jr	nc,A6E7D
         dec	hl
 A6E7D:	push	af
-        call	M.2F99
+        call	MAKINT
         pop	af
         pop	hl
         inc	hl
@@ -7658,7 +7658,7 @@ A6E99:	call	A6F63
         push	af
         call	A6645
         jp	z,A7312
-        ld	ix,COUTNL
+        ld	ix,CRDONZ
         call	A731E
 A6EAE:	ld	hl,BUF+85
         ld	b,00BH
@@ -7690,7 +7690,7 @@ A6ED8:	and	a
         jr	nc,A6EE3
         ld	a," "
         rst	018H
-A6EE3:	ld	ix,OUTNL
+A6EE3:	ld	ix,CRDO
         call	nc,A731E
 A6EEA:	ld	de,BUF+10
         xor	a
@@ -7700,7 +7700,7 @@ A6EEA:	ld	de,BUF+10
         jr	nz,A6EAE
         pop	af
 A6EF8:	pop	hl
-        ld	ix,SCROUT
+        ld	ix,FINPRT
         jp	A731E
 ;
 ;
@@ -7854,9 +7854,9 @@ A7009:	ld	bc,00010H
 A700D:	ld	bc,00021H
         call	A7380
         push	bc
-        ld	ix,CNVBYT
+        ld	ix,CONINT
         call	A731E
-        ld	ix,GTCHNP
+        ld	ix,FILIDX
         call	A731E
         jp	c,A7315
         jp	z,A7300
@@ -7876,24 +7876,24 @@ A700D:	ld	bc,00021H
         ld	d,(hl)
         ex	de,hl
         push	bc
-        ld	ix,CSNG
+        ld	ix,FLTLIN
         call	A731E
         ld	bc,06545H
         ld	de,06053H
-        call	M.325C
+        call	SGNMUL
         ld	hl,DAC
         ld	de,ARG
         ld	bc,00008H
         ldir
         pop	hl
-        ld	ix,CSNG
+        ld	ix,FLTLIN
         call	A731E
-        call	M.3042
+        call	$CDS
         jp	DECADD
 ;
 ;
 A7061:	call	A7380
-        ld	ix,CNVBYT
+        ld	ix,CONINT
         call	A731E
         ld	hl,YF347
         cp	(hl)
@@ -7901,7 +7901,7 @@ A7061:	call	A7380
         jp	nc,A719C
 A7074:	ld	e,a
         call	A505D
-        jp	M.2F99
+        jp	MAKINT
 ;
 ;
 A707B:	call	A7380
@@ -8065,7 +8065,7 @@ A71B7:	ld	e,047H
         ld	(NLONLY),a
         ld	(FLBMEM),a
         push	de
-        ld	ix,CLOCHN
+        ld	ix,CLSFIL
         call	A731E
         pop	de
         ld	ix,ERROR
@@ -8202,12 +8202,12 @@ A7331:	add	hl,sp
         inc	hl
         ld	d,(hl)
         push	hl
-        ld	hl,CALBSV+3
+        ld	hl,BSAVE+3
         rst	020H
         pop	hl
         jr	z,A734A
         push	hl
-        ld	hl,CALBLD+3
+        ld	hl,BLOAD+3
         rst	020H
         pop	hl
         jr	nz,A7350
