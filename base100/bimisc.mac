@@ -230,7 +230,13 @@ J6275:  CALL    LINKER                  ; setup BASIC linelinks
         DEC     HL
         DEC     HL
         LD      (SAVSTK),HL
+
+        IF      OPTM EQ 0
         LD      DE,7                    ; ?? LD E,7 should be enough ??
+        ELSE
+        LD      E,7
+        ENDIF
+
         JP      ERROR                   ; out of memory error
 
 ;       Subroutine      NEW statement
@@ -247,7 +253,7 @@ C6286:  RET     NZ                      ; not end of statement, quit (which will
 SCRTCH:
 C6287:  LD      HL,(TXTTAB)
         CALL    C6439                   ; trace off
-        LD      (AUTFLG),A              ; quit auto linenumber mode
+        LD      (AUTFLG),A              ; quit auto line number mode
         LD      (PTRFLG),A              ; output to screen
         LD      (HL),A
         INC     HL
@@ -255,7 +261,7 @@ C6287:  LD      HL,(TXTTAB)
         INC     HL
         LD      (VARTAB),HL             ; initialize start of basic variable area
 
-;       Subroutine      initialize interpreter, basicpointer at start of program
+;       Subroutine      initialize interpreter, BASIC pointer at start of program
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -270,9 +276,9 @@ C629A:  CALL    H.RUNC
 
 CLEARC:
 C62A1:  CALL    H.CLEA
-        LD      (TEMP),HL
+        LD      (TEMP),HL               ; store BASIC pointer
 
-;       Subroutine      initialize interpreter, basicpointer from TEMP
+;       Subroutine      initialize interpreter, restore BASIC pointer from TEMP
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 ;       Remark          CLEAR2 is not the offical name
@@ -350,12 +356,12 @@ C6317:  LD      HL,(TEMP)
 ONTRP:
 J631B:  DI
         LD      A,(HL)
-        AND     04H                     ; keep trap occured flag
-        OR      01H                     ; trap enabled
+        AND     00000100B               ; keep trap occured flag
+        OR      00000001B               ; trap enabled
         CP      (HL)                    ; trap already enabled AND not paused ?
         LD      (HL),A
         JR      Z,J6329                 ; yep, quit
-        AND     04H                     ; trap occured ?
+        AND     00000100B               ; trap occured ?
         JR      NZ,J634F                ; yep, increase trap counter and quit
 J6329:  EI
         RET
@@ -378,10 +384,10 @@ STPTRP:
 C6331:  DI
         LD      A,(HL)
         PUSH    AF
-        OR      02H
+        OR      00000010B
         LD      (HL),A                  ; trap paused
         POP     AF
-J6338:  XOR     05H                     ; trap occured AND trap was not paused AND trap enabled ?
+J6338:  XOR     00000101B               ; trap occured AND trap was not paused AND trap enabled ?
         JR      Z,J6362                 ; yep, decrease trap counter
         EI
         RET
@@ -393,7 +399,7 @@ J6338:  XOR     05H                     ; trap occured AND trap was not paused A
 RSTTRP:
 C633E:  DI
         LD      A,(HL)
-        AND     05H                     ; keep trap occured and trap enabled flags
+        AND     00000101B               ; keep trap occured and trap enabled flags
         CP      (HL)                    ; was trap paused ?
         LD      (HL),A                  ; trap not paused anymore
         JR      NZ,J6348                ; yep,
@@ -401,7 +407,7 @@ C633E:  DI
         RET
 
 SETCHK:
-J6348:  XOR     05H                     ; trap occured AND trap enabled ?
+J6348:  XOR     00000101B               ; trap occured AND trap enabled ?
         JR      Z,J634F                 ; yep, increase trap counter and quit
         EI
         RET
@@ -432,7 +438,7 @@ J634F:  LD      A,(ONGSBF)
 FRETRP:
 C6358:  DI
         LD      A,(HL)
-        AND     03H                     ; keep trap paused and trap enabled flags
+        AND     00000011B               ; keep trap paused and trap enabled flags
         CP      (HL)                    ; trap occured ?
         LD      (HL),A                  ; clear trap occured
         JR      NZ,J6362                ; yep, decrease trap counter
@@ -445,7 +451,7 @@ J6360:  EI
 
 FRETP2:
 J6362:  LD      A,(ONGSBF)
-        SUB     01H
+        SUB     1
         JR      C,J6360                 ; already zero, quit
         LD      (ONGSBF),A
         EI
@@ -474,15 +480,15 @@ J6381:  LD      (HL),A
         LD      (ONGSBF),A              ; clear trap counter
         RET
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+;       Subroutine      handle trap
+;       Inputs          HL = BASIC pointer
 ;       Outputs         ________________________
 
 GOTRP:
 C6389:  LD      A,(ONEFLG)
         OR      A                       ; in ERROR handling routine ?
         RET     NZ                      ; yep, quit
-        PUSH    HL
+        PUSH    HL                      ; store BASIC pointer
         LD      HL,(CURLIN)
         LD      A,H
         AND     L
@@ -491,38 +497,38 @@ C6389:  LD      A,(ONEFLG)
         LD      HL,TRPTBL
         LD      B,26
 J639C:  LD      A,(HL)
-        CP      05H                     ; trap occured AND trap not paused AND trap enabled ?
+        CP      00000101B               ; trap occured AND trap not paused AND trap enabled ?
         JR      Z,J63A8                 ; yep, handle trap
 J63A1:  INC     HL
         INC     HL
         INC     HL
         DJNZ    J639C                   ; next trap
-J63A6:  POP     HL
+J63A6:  POP     HL                      ; restore BASIC pointer
         RET
 
 J63A8:  PUSH    BC
         INC     HL
         LD      E,(HL)
         INC     HL
-        LD      D,(HL)                  ; linepointer trap handler
+        LD      D,(HL)                  ; pointer to trap handler
         DEC     HL
         DEC     HL
         LD      A,D
         OR      E                       ; has this trap a handler ?
         POP     BC
         JR      Z,J63A1                 ; nope, next trap
-        PUSH    DE
-        PUSH    HL
+        PUSH    DE                      ; store pointer to trap handler
+        PUSH    HL                      ; store pointer to trap entry
         CALL    C6358                   ; acknowledge trap
         CALL    C6331                   ; pause trap
         LD      C,3
         CALL    GETSTK                  ; check if enough stackspace for 3 words
-        POP     BC                      ; trapentry
-        POP     DE                      ; linepointer traphandler
-        POP     HL                      ; BASIC pointer
-        EX      (SP),HL
-        POP     HL                      ; remove returnaddress
-        JP      GOSUBT                  ; GOSUB traphandler
+        POP     BC                      ; restore pointer to trap entry
+        POP     DE                      ; restore pointer to trap handler
+        POP     HL                      ; restore BASIC pointer
+        EX      (SP),HL                 ; restore return address, store BASIC pointer
+        POP     HL                      ; restore BASIC pointer
+        JP      GOSUBT                  ; GOSUB trap handler
 
 ;       Subroutine      RESTORE statement
 ;       Inputs          ________________________
@@ -533,9 +539,9 @@ C63C9:  EX      DE,HL
         LD      HL,(TXTTAB)
         JR      Z,J63DD                 ; end of statement, use start of BASIC program
         EX      DE,HL
-        CALL    LINGET                  ; collect linenumber
+        CALL    LINGET                  ; collect line number
         PUSH    HL
-        CALL    FNDLIN                  ; search linenumber from start of program
+        CALL    FNDLIN                  ; search line number from start of program
         LD      H,B
         LD      L,C
         POP     DE
@@ -569,13 +575,13 @@ C63E6:  RET     NZ			; ?? because it is always called with Zx set, RET NZ could 
 ENDS:
 C63EA:  RET     NZ                      ; not end of statement, quit (which generates syntax error)
         XOR     A
-        LD      (ONEFLG),A              ; not in ERROR handler routine
+        LD      (ONEFLG),A              ; not in ERROR handler routine anymore
         PUSH    AF
         CALL    Z,CLSALL                ; close all i/o channels (?? should be CALL CLSALL ??)
         POP     AF			; reset STOP flag (indicate END statement)
 
 CONSTP:
-J63F4:  LD      (SAVTXT),HL             ; save BASIC pointer
+J63F4:  LD      (SAVTXT),HL             ; store BASIC pointer
         LD      HL,TEMPST
         LD      (TEMPPT),HL             ; clear stringdescriptor stack
         DEFB    021H                    ; LD HL,xxxx, trick to skip next instruction
@@ -592,10 +598,10 @@ J6401:  LD      HL,(CURLIN)
         LD      A,L
         AND     H
         INC     A                       ; interpreter in direct mode ?
-        JR      Z,J6414                 ; yep, do not save
-        LD      (OLDLIN),HL
-        LD      HL,(SAVTXT)
-        LD      (OLDTXT),HL             ; nope, save BASIC pointer and linenumber for CONT
+        JR      Z,J6414                 ; yep, skip updating OLDLIN and OLDTXT
+        LD      (OLDLIN),HL             ; update line number for CONT
+        LD      HL,(SAVTXT)             ; restore BASIC pointer
+        LD      (OLDTXT),HL             ; update BASIC pointer for CONT
 J6414:  CALL    FINLPT                  ; end printeroutput
         CALL    CRDONZ                  ; fresh line to interpreter output
         POP     AF                      ; END statement ?
@@ -608,13 +614,13 @@ J6414:  CALL    FINLPT                  ; end printeroutput
 ;       Outputs         ________________________
 
 CONT:
-C6424:  LD      HL,(OLDTXT)
+C6424:  LD      HL,(OLDTXT)             ; BASIC pointer = BASIC pointer for CONT
         LD      A,H
-        OR      L
+        OR      L                       ; is pointer valid ?
         LD      DE,17                   ; ?? LD E,17 should be enough ??
         JP      Z,ERROR                 ; nope, can not continue error
         LD      DE,(OLDLIN)
-        LD      (CURLIN),DE
+        LD      (CURLIN),DE             ; update current line number = line number for CONT
         RET
 
 ;       Subroutine      TRON
@@ -642,11 +648,11 @@ C643E:  CALL    PTRGET                  ; locate variable
         PUSH    DE
         PUSH    HL
         LD      HL,SWPTMP
-        CALL    VMOVE                   ; HL = DE (valtyp), save 1st var in SWPTMP
+        CALL    VMOVE                   ; HL = DE (valtyp), store 1st var in SWPTMP
         LD      HL,(ARYTAB)
-        EX      (SP),HL                 ; save (ARYTAB), restore BASIC pointer
+        EX      (SP),HL                 ; store start of BASIC array variables, restore BASIC pointer
         _RST    GETYPR                  ; get DAC type
-        PUSH    AF                      ; save type
+        PUSH    AF                      ; store type
         _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    PTRGET                  ; locate variable
@@ -663,12 +669,12 @@ C643E:  CALL    PTRGET                  ; locate variable
         JR      NZ,J6474                ; yep, illegal function call
         POP     DE                      ; pointer to 2nd variable
         POP     HL
-        EX      (SP),HL                 ; save BASIC pointer, get pointer to 1st variable
+        EX      (SP),HL                 ; store BASIC pointer, get pointer to 1st variable
         PUSH    DE
-        CALL    VMOVE                   ; HL = DE (valtyp), 1st var = 2nd var
+        CALL    VMOVE                   ; HL = DE (valtyp), 1st variable = 2nd variable
         POP     HL
         LD      DE,SWPTMP
-        CALL    VMOVE                   ; HL = DE (valtyp), 2nd var = SWPTMP
+        CALL    VMOVE                   ; HL = DE (valtyp), 2nd variable = SWPTMP
         POP     HL
         RET
 
@@ -834,7 +840,7 @@ C6527:  LD      DE,0                    ; any loop variable
 ;       Outputs         ________________________
 
 C652A:  CALL    NZ,PTRGET               ; not end of statement, locate variable
-        LD      (TEMP),HL               ; save BASIC pointer
+        LD      (TEMP),HL               ; store BASIC pointer
         CALL    FNDFOR                  ; search FOR block on stack (skip 2 words)
         JP      NZ,NFERR                ; not found,
         LD      SP,HL

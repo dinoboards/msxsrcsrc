@@ -237,18 +237,18 @@ _RST    MACRO   X
 ;       Outputs         ________________________
 
 MOTOR:
-C73B7:  ld      e,0FFH
+C73B7:  ld      e,0FFH                  ; default = toggle
         jr      z,A73C6                 ; end of statement, toggle
-        sub     0EBH
-        ld      e,a                     ; OFF token ?
+        sub     0EBH                    ; OFF token ?
+        ld      e,a                     ; off
         jr      z,A73C5                 ; yep, off
         _RST    SYNCHR
-        db      095H                    ; check for ON token
+        defb    095H                    ; check for ON token
         ld      e,1                     ; on
-        db      03EH
+        defb    03EH                    ; LD A,xx: trick to skip next instruction
 A73C5:  _RST    CHRGTR
 A73C6:  ld      a,e
-        jp      STMOTR
+        jp      STMOTR                  ; change cassette motor status
 
 ;       Subroutine      SOUND statement
 ;       Inputs          ________________________
@@ -256,20 +256,20 @@ A73C6:  ld      a,e
 
 SOUND:
 C73CA:  CALL    GETBYT                  ; evaluate byte operand
-        CP      14                      ; register 0-13 ?
+        CP      13+1                    ; register 0-13 ?
         JP      NC,FCERR                ; nope, illegal function call
-        PUSH    AF
+        PUSH    AF                      ; store register
         _RST    SYNCHR
-        DEFB    ","                     ; check for ,
+        DEFB    ','                     ; check for ,
         CALL    GETBYT                  ; evaluate byte operand
-        POP     AF
+        POP     AF                      ; restore register
         CP      7                       ; register 7 ?
         JR      NZ,J73E1                ; nope, write PSG register
         RES     6,E
         SET     7,E                     ; make sure PSG I/O port definition is not changed
 J73E1:  JP      WRTPSG                  ; write PSG register
 
-I73E4:  DEFB    " "
+I73E4:  DEFB    ' '
 
 ; PSG VCB structure:
 ;
@@ -368,7 +368,7 @@ J7413:  POP     AF                      ; restore voice
         JR      Z,J7439			; yep,
         PUSH    BC                      ; store voice
         _RST    SYNCHR
-        DEFB    ","                     ; check for ,
+        DEFB    ','                     ; check for ,
         JR      J73FD                   ; next voice
 
 J7439:  LD      A,B
@@ -548,37 +548,37 @@ C7521:  LD      A,(VOICEN)              ; current voice
         CP      8
         RET
 
-I752E:  DEFB    "A"                     ; note A
+I752E:  DEFB    'A'                     ; note A
         DEFW    PLYNOT
-        DEFB    "B"                     ; note B
+        DEFB    'B'                     ; note B
         DEFW    PLYNOT
-        DEFB    "C"                     ; note C
+        DEFB    'C'                     ; note C
         DEFW    PLYNOT
-        DEFB    "D"                     ; note D
+        DEFB    'D'                     ; note D
         DEFW    PLYNOT
-        DEFB    "E"                     ; note E
+        DEFB    'E'                     ; note E
         DEFW    PLYNOT
-        DEFB    "F"                     ; note F
+        DEFB    'F'                     ; note F
         DEFW    PLYNOT
-        DEFB    "G"                     ; note G
+        DEFB    'G'                     ; note G
         DEFW    PLYNOT
-        DEFB    "M"+128                 ; change envelope period, numeric operand
+        DEFB    'M'+128                 ; change envelope period, numeric operand
         DEFW    PENVLP
-        DEFB    "V"+128                 ; change volume, numeric operand
+        DEFB    'V'+128                 ; change volume, numeric operand
         DEFW    PVOLUM
-        DEFB    "S"+128                 ; change shape, numeric operand
+        DEFB    'S'+128                 ; change shape, numeric operand
         DEFW    PSHAPE
-        DEFB    "N"+128                 ; note number, numeric operand
+        DEFB    'N'+128                 ; note number, numeric operand
         DEFW    PLYNUM
-        DEFB    "O"+128                 ; change octave, numeric operand
+        DEFB    'O'+128                 ; change octave, numeric operand
         DEFW    POCTAV
-        DEFB    "R"+128                 ; rest note, numeric operand
+        DEFB    'R'+128                 ; rest note, numeric operand
         DEFW    PLYRST
-        DEFB    "T"+128                 ; change tempo, numeric operand
+        DEFB    'T'+128                 ; change tempo, numeric operand
         DEFW    PTEMPO
-        DEFB    "L"+128                 ; change note length, numeric operand
+        DEFB    'L'+128                 ; change note length, numeric operand
         DEFW    PLYLEN
-        DEFB    "X"                     ; macro substring
+        DEFB    'X'                     ; macro substring
         DEFW    MCLXEQ
         DEFB    0
 
@@ -803,20 +803,20 @@ C763E:  LD      B,C                     ; store note letter
         LD      C,A                     ; note letter to note table offset (assumes sharp)
         CALL    FETCHR                  ; fetch macro string character
         JR      Z,J7665                 ; end of macro string,
-        CP      "#"                     ; sharp ?
+        CP      '#'                     ; sharp ?
         JR      Z,J7666                 ; yep, note offset is already sharp
-        CP      "+"                     ; plus ?
+        CP      '+'                     ; plus ?
         JR      Z,J7666                 ; yep, note offset is already sharp
-        CP      "-"                     ; minus ?
+        CP      '-'                     ; minus ?
         JR      Z,J765A                 ; yep, adjust note offset
         CALL    DECFET                  ; to previous macro string character
         JR      J7665                   ; no note extender
 
 J765A:  DEC     C                       ; decrease note table offset
         LD      A,B                     ; restore note letter
-        CP      "C"                     ; C- ?
+        CP      'C'                     ; C- ?
         JR      Z,J7664                 ; yep, from C# to C- is note table offset -3
-        CP      "F"                     ; F- ?
+        CP      'F'                     ; F- ?
         JR      NZ,J7665                ; nope, note table offset -2
 J7664:  DEC     C
 J7665:  DEC     C
@@ -889,7 +889,7 @@ J76A9:  POP     HL                      ; restore pointer to note length
         LD      E,L                     ; store duration (ticks)
 J76C8:  CALL    FETCHR                  ; fetch macro string character
         JR      Z,J76E3                 ; end of macro string,
-        CP      "."                     ; dot ?
+        CP      '.'                     ; dot ?
         JR      NZ,J76E0                ; nope, duration determined
         SRL     D
         RR      E
@@ -1003,7 +1003,7 @@ I7754:  DEFB    000H,000H,045H,012H             ; 12000 (50*120*4*0.5)
 ;       Outputs         ________________________
 
 PUTS:
-C7758:  LD      B,80H                   ; PUT flag
+C7758:  LD      B,80H                   ; PUT
         DEFB    011H                    ; LD DE,xxxx, trick to skip next instruction
 
 ;       Subroutine      GET statement
@@ -1011,10 +1011,10 @@ C7758:  LD      B,80H                   ; PUT flag
 ;       Outputs         ________________________
 
 GETS:
-C775B:  LD      B,0
+C775B:  LD      B,0                     ; GET
         CP      0C7H                    ; SPRITE token follows ?
-        JP      Z,J7AAF
-J7762:  LD      A,B
+        JP      Z,J7AAF                 ; yep, handle PUT SPRITE
+J7762:  LD      A,B                     ; GET/PUT flag
         JP      GETPUT                  ; do random input/output
 
 ;       Subroutine      LOCATE statement
@@ -1023,46 +1023,46 @@ J7762:  LD      A,B
 
 LOCATE:
 C7766:  LD      DE,(CSRY)
-        PUSH    DE                      ; use current coordinates as default
-        CP      ","                     ; x coordinate not specified ?
+        PUSH    DE                      ; store current coordinates as default
+        CP      ','                     ; X coordinate not specified ?
         JR      Z,J777A                 ; yep, use current
         CALL    GETBYT                  ; evaluate byte operand
-        INC     A                       ; x coordinate (1 based)
-        POP     DE
-        LD      D,A
-        PUSH    DE
+        INC     A                       ; X coordinate (1 based)
+        POP     DE                      ; restore current coordinates
+        LD      D,A                     ; update X
+        PUSH    DE                      ; store coordinates
         DEC     HL
         _RST    CHRGTR                  ; end of statement ?
         JR      Z,J779F                 ; yep, set cursor position and quit
 J777A:  _RST    SYNCHR
-        DEFB    ","                     ; check for ,
-        CP      ","                     ; y coordinate not specified ?
+        DEFB    ','                     ; check for ,
+        CP      ','                     ; Y coordinate not specified ?
         JR      Z,J778B                 ; yep, use current
         CALL    GETBYT                  ; evaluate byte operand
-        INC     A                       ; y coordinate (1 based)
-        POP     DE
-        LD      E,A
-        PUSH    DE                      ; save coordinates
+        INC     A                       ; Y coordinate (1 based)
+        POP     DE                      ; restore current coordinates
+        LD      E,A                     ; update Y
+        PUSH    DE                      ; store coordinates
         DEC     HL
         _RST    CHRGTR                  ; end of statement ?
         JR      Z,J779F                 ; yep, set cursor position and quit
 J778B:  _RST    SYNCHR
-        DEFB    ","                     ; check for ,
+        DEFB    ','                     ; check for ,
         CALL    GETBYT                  ; evaluate byte operand
-        AND     A
-        LD      A,"y"
-        JR      NZ,J7796                ; <>0, cursor on (ESC y 5)
-        DEC     A                       ; =0, cursor off (ESC x 5)
+        AND     A                       ; 0 (cursor off) ?
+        LD      A,'y'
+        JR      NZ,J7796                ; nope, cursor on (ESC y 5)
+        DEC     A                       ; yep, cursor off (ESC x 5)
 J7796:  PUSH    AF
         LD      A,1BH
         _RST    OUTDO                   ; ESC to interpreter output
         POP     AF
         _RST    OUTDO                   ; "x" or "y" to interpreter output
-        LD      A,"5"
+        LD      A,'5'
         _RST    OUTDO                   ; "5" to interpreter output
-J779F:  EX      (SP),HL
+J779F:  EX      (SP),HL                 ; store BASIC pointer, restore cursor coordinates
         CALL    POSIT                   ; set cursor position
-        POP     HL
+        POP     HL                      ; restore BASIC pointer
         RET
 
 ;       Subroutine      STOP statement (trap)
@@ -1070,18 +1070,18 @@ J779F:  EX      (SP),HL
 ;       Outputs         ________________________
 
 STOPT:
-J77A5:  PUSH    HL
-        LD      HL,TRPTBL+10*3
-        JR      J77CF
+J77A5:  PUSH    HL                      ; store BASIC pointer
+        LD      HL,TRPTBL+10*3          ; STOP entry
+        JR      J77CF                   ; handle trap keyword
 
 ;       Subroutine      SPRITE statement (trap)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 SPRITT:
-J77AB:  PUSH    HL
-        LD      HL,TRPTBL+11*3
-        JR      J77CF
+J77AB:  PUSH    HL                      ; store BASIC pointer
+        LD      HL,TRPTBL+11*3          ; SPRITE entry
+        JR      J77CF                   ; handle trap keyword
 
 ;       Subroutine      INTERVAL statement
 ;       Inputs          ________________________
@@ -1089,16 +1089,16 @@ J77AB:  PUSH    HL
 
 INTS:
 J77B1:  _RST    SYNCHR
-        DEFB    "E"
+        DEFB    'E'
         _RST    SYNCHR
-        DEFB    "R"
+        DEFB    'R'
         _RST    SYNCHR
         DEFB    0FFH
         _RST    SYNCHR
         DEFB    094H                    ; check for ERVAL
-        PUSH    HL
-        LD      HL,TRPTBL+17*3
-        JR      J77CF
+        PUSH    HL                      ; store BASIC pointer
+        LD      HL,TRPTBL+17*3          ; INTERVAL entry
+        JR      J77CF                   ; handle trap keyword
 
 ;       Subroutine      STRIG statement
 ;       Inputs          ________________________
@@ -1109,12 +1109,15 @@ J77BF:  LD      A,4                     ; max is 4
         CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
         DEC     HL
         _RST    CHRGTR                  ; get next BASIC character
-        PUSH    HL
-        LD      D,00H
+        PUSH    HL                      ; store BASIC pointer
+        LD      D,0
         LD      HL,TRPTBL+12*3
         ADD     HL,DE
         ADD     HL,DE
-        ADD     HL,DE
+        ADD     HL,DE                   ; STRIG entry
+
+; handle trap keyword
+
 J77CF:  CALL    C77FE                   ; check for trap tokens and act upon
         JR      J77E2                   ; new statement without CTRL-STOP and trap check
 
@@ -1125,32 +1128,32 @@ J77CF:  CALL    C77FE                   ; check for trap tokens and act upon
 KEYT:
 J77D4:  CALL    GETBYT                  ; evaluate byte operand
         DEC     A
-        CP      10                      ; functionkeynumber 1-10 ?
+        CP      9+1                     ; functionkeynumber 1-10 ?
         JP      NC,FCERR                ; nope, illegal function call
         LD      A,(HL)                  ; ?? function key number already in A ??
-        PUSH    HL
-        CALL    C77E8                   ; set trapentry of functionkey
-J77E2:  POP     HL
-        POP     AF
+        PUSH    HL                      ; store BASIC pointer
+        CALL    C77E8                   ; set trap entry of functionkey
+J77E2:  POP     HL                      ; restore BASIC pointer
+        POP     AF                      ; dispose return address
         _RST    CHRGTR                  ; get next BASIC character
         JP      NEWSTN                  ; new statement without CTRL-STOP and trap check
 
-;       Subroutine      set trapentry of functionkey
+;       Subroutine      set trap entry of functionkey
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 C77E8:  LD      D,0
         LD      HL,FNKFLG-1
         ADD     HL,DE
-        PUSH    HL
+        PUSH    HL                      ; store FNKFLG pointer
         LD      HL,TRPTBL+0*3-(1*3)
         ADD     HL,DE
         ADD     HL,DE
-        ADD     HL,DE
+        ADD     HL,DE                   ; KEY entry
         CALL    C77FE                   ; check for trap tokens and act upon
         LD      A,(HL)
-        AND     01H                     ; functionkey trap enabled
-        POP     HL
+        AND     01H                     ; functionkey trap enabled ?
+        POP     HL                      ; restore FNKFLG pointer
         LD      (HL),A                  ; set FNKFLG if trap enabled
         RET
 
@@ -1166,44 +1169,44 @@ C77FE:  CP      95H                     ; ON token ?
         JP      Z,STPTRP                ; yep, pause trap
         JP      SNERR                   ; syntax error
 
-;       Subroutine      __________________________
+;       Subroutine      trap token ?
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 ONGOT:
 C7810:  CALL    H.ONGO
-        LD      BC,10
-        CP      0CCH
-        RET     Z
-        LD      BC,0A01H
-        CP      90H
-        RET     Z
-        INC     B
-        CP      0C7H
-        RET     Z
-        CP      0FFH
-        RET     C
-        PUSH    HL
+        LD      BC,0*256+10             ; trap base number = 0, maximum number of traps = 10
+        CP      0CCH                    ; KEY token ?
+        RET     Z                       ; yep, quit (trap token)
+        LD      BC,10*256+1             ; trap base number = 10, maximum number of traps = 1
+        CP      90H                     ; STOP token ?
+        RET     Z                       ; yep, quit (trap token)
+        INC     B                       ; trap base number = 11, maximum number of traps = 1
+        CP      0C7H                    ; SPRITE token ?
+        RET     Z                       ; yep, quit (trap token)
+        CP      0FFH                    ; function token ?
+        RET     C                       ; nope, quit (no trap token)
+        PUSH    HL                      ; store BASIC pointer
         _RST    CHRGTR                  ; get next BASIC character
-        CP      0A3H
-        JR      Z,J7833
-        CP      85H
-        JR      Z,J7838
-J7830:  POP     HL
-        SCF
+        CP      0A3H                    ; TRIG token ?
+        JR      Z,J7833                 ; yep, quit (trap token)
+        CP      85H                     ; INT token ?
+        JR      Z,J7838                 ; yep, on INTERVAL
+J7830:  POP     HL                      ; restore BASIC pointer
+        SCF                             ; no trap token
         RET
 
-J7833:  POP     BC
-        LD      BC,0C05H
+J7833:  POP     BC                      ; dispose stored BASIC pointer
+        LD      BC,12*256+5             ; trap base number = 12, maximum number of traps = 5
         RET
 
 J7838:  _RST    CHRGTR                  ; get next BASIC character
-        CP      "E"
+        CP      'E'
         JR      NZ,J7830
-        POP     BC
+        POP     BC                      ; dispose stored BASIC pointer
         _RST    CHRGTR                  ; get next BASIC character
         _RST    SYNCHR
-        DEFB    "R"
+        DEFB    'R'
         _RST    SYNCHR
         DEFB    0FFH
         _RST    SYNCHR
@@ -1212,17 +1215,17 @@ J7838:  _RST    CHRGTR                  ; get next BASIC character
         DEFB    0EFH                    ; check for RVAL=
         CALL    GETUIN                  ; evaluate address operand
         LD      A,D
-        OR      E
-        JP      Z,FCERR                 ; illegal function call
+        OR      E                       ; interval value = 0 ?
+        JP      Z,FCERR                 ; yep, illegal function call
         EX      DE,HL
-        LD      (INTVAL),HL
-        LD      (INTCNT),HL
+        LD      (INTVAL),HL             ; update interval value
+        LD      (INTCNT),HL             ; reset interval counter
         EX      DE,HL
-        LD      BC,1101H
+        LD      BC,256*17+1             ; trap base number = 17, maximum number of traps = 1
         DEC     HL
         RET
 
-;       Subroutine      __________________________
+;       Subroutine      update trap handler line number
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -1247,58 +1250,67 @@ C785C:  PUSH    HL
 
 KEYS:
 C786C:  CP      93H                     ; LIST token ?
-        JR      NZ,J78AE                ; nope, other KEY statement variant
+        JR      NZ,J78AE                ; nope, other KEY statement variants
+
+; KEY LIST
+
         _RST    CHRGTR                  ; get next BASIC character
-        PUSH    HL
+        PUSH    HL                      ; store BASIC pointer
         LD      HL,FNKSTR
-        LD      C,0AH
-J7877:  LD      B,10H
-J7879:  LD      A,(HL)
+        LD      C,10                    ; 10 function keys
+J7877:  LD      B,16                    ; maximum function definition length
+J7879:  LD      A,(HL)                  ; get character
         INC     HL
-        CALL    CNVCHR
-        JR      C,J7891
+        CALL    CNVCHR                  ; graphic header character ?
+        JR      C,J7891                 ; nope,
         DEC     B
-        JR      Z,J789E
-        LD      A,(HL)
+        JR      Z,J789E                 ; no more characters, ignore graphic header and finish this definition
+        LD      A,(HL)                  ; get character
         INC     HL
-        LD      E,A
-        CALL    CNVCHR
-        JR      Z,J7891
-        LD      A,1
+        LD      E,A                     ; store character
+        CALL    CNVCHR                  ; graphic character ?
+        JR      Z,J7891                 ; nope,
+        LD      A,1                     ; graphic character header
         _RST    OUTDO                   ; MSX to interpreter output
-        LD      A,E
+        LD      A,E                     ; restore graphic character
         JR      J789B
 
-J7891:  CP      7FH
-        JR      Z,J7899
-        CP      20H
-        JR      NC,J789B
-J7899:  LD      A," "
+J7891:  CP      7FH                     ; DEL ?
+        JR      Z,J7899                 ; yep, display space
+        CP      20H                     ; control character ?
+        JR      NC,J789B                ; nope, display character
+J7899:  LD      A,' '
 J789B:  _RST    OUTDO                   ; char to interpreter output
-        DJNZ    J7879
+        DJNZ    J7879                   ; next definition character
 J789E:  CALL    CRDO                    ; newline to interpreter output
-        DEC     C
-        JR      NZ,J7877
-        POP     HL
+        DEC     C                       ; done all function keys ?
+        JR      NZ,J7877                ; nope, next
+        POP     HL                      ; restore BASIC pointer
         RET
+
+; function key display on
 
 J78A6:  _RST    CHRGTR                  ; get next BASIC character
         JP      DSPFNK
 
+; function key display off
+
 J78AA:  _RST    CHRGTR                  ; get next BASIC character
         JP      ERAFNK
 
-J78AE:  CP      "("
-        JP      Z,KEYT                  ; KEY statement (trap)
+; other KEY statement variants
+
+J78AE:  CP      '('
+        JP      Z,KEYT                  ; yep, KEY statement (trap)
         CP      95H                     ; ON token ?
         JR      Z,J78A6                 ; yep, enable display functionkeys
         CP      0EBH                    ; OFF token ?
         JR      Z,J78AA                 ; yep, disable display functionkeys
         CALL    GETBYT                  ; evaluate byte operand
         DEC     A
-        CP      10                      ; functionkeynumber 1-10 ?
+        CP      9+1                     ; functionkeynumber 1-10 ?
         JP      NC,FCERR                ; nope, illegal function call
-        EX      DE,HL
+        EX      DE,HL                   ; store BASIC pointer
         LD      L,A
         LD      H,0
         ADD     HL,HL
@@ -1307,40 +1319,40 @@ J78AE:  CP      "("
         ADD     HL,HL                   ; * 16
         LD      BC,FNKSTR
         ADD     HL,BC
-        PUSH    HL
-        EX      DE,HL
+        PUSH    HL                      ; store pointer in function key definition
+        EX      DE,HL                   ; restore BASIC pointer
         _RST    SYNCHR
-        DEFB    ","                     ; check for ,
+        DEFB    ','                     ; check for ,
         CALL    FRMEVL                  ; evaluate expression
-        PUSH    HL
+        PUSH    HL                      ; store BASIC pointer
         CALL    FRESTR                  ; free temporary string with type check
         LD      B,(HL)
         INC     HL
         LD      E,(HL)
         INC     HL
         LD      D,(HL)
-        POP     HL
-        EX      (SP),HL
-        LD      C,0FH
+        POP     HL                      ; restore BASIC pointer
+        EX      (SP),HL                 ; store BASIC pointer, restore pointer in function key definition
+        LD      C,16-1                  ; maximum defintion length
         LD      A,B
-        AND     A
-        JR      Z,J78F5
+        AND     A                       ; empty defintion string ?
+        JR      Z,J78F5                 ; yep,
 J78E8:  LD      A,(DE)
-        AND     A
-        JP      Z,FCERR                 ; illegal function call
+        AND     A                       ; NULL character ?
+        JP      Z,FCERR                 ; yep, illegal function call
         LD      (HL),A
         INC     DE
         INC     HL
-        DEC     C
-        JR      Z,J78FA
-        DJNZ    J78E8
+        DEC     C                       ; decrease length left
+        JR      Z,J78FA                 ; definition length reached, ignore remainer and put end marker
+        DJNZ    J78E8                   ; next definition character
 J78F5:  LD      (HL),B
         INC     HL
         DEC     C
-        JR      NZ,J78F5
-J78FA:  LD      (HL),C
-        CALL    FNKSB
-        POP     HL
+        JR      NZ,J78F5                ; fill remainer of defintion with end markers
+J78FA:  LD      (HL),C                  ; put end marker
+        CALL    FNKSB                   ; update function key display
+        POP     HL                      ; restore BASIC pointer
         RET
 
 ;       Subroutine      TIME function
@@ -1349,10 +1361,10 @@ J78FA:  LD      (HL),C
 
 TIMEF:
 J7900:  _RST    CHRGTR                  ; get next BASIC character
-        PUSH    HL
-        LD      HL,(JIFFY)
+        PUSH    HL                      ; store BASIC pointer
+        LD      HL,(JIFFY)              ; current JIFFY value
         CALL    CONSUI                  ; convert unsigned integer to single real
-        POP     HL
+        POP     HL                      ; restore BASIC pointer
         RET
 
 ;       Subroutine      CSRLIN function
@@ -1361,9 +1373,9 @@ J7900:  _RST    CHRGTR                  ; get next BASIC character
 
 CSRLIN:
 J790A:  _RST    CHRGTR                  ; get next BASIC character
-        PUSH    HL
+        PUSH    HL                      ; store BASIC pointer
         LD      A,(CSRY)
-        JR      J7932
+        JR      J7932                   ; decrease, convert signed byte to integer and store in DAC, restore BASIC pointer and quit
 
 ;       Subroutine      TIME statement
 ;       Inputs          ________________________
@@ -1373,7 +1385,7 @@ TIMES:
 C7911:  _RST    SYNCHR
         DEFB    0EFH                    ; check for =
         CALL    GETUIN                  ; evaluate address operand
-        LD      (JIFFY),DE
+        LD      (JIFFY),DE              ; update JIFFY
         RET
 
 ;       Subroutine      PLAY function
@@ -1394,8 +1406,8 @@ J7929:  RRCA                            ; this voice active ?
         LD      A,0
         JR      NC,J7933                ; voice not active, return 0
 J7932:  DEC     A
-J7933:  CALL    CONIA
-        POP     HL
+J7933:  CALL    CONIA                   ; convert signed byte to integer and store in DAC
+        POP     HL                      ; restore BASIC pointer
         RET
 
 J7938:  AND     07H                     ; all voices inactive ?
@@ -1423,7 +1435,7 @@ C794C:  CALL    CONINT                  ; check for byte value
         CP      05H
 J7951:  JP      NC,FCERR                ; illegal function call
         CALL    GTTRIG
-J7957:  JP      CONIA
+J7957:  JP      CONIA                   ; convert signed byte to integer and store in DAC
 
 ;       Subroutine      PDL function
 ;       Inputs          ________________________
@@ -1478,7 +1490,7 @@ C7980:  ld      bc,FCERR
         _RST    CHRGTR                  ; end of statement ?
         jr      z,A79BC			; yep,
 A799A:  _RST    SYNCHR
-        db      ','
+        defb    ','
         jr      z,A79BC
         cp      02CH
         jr      z,A79AF
@@ -1492,7 +1504,7 @@ A799A:  _RST    SYNCHR
         _RST    CHRGTR                  ; end of statement ?
         jr      z,A79BC			; yep,
 A79AF:  _RST    SYNCHR
-        db      ','
+        defb    ','
         call    GETBYT
         pop     de
         cp      010H
@@ -1531,8 +1543,8 @@ C79CC:  call    H.SCRE
         _RST    CHRGTR                  ; end of statement ?
         ret     z			; yep, quit
 A79EA:  _RST    SYNCHR
-        db      ','
-        cp      02CH
+        defb    ','
+        cp      ','
         jr      z,A7A09
         call    GETBYT
         cp      004H
@@ -1548,7 +1560,7 @@ A79EA:  _RST    SYNCHR
         _RST    CHRGTR                  ; end of statement ?
         ret     z			; yep, quit
 A7A09:  _RST    SYNCHR
-        db      ','
+        defb    ','
         cp      02CH
         jr      z,A7A18
         call    GETBYT
@@ -1557,7 +1569,7 @@ A7A09:  _RST    SYNCHR
         _RST    CHRGTR                  ; end of statement ?
         ret     z			; yep, quit
 A7A18:  _RST    SYNCHR
-        db      ','
+        defb    ','
         cp      02CH
         jr      z,A7A24
         call    GETCSP
@@ -1565,7 +1577,7 @@ A7A18:  _RST    SYNCHR
         _RST    CHRGTR                  ; end of statement ?
         ret     z			; yep, quit
 A7A24:  _RST    SYNCHR
-        db      ','
+        defb    ','
         call    GETBYT
         ld      (NTMSXP),a
         ret
@@ -1591,7 +1603,7 @@ A7A41:  ld      de,LOW.
 ;       Outputs         ________________________
 
 SPRITE:
-C7A48:  CP      "$"
+C7A48:  CP      '$'
         JP      NZ,SPRITT
         LD      A,(SCRMOD)
         AND     A
@@ -1648,7 +1660,7 @@ J7A84:  CALL    C7A9F
         POP     BC
         POP     HL
         CALL    LDIRMV
-        JP      PUTNEW                  ; push temporary descriptor to temporary desciptor heap and quit
+        JP      PUTNEW                  ; push temporary descriptor to temporary descriptor heap and quit
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
@@ -1661,7 +1673,7 @@ C7A9F:  _RST    CHRGTR                  ; get next BASIC character
 ;       Outputs         ________________________
 
 C7AA0:  _RST    SYNCHR
-        DEFB    "$"                     ; check for $
+        DEFB    '$'                     ; check for $
         LD      A,255                   ; max is 255
         CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
         PUSH    HL
@@ -1688,8 +1700,8 @@ J7AAF:  DEC     B                       ; PUT ?
         CALL    CALATR
         EX      (SP),HL
         _RST    SYNCHR
-        DEFB    ","                     ; check for ,
-        CP      ","
+        DEFB    ','                     ; check for ,
+        CP      ','
         JR      Z,J7AF9
         CALL    SCAN1                   ; evaluate complex graphic coordinatepair
         EX      (SP),HL
@@ -1720,8 +1732,8 @@ J7AE1:  INC     HL
         RET     Z			; yep, quit
         PUSH    BC
 J7AF9:  _RST    SYNCHR
-        DEFB    ","                     ; check for ,
-        CP      ","
+        DEFB    ','                     ; check for ,
+        CP      ','
         JR      Z,J7B1D
         CALL    GETBYT                  ; evaluate byte operand
         CP      16                      ; colornumber 0-15 ?
@@ -1744,7 +1756,7 @@ J7AF9:  _RST    SYNCHR
         RET     Z			; yep, quit
         PUSH    BC
 J7B1D:  _RST    SYNCHR
-        DEFB    ","                     ; check for ,
+        DEFB    ','                     ; check for ,
         CALL    GETBYT                  ; evaluate byte operand
         CALL    GSPSIZ
         LD      A,E
@@ -1769,7 +1781,7 @@ C7B37:  ld      a,7
         call    C7C08
         push    de
         _RST    SYNCHR
-        db      0EFH			; check for =
+        defb    0EFH			; check for =
         call    GETBYT
         pop     bc
         ld      b,a
@@ -1802,8 +1814,8 @@ C7B5A:  ld      a,19
         ld      d,000H
         push    de
         _RST    SYNCHR
-        db      0EFH			; check for =
-        call    FRMEVL                  ; eval expression
+        defb    0EFH			; check for =
+        call    FRMEVL                  ; evaluate expression
         ex      (sp),hl
         push    hl
         call    A7BFE
@@ -1891,12 +1903,12 @@ A7BD9:  ld      a,(hl)
 ;       Outputs         ________________________
 
 VPOKE:
-C7BE2:  call    FRMEVL                  ; eval expression
+C7BE2:  call    FRMEVL                  ; evaluate expression
         push    hl
         call    A7BFE
         ex      (sp),hl
         _RST    SYNCHR
-        db      ','			; check for ,
+        defb    ','			; check for ,
         call    GETBYT
         ex      (sp),hl
         call    WRTVRM
@@ -1924,13 +1936,13 @@ A7BFE:  call    FRCINT
 
 C7C08:  PUSH    AF
         _RST    SYNCHR
-        DEFB    "("                     ; check for (
+        DEFB    '('                     ; check for (
         CALL    GETBYT                  ; evaluate byte operand
         POP     AF
         CP      E
         JR      C,J7C73
         _RST    SYNCHR
-        DEFB    ")"                     ; check for )
+        DEFB    ')'                     ; check for )
         LD      A,E
         RET
 

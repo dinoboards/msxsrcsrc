@@ -152,8 +152,8 @@ C6A0E:  CALL    FRMEVL                  ; evaluate expression
         LD      H,(HL)
         LD      L,E                     ; pointer to string
         LD      E,A                     ; size of string
-        CALL    PARDEV                  ; parse devicename
-        PUSH    AF                      ; save devicecode
+        CALL    PARDEV                  ; parse device name
+        PUSH    AF                      ; store device code
         LD      BC,FILNAM
         LD      D,11
         INC     E
@@ -162,7 +162,7 @@ J6A29:  DEC     E                       ; end of filespecification string ?
         LD      A,(HL)
         CP      20H                     ; control characters ?
         JR      C,J6A47                 ; yep, bad filename error
-        CP      "."                     ; filename/extension seperator ?
+        CP      '.'                     ; filename/extension seperator ?
         JR      Z,J6A4D                 ; yep, handle extension
         LD      (BC),A
         INC     BC
@@ -171,7 +171,7 @@ J6A29:  DEC     E                       ; end of filespecification string ?
         JR      NZ,J6A29                ; nope, next
 J6A3B:  POP     AF
         PUSH    AF
-        LD      D,A                     ; devicecode
+        LD      D,A                     ; device code
         LD      A,(FILNAM+0)
         INC     A                       ; first character FILNAME charactercode 255 ?
         JR      Z,J6A47                 ; yep, bad filename error (because this is internally used as runflag)
@@ -196,7 +196,7 @@ J6A4D:  LD      A,D
         DEC     D
         JR      J6A4D
 
-J6A61:  LD      A," "
+J6A61:  LD      A,' '
         LD      (BC),A
         INC     BC
         DEC     D
@@ -248,17 +248,17 @@ J6A99:  POP     HL
         SCF				; i/o channel device is not a diskdrive
         RET
 
-;       Subroutine      evaluate i/o channel operand and set current i/o channel
+;       Subroutine      evaluate i/o channel operand and set current i/o channel, store BASIC pointer on stack
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 C6A9E:  DEC     HL
         _RST    CHRGTR                  ; get next BASIC character
-        CP      "#"
+        CP      '#'
         CALL    Z,CHRGTR                ; yep, get next BASIC character
         CALL    GETBYT                  ; evaluate byte operand
-        EX      (SP),HL
-        PUSH    HL
+        EX      (SP),HL                 ; store BASIC pointer, restore return address
+        PUSH    HL                      ; store return address
 
 ;       Subroutine      redirect interpreter input/output to file
 ;       Inputs          A = i/o channel number
@@ -290,11 +290,11 @@ C6AB7:  LD      BC,FINPRT
         CP      9CH                     ; OUT token ?
         JR      Z,J6ADC                 ; yep, may be OUTPUT
         _RST    SYNCHR
-        DEFB    "A"
+        DEFB    'A'
         _RST    SYNCHR
-        DEFB    "P"
+        DEFB    'P'
         _RST    SYNCHR
-        DEFB    "P"
+        DEFB    'P'
         _RST    SYNCHR
         DEFB    081H                    ; check for APPEND
         LD      E,8                     ; append file mode
@@ -308,12 +308,12 @@ J6ADC:  _RST    CHRGTR                  ; get next BASIC character
 
 J6AE3:  _RST    CHRGTR                  ; get next BASIC character
 J6AE4:  _RST    SYNCHR
-        DEFB    "A"
+        DEFB    'A'
         _RST    SYNCHR
-        DEFB    "S"                     ; check for AS
+        DEFB    'S'                     ; check for AS
         PUSH    DE
         LD      A,(HL)
-        CP      "#"
+        CP      '#'
         CALL    Z,CHRGTR                ; yep, get next BASIC character
         CALL    GETBYT                  ; evaluate byte operand
         OR      A                       ; i/o channel 0 ?
@@ -322,7 +322,7 @@ J6AE4:  _RST    SYNCHR
         DEFB    01EH                    ; LD E,xx, trick to skip next instruction
 
 ;       Subroutine      open i/o channel
-;       Inputs          A = i/o channel number, D = devicecode, E = filemode, HL = BASIC pointer
+;       Inputs          A = i/o channel number, D = device code, E = file mode, HL = BASIC pointer
 ;       Outputs         ________________________
 
 OPNFIL:
@@ -410,19 +410,19 @@ C6B5D:  DEFB    0F6H                    ; OR 0AFH, so A<>0 and Cx=0 (RUN flag no
 
 MERGE:
 C6B5E:  XOR     A                       ; A=0 and Cx=0 (RUN flag not set)
-        PUSH    AF                      ; save flags
+        PUSH    AF                      ; store flags
         CALL    FILEVL                  ; evaluate filespecification
         CALL    H.MERG
         POP     AF
         PUSH    AF
         JR      Z,J6B76                 ; MERGE statement, skip ,R option check, do close i/o channels
         LD      A,(HL)
-        SUB     ","
+        SUB     ','
         OR      A
         JR      NZ,J6B76                ; no ,R option, do close i/o channels
         _RST    CHRGTR                  ; get next BASIC character
         _RST    SYNCHR
-        DEFB    "R"                     ; check for R
+        DEFB    'R'                     ; check for R
         POP     AF
         SCF                             ; set RUN flag
         PUSH    AF                      ; do not close i/o channels
@@ -464,9 +464,9 @@ C6BA3:  CALL    FILEVL                  ; evaluate filespecification
         SCF
         JR      Z,J6BB7                 ; yep (no ,A option), use binairy save
         _RST    SYNCHR
-        DEFB    ","
+        DEFB    ','
         _RST    SYNCHR
-        DEFB    "A"                     ; check for ,A
+        DEFB    'A'                     ; check for ,A
         OR      A
         LD      E,2                     ; use ascii save
 J6BB7:  PUSH    AF
@@ -507,7 +507,7 @@ J6BD4:  CALL    H.BINL
         RET
 
 J6BE7:  JR      NZ,J6C02                ; not end of statement, evaluate channels
-        PUSH    HL                      ; save basic pointer
+        PUSH    HL                      ; store BASIC pointer
 J6BEA:  PUSH    BC
         PUSH    AF
         LD      DE,I6BF3
@@ -520,18 +520,18 @@ I6BF3:  POP     AF
         POP     BC
         DEC     A
         JP      P,J6BEA                 ; next channel
-        POP     HL
+        POP     HL                      ; restore BASIC pointer
         RET
 
 I6BFB:  POP     BC                      ; close i/o channel routine
         POP     HL                      ; basic pointer
         LD      A,(HL)
-        CP      ","
+        CP      ','
         RET     NZ
         _RST    CHRGTR                  ; get next BASIC character
 J6C02:  PUSH    BC
         LD      A,(HL)
-        CP      "#"
+        CP      '#'
         CALL    Z,CHRGTR                ; yep, get next BASIC character
         CALL    GETBYT                  ; evaluate byte operand
         EX      (SP),HL
@@ -576,7 +576,7 @@ C6C2A:  LD      A,1
 ;       Outputs         ________________________
 
 FILES:
-C6C2F:  CALL    H.FILE
+C6C2F:  CALL    H.FILE                  ; FILES hook
         JP      FCERR                   ; illegal function call
 
 ;       Subroutine      do random input/output
@@ -584,14 +584,14 @@ C6C2F:  CALL    H.FILE
 ;       Outputs         ________________________
 
 GETPUT:
-J6C35:  PUSH    AF
-        CALL    C6A9E			; evaluate i/o channel operand and set current i/o channel
+J6C35:  PUSH    AF                      ; store GET/PUT flag
+        CALL    C6A9E			; evaluate i/o channel operand and set current i/o channel, store BASIC pointer on stack
         JR      C,J6C41			; device is not a diskdrive,
-        CALL    H.DGET
+        CALL    H.DGET                  ; GET/PUT for disk hook
         JP      DERNMF                  ; bad filename
 
-J6C41:  POP     DE
-        POP     BC
+J6C41:  POP     DE                      ; dispose BASIC pointer
+        POP     BC                      ; restore GET/PUT flag
         LD      A,4                     ; function random i/o
         JP      GENDSP                  ; i/o function dispatcher
 
@@ -606,7 +606,7 @@ C6C48:  PUSH    HL
         PUSH    AF
         CALL    ISDDEV                  ; current i/o channel a diskdrive device ?
         JR      NC,J6C57                ; nope,
-        CALL    H.FILO                  ; sequential ouput for disk hook
+        CALL    H.FILO                  ; sequential output for disk hook
         JP      DERNMF                  ; bad filename
 
 J6C57:  POP     AF
@@ -656,79 +656,79 @@ J6C7F:  LD      A,8                     ; function sequential input
 FIXINP:
 J6C87:  _RST    CHRGTR                  ; get next BASIC character
         _RST    SYNCHR
-        DEFB    "$"
+        DEFB    '$'
         _RST    SYNCHR
-        DEFB    "("                     ; check for $(
-        PUSH    HL
+        DEFB    '('                     ; check for $(
+        PUSH    HL                      ; store BASIC pointer
         LD      HL,(PTRFIL)
-        PUSH    HL                      ; save interpreter input/output device
+        PUSH    HL                      ; store interpreter input/output device
         LD      HL,0
         LD      (PTRFIL),HL             ; interpreter input/output device = keyboard/screen
-        POP     HL
-        EX      (SP),HL
+        POP     HL                      ; restore interpreter input/output device
+        EX      (SP),HL                 ; store interpreter input/output device, restore BASIC pointer
         CALL    GETBYT                  ; evaluate byte operand
-        PUSH    DE
+        PUSH    DE                      ; store string size
         LD      A,(HL)
-        CP      ","
-        JR      NZ,J6CB3
+        CP      ','                     ; operand seperator ?
+        JR      NZ,J6CB3                ; nope, skip i/o channel operand, use keyboard
         _RST    CHRGTR                  ; get next BASIC character
-        CALL    C6A9E			; evaluate i/o channel operand and set current i/o channel
+        CALL    C6A9E			; evaluate i/o channel operand and set current i/o channel, store BASIC pointer on stack
         CP      1			; sequential input mode ?
         JP      Z,J6CB0			; yep,
         CP      4			; random i/o mode ?
         JP      NZ,DERRPE		; nope, input past end error
-J6CB0:  POP     HL
-        XOR     A
+J6CB0:  POP     HL                      ; restore BASIC pointer
+        XOR     A                       ; clear keyboard flag
         LD      A,(HL)
-J6CB3:  PUSH    AF
+J6CB3:  PUSH    AF                      ; store keyboard flag
         _RST    SYNCHR
-        DEFB    ")"                     ; check for )
-        POP     AF
-        EX      (SP),HL
-        PUSH    AF
+        DEFB    ')'                     ; check for )
+        POP     AF                      ; restore keyboard flag
+        EX      (SP),HL                 ; store BASIC pointer, restore string size
+        PUSH    AF                      ; store keyboard flag
         LD      A,L
-        OR      A
-        JP      Z,FCERR                 ; illegal function call
-        PUSH    HL
+        OR      A                       ; string size = 0 ?
+        JP      Z,FCERR                 ; yep, illegal function call
+        PUSH    HL                      ; store string size
         CALL    STRINI                  ; allocate temporary string
         EX      DE,HL
-        POP     BC
-J6CC4:  POP     AF
-        PUSH    AF
-        JR      Z,J6CE2
-        CALL    CHGET
-        PUSH    AF
-        CALL    CKCNTC
-        POP     AF
-J6CD0:  LD      (HL),A
+        POP     BC                      ; restore string size
+J6CC4:  POP     AF                      ; restore keyboard flag
+        PUSH    AF                      ; store keyboard flag
+        JR      Z,J6CE2                 ; input from i/o channel,
+        CALL    CHGET                   ; get character from keyboard
+        PUSH    AF                      ; store character
+        CALL    CKCNTC                  ; handle CTRL/STOP or STOP pressed, no resume
+        POP     AF                      ; restore character
+J6CD0:  LD      (HL),A                  ; store character in string
         INC     HL
-        DEC     C
-        JR      NZ,J6CC4
-        POP     AF
-        POP     BC
-        POP     HL
+        DEC     C                       ; finished string ?
+        JR      NZ,J6CC4                ; nope, next character
+        POP     AF                      ; restore keyboard flag
+        POP     BC                      ; restore BASIC pointer
+        POP     HL                      ; restore interpreter input/output device
         CALL    H.RSLF
         LD      (PTRFIL),HL             ; restore interpreter input/output device
-        PUSH    BC
-        JP      PUTNEW                  ; push temporary descriptor to temporary desciptor heap and quit
+        PUSH    BC                      ; store BASIC pointer
+        JP      PUTNEW                  ; push temporary descriptor to temporary descriptor heap and quit
 
 J6CE2:  CALL    INDSKC                  ; get sequential input
         JP      C,DERRPE                ; error, input past end error
-        JR      J6CD0
+        JR      J6CD0                   ; continue
 
-;       Subroutine      __________________________
-;       Inputs          ________________________
+;       Subroutine      clear buffer of interpreter i/o channel
+;       Inputs          HL = pointer to i/o channel
 ;       Outputs         ________________________
 
 C6CEA:  CALL    C6CFB			; get pointer to buffer of interpreter i/o channel
-        PUSH    HL
-        LD      B,0
+        PUSH    HL                      ; store pointer to channel buffer
+        LD      B,0                     ; 256 bytes
         CALL    C6CF5			; clear i/o channel buffer
-POPHR2: POP     HL
+POPHR2: POP     HL                      ; restore pointer to channel buffer
         RET
 
 ;       Subroutine      clear i/o channel buffer
-;       Inputs          ________________________
+;       Inputs          HL = pointer to channel buffer, B = number of bytes to clear
 ;       Outputs         ________________________
 
 C6CF5:  XOR     A
