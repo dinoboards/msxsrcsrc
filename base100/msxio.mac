@@ -552,18 +552,18 @@ A046F:  in      a,(0AAH)
 ;       Outputs         ________________________
 
 INITIO:
-A049D:  ld      a,7                     ; register = 7
+A049D:  ld      a,7                     ; PSG register = 7
         ld      e,10000000B             ; IOB = input, IOA = output, noise = 0, tone = 0
-        call    WRTPSG                  ; WRTPSG
+        call    WRTPSG                  ; write PSG register
         ld      a,15                    ; register = 15 (IOB port)
         ld      e,11001111B
-        call    WRTPSG                  ; WRTPSG
+        call    WRTPSG                  ; write PSG register
         ld      a,11                    ; register = 11
         ld      e,a
-        call    WRTPSG                  ; WRTPSG
+        call    WRTPSG                  ; write PSG register
         call    INGI                    ; read PSG IOA port
         and     01000000B
-        ld      (KANAMD),a
+        ld      (KANAMD),a              ; store japanese keyboard layout
         ld      a,0FFH
         out     (090H),a                ; LPT strobe off
 
@@ -591,9 +591,9 @@ A04D3:  push    hl
         push    af                      ; store voice
         call    INITQ                   ; initialize queue
         pop     af                      ; restore voice
-        add     a,8
+        add     a,8                     ; PSG register = volume of voice
         ld      e,0                     ; volume = 0 (silence)
-        call    WRTPSG                  ; WRTPSG
+        call    WRTPSG                  ; write PSG register
         sub     8
         push    af                      ; store voice
         ld      l,15                    ; offset = octave
@@ -613,7 +613,7 @@ A04D3:  push    hl
         jr      c,A04D3                 ; nope, next voice
         ld      a,7                     ; register = 7
         ld      e,10111000B             ; IOB = input, IOA = output, noise = 7, tone = 0
-        call    WRTPSG                  ; WRTPSG
+        call    WRTPSG                  ; write PSG register
         jp      POPALL                  ; quit
 
 T0508:  defb    4                       ; default octave = 4
@@ -674,7 +674,7 @@ A0538:  call    DISSCR                  ; disable screen
 
 ENASCR:
 A0570:  ld      a,(RG1SAV)
-        or      01000000B
+        or      01000000B               ; set enable screen bit
         jr      A057C
 
 ;       Subroutine      DISSCR (disable screen)
@@ -683,7 +683,7 @@ A0570:  ld      a,(RG1SAV)
 
 DISSCR:
 A0577:  ld      a,(RG1SAV)
-        and     10111111B
+        and     10111111B               ; clear enable screen bit
 A057C:  ld      b,a
         ld      c,1                     ; register = 1
 
@@ -698,7 +698,11 @@ A057F:  ld      a,b                     ; store data
         ld      a,c                     ; VDP register
         or      10000000B               ; VDP command = write VDP register
         out     (099H),a                ; execute VDP command
-        ei                              ; enable maskable interrupts
+
+        IF      OPTM EQ 0
+        ei                              ; enable maskable interrupts (BUG: interrupts should be enabled after RGSAV update!)
+        ENDIF
+
         push    hl
         ld      a,b
         ld      b,0
@@ -706,6 +710,11 @@ A057F:  ld      a,b                     ; store data
         add     hl,bc
         ld      (hl),a                  ; update VDP register value in RGSAV (because VDP register can not be read)
         pop     hl
+
+        IF      OPTM NE 0
+        ei                              ; enable maskable interrupts
+        ENDIF
+
         ret
 
 ;       Subroutine      SETTXT (setup VDP for screen mode 0)
@@ -999,7 +1008,7 @@ A0714:  in      a,(098H)                ; read byte from VRAM
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-A071E:  call    H.INIP
+A071E:  call    H.INIP                  ; hook initialize pattern table
         ld      hl,(CGPBAS)             ; pattern table address
         call    SETWRT                  ; setup VDP for VRAM write
         ld      a,(CGPNT+0)             ; slotid system character set
@@ -1099,7 +1108,7 @@ A078D:  ld      a,' '
         ld      b,24
 A079A:  ld      (hl),b
         inc     hl
-        djnz    A079A                   ; clear LINTTB
+        djnz    A079A                   ; all logical lines are not expanded
         jp      FNKSB                   ; add function key display if enabled
 
 ;       Subroutine      clear screen mode 2
@@ -1388,14 +1397,14 @@ A08BC:  push    hl
         push    de
         push    bc
         push    af                      ; store character
-        call    H.CHPU
+        call    H.CHPU                  ; hook character to display
         call    A0B9F                   ; graphic screen mode ?
         jr      nc,POPALL               ; yep, quit
         call    CKERCS                  ; remove cursor when visable
         pop     af                      ; restore character
         push    af                      ; store character
         call    A08DF                   ; display character (with control character handling)
-        call    CKDPCS                  ; add cursor when visable
+        call    CKDPCS                  ; display cursor when visable
         ld      a,(CSRX)
         dec     a
         ld      (TTYPOS),a              ; update TTYPOS
@@ -1410,6 +1419,7 @@ A08DB:  pop     bc
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CHPUT1:
 A08DF:  call    CNVCHR                  ; convert graphic character
         ret     nc                      ; graphic header character, quit
         ld      c,a
@@ -1443,8 +1453,13 @@ A0908:  call    A0A61                   ; cursor down if possible
         ld      l,1                     ; row = 1
         jp      A0A88                   ; clear line
 
-A0914:  ld      hl,T092F-2
-        ld      c,12
+A0914:  ld      hl,T092F-2              ; control code function table
+        ld      c,12                    ; number of entries control code function table
+
+;       Subroutine      execute function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
 INDJMP:
 A0919:  inc     hl
         inc     hl
@@ -1461,10 +1476,11 @@ A0919:  inc     hl
         call    A092D                   ; execute function
         xor     a
         ret
-;
+
+JMPBC:
 A092D:  push    bc
         ret
-;
+
 T092F:  defb    007H
         defw    BEEP                    ; BEEP
         defb    008H
@@ -1523,76 +1539,86 @@ T0953:  defb    'j'
 
 ; ESC x sequence
 
-A0980:  ld      a,1
+A0980:  ld      a,1                     ; ESC flag = ESC x
         defb    001H                    ; LD BC,xxxx (trick to skip the next instruction)
 
 ; ESC y sequence
 
-A0983:  ld      a,2
+A0983:  ld      a,2                     ; ESC flag = ESC y
         defb    001H                    ; LD BC,xxxx (trick to skip the next instruction)
 
 ; ESC Y sequence
 
-A0986:  ld      a,4
+A0986:  ld      a,4                     ; ESC flag = ESC Y (first parameter)
         defb    001H                    ; LD BC,xxxx (trick to skip the next instruction)
 
 ; start of ESC sequence
 
-A0989:  ld      a,0FFH
+A0989:  ld      a,0FFH                  ; ESC flag = start of ESC sequence
         ld      (ESCCNT),a
         ret
 
 ; in ESC sequence
 
-A098F:  jp      p,A099D                 ; handle long ESC sequences
-        ld      (hl),0                  ; next is no ESC anymore
-        ld      a,c
-        ld      hl,T0953-2
-        ld      c,15
-        jp      A0919                   ; handle function
-;
-A099D:  dec     a
-        jr      z,A09BE                 ; ESC "x"
-        dec     a
-        jr      z,A09C8                 ; ESC "y"
-        dec     a
-        ld      (hl),a                  ; ESC "Y" ends ?
+A098F:  jp      p,A099D                 ; handle ESC sequences with parameter(s)
+        ld      (hl),0                  ; clear ESC flag
+        ld      a,c                     ; restore character
+        ld      hl,T0953-2              ; ESC function table
+        ld      c,15                    ; number of entries in ESC function table
+        jp      INDJMP                  ; execute function
+
+A099D:  dec     a                       ; ESC x ?
+        jr      z,A09BE                 ; yep,
+        dec     a                       ; ESC y ?
+        jr      z,A09C8                 ; yep,
+        dec     a                       ; ESC Y (second parameter) ?
+        ld      (hl),a                  ; update ESC flag
         ld      a,(LINLEN)              ; number of columns on row
         ld      de,CSRX
-        jr      z,A09B3
-        ld      (hl),3
-        call    A0C32                   ; get max. line number
-        dec     de
-A09B3:  ld      b,a
-        ld      a,c
-        sub     32
-        cp      b
-        inc     a
-        ld      (de),a
-        ret     c
+        jr      z,A09B3                 ; yep, validate and update location row
+
+; ESC Y (first parameter)
+
+        ld      (hl),3                  ; ESC flag = ESC Y (second parameter)
+        call    GETLEN                  ; get number of usable screen lines
+        dec     de                      ; CSRY
+
+; validate and update location
+
+A09B3:  ld      b,a                     ; store maximum
+        ld      a,c                     ; restore parameter character
+        sub     32                      ; 0 based
+        cp      b                       ; valid parameter ?
+        inc     a                       ; 1 based
+        ld      (de),a                  ; update location
+        ret     c                       ; yep, quit
         ld      a,b
-        ld      (de),a
+        ld      (de),a                  ; update location with maximum
         ret
-;
-A09BE:  ld      (hl),a
+
+; ESC x
+
+A09BE:  ld      (hl),a                  ; clear ESC flag
         ld      a,c
-        sub     '4'
-        jr      z,A09CF                 ; ESC "x4", block cursor
-        dec     a
-        jr      z,A09D6                 ; ESC "x5", cursor invisable
-        ret
-;
-A09C8:  ld      (hl),a
-        ld      a,c
-        sub     '4'
-        jr      nz,A09D3
-        inc     a                       ; ESC "y4", stripe cursor
+        sub     '4'                     ; ESC x4 ?
+        jr      z,A09CF                 ; yep, cursor = block cursor
+        dec     a                       ; ESC x5 ?
+        jr      z,A09D6                 ; yep, cursor = invisable
+        ret                             ; nope, quit (ignored)
+
+; ESC y
+
+A09C8:  ld      (hl),a                  ; clear ESC flag
+        ld      a,c                     ; restore character
+        sub     '4'                     ; ESC y4 ?
+        jr      nz,A09D3                ; nope,
+        inc     a                       ; cursor style = stripe cursor
 A09CF:  ld      (CSTYLE),a
         ret
-;
-A09D3:  dec     a
-        ret     nz
-        inc     a                       ; ESC "y5", cursor visable
+
+A09D3:  dec     a                       ; ESC y5 ?
+        ret     nz                      ; nope, quit (ignored)
+        inc     a                       ; yep, cursor = visable
 A09D6:  ld      (CSRSR),a
         ret
 
@@ -1603,9 +1629,9 @@ A09D6:  ld      (CSRSR),a
 A09DA:  ld      a,(CSRSR)
         and     a                       ; cursor already visable ?
         ret     nz                      ; yep, quit
-        jr      A09E6                   ; add cursor
+        jr      A09E6                   ; display cursor
 
-;       Subroutine      add cursor when visable
+;       Subroutine      display cursor when visable
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -1614,7 +1640,7 @@ A09E1:  ld      a,(CSRSR)
         and     a                       ; cursor visable ?
         ret     z                       ; nope, quit
 
-;       Subroutine      add cursor
+;       Subroutine      display cursor
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -1728,8 +1754,8 @@ A0A5B:  call    A0A44                   ; cursor right if possible
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-A0A61:  call    A0C32                   ; get max. line number
-        cp      l                       ; at last line number ?
+A0A61:  call    GETLEN                  ; get number of usable screen lines
+        cp      l                       ; last line number ?
         ret     z                       ; yep, quit
         jr      c,A0A6D
         inc     l
@@ -1776,15 +1802,15 @@ A0A85:  call    A0A81                   ; cursor to start of line
 ;       Outputs         ________________________
 
 DELLN0:
-A0A88:  call    A0C32                   ; get max. line number
-        sub     l
-        ret     c
-        jp      z,A0AEC                 ; clear line
+A0A88:  call    GETLEN                  ; get number of usable screen lines
+        sub     l                       ; valid line number ?
+        ret     c                       ; nope, quit
+        jp      z,A0AEC                 ; clear line and quit
         push    hl                      ; store location
         push    af
         ld      c,a
         ld      b,0
-        call    A0C1D                   ; get pointer to logical line expand flag
+        call    GETTRM                  ; get pointer to logical line expand flag
         ld      l,e
         ld      h,d
         inc     hl
@@ -1815,17 +1841,17 @@ A0AB4:  call    A0A81                   ; cursor to start of line
 ;       Outputs         ________________________
 
 INSLN0:
-A0AB7:  call    A0C32                   ; get max. line number
-        ld      h,a
-        sub     l
-        ret     c
-        jp      z,A0AEC                 ; clear line
-        ld      l,h
+A0AB7:  call    GETLEN                  ; get number of usable screen lines
+        ld      h,a                     ; store number of usable screen lines
+        sub     l                       ; valid line number ?
+        ret     c                       ; nope, quit
+        jp      z,A0AEC                 ; last line, clear line and quit
+        ld      l,h                     ; restore number of usable screen lines
         push    hl
         push    af
         ld      c,a
         ld      b,0
-        call    A0C1D                   ; get pointer to logical line expand flag
+        call    GETTRM                  ; get pointer to logical line expand flag
         ld      l,e
         ld      h,d
         push    hl
@@ -1868,7 +1894,7 @@ A0AEC:  ld      h,1                     ; column = 1
 EOL:
 A0AEE:  call    TERMIN                  ; terminate logical line
         push    hl                      ; store location
-        call    A0BF2                   ; convert location to VRAM address
+        call    VADDR                   ; convert location to VRAM address
         call    SETWRT                  ; setup VDP for VRAM write
         pop     hl                      ; restore location
 A0AF9:  ld      a,' '
@@ -1886,13 +1912,13 @@ A0AF9:  ld      a,' '
 A0B05:  push    hl                      ; store location
         call    A0AEE                   ; clear line from location
         pop     hl                      ; restore location
-        call    A0C32                   ; get max. line number
-        cp      l
-        ret     c
-        ret     z
-        ld      h,1
-        inc     l
-        jr      A0B05
+        call    GETLEN                  ; number of usable screen lines
+        cp      l                       ; valid line number ?
+        ret     c                       ; nope, quit
+        ret     z                       ; last line, quit
+        ld      h,1                     ; column = 1
+        inc     l                       ; next line
+        jr      A0B05                   ; next
 
 ;       Subroutine      ERAFNK (remove function key display)
 ;       Inputs          ________________________
@@ -1992,12 +2018,14 @@ A0B94:  ld      hl,(CRTCNT)             ; row = last row of screen
 ;       Inputs          ________________________
 ;       Outputs         Cx set if text screen mode
 
+SETCHK:
 A0B9C:  ld      (CNSDFG),a              ; update function key display flag
 
 ;       Subroutine      graphic screen mode ?
 ;       Inputs          ________________________
 ;       Outputs         Cx set if text screen mode
 
+CHKSCR:
 A0B9F:  ld      a,(SCRMOD)
         cp      2                       ; in graphic screen mode ?
         ret
@@ -2016,7 +2044,7 @@ A0BA5:  push    hl
 
 A0BAA:  push    hl                      ; store location
         ld      h,1                     ; column = 1
-        call    A0BF2                   ; convert location to VRAM address
+        call    VADDR                   ; convert location to VRAM address
         ld      a,(LINLEN)
         ld      c,a                     ; number of columns = number of columns on row
 A0BB4:  ld      b,0
@@ -2039,7 +2067,7 @@ A0BBE:  push    hl
 
 A0BC3:  push    hl                      ; store location
         ld      h,1                     ; column = 1
-        call    A0BF2                   ; convert location to VRAM address
+        call    VADDR                   ; convert location to VRAM address
         ld      a,(LINLEN)
         ld      c,a                     ; number of columns = number of columns on row
 A0BCD:  ld      b,0
@@ -2055,7 +2083,7 @@ A0BCD:  ld      b,0
 
 GETVRM:
 A0BD8:  push    hl                      ; store location
-        call    A0BF2                   ; convert location to VRAM address
+        call    VADDR                   ; convert location to VRAM address
         call    SETRD                   ; setup VDP for VRAM read
         ex      (sp),hl
         ex      (sp),hl
@@ -2070,7 +2098,7 @@ A0BD8:  push    hl                      ; store location
 
 PUTVRM:
 A0BE6:  push    hl                      ; store location
-        call    A0BF2                   ; convert location to VRAM address
+        call    VADDR                   ; convert location to VRAM address
         call    SETWRT                  ; setup VDP for VRAM write
         ld      a,c
         out     (098H),a                ; write byte to VRAM
@@ -2081,6 +2109,7 @@ A0BE6:  push    hl                      ; store location
 ;       Inputs          H = column (1 based), L = row (1 based)
 ;       Outputs         HL = VRAM address
 
+VADDR:
 A0BF2:  push    bc
         ld      e,h
         ld      h,0
@@ -2127,7 +2156,7 @@ A0C1D:  push    hl
         ld      a,(hl)
         ex      de,hl
         pop     hl
-        and     a
+        and     a                       ; is logical line expanded ?
         ret
 
 ;       Subroutine      terminate logical line
@@ -2144,12 +2173,12 @@ A0C29:  defb    03EH                    ; LD A,xx: a trick to skip the next line
 UNTERM:
 A0C2A:  xor     a                       ; flag = expanded
 A0C2B:  push    af
-        call    A0C1D                   ; get pointer to logical line expand flag
+        call    GETTRM                  ; get pointer to logical line expand flag
         pop     af
         ld      (de),a                  ; update logical line expand flag
         ret
 
-;       Subroutine      get max. line number
+;       Subroutine      get number of usable screen lines
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -2298,6 +2327,7 @@ A0D02:  pop     ix
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+KEYCHK:
 A0D12:  in      a,(0AAH)
         and     0F0H
         ld      c,a
@@ -2319,6 +2349,7 @@ A0D1C:  ld      a,c
         ld      ix,READYR               ; start headloop
         jp      CALBAS                  ; call BASIC routine
 
+NOSTOP:
 A0D3A:  ld      de,OLDKEY+11
         ld      b,11                    ; 11 keyboard rows
 A0D3F:  dec     de
@@ -2343,6 +2374,7 @@ A0D49:
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+KEYCK4:
 A0D4E:  ld      b,11                    ; 11 keyboard rows
         ld      hl,OLDKEY
         ld      de,NEWKEY
@@ -2388,6 +2420,7 @@ A0D82:  call    A0D62                   ; keyboard buffer empty ?
 ;       Inputs          A = key row data
 ;       Outputs         ________________________
 
+KEYANY:
 A0D89:  push    hl
         push    de
         push    bc
@@ -2467,6 +2500,7 @@ A0D97:  rra                             ; this key being pressed ?
 ;       Outputs         ________________________
 ;       Remark          code identical among keyboard layout versions
 
+REQTRP:
 C0EF1:  LD      A,(HL)
         AND     00000001B               ; trap enabled ?
         RET     Z                       ; nope, quit
@@ -2506,6 +2540,7 @@ J0F43:  OUT     (0ABH),A
 ;       Outputs         ________________________
 ;       Remark          code identical among keyboard layout versions
 
+GENCLK:
 J0F64:  LD      A,(CLIKSW)
         AND     A                       ; key clicks enabled ?
         RET     Z                       ; nope, quit
@@ -2540,6 +2575,7 @@ J0F80:  OUT     (0ABH),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+UPDATE:
 C10C2:  inc     hl
         ld      a,l
         cp      LOW (KEYBUF+40)
@@ -2640,6 +2676,7 @@ A1113:  xor     a                       ; register = 0
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CSDLY1:
 A1133:  dec     bc
         ex      (sp),hl
         ex      (sp),hl
@@ -2652,6 +2689,7 @@ A1133:  dec     bc
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+ACTION:
 A113B:  ld      b,a                     ; store voice
         call    GETVCP                  ; get pointer to macro string info voice buffer
         dec     hl
@@ -2766,6 +2804,7 @@ A11C4:  ld      a,(MUSICF)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+XGETQ:
 A11E2:  ld      a,(QUEUEN)              ; current queue
         push    hl
         push    de
@@ -2803,6 +2842,7 @@ A1200:  call    A1226                   ; read keyboard row 8
 ;       Inputs          A = joystick port (0 or 1)
 ;       Outputs         ________________________
 
+SLSTCK:
 A120C:  ld      b,a                     ; store joystick port
         ld      a,15                    ; register = IOB
         di                              ; disable maskable interrupts (make sure no other PSG register is selected)
@@ -2823,6 +2863,7 @@ A121F:  out     (0A1H),a                ; write PSG register
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+GTROW8:
 A1226:  di                              ; disable maskable interrupts (make sure PPI port C is not changed)
         in      a,(0AAH)
         and     11110000B               ; clear keyboard bits
@@ -2992,6 +3033,7 @@ A131A:  ei
 ;       Inputs          ________________________
 ;       Outputs         D = X coordinate, E = Y coordinate, Cx = set when no sense
 
+REDCOD:
 A1320:  ld      c,00001010B             ; serial data = 1, both d0,d1 -> channel 3
         call    A1332                   ; read touchpad data
         ret     c                       ; no sense, quit (H <> 0)
@@ -3009,6 +3051,7 @@ A1320:  ld      c,00001010B             ; serial data = 1, both d0,d1 -> channel
 ;       Inputs          C = serial data in b3,b1 (channel)
 ;       Outputs         Cx = no sense, H = IOA port value
 
+REDPAD:
 A1332:  call    A135B                   ; wait for EOC, select chip
         ld      b,8                     ; 8 bits
         ld      d,c                     ; OR mask = pin 7 ports OR mask
@@ -3036,6 +3079,7 @@ A1338:  res     0,d                     ; pin 6 port 0 = 0 (serial clock high)
 ;       Inputs          C = serial data in b3,b1
 ;       Outputs         ________________________
 
+CHKEOC:
 A135B:  ld      a,00110101B             ; pulse ports = 1 (deselect chip), pin 6 ports = 1 (serial clock low)
         or      c                       ; OR mask pin 7 bit ports
         ld      d,a                     ; set bit OR mask pulse and pin 6/7 bits
@@ -3092,7 +3136,7 @@ A1392:  in      a,(0AAH)
 ;       Outputs         ________________________
 
 NMI:
-A1398:  call    H.NMI
+A1398:  call    H.NMI                   ; hook non maskable interrupt
         retn                            ; acknowledge NMI
 
 ;       Subroutine      INIFNK (initialize function key definition)
@@ -3177,7 +3221,7 @@ A1452:  ld      c,a                     ; store keyboard row
 ;       Outputs         ________________________
 
 ISFLIO:
-A145F:  call    H.ISFL                  ; hook
+A145F:  call    H.ISFL                  ; hook interpreter input/out device is file
         push    hl
         ld      hl,(PTRFIL)
         ld      a,l
@@ -3240,7 +3284,7 @@ A1488:  pop     de
 ;       Outputs         ________________________
 
 PHYDIO:
-A148A:  call    H.PHYD
+A148A:  call    H.PHYD                  ; hook physical disk I/O
         ret
 
 ;       Subroutine      FORMAT (format disk)
@@ -3248,7 +3292,7 @@ A148A:  call    H.PHYD
 ;       Outputs         ________________________
 
 FORMAT:
-A148E:  call    H.FORM
+A148E:  call    H.FORM                  ; hook format disk
         ret
 
 ; END   SUBTTL  MSXIO
