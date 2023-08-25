@@ -22,6 +22,7 @@ MYSIZE	EQU	9
 				; +7	not used
                                 ; +8    number of physical drives
 
+DRVFIX	EQU	1
 SECLEN	EQU	512
 BASENT  EQU     4022H
 DOSLOD	EQU	0100H
@@ -34,6 +35,10 @@ D.7FFC	EQU	7FFCH			; side select
 D.7FFD	EQU	D.7FFC+1
 I.7FFF	EQU	D.7FFC+3
 
+
+; rubish, not used anywhere
+
+	IF	DRVFIX EQ 0
 
         .PHASE	0C000H
 
@@ -118,6 +123,8 @@ DC09F:	DEFB	0
 DC0C4:	DEFB	0
 
         .DEPHASE
+
+	ENDIF
 
 I$74CA:
         DEFB	0F8h		; Media F8
@@ -236,10 +243,7 @@ DEFDPB	EQU	$-1
 
 	DEFB	0
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
-;
+; jump table, this is not realy needed
 DSKIO:
 C.755B:	JP	C.7579
 
@@ -271,7 +275,7 @@ MTOFF:
 ?.7576:	JP	J$79CE
 
 ;	  Subroutine DSKIO
-;	     Inputs  ________________________
+;	     Inputs  Cx = operation, A = drive id, B = number of sectors, C = media descriptor, DE = starting sector, HL = transfer address
 ;	     Outputs ________________________
 
 C.7579:	PUSH	AF			; store drive id
@@ -328,7 +332,7 @@ J$75AA:	LD	A,H
 	CALL	C.782A			; prepare for next sector
 	JR	J$75AA			; next sector
 
-J.75CC:	CALL	C.75D8
+J.75CC:	CALL	C.75D8			; write sector
 	RET	C			; error, quit
 	DEC	B			; more sectors ?
 	RET	Z			; nope, quit
@@ -336,23 +340,23 @@ J.75CC:	CALL	C.75D8
 	JP	J.75CC			; next sector
 
 ;	  Subroutine write sector
-;	     Inputs  ________________________
+;	     Inputs  D = media flags, HL = transfer address
 ;	     Outputs ________________________
 
 C.75D8:	LD	E,10			; retries = 10
 J$75DA:	CALL	C.7886			; wait for FDC ready
-	LD	A,0A0H
+	LD	A,0A0H			; WRITE SECTOR, multiple off, no 15 ms delay, no side compare
 	BIT	6,D			; double sided media ?
 	JR	Z,J.75EB		; nope,
-	OR	02H
+	OR	00000010B		; set side compare, assume side to compare = 0
 	BIT	0,D			; side 0 ?
 	JR	Z,J.75EB		; yep,
-	OR	08H
-J.75EB:	PUSH	HL
-	PUSH	DE
-	PUSH	BC
+	OR	00001000B		; side to compare = 1
+J.75EB:	PUSH	HL			; store transfer address
+	PUSH	DE			; store media flags, retries
+	PUSH	BC			; store number of sectors
 	LD	DE,I$760D
-	PUSH	DE
+	PUSH	DE			; return here after IRQ
 	CALL	DISINT
 	DI				; disable maskable interrupts
 	LD	(D.7FF8),A		; execute command
@@ -367,66 +371,68 @@ J.7601:	LD	A,(BC)
 	LD	A,(HL)
 	LD	(DE),A
 	INC	HL
-	JP	J.7601
+	JP	J.7601			; next
 
-I$760D:	POP	BC
-	POP	DE
-	POP	HL
+I$760D:	POP	BC			; restore number of sectors
+	POP	DE			; restore media flags, retries
+	POP	HL			; restore transfer address
 	EI
 	CALL	ENAINT			; enable maskable interrupts
 	LD	A,(D.7FF8)
-	AND	7CH
-	RET	Z
-	JP	M,J$7666
-	BIT	6,A
-	JR	NZ,J$7645
-	PUSH	AF
+	AND	01111100B		; ignore drive ready, DRQ, FDC busy
+	RET	Z			; no errors, quit
+	JP	M,J$7666		; ?? (can never accure because drive ready is ignored)
+	BIT	6,A			; write protect ?
+	JR	NZ,J$7645		; yep, check if it is real
+	PUSH	AF			; store status
 	LD	A,(IX+3)
 	OR	11000100B		; motor on, led on, set b2
 	LD	(D.7FFD),A		; update drive register
 	CALL	C.786C			; reselect cylinder
-	POP	AF
+	POP	AF			; restore status
 	DEC	E			; more retries ?
 	JR	NZ,J$75DA		; yep, try again
 	SCF
-	LD	E,A
-	BIT	5,E
+	LD	E,A			; store status
+	BIT	5,E			; WD179x only: write fault ?
 	LD	A,10
-	RET	NZ
-	BIT	4,E
+	RET	NZ			; yep, quit with write fault error
+	BIT	4,E			; record not found ?
 	LD	A,8
-	RET	NZ
-	BIT	3,E
+	RET	NZ			; yep, quit with record not found error
+	BIT	3,E			; CRC error ?
 	LD	A,4
-	RET	NZ
+	RET	NZ			; yep, quit with data (crc) error
 	LD	A,12
-	RET
+	RET				; quit with other error
+
+; check if write protect is real
 
 J$7645:	LD	A,0D0H			; FORCE INTERRUPT
 	LD	(D.7FF8),A		; execute command
 	EX	(SP),HL
 	EX	(SP),HL
-	LD	A,80H			; READ SECTOR
+	LD	A,80H			; READ SECTOR, multiple off, no 15 ms delay, no side compare
 	LD	(D.7FF8),A		; execute command
 	EX	(SP),HL
 	EX	(SP),HL
 	LD	HL,I.7FFF		; IRQ/DRQ status register
-	LD	DE,0
+	LD	DE,0			; timer = 0
 J$7659:	LD	A,(HL)
 	ADD	A,A			; DRQ ?
-	JR	NC,J.766A		; yep,
-	JP	P,J.766A		; IRQ,
+	JR	NC,J.766A		; yep, quit with write protect error
+	JP	P,J.766A		; IRQ, quit with write protect error
 	DEC	DE
 	LD	A,E
-	OR	D
-	JP	NZ,J$7659
+	OR	D			; timer finished ?
+	JP	NZ,J$7659		; nope, keep trying
 J$7666:	LD	A,2
 	SCF
-	RET
+	RET				; quit with not ready error
 
 J.766A:	XOR	A
 	SCF
-	RET
+	RET				; quit with write protect error
 
 J$766D:	CALL	C$7673			; disk operation sector read
 	JP	J.7580			; finish disk I/O operation
@@ -455,8 +461,12 @@ J$7677:	LD	A,H
 	POP	BC			; restore number of sectors, media descriptor
 	POP	DE			; restore sector number
 	POP	HL			; restore transfer address
+
+	IF	DRVFIX EQ 0
 	AND	A			; ??
 	RET	C			; ??
+	ENDIF
+
 	DEC	B			; more sectors ?
 	RET	Z			; nope, quit
 	CALL	C.782A			; prepare for next sector
@@ -470,24 +480,24 @@ J.769F:	CALL	C.76AA			; read sector
 	JR	J.769F			; next sector
 
 ;	  Subroutine read sector
-;	     Inputs  ________________________
+;	     Inputs  D = media flags, HL = transfer address
 ;	     Outputs ________________________
 
 C.76AA:	LD	E,10			; retries = 10
 J$76AC:	CALL	C.7886			; wait for FDC ready
-	LD	A,80H
+	LD	A,80H			; WRITE SECTOR, multiple off, no 15 ms delay, no side compare
 	BIT	6,D			; double sided media ?
 	JR	Z,J.76BD		; nope,
-	OR	02H
+	OR	00000010B		; set side compare, assume side to compare = side 0
 	BIT	0,D			; side 0 ?
 	JR	Z,J.76BD		; yep,
-	OR	08H
-J.76BD:	PUSH	HL
-	PUSH	DE
-	PUSH	BC
+	OR	00001000B		; side to compare = 1
+J.76BD:	PUSH	HL			; store transfer address
+	PUSH	DE			; store media flags, retries
+	PUSH	BC			; store number of sectors
 	LD	BC,I.7FFF		; IRQ/DRQ status register
 	LD	DE,I$76FF
-	PUSH	DE
+	PUSH	DE			; return here after IRQ
 	CALL	DISINT
 	DI				; disable maskable interrupts
 	LD	(D.7FF8),A		; execute command
@@ -502,15 +512,15 @@ J.76D3:	LD	A,(BC)
 	ADD	A,A			; DRQ ?
 	JP	NC,J.76ED		; yep,
 	RET	P			; IRQ, quit
-	DEC	E
-	JP	NZ,J.76D3
-	DEC	D
-	JP	NZ,J.76D3
-	POP	BC
-	POP	BC
-	POP	DE
-	POP	HL
-	JR	J.772E
+	DEC	E			; timer finished ?
+	JP	NZ,J.76D3		; nope, try again
+	DEC	D			; timer finished ?
+	JP	NZ,J.76D3		; nope, try again
+	POP	BC			; discard return address
+	POP	BC			; restore number of sectors
+	POP	DE			; restore media flags, retries
+	POP	HL			; restore transfer address
+	JR	J.772E			; quit with not ready error
 
 J.76ED:	LD	DE,D.7FFB		; FDC data register
 	JP	J$76F9
@@ -522,35 +532,35 @@ J.76F3:	LD	A,(BC)
 J$76F9:	LD	A,(DE)
 	LD	(HL),A
 	INC	HL
-	JP	J.76F3
+	JP	J.76F3			; next
 
-I$76FF:	POP	BC
-	POP	DE
-	POP	HL
+I$76FF:	POP	BC			; restore number of sectors
+	POP	DE			; restore media flags, retries
+	POP	HL			; restore transfer address
 	EI
 	CALL	ENAINT			; enable maskable interrupts
 	LD	A,(D.7FF8)
-	AND	1CH
-	RET	Z
-	JP	M,J.772E
-	PUSH	AF
+	AND	00011100B		; ignore drive ready, write protect, record type, DRQ, FDC busy
+	RET	Z			; no error, quit
+	JP	M,J.772E		; ?? (can never accure because drive ready is ignored)
+	PUSH	AF			; store status
 	LD	A,(IX+3)
 	OR	11000100B		; motor on, led on, set b2
 	LD	(D.7FFD),A		; update drive register
 	CALL	C.786C			; reselect cylinder
-	POP	AF
+	POP	AF			; restore status
 	DEC	E			; more retries ?
 	JR	NZ,J$76AC		; yep, try again
 	SCF
 	LD	E,A
-	BIT	4,E
+	BIT	4,E			; record not found ?
 	LD	A,8
-	RET	NZ
-	BIT	3,E
+	RET	NZ			; yep, quit with record not found error
+	BIT	3,E			; CRC error ?
 	LD	A,4
-	RET	NZ
+	RET	NZ			; yep, quit with data (crc) error
 	LD	A,12
-	RET
+	RET				; quit with other error
 
 J.772E:	LD	A,2
 	SCF
@@ -563,7 +573,7 @@ J.772E:	LD	A,2
 C.7732:	PUSH	AF
 	PUSH	BC
 	PUSH	HL
-	CALL	GETWRK
+	CALL	GETWRK			; get pointer to work area
 	POP	HL
 	POP	BC
 	POP	AF
@@ -571,14 +581,14 @@ C.7732:	PUSH	AF
 	JR	C,J$7743		; yep, continue
 J$773F:	LD	A,12
 	SCF
-	RET
+	RET				; quit with other error
 
 J$7743:	PUSH	AF			; store drive id
 	LD	A,C
 	CP	0F8H			; valid media descriptor ?
 	JR	NC,J$774C		; yep, continue
 	POP	AF			; restore drive id
-	JR	J$773F			; quit with error
+	JR	J$773F			; quit with other error
 
 J$774C:	EX	(SP),HL			; store HL, restore drive id
 	PUSH	HL			; store drive id
@@ -635,7 +645,7 @@ J$77A5:	LD	A,C
 	AND	0C0H			; media flags in b7,b6
 	LD	D,A			; store media flags
 	LD	A,(D.7FFC)
-	AND	01H			; current side
+	AND	00000001B		; current side
 	OR	D
 	LD	D,A			; side flag in b0
 	LD	C,L			; cylinder
@@ -645,13 +655,13 @@ J$77A5:	LD	A,C
 	LD	A,(IX+3)
 	CP	H			; same physical drive of last disk operation ?
 	JR	Z,J.7821		; yep,
-	XOR	01H
+	XOR	00000001B		; flip drive id
 	LD	(IX+3),A		; update physical drive of last disk operation
 	LD	A,(D.7FF9)		; current cylinder of drive
 	JR	Z,J$77D1		; now drive 0,
 	LD	(IX+4),A		; store current cylinder of drive 0
 	LD	A,(IX+5)		; restore current cylinder of drive 1
-	JR	J$77D7
+	JR	J$77D7			; continue
 
 J$77D1:	LD	(IX+5),A		; store current cylinder of drive 1
 	LD	A,(IX+4)		; restore current cylinder of drive 0
@@ -687,7 +697,7 @@ J$7808:	INC	HL
 	EX	(SP),IX
 	LD	A,H
 	OR	L			; timer finished ?
-	JR	Z,J$781C		; yep, continue
+	JR	Z,J$781C		; yep, continue (without the drive is ready)
 	LD	A,(D.7FF8)
 	BIT	7,A			; drive ready ?
 	JR	NZ,J$7808		; nope, wait
@@ -737,7 +747,7 @@ C.7854:	RES	0,D			; side 0
 	LD	(D.7FFC),A		; select side 0
 	INC	C
 	CALL	C.7886			; wait for FDC ready
-	LD	A,51H			; STEP IN
+	LD	A,51H			; STEP IN, update track register, no head load, no cylinder verify, step rate = 1
 	LD	(D.7FF8),A		; execute command
 	EX	(SP),HL
 	EX	(SP),HL
@@ -749,8 +759,8 @@ C.7854:	RES	0,D			; side 0
 ;	     Inputs  C = cylinder, E = retry counter
 ;	     Outputs ________________________
 
-C.786C:	BIT	0,E
-	RET	NZ
+C.786C:	BIT	0,E			; odd retry ?
+	RET	NZ			; yep, quit (skip reselect)
 	CALL	C$788D			; select cylinder 0
 
 ;	  Subroutine select cylinder
@@ -761,7 +771,7 @@ C$7872:	LD	A,C
 	LD	(D.7FFB),A		; data register = cylinder
 	EX	(SP),HL
 	EX	(SP),HL
-	LD	A,11H			; SEEK
+	LD	A,11H			; SEEK, no head load, no cylinder verify, step rate = 1
 
 ;	  Subroutine execute cylinder move command
 ;	     Inputs  ________________________
@@ -779,8 +789,8 @@ J$787A:	LD	(D.7FF8),A		; execute cylinder move command
 ;	     Outputs ________________________
 
 C.7886:	LD	A,(D.7FF8)
-	RRA
-	JR	C,C.7886
+	RRA				; FDC busy ?
+	JR	C,C.7886		; yep, wait
 	RET
 
 ;	  Subroutine select cylinder 0
@@ -788,7 +798,7 @@ C.7886:	LD	A,(D.7FF8)
 ;	     Outputs ________________________
 
 C$788D:	CALL	C.7886			; wait for FDC ready
-	LD	A,01H			; RESTORE
+	LD	A,01H			; RESTORE, no head load, no cylinder verify, step rate = 1
 	JR	J$787A			; execute cylinder move command
 
 ;	  Subroutine wait for head settle
@@ -832,35 +842,35 @@ J$78B2:	LD	A,0D0H			; FORCE INTERRUPT
 	EX	(SP),HL
 	EX	(SP),HL
 	LD	A,00000000B		; motor off, led off, clear b2, select drive 0
-	CALL	C.78C9
+	CALL	C.78C9			; initialize drive
 	LD	A,00000001B		; motor off, led off, clear b2, select drive 1
-	CALL	C.78C9
+	CALL	C.78C9			; initialize drive
 	LD	A,00000011B		; motor off, led off, clear b2, unselect drive
 	LD	(D.7FFD),A		; update drive register
 	RET
 
-;	  Subroutine __________________________
+;	  Subroutine initialize drive
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 ;
 C.78C9:	LD	(D.7FFD),A		; update drive register
 J$78CC:	CALL	C.7854			; select next cylinder
 	LD	A,(D.7FF8)
-	AND	04H
-	JR	NZ,J$78CC
+	AND	00000100B		; on cylinder 0 ?
+	JR	NZ,J$78CC		; yep, move from it
 	CALL	C.7886			; wait for FDC ready
-	LD	A,01H			; RESTORE
+	LD	A,01H			; RESTORE, no head load, no cylinder verify, step rate = 1
 	LD	(D.7FF8),A		; execute command
 	EX	(SP),HL
 	EX	(SP),HL
-	LD	HL,0
+	LD	HL,0			; timer = 0
 J$78E3:	LD	A,(D.7FF8)
-	RRA
-	RET	NC
+	RRA				; FDC busy ?
+	RET	NC			; nope, quit
 	DEC	HL
 	LD	A,L
-	OR	H
-	JR	NZ,J$78E3
+	OR	H			; timer finished ?
+	JR	NZ,J$78E3		; nope, wait
 	CALL	C.7894			; wait for head settle
 	RET
 
@@ -869,19 +879,19 @@ J$78E3:	LD	A,(D.7FF8)
 ;	     Outputs ________________________
 
 J$78F1:	PUSH	BC
-	PUSH	AF
-	CALL	GETWRK
+	PUSH	AF			; store phantom flag
+	CALL	GETWRK			; get pointer to work area
 	LD	A,00000001B		; motor off, led off, clear b2, select drive 1
 	LD	(D.7FFD),A		; update drive register
 	CALL	C.7886			; wait for FDC ready
-	LD	A,01H			; RESTORE
+	LD	A,01H			; RESTORE, no head load, no cylinder verify, step rate = 1
 	LD	(D.7FF8),A		; execute command
 	EX	(SP),HL
 	EX	(SP),HL
 	LD	HL,0			; timer = 0
 J$7908:	LD	A,(D.7FF8)
-	RRA				; on cylinder 0 ?
-	JR	NC,J$7915		; yep,
+	RRA				; FDC busy ?
+	JR	NC,J$7915		; nope (command finished), has drive 1
 	DEC	HL
 	LD	A,L
 	OR	H			; timer finished ?
@@ -892,9 +902,9 @@ J$7915:	LD	L,2			; physical drives = 2
 	LD	(IX+8),L		; update physical drives
 	LD	A,00000011B		; motor off, led off, clear b2, unselect drive
 	LD	(D.7FFD),A		; update drive register
-	POP	AF
-	JR	Z,J$7924
-	LD	L,2
+	POP	AF			; restore phantom flag
+	JR	Z,J$7924		; no phantom drives, quit
+	LD	L,2			; 1 physical drive act as 2 phantom drives
 J$7924:	POP	BC
 	RET
 
@@ -902,70 +912,81 @@ J$7924:	POP	BC
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J$7926:	CALL	GETWRK
+J$7926:	CALL	GETWRK			; get pointer to work area
 	XOR	A
-	LD	B,MYSIZE-1
+	LD	B,MYSIZE-1		; whole work area, but keep physical drives
 J$792C:	LD	(HL),A
 	INC	HL
-	DJNZ	J$792C
+	DJNZ	J$792C			; initialize work area
 	LD	HL,I$7936
-	JP	SETINT
+	JP	SETINT			; install driver interrupt handler
 
-I$7936:	PUSH	AF
-	CALL	GETWRK
+;	  Subroutine driver interrupt handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$7936:	PUSH	AF			; store VDP status
+	CALL	GETWRK			; get pointer to work area
 	LD	A,(HL)
-	AND	A
-	JR	Z,J.794B
-	CP	0FFH
-	JR	Z,J.794B
+	AND	A			; motor timer already finished ?
+	JR	Z,J.794B		; yep, skip
+	CP	0FFH			; motor timer paused ?
+	JR	Z,J.794B		; yep, skip
 	DEC	A
-	LD	(HL),A
-	JR	NZ,J.794B
+	LD	(HL),A			; update motor timer
+	JR	NZ,J.794B		; motor timer not finished, skip
 	LD	A,00000011B		; motor off, led off, clear b2, unselect drive
 	LD	(D.7FFD),A		; update drive register
 J.794B:	INC	HL
 	LD	A,(HL)
-	AND	A
-	JR	Z,J$7951
-	DEC	(HL)
+	AND	A			; disk change timer drive 0 already finished ?
+	JR	Z,J$7951		; yep, skip
+	DEC	(HL)			; update disk change timer drive 0
 J$7951:	INC	HL
 	LD	A,(HL)
-	AND	A
-	JR	Z,J$7957
-	DEC	(HL)
-J$7957:	POP	AF
-	JP	PRVINT
+	AND	A			; disk change timer drive 1 already finished ?
+	JR	Z,J$7957		; yep, skip
+	DEC	(HL)			; update disk change timer drive 1
+J$7957:	POP	AF			; restore VDP status
+	JP	PRVINT			; next interrupt handler
 
 ;	  Subroutine DSKCHG
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+;	     Remark  the orginal code does leave the stack in a incorrect state
+;	             remarkable that this does not seemed to lead to system crashes
+;	             as this routine is normally called by a CALSLT, the effect is
+;	             that the orginal slot configuration in page 1 is not restored
+;	             if this disk rom is also the master disk rom, this is no problem
 
 J$795B:	PUSH	HL
 	PUSH	BC
 	PUSH	AF
-	CALL	GETWRK
+	CALL	GETWRK			; get pointer to work area
 	POP	AF
 	POP	BC
 	POP	HL
 	AND	A			; drive id = 0 ?
-	LD	B,(IX+2)
+	LD	B,(IX+2)		; disk change timer drive 1
 	JR	NZ,J$796D		; nope,
-	LD	B,(IX+1)
+	LD	B,(IX+1)		; disk change timer drive 0
 J$796D:	INC	B
-	DEC	B
+	DEC	B			; disk change timer finished ?
 	LD	B,1
-	RET	NZ
+	RET	NZ			; nope, quit with disk unchanged
 	PUSH	BC			; store media descriptor
 	PUSH	HL			; store pointer to DPB
 	PUSH	AF			; store drive id
 	XOR	A
 	LD	(D.7FFC),A		; select side 0
 	POP	AF			; restore drive id
+
+	IF	DRVFIX EQ 0
 	PUSH	AF			; store drive id
 	LD	DE,1			; sector = 1
 	LD	HL,($SECBUF)
 	SCF
-	CCF				; read
+	CCF				; operation = read
 	CALL	DSKIO			; disk I/O operation
 	JR	C,J.79AE		; error,
 	LD	HL,($SECBUF)
@@ -977,19 +998,19 @@ J$796D:	INC	B
 	POP	HL			; restore pointer to DPB
 	PUSH	BC			; store media descriptor on disk
 	CALL	GETDPB			; update DPB
-	POP	DE			; restore media descriptor on disk
+	POP	DE			; ??
 	LD	A,12
 	JR	C,J.79AE		; error, quit
-	POP	DE			; restore
-	POP	AF			; restore
+	POP	DE			; ??
+	POP	AF			; restore media descriptor on disk
 	POP	BC			; restore media descriptor
 	CP	C			; same as media descriptor on disk ?
 	SCF
 	CCF				; clear Cx
 	LD	B,0FFH
-	RET	NZ
+	RET	NZ			; nope, quit with disk changed
 	INC	B
-	RET
+	RET				; quit with disk change unknown
 
 J$79A7:	POP	DE
 	POP	DE
@@ -1002,6 +1023,42 @@ J.79AE:	POP	DE
 	POP	DE
 	POP	DE
 	RET
+
+	ELSE
+
+	LD	DE,1			; sector = 1
+	LD	HL,($SECBUF)
+	OR	A			; operation = read
+	CALL	DSKIO			; disk I/O operation
+	JR	C,J.79AE		; error,
+	LD	HL,($SECBUF)
+	LD	B,(HL)			; media descriptor
+	LD	A,B
+	CP	0F8H			; valid media descriptor ?
+	JR	C,J$79A7		; nope, quit
+	POP	HL			; restore pointer to DPB
+	PUSH	BC			; store media descriptor on disk
+	CALL	GETDPB			; update DPB
+	LD	A,12
+	JR	C,J.79AE		; error, quit
+	POP	AF			; restore media descriptor on disk
+	POP	BC			; restore media descriptor
+	CP	C			; same as media descriptor on disk ?
+	SCF
+	CCF				; clear Cx
+	LD	B,0FFH
+	RET	NZ			; nope, quit with disk changed
+	INC	B
+	RET				; quit with disk change unknown
+
+J$79A7:	LD	A,10
+	SCF
+
+J.79AE:	POP	DE
+	POP	DE
+	RET
+
+	ENDIF
 
 ;	  Subroutine GETDPB
 ;	     Inputs  HL = pointer to DPB, B = media descriptor on disk
@@ -1032,7 +1089,7 @@ J$79B2:	EX	DE,HL
 ;	     Outputs ________________________
 
 J$79CC:	SCF
-	RET
+	RET				; quit with statement not recognized
 
 ;	  Subroutine MTOFF
 ;	     Inputs  ________________________
@@ -1051,7 +1108,7 @@ J$79CE:	LD	A,00111100B		; motor off, led off, set b2, select drive 0
 ;	     Outputs ________________________
 
 J$79DE:	LD	HL,0
-	LD	A,01H
+	LD	A,00000001B
 	LD	(D.7FFC),A		; select side 1
 	LD	A,(D.7FFC)		; read back side
 	BIT	0,A			; drive supports side 1 ?
@@ -1084,21 +1141,21 @@ J$7A44:	PUSH	HL
 	LD	A,14
 	RET	C			; nope, quit with
 	LD	A,D
-	AND	01H
+	AND	00000001B
 	LD	(IY+9),A		; store drive id
 	PUSH	HL			; store start of workarea
 	LD	BC,32
 	ADD	HL,BC
 	LD	(IY+5),L
 	LD	(IY+6),H		; store start of format data area
-	LD	D,0
-	LD	B,5
+	LD	D,0			; DE = choice
+	LD	B,5			; table entries are 5 bytes
 	LD	HL,I$7B93
 J$7A6D:	ADD	HL,DE
-	DJNZ	J$7A6D
+	DJNZ	J$7A6D			; pointer to choice table entry
 	POP	DE			; restore start of workarea
 	LD	BC,5
-	LDIR
+	LDIR				; copy choice parameters
 	CALL	INIHRD			; initialize hardware
 	XOR	A			; operation = read
 	LD	(IX+4),A		; current cylinder drive 0 = 0
@@ -1110,10 +1167,10 @@ J$7A6D:	ADD	HL,DE
 	RET	C			; error, quit
 	CALL	DISINT
 	DI				; disable maskable interrupts
-	LD	E,00000010B		; index = on
+	LD	E,00000010B		; wait for index = on
 	CALL	C.7CF9			; wait for index
 	RET	C			; time out, quit
-	LD	E,00000000B		; index = off
+	LD	E,00000000B		; wait for index = off
 	CALL	C.7CF9			; wait for index
 	RET	C			; time out, quit
 	LD	C,(IY+2)		; media descriptor
@@ -1124,7 +1181,7 @@ J.7AA5:	PUSH	DE			; store sector
 	LD	A,(IY+9)		; drive id
 	CALL	C.7732			; prepare for sector I/O
 	LD	A,6
-J$7AAF:	JR	C,J$7ABF		; error,
+J$7AAF:	JR	C,J$7ABF		; error, quit with seek error
 	LD	(IY+7),D		; store media flags
 	LD	L,(IY+5)
 	LD	H,(IY+6)		; format data area
@@ -1133,7 +1190,7 @@ J$7AAF:	JR	C,J$7ABF		; error,
 	POP	HL			; restore format data area
 J$7ABF:	POP	BC			; restore number of sectors per track, media descriptor
 	POP	DE			; restore sector
-	JR	NC,J$7ACD		; no error,
+	JR	NC,J$7ACD		; no error, continue
 	PUSH	AF			; store error
 	LD	A,(IY+9)
 	LD	D,A			; drive id
@@ -1145,11 +1202,11 @@ J$7ACD:	PUSH	DE			; store sector
 	PUSH	BC			; store number of sectors per track, media descriptor
 	LD	A,D
 	OR	E			; sector = 0 ?
-	JR	Z,J.7ADE		; yep,
-	PUSH	HL
+	JR	Z,J.7ADE		; yep, skip extra sector
+	PUSH	HL			; store format data area
 	LD	HL,27
-	SBC	HL,DE
-	POP	HL			; sector < 27 ?
+	SBC	HL,DE			; sector >= 27 ?
+	POP	HL			; store format data area
 	JR	C,J.7ADE		; yep,
 	DEC	DE			; sector
 	INC	B			; number of sectors
@@ -1159,15 +1216,15 @@ J.7ADE:	XOR	A			; operation = read
 	LD	A,4
 	POP	BC			; restore number of sectors per track, media descriptor
 	POP	DE			; restore sector
-	RET	C			; error,
-	PUSH	HL
+	RET	C			; error, quit with data (crc) error
+	PUSH	HL			; store pointer in format data area
 	LD	HL,315
 	BIT	0,C			; double sided media ?
 	JR	Z,J$7AF3		; nope,
 	ADD	HL,HL
 J$7AF3:	AND	A
-	SBC	HL,DE
-	POP	HL			; 80 track media ?
+	SBC	HL,DE			; 80 track media ?
+	POP	HL			; restore pointer in format data area
 	JR	NC,J$7B1A		; nope, skip
 	PUSH	DE			; store sector
 	PUSH	BC			; store number of sectors per track, media descriptor
@@ -1208,7 +1265,7 @@ J$7B37:	LD	(HL),0
 	DEC	BC
 	LD	A,B
 	OR	C
-	JR	NZ,J$7B37		; clear format data
+	JR	NZ,J$7B37		; initialize format data
 	LD	L,(IY+0)
 	LD	H,(IY+1)		; pointer to BPB
 	POP	DE			; restore format data area
@@ -1260,23 +1317,37 @@ J$7B6A:	DEC	(HL)
 	SCF				; operation = write
 	JP	DSKIO			; disk I/O operation
 
-I$7B93:	DEFW	I$7BA7			; pointer to BPB
+I$7B93:
+
+; 5.25" 40 track single sided
+
+	DEFW	I$7BA7			; pointer to BPB
 	DEFB	0FCH			; media descriptor
 	DEFW	360			; number of sectors
+
+; 5.25" 40 track double sided
 
 	DEFW	I$7BC5			; pointer to BPB
 	DEFB	0FDH			; media descriptor
 	DEFW	720			; number of sectors
 
+; 3.5" 80 track single sided
+
 	DEFW	I$7BE3			; pointer to BPB
 	DEFB	0F8H			; media descriptor
 	DEFW	720			; number of sectors
+
+; 3.5" 80 track double sided
 
 	DEFW	I$7C01			; pointer to BPB
 	DEFB	0F9H			; media descriptor
 	DEFW	1440			; number of sectors
 
-I$7BA7: DEFB	0EBH			; 00H, x86 JMP +0100H
+I$7BA7:
+
+; 5.25" 40 track single sided
+
+	DEFB	0EBH			; 00H, x86 JMP +0100H
         DEFB	0FEH
         DEFB	090H			; 02H, x86 NOP
 	DEFB	"MSX_01  "		; 03H, OEM system name
@@ -1291,6 +1362,8 @@ I$7BA7: DEFB	0EBH			; 00H, x86 JMP +0100H
         DEFW	9			; 18H, sectors per track
         DEFW	1			; 1AH, number of sides
         DEFW	0			; 1CH, number of hidden sectors
+
+; 5.25" 40 track double sided
 
 I$7BC5:	DEFB	0EBH			; 00H, x86 JMP +0100H
         DEFB	0FEH
@@ -1308,6 +1381,8 @@ I$7BC5:	DEFB	0EBH			; 00H, x86 JMP +0100H
         DEFW	2			; 1AH, number of sides
         DEFW	0			; 1CH, number of hidden sectors
 
+; 3.5" 80 track single sided
+
 I$7BE3:	DEFB	0EBH			; 00H, x86 JMP +0100H
         DEFB	0FEH
         DEFB	090H			; 02H, x86 NOP
@@ -1323,6 +1398,8 @@ I$7BE3:	DEFB	0EBH			; 00H, x86 JMP +0100H
         DEFW	9			; 18H, sectors per track
         DEFW	1			; 1AH, number of sides
         DEFW	0			; 1CH, number of hidden sectors
+
+; 3.5" 80 track double sided
 
 I$7C01:	DEFB	0EBH			; 00H, x86 JMP +0100H
         DEFB	0FEH
@@ -1408,14 +1485,14 @@ J$7C79:	LD	(HL),40H
 	LD	(IY+8),5		; retries = 5
 J$7C97:	CALL	C.7886			; wait for FDC ready
 	LD	HL,I$7CD0
-	PUSH	HL			; return address
+	PUSH	HL			; return here after IRQ
 	LD	L,(IY+5)
 	LD	H,(IY+6)		; format data area
 	CALL	DISINT
 	DI				; disable maskable interrupts
 	LD	BC,I.7FFF		; IRQ/DRQ status register
 	LD	DE,D.7FFB		; FDC data register
-	LD	A,0F4H			; WRITE TRACK
+	LD	A,0F4H			; WRITE TRACK, no 15 ms delay
 	LD	(D.7FF8),A		; execute command
 J$7CB3:	LD	A,(HL)
 	INC	A			; end of format data ?
@@ -1427,7 +1504,7 @@ J$7CB8:	LD	A,(BC)
 	LD	A,(HL)
 	LD	(DE),A
 	INC	HL
-	JP	J$7CB3
+	JP	J$7CB3			; next
 
 ; write GAP4
 J.7CC4:	LD	A,(BC)
@@ -1436,14 +1513,14 @@ J.7CC4:	LD	A,(BC)
 	JP	C,J.7CC4		; no DRQ, wait
 	LD	A,4EH
 	LD	(DE),A
-	JP	J.7CC4
+	JP	J.7CC4			; next
 
 I$7CD0:	LD	A,(D.7FF8)
-	AND	01111100B
+	AND	01111100B		; ignore drive ready, DRQ, FDC busy
 	PUSH	AF			; store status
 	JR	NZ,J$7CDC		; error,
 	EI
-	CALL	ENAINT
+	CALL	ENAINT			; enable maskable interrupts
 J$7CDC:	POP	AF			; restore status
 	RET	Z			; no error, quit
 	LD	B,A			; store status
@@ -1455,7 +1532,7 @@ J$7CE7:	DEC	(IY+8)			; more retries ?
 	JR	NZ,J$7C97		; yep, retry
 J$7CEC:	PUSH	AF			; store error
 	EI
-	CALL	ENAINT
+	CALL	ENAINT			; enable maskable interrupts
 	POP	AF			; restore error
 	LD	HL,D.7FFD		; drive register
 	LD	(HL),00000011B		; motor off, led off, clear b2, unselect drive
@@ -1466,15 +1543,15 @@ J$7CEC:	PUSH	AF			; store error
 ;	     Inputs  E = index status
 ;	     Outputs ________________________
 
-C.7CF9:	LD	BC,0FFFFH
+C.7CF9:	LD	BC,0FFFFH		; timer = 65535
 J$7CFC:	LD	A,(D.7FF8)
 	AND	00000010B
 	CP	E
 	RET	Z
 	DEC	BC
 	LD	A,B
-	OR	C
-	JR	NZ,J$7CFC
+	OR	C			; timer finished ?
+	JR	NZ,J$7CFC		; nope, wait
 	LD	A,16			; other error
 	JR	J$7CEC			; quit with error
 
@@ -1493,6 +1570,9 @@ C.7D0F:	LD	(HL),A
 	INC	HL
 	DJNZ	C.7D0F
 	RET
+
+
+; MSX boot loader
 
 I$7D14:
         .PHASE	0C01EH
@@ -1562,7 +1642,9 @@ DC0C4:	DEFB	0FFH
 
 
         .DEPHASE
+
 S7D14	EQU	$-I$7D14
+
 
 	DEFB	"Copyrite 24,Mar,1986 by"
 	DEFB	"Software Technical Center in"
