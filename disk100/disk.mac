@@ -48,6 +48,36 @@
 ;       PUBLIC  XFER
 
 
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+_DOSCP	MACRO	X
+	IF2
+	IF	($ NE X)
+	.PRINTX	"ERROR: MSXDOS incompatible, subroutine not aligned to &X"
+	ENDIF
+	ENDIF
+	ENDM
+
+
 WBOOT   equ     00000H
 RDSLT   equ     0000CH
 WRSLT   equ     00014H
@@ -450,6 +480,9 @@ A402D:  jp      A5FB3                   ; get slotid entrypoint
 ;       Inputs          -
 ;       Outputs         HL = lowest address used by the base MSX-DOS system
 
+	_DOSCP	4030H
+
+$INIT:
 A4030:  ld      hl,(YF34B)
         ret
 
@@ -457,6 +490,9 @@ A4030:  ld      hl,(YF34B)
 ;       Inputs          -
 ;       Outputs         Zx set if no input, Zx reset if input, A = input
 
+	_DOSCP	4034H
+
+$$BIOS:
 A4034:  push    ix
         ld      ix,BREAKX
         call    A40AB                   ; BREAKX BIOS call
@@ -494,6 +530,9 @@ A404B:  ld      a,(YF336)
 ;       Inputs          -
 ;       Outputs         A = input
 
+	_DOSCP	4078H
+
+$IN:
 A4078:  push    hl
         ld      hl,YF336
         xor     a
@@ -513,6 +552,9 @@ A4078:  push    hl
 ;       Inputs          A = output
 ;       Outputs         -
 
+	_DOSCP	408FH
+
+$OUT:
 A408F:  push    ix
         ld      ix,CHPUT
         call    A40AB                   ; CHPUT BIOS call
@@ -744,6 +786,9 @@ A41B5:  ld      d,a
 ;       Outputs         ________________________
 
 
+	_DOSCP	41EFH
+
+CPMVER:
 A41EF:  ld      b,000H                  ; machinetype 8080, plain CP/M
         ld      a,022H                  ; CP/M version 2.2
         ret
@@ -1033,6 +1078,9 @@ A4367:  call    A4743                   ; flush directory buffer
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	436CH
+
+DELETE:
 A436C:  call    A440E                   ; validate FCB drive and filename
         call    nc,A42B5                ; valid, find first directoryentry
         ld      a,0FFH
@@ -1055,6 +1103,9 @@ A4376:  ld      a,0E5H
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	4392H
+
+RENAME:
 A4392:  call    A440E                   ; validate FCB drive and filename
         jr      c,A440B                 ; invalid, quit with error
         ld      de,00005H
@@ -1177,6 +1228,9 @@ A445E:  ld      bc,0FF7FH               ; extent 255, record 127
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	4462H
+
+OPEN:
 A4462:  call    A42A5                   ; validate FCB, clear S2 and find direntry
         jr      c,A440B                 ; error, quit with error
         call    A4439                   ; get max record and extent
@@ -1374,6 +1428,9 @@ A4563:  ld      a,(YF2E1)               ; current driveid
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	456FH
+
+CLOSE:
 A456F:  push    de
         pop     iy
         call    A440E                   ; validate FCB drive and filename
@@ -1494,6 +1551,9 @@ A4617:  ld      hl,(YF351)              ; dirsector buffer
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	461DH
+
+CREATE:
 A461D:  push    de
 T461E:  call    A440E                   ; validate FCB drive and filename
         jr      c,A464D                 ; invalid, quit with error
@@ -1594,6 +1654,9 @@ A46A4:  push    bc
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	46BAH
+
+ABSREA:
 A46BA:  ld      b,h
         ld      a,l
         ld      (YF2E1),a               ; set current driveid
@@ -1680,6 +1743,9 @@ A470A:  call    XF273
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	4720H
+
+ABSWRI:
 A4720:  ld      b,h
         ld      a,l
         ld      (YF2E1),a               ; set current driveid
@@ -1747,6 +1813,9 @@ A4755:  call    XF279
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	4775H
+
+SEQRD:
 A4775:  call    A4EF8                   ; get recordnumber from CR,EX and S2 fields
         call    A4B23                   ; read record
         jr      A4783                   ; update sequencial fields
@@ -1755,6 +1824,9 @@ A4775:  call    A4EF8                   ; get recordnumber from CR,EX and S2 fie
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	477DH
+
+SEQWRT:
 A477D:  call    A4EF8                   ; get recordnumber from CR,EX and S2 fields
         call    A4CA3                   ; write record
 A4783:  call    A486A                   ; increase recordnumber if something was read/written
@@ -1764,6 +1836,9 @@ A4783:  call    A486A                   ; increase recordnumber if something was
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	4788H
+
+RNDRD:
 A4788:  call    A4857                   ; get recordnumber from Rx fields, 1 record
         call    A4B23                   ; read record
         jr      A4799                   ; update Rx, CR,EX and S2 field
@@ -1775,6 +1850,9 @@ A4790:  push    iy
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	4793H
+
+RNDWRT:
 A4793:  call    A4857                   ; get recordnumber from Rx fields, 1 record
         call    A4CA3                   ; write record
 A4799:  call    A4844                   ; update Rx fields
@@ -1794,6 +1872,9 @@ A479C:  ld      a,l
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	47B2H
+
+BLKRD:
 A47B2:  xor     a
         ld      (YF306),a               ; no CP/M call
         call    A485A                   ; get random record number
@@ -1804,6 +1885,9 @@ A47B2:  xor     a
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	47BEH
+
+BLKWRT:
 A47BE:  xor     a
         ld      (YF306),a               ; no CP/M call
         call    A485A                   ; get random record number
@@ -1818,6 +1902,9 @@ A47C8:  call    A486A                   ; increase recordnumber if something was
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	47D1H
+
+ZWRITE:
 A47D1:  push    de
         pop     iy
         ld      a,(iy+16)
@@ -3042,6 +3129,9 @@ A4F9E:  call    XF2A9
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	4FB8H
+
+SRCHFR:
 A4FB8:  call    A42A5                   ; validate FCB, clear S2 and find direntry
 A4FBB:  jr      c,A5000                 ; error, quit
         ld      a,(YF2B8)
@@ -3088,6 +3178,9 @@ A5000:  ld      a,0FFH
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	5006H
+
+SRCHNX:
 A5006:  call    A440E                   ; validate FCB drive and filename
         jr      c,A5000                 ; invalid,
         ld      a,(YF30B)               ; saved direntrynumber of last search first
@@ -3102,6 +3195,9 @@ A5006:  call    A440E                   ; validate FCB drive and filename
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	501EH
+
+FILESI:
 A501E:  call    A42A5                   ; validate FCB, clear S2 and find direntry
         ld      a,0FFH
         ret     c                       ; error, quit
@@ -3132,6 +3228,9 @@ A5043:  ld      (ix+33),c
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	504EH
+
+LOGIN:
 A504E:  ld      a,(YF347)
         ld      b,a
         xor     a
@@ -3144,6 +3243,9 @@ A5053:  scf
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	5058H
+
+SETDMA:
 A5058:  ld      (YF23D),de              ; set transferaddress
         ret
 
@@ -3151,6 +3253,9 @@ A5058:  ld      (YF23D),de              ; set transferaddress
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	505DH
+
+GETEFA:
 A505D:  xor     a
         ld      (YF306),a               ; no CP/M call
         ld      a,e
@@ -3194,11 +3299,17 @@ A508B:  inc     hl
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	509FH
+
+DSKRES:
 A509F:  ld      hl,00080H
         ld      (YF23D),hl              ; default transferaddress
         xor     a
         ld      (YF247),a               ; default driveid 0 (A:)
-        call    A472D                   ; flush datasector buffer
+
+	_DOSCP	50A9H
+
+WRTFAT: call    A472D                   ; flush datasector buffer
         ld      hl,YF355
         ld      a,(YF347)               ; all drives
 A50B2:  ld      e,(hl)
@@ -3220,6 +3331,9 @@ A50B2:  ld      e,(hl)
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	50C4H
+
+GETDRV:
 A50C4:  ld      a,(YF247)
         ret
 
@@ -3227,6 +3341,9 @@ A50C4:  ld      a,(YF247)
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	50C8H
+
+SETRND:
 A50C8:  call    A4EF8                   ; get recordnumber from CR,EX and S2 field
         ld      (iy+33),l
         ld      (iy+34),h
@@ -3237,6 +3354,9 @@ A50C8:  call    A4EF8                   ; get recordnumber from CR,EX and S2 fie
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	50D5H
+
+SELDSK:
 A50D5:  ld      a,(YF347)
         cp      e
         ret     c
@@ -3249,6 +3369,9 @@ A50D5:  ld      a,(YF347)
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	50E0H
+
+BUFIN:
 A50E0:  push    de
         ld      a,(YF237)
         ld      (YF238),a               ; save current console columnpos to record start of inputline
@@ -3370,6 +3493,9 @@ A517A:  ld      a,b
         call    A5183                   ; newline
 A5181:  jr      A5104
 
+	_DOSCP	5183H
+
+CRLF:
 A5183:  ld      a,00DH
         call    A53A8                   ; console output
         ld      a,00AH
@@ -3708,6 +3834,9 @@ A534F:  ld      a,008H
         ld      a,008H
         jr      A53A8                   ; console output
 
+	_DOSCP	535DH
+
+BUFOUT:
 A535D:  cp      020H
         jr      nc,A53A8                ; console output
         cp      009H
@@ -3740,6 +3869,9 @@ NKEYNT  equ     ($-T5374)/3
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	53A7H
+
+CONOUT:
 A53A7:  ld      a,e
 A53A8:  call    XF2AF
         cp      00BH
@@ -3831,6 +3963,9 @@ A5437:  xor     a
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	543CH
+
+CONSTA:
 A543C:  call    A5412
         ld      a,000H
         ret     z
@@ -3841,6 +3976,9 @@ A543C:  call    A5412
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	5445H
+
+CONIN:
 A5445:  call    A544E                   ; BDOS 8 (direct input)
         push    af
         call    A53A8                   ; console output
@@ -3851,6 +3989,9 @@ A5445:  call    A544E                   ; BDOS 8 (direct input)
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	544EH
+
+IN:
 A544E:  call    A541D
         jr      z,A544E
         ret
@@ -3859,6 +4000,9 @@ A544E:  call    A541D
 ;       Inputs          A=0FFH for console input, A<>0FFH for console output
 ;       Outputs         A=input (console input)
 
+	_DOSCP	5454H
+
+RAWIO:
 A5454:  ld      a,e
         cp      0FFH                    ; console input ?
         jp      nz,A408F                ; console output, output to screen and quit
@@ -3871,12 +4015,18 @@ A5454:  ld      a,e
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	5462H
+
+RAWINP:
 A5462:  jp      A4078                   ; get keyboardinput
 
 ;       Subroutine      BDOS 05 (printer output)
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	5465H
+
+LIST:
 A5465:  ld      a,e
 A5466:  push    af
         call    A5412
@@ -3887,6 +4037,9 @@ A5466:  push    af
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	546EH
+
+READER:
 A546E:  call    A5412
         jp      XF371
 
@@ -3894,6 +4047,9 @@ A546E:  call    A5412
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	5474H
+
+PUNCH:
 A5474:  ld      a,e
 A5475:  push    af
         call    A5412
@@ -4015,6 +4171,9 @@ T5534:  defb    200,166,200,165,200,165,200,165
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	553CH
+
+GETDAT:
 A553C:  xor     a
         ld      (YF306),a               ; no CP/M call
         call    A54C0                   ; get time and date values
@@ -4029,6 +4188,9 @@ A553C:  xor     a
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	5552H
+
+SETDAT:
 A5552:  ld      bc,-1980
         add     hl,bc
         jr      nc,A559A                ; year <1980, error
@@ -4113,6 +4275,9 @@ A55D2:  dec     a
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	55DBH
+
+GETTIM:
 A55DB:  xor     a
         ld      (YF306),a               ; no CP/M call
         call    A54C0                   ; get time and date values
@@ -4125,6 +4290,9 @@ A55DB:  xor     a
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	55E6H
+
+SETTIM:
 A55E6:  ld      b,h
         ld      c,l
         ld      a,b
@@ -4146,6 +4314,9 @@ A55E6:  ld      b,h
 ;       Inputs          
 ;       Outputs         ________________________
 
+	_DOSCP	55FFH
+
+SETRAW:
 A55FF:  ld      a,e
         ld      (RAWFLG),a
         ret

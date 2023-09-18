@@ -1,8 +1,16 @@
-;  
-;   FASTROM -> Source re-created by Z80DIS 2.2
-;      Z80DIS was written by Kenneth Gielow
-;                            Palo Alto, CA
-;
+; FASTROM.MAC
+
+; FAST DiskROM DOS 1.0a kernel, DOS1 compatible
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII,A&L and may be others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
 
 MYSIZE	EQU	18
 
@@ -25,23 +33,25 @@ MYSIZE	EQU	18
                                 ; +17	disk drive 3 connected
 
 SECLEN	EQU	512
-D.5C93	EQU	5C93H	        ; xxxx xxxx 1001 00xx motor off
-D.6205	EQU	6205H	        ; xxxx xxxx 0000 01xx enable I/O ports
-D.7114	EQU	7114H	        ; xxxx xxxx 0001 01xx disable I/O ports
-D.711C	EQU	711CH	        ; xxxx xxxx 0001 11xx disable I/O ports
 
-I.8348	EQU	8348H           ; xxxx xxxx 0100 10xx unused
+D.5C93	EQU	5C93H	        ; xxxx xxxx 1001 00xx DDX motor off
+D.6205	EQU	6205H	        ; xxxx xxxx 0000 01xx DDX enable I/O ports
+D.7114	EQU	7114H	        ; xxxx xxxx 0001 01xx DDX disable I/O ports
+D.711C	EQU	711CH	        ; xxxx xxxx 0001 11xx DDX disable I/O ports
+I.8348	EQU	8348H           ; xxxx xxxx 0100 10xx DDXunused
 
 WBOOT	EQU	0000H	; JC-LI
 RDSLT	EQU	000CH	; -C--I
 WRSLT	EQU	0014H	; -C---
+OUTDO	EQU	0018H
 CALSLT	EQU	001CH	; JC--I
+DCOMPR	EQU	0020H
 ENASLT	EQU	0024H	; JC--I
 IDBYT0	EQU	002BH	; ---L-
 IDBYT2	EQU	002DH	; ---L-
 CALLF	EQU	0030H	; -C---
 I$0034	EQU	0034H	; ----I
-X.0038	EQU	0038H	; -CS-I
+KEYINT	EQU	0038H	; -CS-I
 LDIRMV 	EQU	0059H	; -C---
 LDIRVM	EQU	005CH	; -C---
 DBUF	EQU	0080H	; ----I
@@ -90,17 +100,9 @@ I$7D17	EQU	7D17H
 I$7E14	EQU	7E14H
 
 I$8000	EQU	8000H	; ----I
-J$8035	EQU	8035H	; J----
-J$803A	EQU	803AH	; J----
 I$C000	EQU	0C000H	; ----I
-I$C001	EQU	0C001H	; ----I
 I.C200	EQU	0C200H	; ----I
-I$C9A8	EQU	0C9A8H	; ----I
-J$CD5B	EQU	0CD5BH	; J----
-I$DDFF	EQU	0DDFFH	; ----I
-C$E471	EQU	0E471H	; -C---
-D$ED00	EQU	0ED00H	; ---L-
-I$F1DE	EQU	0F1DEH
+
 I.F22B	EQU	0F22BH	; ----I
 D.F237	EQU	0F237H	; --SLI
 D.F238	EQU	0F238H	; --SL-
@@ -371,6 +373,37 @@ DISINT	EQU	0FFCFH	; -C---
 ENAINT	EQU	0FFD4H	; -C---
 D.FFFF	EQU	0FFFFH	; --SLI
 
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+_DOSCP	MACRO	X
+	IF2
+	IF	($ NE X)
+	.PRINTX	"ERROR: MSXDOS incompatible, subroutine not aligned to &X"
+	ENDIF
+	ENDIF
+	ENDM
+
+
         .Z80
         ASEG
         ORG     04000H
@@ -400,12 +433,23 @@ J.4022:	JP	J.5B91			; start DiskBASIC
 
 C$402D:	JP	C.5FE0			; get my slot id
 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4030H
+
+$INIT:
 ?.4030:	LD	HL,(D.F34B)
 	RET
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	4034H
+
+$$BIOS:
 
 C.4034:	PUSH	IX
 	LD	IX,BREAKX		; check if CTRL-STOP pressed
@@ -449,6 +493,9 @@ I$406F:	PUSH	IX
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	4078H
+
+$IN:
 C.4078:	PUSH	HL
 	LD	HL,D.F336
 	XOR	A
@@ -473,6 +520,9 @@ J.4089:	CALL	C.40AB			; execute MAIN ROM call
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	408FH
+
+$OUT:
 C.408F:	PUSH	IX
 	LD	IX,CHPUT
 	JR	J.4089
@@ -694,6 +744,7 @@ C.41AB:	XOR	A
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$41B3:	LD	D,A
 	DEC	E
 	LD	A,E
@@ -751,6 +802,10 @@ C.41E8:	CALL	DISINT
 ;	  Subroutine BDOS return version number
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	41EFH
+
+CPMVER:
 C.41EF:	LD	B,00H
 	LD	A,22H
 	RET
@@ -826,6 +881,7 @@ C.4246:	LD	DE,I.F2B9
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.4249:	LD	A,(DE)
 	CP	(HL)
 	INC	HL
@@ -899,6 +955,7 @@ C$42A8:	CALL	C.440E
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.42AC:	CALL	C.4251
 	RET	NC
 	CALL	C$44D3
@@ -1026,6 +1083,10 @@ C.4363:	LD	BC,3*256+0F5H
 ;	  Subroutine BDOS delete file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	436CH
+
+DELETE:
 C.436C:	CALL	C.440E
 	CALL	NC,C.42AC
 	LD	A,0FFH
@@ -1047,6 +1108,10 @@ J$4376:	LD	A,0E5H
 ;	  Subroutine BDOS rename file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	4392H
+
+RENAME:
 C.4392:	CALL	C.440E
 	JR	C,J.440B
 	LD	DE,5
@@ -1101,9 +1166,11 @@ J$43C3:	LD	(DE),A
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$4403:	CALL	C.4743			; flush directory buffer
 	XOR	A
 	RET
+
 J.4408:	CALL	C.4743			; flush directory buffer
 J.440B:	LD	A,0FFH
 	RET
@@ -1173,6 +1240,10 @@ J.445D:	LD	BC,0FF7FH
 ;	  Subroutine BDOS open file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	4462H
+
+OPEN:
 C.4462:	CALL	C.429C
 	JR	C,J.440B
 	CALL	C.4438
@@ -1249,6 +1320,7 @@ C$44D3:	LD	A,0FFH
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.44DB:	CALL	C$F267
 	CALL	C.454F			; get pointer to DPB current drive id
 	LD	A,(D.F2E1)		; drive id
@@ -1332,6 +1404,7 @@ C.455D:	LD	A,(D.F2E1)
 ;	  Subroutine get pointer to DPB entry
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$4560:	LD	HL,I.F355
 	ADD	A,A
 
@@ -1358,6 +1431,10 @@ C.456A:	LD	HL,1
 ;	  Subroutine BDOS close file
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	456FH
+
+CLOSE:
 C.456F:	PUSH	DE
 	POP	IY
 	CALL	C.440E
@@ -1480,6 +1557,9 @@ S.4609	EQU	$-I$4609
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	461DH
+
+CREATE:
 C.461D:	PUSH	DE
 I$461E:	CALL	C.440E
 I$4620	EQU	$-1
@@ -1580,6 +1660,9 @@ C.46A4:	PUSH	BC			; store directory buffer relative sector
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	46BAH
+
+ABSREA:
 C.46BA:	LD	B,H
 	LD	A,L
 	LD	(D.F2E1),A
@@ -1589,6 +1672,7 @@ C.46BA:	LD	B,H
 ;	  Subroutine read sectors with error handling
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.46C5:	CALL	C$F270
 	XOR	A
 	LD	(D.F2FF),A		; operation = read
@@ -1642,6 +1726,7 @@ C.46E8:	PUSH	AF			; store error code
 ;	  Subroutine handle disk error
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$4702:	CALL	C$F273
 	PUSH	BC
 	PUSH	DE
@@ -1665,6 +1750,10 @@ I$471E:	DEFB	0,0
 ;	  Subroutine BDOS write logical sector
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	4720H
+
+ABSWRI:
 C.4720:	LD	B,H
 	LD	A,L
 	LD	(D.F2E1),A
@@ -1731,6 +1820,10 @@ C.4755:	CALL	C$F279
 ;	  Subroutine BDOS read next record
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	4775H
+
+SEQRD:
 C.4775:	CALL	C.4EFD
 	CALL	C.4B26
 	JR	J$4783
@@ -1738,6 +1831,10 @@ C.4775:	CALL	C.4EFD
 ;	  Subroutine BDOS write next record
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	477DH
+
+SEQWRT:
 C.477D:	CALL	C.4EFD
 	CALL	C.4CAF
 J$4783:	CALL	C.486A
@@ -1746,6 +1843,10 @@ J$4783:	CALL	C.486A
 ;	  Subroutine BDOS random access read record
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	4788H
+
+RNDRD:
 C.4788:	CALL	C.4857
 	CALL	C.4B26
 	JR	J$4799
@@ -1760,6 +1861,10 @@ C.4790:	PUSH	IY
 ;	  Subroutine BDOS random access write record
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	4793H
+
+RNDWRT:
 C.4793:	CALL	C.4857
 	CALL	C.4CAF
 J$4799:	CALL	C.4844
@@ -1777,6 +1882,10 @@ J$479C:	LD	A,L
 ;	  Subroutine BDOS read random block
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	47B2H
+
+BLKRD:
 C.47B2:	XOR	A
 	LD	(D.F306),A		; no CP/M function result compatibility
 	CALL	C.485A
@@ -1786,6 +1895,10 @@ C.47B2:	XOR	A
 ;	  Subroutine BDOS write random block
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	47BEH
+
+BLKWRT:
 C.47BE:	XOR	A
 	LD	(D.F306),A		; no CP/M function result compatibility
 	CALL	C.485A
@@ -1799,6 +1912,10 @@ J$47C8:	CALL	C.486A
 ;	  Subroutine BDOS write random with zero fill
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	47D1H
+
+ZWRITE:
 C.47D1:	PUSH	DE
 	POP	IY
 	LD	A,(IY+16)
@@ -2004,6 +2121,7 @@ C.491C:	CALL	C$F27C
 ;	  Subroutine multiply high word
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.4922:	LD	A,B
 	LD	B,17
 	JR	J$492E
@@ -2839,6 +2957,7 @@ C.4EDA:	CALL	C.5FEF			 ; get pointer to driver workarea
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$4EDD:	LD	DE,14
 	ADD	IX,DE
 
@@ -3004,6 +3123,7 @@ I$4FA8:	DEFB	1,6,2,7,3,8,4,9,5
 ;	  Subroutine CALL CHKDSK
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.4FB1:	PUSH	HL
 	CALL	C$7E74
 	POP	HL
@@ -3013,6 +3133,10 @@ C.4FB1:	PUSH	HL
 ;	  Subroutine BDOS search for first
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	4FB8H
+
+SRCHFR:
 C.4FB8:	CALL	C.429C
 J$4FBB:	JR	C,J.5000
 	LD	A,(D.F2B8)
@@ -3057,6 +3181,10 @@ J.5000:	LD	A,0FFH
 ;	  Subroutine BDOS search for next
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	5006H
+
+SRCHNX:
 C.5006:	CALL	C.440E
 	JR	C,J.5000
 	LD	A,(D.F30B)
@@ -3070,6 +3198,10 @@ C.5006:	CALL	C.440E
 ;	  Subroutine BDOS compute file size
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	501EH
+
+FILESI:
 C.501E:	CALL	C.429C
 	LD	A,0FFH
 	RET	C
@@ -3099,6 +3231,10 @@ J.5043:	LD	(IX+33),C
 ;	  Subroutine BDOS return bitmap of logged-in disks
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	504EH
+
+LOGIN:
 C.504E:	LD	A,(D.F347)
 	LD	B,A			; total number of drives
 	XOR	A
@@ -3110,12 +3246,20 @@ J$5053:	SCF
 ;	  Subroutine BDOS set DMA address
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	5058H
+
+SETDMA:
 C.5058:	LD	(D.F23D),DE
 	RET
 
 ;	  Subroutine BDOS disk allocation information
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	505DH
+
+GETEFA:
 C.505D:	XOR	A
 	LD	(D.F306),A		; no CP/M function result compatibility
 	LD	A,E
@@ -3168,16 +3312,23 @@ C.5095:	PUSH	AF
 	CALL	C.517F			; enable I/O ports
 	XOR	A
 	OUT	(0D4H),A		; motor off, side 0, unselect drive
-	JP	J$79DF			; disable I/O ports when enabled
+	JP	J$79DF			; disable I/O ports of interface in current slot when two or more DDX or FAST disk interfaces
 
 ;	  Subroutine BDOS reset disks
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	509FH
+
+DSKRES:
 C.509F:	LD	HL,DBUF
 	LD	(D.F23D),HL
 	XOR	A
 	LD	(D.F247),A		; current drive id = 0
-	CALL	C.472D
+
+	_DOSCP	50A9H
+
+WRTFAT:	CALL	C.472D
 	CALL	C.45C4			; flush FAT buffer
 	XOR	A
 	RET
@@ -3207,12 +3358,20 @@ I$50B1:	DEFB	10H
 ;	  Subroutine BDOS return current disk
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	50C4H
+
+GETDRV:
 C.50C4:	LD	A,(D.F247)		; current drive id
 	RET
 
 ;	  Subroutine BDOS update random access pointer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	50C8H
+
+SETRND:
 C.50C8:	CALL	C.4EFD
 	LD	(IY+33),L
 	LD	(IY+34),H
@@ -3222,6 +3381,10 @@ C.50C8:	CALL	C.4EFD
 ;	  Subroutine BDOS select disk
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	50D5H
+
+SELDSK:
 C.50D5:	LD	A,(D.F347)
 	CP	E			; valid drive id ?
 	RET	C			; nope, quit
@@ -3233,6 +3396,10 @@ C.50D5:	LD	A,(D.F347)
 ;	  Subroutine BDOS buffered console input
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	50E0H
+
+BUFIN:
 C.50E0:	PUSH	DE
 	LD	A,(D.F237)
 	LD	(D.F238),A
@@ -3338,6 +3505,7 @@ J.517D:	JR	C.5104
 ;	  Subroutine enable I/O ports
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.517F:	LD	(D.6205),A
 	RET
 
@@ -3345,6 +3513,9 @@ C.517F:	LD	(D.6205),A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	5183H
+
+CRLF:
 C.5183:	LD	A,0DH	; 13 
 	CALL	C.53A8
 	LD	A,0AH	; 10 
@@ -3355,6 +3526,7 @@ C.518D:	POP	DE
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$518E:	CALL	C.53A8
 	PUSH	DE
 	INC	DE
@@ -3669,6 +3841,7 @@ C.5349:	LD	BC,12*256+0
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.534C:	LD	(HL),C
 	INC	HL
 	DJNZ	C.534C
@@ -3702,6 +3875,9 @@ C$5357:	DEC	A			; to drive id
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	535DH
+
+BUFOUT:
 C.535D:	CP	20H	; " "
 	JR	NC,C.53A8
 	CP	09H	; 9 
@@ -3727,11 +3903,16 @@ NKEYNT  EQU     ($-I$5374)/3
 ;	  Subroutine BDOS console output
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	53A7H
+
+CONOUT:
 C.53A7:	LD	A,E
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.53A8:	CALL	C$F2AF
 	CP	0BH	; 11 
 	JR	Z,J.53E8
@@ -3826,6 +4007,10 @@ J$5437:	XOR	A
 ;	  Subroutine BDOS console status
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	543CH
+
+CONSTA:
 C.543C:	CALL	C.5412
 	LD	A,00H
 	RET	Z
@@ -3835,6 +4020,10 @@ C.543C:	CALL	C.5412
 ;	  Subroutine BDOS console input
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	5445H
+
+CONIN:
 C.5445:	CALL	C.544E			; direct console input (with control keys)
 	PUSH	AF
 	CALL	C.53A8
@@ -3844,6 +4033,10 @@ C.5445:	CALL	C.544E			; direct console input (with control keys)
 ;	  Subroutine BDOS direct console input (with control keys)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	544EH
+
+IN:
 C.544E:	CALL	C.541D
 	JR	Z,C.544E
 	RET
@@ -3851,6 +4044,10 @@ C.544E:	CALL	C.541D
 ;	  Subroutine BDOS direct console I/O
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	5454H
+
+RAWIO:
 C.5454:	LD	A,E
 	CP	0FFH			; direct console input ?
 	JP	NZ,C.408F		; nope, character to screen
@@ -3863,12 +4060,18 @@ C.5454:	LD	A,E
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	5462H
+
+RAWINP:
 C.5462:	JP	C.4078			; get key (use stored if any)
 
 ;	  Subroutine BDOS printer output
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	5465H
+
+LIST:
 C.5465:	LD	A,E
 
 ;	  Subroutine __________________________
@@ -3884,6 +4087,9 @@ C$5466:	PUSH	AF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	546EH
+
+READER:
 C.546E:	CALL	C.5412
 	JP	J$F371
 
@@ -3891,6 +4097,9 @@ C.546E:	CALL	C.5412
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	5474H
+
+PUNCH:
 C.5474:	LD	A,E
 
 ;	  Subroutine __________________________
@@ -4011,6 +4220,7 @@ C.550A:	CALL	C$F2B5
 ;	  Subroutine update number of days in februari
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$5510:	AND	03H
 	LD	A,28
 	JR	NZ,J$5517
@@ -4046,6 +4256,10 @@ I$552C:	DEFW	0163H			; media 0F8H
 ;	  Subroutine BDOS get date
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	553CH
+
+GETDAT:
 C.553C:	XOR	A
 	LD	(D.F306),A
 	CALL	C.54A7
@@ -4059,6 +4273,10 @@ C.553C:	XOR	A
 ;	  Subroutine BDOS set date
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	5552H
+
+SETDAT:
 C.5552:	LD	BC,I$F844
 	ADD	HL,BC
 	JR	NC,J.559A
@@ -4094,6 +4312,7 @@ J$5579:	LD	A,(HL)
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$5588:	LD	BC,(D.F24C)
 	LD	DE,7
 	INC	BC
@@ -4154,6 +4373,10 @@ C.55D2:	DEC	A
 ;	  Subroutine BDOS get time
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	55DBH
+
+GETTIM:
 C.55DB:	XOR	A
 	LD	(D.F306),A		; no CP/M function result compatibility
 	CALL	C.54A7
@@ -4165,6 +4388,10 @@ C.55DB:	XOR	A
 ;	  Subroutine BDOS set time
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	55E6H
+
+SETTIM:
 C.55E6:	LD	B,H
 	LD	C,L
 	LD	A,B
@@ -4185,6 +4412,10 @@ C.55E6:	LD	B,H
 ;	  Subroutine BDOS set verify flag
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
+	_DOSCP	55FFH
+
+SETRAW:
 C.55FF:	LD	A,E
 	LD	(D.F30D),A		; update read after write flag
 	RET
@@ -4274,6 +4505,7 @@ S.5677	EQU	$-I$5677
 ;	  Subroutine is double byte header character ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.5681:	PUSH	HL
 	LD	HL,I.F30F
 	CP	(HL)
@@ -4416,8 +4648,8 @@ J$5789:	LD	(HL),0C9H
 	INC	HL
 	DJNZ	J$5789
 J$578E:	LD	HL,(D.FC48)
-	LD	DE,I$C001
-	RST	20H			; at least 16 Kb RAM ?
+	LD	DE,I$C000+1
+	_RST	DCOMPR			; at least 16 Kb RAM ?
 	JR	NC,J$57A3		; nope, disable disk system initialisation and quit
 	LD	A,6
 	CALL	SNSMAT
@@ -4425,7 +4657,7 @@ J$578E:	LD	HL,(D.FC48)
 	RRCA				; SHIFT pressed ?
 	JR	C,J$57A9		; nope,
 	LD	A,7
-	RST	18H			; beep
+	_RST	OUTDO			; beep
 J$57A3:	LD	A,0FFH
 	LD	(DEVICE),A		; disable disk system initialisation
 	RET
@@ -4458,7 +4690,7 @@ J$57B6:	PUSH	HL			; store pointer to driver work area
 	AND	02H			; CTRL key
 	LD	(D.F33F),A		; store CTRL key status
 	LD	A,7
-	RST	18H			; beep
+	_RST	OUTDO			; beep
 
 J$57EF:	LD	A,(D.F313)
 	CP	13H			; dos version >= 1.3 ?
@@ -4506,7 +4738,7 @@ J.583F:	CALL	C.5FFA			; get pointer to SLTWRK entry
 	LD	(HL),D			; store pointer to driver workarea
 	LD	HL,(D.F6AB)
 	LD	DE,SECLEN		; biggest sector size interface
-	RST	20H
+	_RST	DCOMPR
 	JR	NC,J$5852
 	LD	(D.F6AB),DE		; update biggest sector size
 J$5852:	CALL	C$7BD4			; detect disk drives
@@ -4596,7 +4828,7 @@ J$58D3:	CALL	INIENV			; initialize environment
 	LD	HL,DEVICE
 	INC	(HL)
 	RET
-I$58DE:	RST	30H
+I$58DE:	_RST	CALLF
 	DEFB	0
 	DEFW	C.58EB
 	RET
@@ -4779,7 +5011,7 @@ J$5A4C:	LD	HL,J.5B91
 	CALL	C$5B38			; setup and start boot loader (environment = DiskBASIC)
 	LD	HL,(D.FC48)
 	LD	DE,I$8000
-	RST	20H			; at least 32 Kb ?
+	_RST	DCOMPR			; at least 32 Kb ?
 	RET	NZ			; nope (failed MSXDOS requirement), quit to DiskBASIC
 	LD	HL,D.F341
 	LD	A,(EXPTBL+0)		; slot id main ROM
@@ -4882,8 +5114,8 @@ J$5AF5:	POP	HL
 	CALL	C.62A1			; relocate routine
 	POP	HL
 	LD	A,0C3H
-	LD	(X.0038+0),A
-	LD	(X.0038+1),HL
+	LD	(KEYINT+0),A
+	LD	(KEYINT+1),HL
 	LD	DE,34
 	ADD	HL,DE
 	LD	DE,(D.F34B)
@@ -4899,6 +5131,7 @@ J$5AF5:	POP	HL
 ;	  Subroutine setup and start boot loader
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$5B38:	LD	HL,D.F323		; pointer to address disk error handler
 	LD	DE,X.F368		; $DOSON
 	LD	A,(D.F340)		; cold boot flag
@@ -4949,6 +5182,7 @@ I$5B8F:	DEFW	C.5BEA
 ;	  Subroutine start DiskBASIC
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 J.5B91:	CALL	C.5CB6			; disable MSXDOS slot support
 	LD	HL,I$5B7F
 	LD	DE,X.F568
@@ -4999,6 +5233,7 @@ J$5BDF:	XOR	A
 ;	  Subroutine disk error handler
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.5BEA:	LD	SP,I.C200
 	LD	A,(D.F338)
 	AND	A			; have real time device ?
@@ -5029,7 +5264,7 @@ J.5BF8:	LD	SP,I.C200
 	LD	A,0FFH
 	LD	(D$F3DE),A
 	LD	A,0CH	; 12 
-	RST	18H
+	_RST	OUTDO
 	LD	IX,I$7D31
 	CALL	CALBAS
 	CALL	C.5FA9
@@ -5051,6 +5286,7 @@ J.5BF8:	LD	SP,I.C200
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.5C6C:	LD	HL,I$4068
 	LD	(D.F323),HL		; install disk error handler
 	LD	HL,I.570D
@@ -5087,6 +5323,7 @@ J$5C83	EQU	$-1
 ;	  Subroutine disable MSXDOS slot support
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.5CB6:	LD	A,0C9H
 
 ;	  Subroutine update MSXDOS slot support
@@ -5709,6 +5946,7 @@ J$601E:	LD	B,0
 ;	  Subroutine SETINT
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 SETINT:
 J$6023:	LD	A,(H.TIMI+0)
 	CP	0C9H			; H.TIMI in use ?
@@ -5822,6 +6060,7 @@ I$60B1:	CALL	C.517F			; enable I/O ports
 ;	  Subroutine determine drive id and slot id of interface
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.60B7:	LD	(D.F33F),A		; store drive id
 	LD	HL,I.FB21
 J$60BD:	SUB	(HL)			; drive id handled by this interface ?
@@ -5990,7 +6229,7 @@ J$61CB:	LD	DE,I.F698
 	LD	(D.F663),A
 	CALL	C.2EF3
 	LD	DE,D.F69B
-	RST	20H
+	_RST	DCOMPR
 	LD	(D.F678),HL
 	RET	NZ
 	JP	J.7239
@@ -6097,7 +6336,7 @@ C.6276:	LD	HL,-256
 I$6288:	LD	A,D
 	CP	9
 	JP	NC,J.6EC9
-	RST	30H
+	_RST	CALLF
 	DEFB	0
 	DEC	BC
 	LD	L,D
@@ -6107,7 +6346,7 @@ I$6288:	LD	A,D
 ?.6296:	LD	A,D
 	CP	9
 	JP	NC,J.6E95
-	RST	30H
+	_RST	CALLF
 	DEFB	0
 	LD	C,A
 	LD	L,C
@@ -6116,6 +6355,7 @@ I$6288:	LD	A,D
 ;	  Subroutine relocate routine
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.62A1:	PUSH	DE
 	EX	DE,HL
 	AND	A
@@ -6173,7 +6413,7 @@ I$62CE:	PUSH	IX
 	LD	A,L
 	OR	H
 	POP	HL
-	LD	IX,X.0038
+	LD	IX,KEYINT
 	LD	IY,(EXPTBL+0-1)
 	JR	NZ,J$630D
 	POP	AF
@@ -6281,6 +6521,7 @@ I$634F:	DEFB	00H
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.636C:	CALL	C.643A
 	JP	M,J$637C
 	IN	A,(0A8H)
@@ -6352,6 +6593,7 @@ J$63AE:	POP	BC
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$63CD:	EXX
 	EX	AF,AF'
 	PUSH	IY
@@ -6524,6 +6766,7 @@ J$649C:	POP	DE
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.64A1:	LD	A,B
 	JR	J$64CF
 J$64A4:	CALL	C.64B9
@@ -6653,6 +6896,7 @@ J.6523:	LD	A,(DE)
 ;	  Subroutine CALL SYSTEM
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.652E:	RET	NZ
 	LD	A,(D.F346)
 	AND	A
@@ -6668,6 +6912,7 @@ I.6545	EQU	$-2
 ;	  Subroutine CALL FORMAT
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.6547:	PUSH	HL
 	PUSH	AF
 	LD	A,(D.F347)
@@ -7250,6 +7495,7 @@ C.687B:	CALL	C.72C2
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.689F:	LD	IX,I$6B24
 	JP	C.7260
 C.68A6:	LD	IX,I$739A
@@ -7360,7 +7606,7 @@ J$6940:	PUSH	AF
 	LD	(D.F87D),DE
 	EX	(SP),HL
 	EX	DE,HL
-	RST	20H
+	_RST	DCOMPR
 	JP	C,J.7257
 	EX	DE,HL
 	EX	(SP),HL
@@ -7420,7 +7666,7 @@ J$69C5:	LD	A,0FFH
 J$69D1:	CALL	C.70A3
 J$69D4:	PUSH	HL
 	LD	DE,(D.FCBF)
-	RST	20H
+	_RST	DCOMPR
 	PUSH	AF
 	LD	C,L
 	LD	B,H
@@ -7507,7 +7753,7 @@ J$6A75:	CALL	C$6E36
 J$6A7A:	CALL	C.70A3
 J$6A7D:	PUSH	HL
 	LD	DE,(D.FCBF)
-	RST	20H
+	_RST	DCOMPR
 	PUSH	AF
 	LD	DE,(D.F353)
 	CALL	C.47B2			; read random block
@@ -7745,7 +7991,7 @@ J$6BEB:	EX	DE,HL
 	LD	(D.F56A),HL
 	EX	DE,HL
 	LD	HL,(X.F568)
-	RST	20H
+	_RST	DCOMPR
 	JP	C,J$7248
 I.6C1C:	POP	DE
 	POP	HL
@@ -7786,6 +8032,7 @@ C$6C36:	LD	IX,I$5597
 
 C.6C3D:	LD	IX,I$67D0
 	JP	C.7260
+
 C.6C44:	DEFB	0F6H
 C.6C45:	SCF
 
@@ -7815,10 +8062,10 @@ C.6C45:	SCF
 	JR	Z,J$6CC2
 	LD	HL,(D.F862)
 	DEC	HL
-	RST	20H
+	_RST	DCOMPR
 	JR	C,J.6CA0
 	LD	HL,(D.F6C2)
-	RST	20H
+	_RST	DCOMPR
 	JR	C,J.6CA0
 	LD	E,C
 	LD	D,00H
@@ -7826,7 +8073,7 @@ C.6C45:	SCF
 	ADD	HL,DE
 	EX	DE,HL
 	LD	HL,(D.F69B)
-	RST	20H
+	_RST	DCOMPR
 	JR	C,J$6CD5
 	POP	AF
 J$6C86:	LD	A,C
@@ -7914,7 +8161,7 @@ J$6CD5:	POP	AF
 	LD	(D.F663),A
 	CALL	C.2EF3
 	LD	DE,D.F69B
-	RST	20H
+	_RST	DCOMPR
 	LD	(D.F678),HL
 	JP	Z,J.7239
 	POP	BC
@@ -8041,7 +8288,7 @@ J$6DEB:	LD	HL,I$F5B3
 	LD	B,11
 J$6DF0:	LD	A,(HL)
 	INC	HL
-	RST	18H
+	_RST	OUTDO
 	LD	A,B
 	CP	04H	; 4 
 	JR	NZ,J$6E00
@@ -8049,7 +8296,7 @@ J$6DF0:	LD	A,(HL)
 	CP	20H	; " "
 	JR	Z,J$6DFF
 	LD	A,2EH	; "."
-J$6DFF:	RST	18H
+J$6DFF:	_RST	OUTDO
 J$6E00:	DJNZ	J$6DF0
 	CALL	CKCNTC
 	POP	AF
@@ -8066,7 +8313,7 @@ J$6E15:	AND	A
 	CP	B
 	JR	NC,J$6E20
 	LD	A,20H	; " "
-	RST	18H
+	_RST	OUTDO
 J$6E20:	LD	IX,I$7328
 	CALL	NC,C.7260
 J$6E27:	LD	DE,X.F568
@@ -8532,6 +8779,7 @@ I$71F2:	DEFB	"Format complete",0
 ;	  Subroutine disk error handler
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7202:	BIT	7,C
 	JP	NZ,J$70D4
 	LD	A,C
@@ -8571,10 +8819,11 @@ C.7226:	LD	A,0C9H
 	LD	DE,(D.FC4A)
 	LD	(D.F349),DE
 	RET
-I$7234:	RST	30H
+I$7234:	_RST	CALLF
 	DEFB	0
 	DEFW	C.7226
 	RET
+
 J.7239:	LD	E,10H
 	DEFB	1
 J.723C:	LD	E,0DH
@@ -8603,6 +8852,7 @@ J$725C:	LD	IX,I$406F
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7260:	CALL	CALBAS
 	EI
 	RET
@@ -8621,12 +8871,12 @@ J$7273:	ADD	HL,SP
 	LD	D,(HL)
 	PUSH	HL
 	LD	HL,J.6E95
-	RST	20H
+	_RST	DCOMPR
 	POP	HL
 	JR	Z,J$728C
 	PUSH	HL
 	LD	HL,J.6EC9
-	RST	20H
+	_RST	DCOMPR
 	POP	HL
 	JR	NZ,J$7292
 	LD	DE,I$F377
@@ -8705,13 +8955,14 @@ C.F1C9:	CALL	X.F36B
 
 C.F1D9:	CALL	X.F36B
 	LDIR
-	CALL	X.F368
+
+C.F1DE:	CALL	X.F368
 	RET
 
 C.F1E2:	CALL	X.F36B
 	JP	0
 
-C.F1E8:	LD	DE,I$F1DE
+C.F1E8:	LD	DE,C.F1DE
 	PUSH	DE
 	LD	E,(HL)
 	INC	HL
@@ -8744,6 +8995,7 @@ S.72D9	EQU	$-J.72D9
 ;	  Subroutine INIENV
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 INIENV:
 C$7347:	LD	A,1
 	LD	(D.F30D),A		; enable read after write (verify)
@@ -8914,12 +9166,14 @@ J.744C:	POP	DE
 ;	  Subroutine CALL VERIFY ON
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.744F:	LD	E,1
 	JR	J$7455
 
 ;	  Subroutine CALL VERIFY OFF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7453:	LD	E,0
 J$7455:	RET	NZ
 	LD	C,2EH
@@ -9558,6 +9812,7 @@ J$7863:	POP	AF
 ;	  Subroutine format track
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$7867:	PUSH	BC
 	PUSH	DE
 	CALL	C.7B3C			; reset FDC and wait for FDC ready
@@ -9800,12 +10055,13 @@ J.79DA:	PUSH	AF
 	EI
 	CALL	ENAINT
 
-;	  Subroutine disable I/O ports when enabled
+;	  Subroutine disable I/O ports of interface in current slot when two or more DDX or FAST disk interfaces
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 J$79DF:	LD	A,(D.F33E)
-	OR	A			; I/O ports enabled ?
-	CALL	NZ,C.7BF1		; yep, disable I/O ports
+	OR	A			; two or more DDX or FAST disk interfaces ?
+	CALL	NZ,C.7BF1		; yep, disable I/O ports of interface in current slot
 	POP	AF
 	RET
 
@@ -10043,6 +10299,7 @@ C.7B3C:	LD	A,0D0H			; FORCE INTERRUPT
 ;	  Subroutine wait for FDC ready
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7B40:	EX	(SP),HL
 	EX	(SP),HL
 	EX	(SP),HL
@@ -10108,26 +10365,26 @@ C.7B67:	PUSH	AF			; store CTRL status
 J$7B74:	POP	AF			; restore CTRL status
 	RET
 
-;	  Subroutine disable I/O ports of all interfaces, enable I/O ports of this interface
+;	  Subroutine ensure I/O ports are enabled only in current slot
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C.7B76:	LD	HL,D.F33E
 	XOR	A
-	LD	(HL),A			; I/O ports disabled
+	LD	(HL),A			; number of DDX or FAST disk interfaces = 0
 	PUSH	HL
-	CALL	C$7B9D			; relocate I/O ports disable routine in temporary area
-	CALL	X.F568			; disable I/O ports
+	CALL	C$7B9D			; copy disable I/O ports subroutine to temporary buffer and relocate subroutine
+	CALL	X.F568			; execute disable I/O ports subroutine
 	POP	HL
-	DEC	(HL)			; I/O ports enabled
-	JP	C.517F			; enable I/O ports
+	DEC	(HL)			; number of DDX or FAST disk interfaces excluding this disk interface
+	JP	C.517F			; enable I/O ports of interface in current slot
 
 ;	  Subroutine INIHRD
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 INIHRD:
-C$7B87:	CALL	C.7B76			; disable I/O ports of all interfaces, enable I/O ports of this interface
+C$7B87:	CALL	C.7B76			; ensure I/O ports are enabled only in current slot
 	LD	A,0ACH
 	OUT	(0D1H),A		; update cylinder register
 	CALL	C$7B63			; wait short
@@ -10184,7 +10441,7 @@ J$7BB5:	PUSH	DE			; store traget address routine
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C$7BD4:	CALL	C.7B76			; disable I/O ports of all interfaces, enable I/O ports of this interface
+C$7BD4:	CALL	C.7B76			; ensure I/O ports are enabled only in current slot
 	CALL	C.4EDA			; get pointer to drive driver work area
 	PUSH	IX
 	LD	C,1			; disk drive 0
@@ -10201,17 +10458,20 @@ J$7BDE:	CALL	C.7BF8			; detect disk drive
 ;	  Subroutine disable I/O ports
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7BF1:	LD	(D.7114),A			; disable I/O ports
 	LD	(D.711C),A			; disable I/O ports
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C$7BF7:	RET
 
 ;	  Subroutine detect disk drive
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7BF8:	DI
 	XOR	A
 	OUT	(0D4H),A		; motor off, side 0, unselect drive
@@ -10281,7 +10541,8 @@ J$7CB7:	HALT
 ;	  Subroutine number of logical drives to screen
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-C.7CBE:	LD	HL,I$7CF5		; logical
+
+C.7CBE:	LD	HL,I$7CF5		; log+ical
 
 ;	  Subroutine number of drives to screen
 ;	     Inputs  ________________________
@@ -10563,6 +10824,7 @@ J$7F3A:	ADD	A,"0"
 	JP	J$6192			; string + CR/LF to screen
 J$7F4F:	LD	HL,I$7F70		; disk ok string
 	JP	J.618F			; CR/LF + string + CR/LF to screen
+
 I$7F55:	DEFB	"Track 0 bad, disk unusable",0
 I$7F70:	DEFB	"Disk OK",0
 I$7F78:	DEFB	" bad cluster(s) marked",0
@@ -10591,12 +10853,12 @@ J$7FAC:	PUSH	BC			; store slot id
 	LD	HL,I.7FF5		; fast disk ROM string
 	LD	DE,I.7FF5
 	LD	B,S.7FF5
-	CALL	C.7FD3			; compare string, disable I/O ports when found
+	CALL	C.7FD3			; test for string, disable I/O ports of interface when found
 	JR	Z,J.7FD0		; fast disk ROM found,
 	LD	HL,I$7F00
 J$7FC1:	LD	DE,I$7FE6		; DDX interface ROM string
 	LD	B,S.7FE6
-	CALL	C.7FD3			; compare string, disable I/O ports when found
+	CALL	C.7FD3			; test for string, disable I/O ports of interface when found
 	JR	Z,J.7FD0		; DDX disk ROM found,
 	LD	A,H
 	CP	HIGH 8000H		; at end of disk ROM ?
@@ -10604,25 +10866,29 @@ J$7FC1:	LD	DE,I$7FE6		; DDX interface ROM string
 J.7FD0:	POP	BC			; restore slot id
 	JR	J.7F91			; next slot
 
-;	  Subroutine compare string, disable I/O ports when found
+;	  Subroutine test for string, disable I/O ports of interface when found
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
+
 C.7FD3:	LD	A,(DE)
 	CP	(HL)
 	INC	HL
 	RET	NZ
 	INC	DE
-	DJNZ	C.7FD3				; compare string
-	LD	(D.7114),A			; disable I/O ports
-	LD	(D.711C),A			; disable I/O ports
+	DJNZ	C.7FD3			; compare string
+	LD	(D.7114),A		; disable I/O ports
+	LD	(D.711C),A		; disable I/O ports
 	LD	HL,D.F33E
-	INC	(HL)				; I/O ports disabled
+	INC	(HL)			; update number of DDX or FAST disk interfaces
 	XOR	A
 	RET
+
 I$7FE6:	DEFB	"DDX-DRIVE Inter"
 S.7FE6	EQU	$-I$7FE6
+
 I.7FF5:	DEFB	"FASTbyA&L05"
 S.7FF5	EQU	$-I.7FF5
+
 S.7F8F	EQU	$-I$7F8F
 
 	END
