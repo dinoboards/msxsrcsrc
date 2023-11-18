@@ -2,6 +2,11 @@
 
 ; DOS2 compile options
 
+; OPTM
+; 0 = orginal code
+; 1 = optimized code
+OPTM	EQU	0
+
 ; ROMVER
 ; 0 = first ST version (2.30 fix level 0)
 ; 1 = second ST version (2.30 fix level 1)

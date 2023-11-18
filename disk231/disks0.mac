@@ -47,6 +47,37 @@ TMPSTK	EQU	BOT16K+BOOTSZ+256	; location of temporary stack
 ;	PUBLIC	ENASLT
 ;	PUBLIC	XFER
 
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+_DOSCP	MACRO	X
+	IF2
+	IF	($ NE X)
+	.PRINTX	"ERROR: MSXDOS incompatible, subroutine not aligned to &X"
+	ENDIF
+	ENDIF
+	ENDM
+
+
 WBOOT	EQU	00000H
 DBUF	EQU	00080H
 X003B	EQU	0003BH			; start of the slot switching helpers for MSX-DOS environment
@@ -78,8 +109,8 @@ KILBUF	EQU	00156H
 CHGCPU	EQU	00180H
 
 LBC00	EQU	0BC00H			; ramdisk bootsector
-LBE00	EQU	0BE00H			; number of ramdisksegments
-LBE02	EQU	0BE02H			; ramdisk segmenttable
+LBE00	EQU	0BE00H			; number of ramdisk segments
+LBE02	EQU	0BE02H			; ramdisk segment table
 
 LF1C9	EQU	0F1C9H			; BDOS _STROUT
 LF1D3	EQU	0F1D3H			; transfer to/from page 1
@@ -181,50 +212,50 @@ CONDS	EQU	03042H			; convert DAC from sgn to dbl
 INT	EQU	030D1H			; dbl to integer
 SGNMUL	EQU	0325CH			; sgn multiply
 NULSTR	EQU	03FD6H			; empty string
-ERROR   equ     0406FH          ; BASIC error
-READYR  equ     0409BH          ; restart BASIC
-NTSTOP  equ     04173H          ; execute statement
-LINKER  equ     04253H          ; recalculate linepointers
-NEWSTT  equ     04601H          ; execution loop
-CHRGTR  equ     04666H          ; CHRGTR
-FLTLIN  equ     046FFH          ; convert to SNG
-INTID2  equ     04756H          ; evaluate word operand and check for 0-32767 range
-FCERR	EQU	0475AH		; illegal function call
-FINPRT  equ     04AFFH          ; output back to screen
-FRMEQL  equ     04C5FH          ; evaluate =expression
-FRMEVL  equ     04C64H          ; evaluate expression
-DOCNVF  equ     0517AH          ; convert DAC to other type
-GETIN2  EQU     0520FH          ; evaluate integer operand
-GTBYTC  equ     0521BH          ; evaluate next byte operand
-GETBYT  equ     0521CH          ; evaluate byte operand
-CONINT  equ     0521FH          ; convert to byte
-M537B   EQU     537BH           ; convert DAC to text, unformatted
-GETUIN  equ     0542FH          ; evaluate address operand
-GETUI   equ     05432H          ; convert address to integer
-SCCPTR  equ     054F7H          ; convert pointers to linenumbers
-GETYPR  equ     05597H          ; GETYPR
-PTRGET  equ     05EA4H          ; get address of variable
-STRINI  equ     06627H          ; allocate temp string
-GETSPA  equ     0668EH          ; allocate stringspace
-FRESTR  equ     067D0H          ; free temporary string
-FILEVL  equ     06A0EH          ; evaluate filespecification
-FILIDX  equ     06A6DH          ; get i/o channel pointer
-OPNFIL  equ     06AFAH          ; open i/o channel
-CLSFIL  equ     06B24H          ; close i/o channel
-CLSALL  equ     06C1CH          ; close all i/o channels
-NOSKCR  equ     06E41H          ; resume character putback routine
-BSAVE   equ     06E92H          ; start of BSAVE routine
-BLOAD   equ     06EC6H          ; start of BLOAD routine
-BLDFIN  equ     06EF4H          ; finish BLOAD
-M6F0B   equ     06F0BH          ; evaluate address operand (BLOAD/SAVE)
-PARDEV  equ     06F15H          ; skip strong cassette devicecheck
-CRDONZ  equ     07323H          ; newline to OUTDO if not at start of line
-CRDO    equ     07328H          ; newline to OUTDO
-M739A   equ     0739AH          ; quit loading & start (headloop/executing)
-M7D17   equ     07D17H          ; continue start of MSX-BASIC without executing BASIC programs in ROM
-M7D2F   equ     07D2FH          ; address initialize BASIC screen
-M7D31   equ     07D31H          ; BASIC initscreen (without INITXT & CNSDFG)
-M7DE9   EQU     7DE9H           ; start MSX-BASIC program in ROM
+ERROR   equ     0406FH          	; BASIC error
+READYR  equ     0409BH          	; restart BASIC
+NTSTOP  equ     04173H          	; execute statement
+LINKER  equ     04253H          	; recalculate linepointers
+NEWSTT  equ     04601H          	; execution loop
+CHRGTR  equ     04666H          	; CHRGTR
+FLTLIN  equ     046FFH          	; convert to SNG
+INTID2  equ     04756H          	; evaluate word operand and check for 0-32767 range
+FCERR	EQU	0475AH			; illegal function call
+FINPRT  equ     04AFFH          	; output back to screen
+FRMEQL  equ     04C5FH          	; evaluate =expression
+FRMEVL  equ     04C64H          	; evaluate expression
+DOCNVF  equ     0517AH          	; convert DAC to other type
+GETIN2  EQU     0520FH          	; evaluate integer operand
+GTBYTC  equ     0521BH          	; evaluate next byte operand
+GETBYT  equ     0521CH          	; evaluate byte operand
+CONINT  equ     0521FH          	; convert to byte
+JPFOUT  EQU     0537BH           	; convert DAC to text, unformatted (JPFOUT is not an offical name)
+GETUIN  equ     0542FH          	; evaluate address operand
+GETUI   equ     05432H          	; convert address to integer
+SCCPTR  equ     054F7H          	; convert pointers to linenumbers
+GETYPR  equ     05597H          	; GETYPR
+PTRGET  equ     05EA4H          	; get address of variable
+STRINI  equ     06627H          	; allocate temp string
+GETSPA  equ     0668EH          	; allocate stringspace
+FRESTR  equ     067D0H          	; free temporary string
+FILEVL  equ     06A0EH          	; evaluate filespecification
+FILIDX  equ     06A6DH          	; get i/o channel pointer
+OPNFIL  equ     06AFAH          	; open i/o channel
+CLSFIL  equ     06B24H          	; close i/o channel
+CLSALL  equ     06C1CH          	; close all i/o channels
+NOSKCR  equ     06E41H          	; resume character putback routine
+BSAVE   equ     06E92H          	; start of BSAVE routine
+BLOAD   equ     06EC6H          	; start of BLOAD routine
+BLDFIN  equ     06EF4H          	; finish BLOAD
+ADRGET  equ     06F0BH          	; evaluate address operand (BLOAD/SAVE)
+PARDEV  equ     06F15H          	; skip strong cassette devicecheck
+CRDONZ  equ     07323H          	; newline to OUTDO if not at start of line
+CRDO    equ     07328H          	; newline to OUTDO
+M739A   equ     0739AH          	; quit loading & start (headloop/executing)
+M7D17   equ     07D17H          	; continue start of MSX-BASIC without executing BASIC programs in ROM
+M7D2F   equ     07D2FH        		; address initialize BASIC screen
+M7D31   equ     07D31H          	; BASIC initscreen (without INITXT & CNSDFG)
+M7DE9   EQU     7DE9H    	       	; start MSX-BASIC program in ROM
 
 
 A58A8	EQU	058A8H			; continue to disksystem 1.x init
@@ -264,7 +295,7 @@ NLONLY	EQU	0F87CH
 SAVEND	EQU	0F87DH
 HOKVLD	EQU	0FB20H			; EXTBIO valid flag (b0)
 DRVTBL	EQU	0FB21H			; disk interface table
-DRVINT	EQU	0FB29H			; disk interface interrupt table
+HOOKSA	EQU	0FB29H			; disk interface interrupt table
 BASROM	EQU	0FBB1H
 BOTTOM	EQU	0FC48H
 HIMEM	EQU	0FC4AH
@@ -334,48 +365,52 @@ CLRSIZ	EQU	LF325+1-LF2B8
 
         
         DEFB	"AB"
-        DEFW	C403C		; Init routine
-        DEFW	C575C		; Call routine
-        DEFW	0
-        DEFW	0
-        DEFW	0
-        DEFW	0
-        DEFW	0
+        DEFW	C403C			; extension ROM initialization
+        DEFW	C575C			; extension ROM BASIC CALL statement handler
+        DEFW	0			; extension ROM BASIC device handler (none)
+        DEFW	0			; extension ROM BASIC program (none)
+        DEFS	6,0			; extension ROM further use
 
 ;	  Subroutine DRIVER: DSKIO
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+DKRWEN:
 C4010:	JP	DSKIO
 
 ;	  Subroutine DRIVER: DSKCHG
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+DKCHGE:
 C4013:	JP	DSKCHG
 
 ;	  Subroutine DRIVER: GETDPB
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+GTDPBE:
 C4016:	JP	GETDPB
 
 ;	  Subroutine DRIVER: CHOICE
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+CHOIEN:
 C4019:	JP	CHOICE
 
 ;	  Subroutine DRIVER: DSKFMT
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+DKFMTE:
 C401C:	JP	DSKFMT
 
 ;	  Subroutine DRIVER: MTOFF
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+MTOFFE:
 C401F:	JP	MTOFF
 
 ;	  Subroutine start DiskBASIC
@@ -383,6 +418,7 @@ C401F:	JP	MTOFF
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+BASENT:
 C4022:	JP	J4B43
 
 ;	  Subroutine format disk
@@ -390,6 +426,7 @@ C4022:	JP	J4B43
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+FORENT:
 C4025:	SCF			; workarea specified
         JP	J4E8F		; format disk
 
@@ -411,6 +448,9 @@ C402D:	JP	C4E2D
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
+	_DOSCP	4030H
+
+$INIT:
 C4030:	LD	HL,(LF34B)
         RET
 
@@ -419,6 +459,9 @@ C4030:	LD	HL,(LF34B)
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	4034H
+
+$$BIOS:
 C4034:	JP	J417C
 
         DEFS	04038H-$,0
@@ -434,7 +477,7 @@ C403C:	XOR	A
         CALL	C7FD0			; select bank 0
         JP	J47D6			; start initialization
 
-C4043:	CALL	C410C			; EXTBIO handler memorymapper
+C4043:	CALL	C410C			; EXTBIO handler memory mapper
         JP	LF2D5			; continue EXTBIO
 
 ;	  Subroutine DOS2 timer routine
@@ -459,6 +502,7 @@ C4049:	PUSH	AF
 J405B:	CALL	C7FD0			; select bank
         EX	AF,AF'
         CALL	C4069			; call routine
+        EX	AF,AF'
         XOR	A
         CALL	C7FD0			; select bank 0
         EX	AF,AF'
@@ -473,6 +517,9 @@ C4069:	JP	(IX)
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	4078H
+
+$IN:
 C4078:	JP	J4181
 
         DEFS	04080H-$,0
@@ -492,6 +539,9 @@ C408C:	JP	R_DSKFMT		; RAMDISK: DSKFMT routine
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	408FH
+
+$OUT:
 C408F:	JP	J4186
 
         DEFS	040FFH-$,0
@@ -502,47 +552,47 @@ D40FF:	DEFB	0			; present bank number register
 ; the routine called depends from the call adress
 ; for example C4100 calls C4100 on bank 1, so add 00h to the caller
 
-;	  Subroutine check and invoke memorymapper of 6 or more segments
+;	  Subroutine check and invoke preferred memory mapper (6 or more segments)
+;	     Inputs  A = current slot id page 2
+;	     Outputs ________________________
+
+C4100:	CALL	C410F			; call subroutine in ROM bank 1 and quit
+
+;	  Subroutine install disk system routines
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4100:	CALL	C410F
-
-;	  Subroutine install disksystem routines
-;	     Inputs  ________________________
-;	     Outputs ________________________
-
-C4103:	CALL	C410F
+C4103:	CALL	C410F			; call subroutine in ROM bank 1 and quit
 
 ;	  Subroutine copy message to buffer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4106:	CALL	C410F
+C4106:	CALL	C410F			; call subroutine in ROM bank 1 and quit
 
 ;	  Subroutine copy errorstring to buffer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4109:	CALL	C410F
+C4109:	CALL	C410F			; call subroutine in ROM bank 1 and quit
 
-;	  Subroutine EXTBIO handler memorymapper
+;	  Subroutine EXTBIO handler memory mapper
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C410C:	CALL	C410F
+C410C:	CALL	C410F			; call subroutine in ROM bank 1 and quit
 
-;	  Subroutine __________________________
+;	  Subroutine call subroutine in ROM bank 1 and quit
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C410F:	POP	IX			; return address
-	PUSH	BC
+	PUSH	BC			; store
 	LD	BC,-3			; offset adjust
 	EX	AF,AF'
 	LD	A,1			; ROM bank 1
 	ADD	IX,BC
-	POP	BC
+	POP	BC			; restore
 	JP	J405B			; invoke routine in bank
 
         IF ROMVER LE 2
@@ -609,6 +659,9 @@ J418A:	JP	LF377			; invoke routine in BDOS code segment
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	41EFH
+
+CPMVER:
 C41EF:	LD	C,00CH
         JP	J4F7C
 
@@ -619,6 +672,9 @@ C41EF:	LD	C,00CH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	436CH
+
+DELETE:
 C436C:	LD	C,013H
         JP	J4F7C
 
@@ -629,6 +685,9 @@ C436C:	LD	C,013H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	4392H
+
+RENAME:
 C4392:	LD	C,017H
         JP	J4F7C
 
@@ -639,6 +698,9 @@ C4392:	LD	C,017H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	4462H
+
+OPEN:
 C4462:	LD	C,00FH
         JP	J4F7C
 
@@ -649,6 +711,9 @@ C4462:	LD	C,00FH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	456FH
+
+CLOSE:
 C456F:	LD	C,010H
         JP	J4F7C
 
@@ -659,6 +724,9 @@ C456F:	LD	C,010H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	461DH
+
+CREATE:
 C461D:	LD	C,016H
         JP	J4F7C
 
@@ -669,6 +737,9 @@ C461D:	LD	C,016H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	46BAH
+
+ABSREA:
 C46BA:	LD	C,02FH
         JP	J4F7C
 
@@ -679,6 +750,9 @@ C46BA:	LD	C,02FH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	4720H
+
+ABSWRI:
 C4720:	LD	C,030H
         JP	J4F7C
 
@@ -689,6 +763,9 @@ C4720:	LD	C,030H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	4775H
+
+SEQRD:
 C4775:	LD	C,014H
         JP	J4F7C
 
@@ -699,6 +776,9 @@ C4775:	LD	C,014H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	477DH
+
+SEQWRT:
 C477D:	LD	C,015H
         JP	J4F7C
 
@@ -709,6 +789,9 @@ C477D:	LD	C,015H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	4788H
+
+RNDRD:
 C4788:	LD	C,021H
         JP	J4F7C
 
@@ -719,6 +802,9 @@ C4788:	LD	C,021H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	4793H
+
+RNDWRT:
 C4793:	LD	C,022H
         JP	J4F7C
 
@@ -729,6 +815,9 @@ C4793:	LD	C,022H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	47B2H
+
+BLKRD:
 C47B2:	LD	C,027H
         JP	J4F7C
 
@@ -739,6 +828,9 @@ C47B2:	LD	C,027H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	47BEH
+
+BLKWRT:
 C47BE:	LD	C,026H
         JP	J4F7C
 
@@ -749,6 +841,9 @@ C47BE:	LD	C,026H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	47D1H
+
+ZWRITE:
 C47D1:	LD	C,028H
         JP	J4F7C
 ;
@@ -807,7 +902,7 @@ J481A:	LD	A,0FFH
 
 	RET
 
-J482B:	CALL	C4938			; select memory mapper with at least 6 segments
+J482B:	CALL	C4938			; select system memory mapper with at least 6 segments
 	RET	C			; error, quit
 	LD	HL,VARWRK-LF1C9
 	CALL	C5604			; allocate static workarea disksystem
@@ -851,7 +946,7 @@ J4853:	LD	(HL),0C9H
 J4873:	LD	A,(LF313)
 	CP	23H			; other disksystem at least version 2.3x ?
 	JR	NC,J4896		; yep, leave init at other disksystem
-	CALL	C4938			; select memory mapper with at least 6 segments
+	CALL	C4938			; select system memory mapper with at least 6 segments
 	RET	C			; error, quit
 ;
 ; I am doing the disksystem init
@@ -985,36 +1080,43 @@ J4929:	ADD	A,(HL)
 	RET	C			; nope, quit with Zx reset, Cx set
 J4935:	JP	J4C7C			; halt system
 
-;	  Subroutine select memory mapper with at least 6 segments
+;	  Subroutine select system memory mapper with at least 6 segments
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4938:	CALL	C4E3A			; get slotid page 2
-	CALL	C4100			; check and invoke memorymapper of 6 or more segments
+;       This is what the stack looks like at entry:
+;
+;       prim    exp
+;       +0      +0      returnaddress C4938 caller
+;       +2      +2      callf BIOS registers
+;       +6      +14     returnaddress CALLF caller
+
+C4938:	CALL	C4E3A			; get current slotid page 2
+	CALL	C4100			; check and invoke preferred memory mapper (6 or more segments)
 	RET	C			; error, quit
-	LD	HL,5
+	LD	HL,5			; offset stored primairy slot register (before CALLF)
 	ADD	HL,SP
 	IN	A,(0A8H)
 	RRD
-	LD	(HL),A
-	CALL	C4E2D			; get slotid page 1
+	LD	(HL),A			; update primairy slot page 3 and 2 on stack (otherwise memory mapper slot change will be rolled back)
+	CALL	C4E2D			; get slotid page 1 (slot id of this disk ROM)
 	BIT	7,A			; in secundairy slot ?
 	RET	Z			; nope, quit
-	LD	HL,12
+	LD	HL,12			; offset stored secundairy slot register (before CALLF)
 	ADD	HL,SP
-	LD	C,A
-	CALL	C4E49			; get slotid page 3
+	LD	C,A			; store slot id
+	CALL	C4E49			; get slotid page 3 (slot id of system memory mapper)
 	XOR	C
-	AND	03H			; master diskrom same primairy slot as selected memorymapper ?
+	AND	03H			; this disk ROM in the same primairy slot as system memory mapper ?
 	JR	NZ,J4962		; nope, skip update on secundairy slot
 	LD	A,(LFFFF)
 	CPL
 	RRD
-	LD	(HL),A			; update saved secundairy slot on stack (otherwise memorymapper change will be rolled back)
+	LD	(HL),A			; update secundairy slot page 3 and 2 on stack (otherwise memory mapper change will be rolled back)
 J4962:	DEC	HL
 	IN	A,(0A8H)
 	RRD
-	LD	(HL),A			; update only saved primairy slot on stack (otherwise memorymapper change will be rolled back)
+	LD	(HL),A			; update primairy slot page 3 and 2 on stack (otherwise memory mapper slot change will be rolled back)
 	RET
 
 ;	  Subroutine H.RUNC handler
@@ -1041,10 +1143,10 @@ J496E:	LD	(HL),0C9H
 	JR	Z,J4994			; yep, continue
 	DEC	A			; 1 extra (standalone DOS2) ?
 	JP	NZ,J4C7C		; nope (DRVTBL corrupted?), halt system
-	LD	DE,DRVINT+0
-	LD	HL,DRVINT+3
+	LD	DE,HOOKSA+0
+	LD	HL,HOOKSA+3
 	LD	BC,4*3			; BUG: should be 3*3
-	LDIR				; remove entry from DRVINT
+	LDIR				; remove entry from HOOKSA
 J4994:	CALL	C402D			; get my slotid
 	LD	(LF348),A		; master disksystem slotid
 	LD	HL,M0034
@@ -1121,7 +1223,7 @@ J4A1A:	LD	E,(HL)
 	EX	DE,HL
 J4A32:	INC	C
 	DJNZ	J4A1A			; next DPB
-	CALL	C4E3A			; get slotid page 2
+	CALL	C4E3A			; get current slotid page 2
 	CALL	C4103			; install disksystem routines
 	JP	C,J4C7C			; error, halt system
 	LD	HL,100+64+100+64
@@ -1170,7 +1272,11 @@ J4A32:	INC	C
 	CALL	CALSLT			; execute SCREEN INIT
 	CALL	C4C8E			; check H.CLEA and take action
 	LD	SP,TMPSTK
+
+	IF	DOS1 EQ 1
 	CALL	C518D			; invoke DOS1 kernel if DOS1 key pressed
+	ENDIF
+
 	LD	A,(H.STKE+0)
 	CP	0C9H			; H.STKE setup for interception (by ROM) ?
 	LD	IX,M7D17
@@ -1180,11 +1286,19 @@ J4A32:	INC	C
 	LD	IX,M7DE9
 	JR	NZ,J4AD1		; yep,  initialize and start DiskBASIC (starts BASIC program in ROM)
 	CALL	C4C3E			; disable XFER, SetRamPg1, SetRomPg1
+
+	IF	DOS1 EQ 1
 	LD	A,(RAMAD3)
-	LD	(RAMAD2),A		; RAM slotid page 2 = slotid RAM memorymapper
+	LD	(RAMAD2),A		; RAM slotid page 2 = slotid RAM memory mapper
+	ENDIF
+
 	JR	J4ADA
 
-J4AD1:	CALL	C519A			; invoke DOS1 kernel if DEFUSR0 is defined
+J4AD1:
+	IF	DOS1 EQ 1
+	CALL	C519A			; invoke DOS1 kernel if DEFUSR0 is defined
+	ENDIF
+
 	CALL	C4C10			; initialize DiskBASIC
 	JP	CALBAS			; start DiskBASIC
 
@@ -1199,9 +1313,15 @@ J4ADA:	LD	HL,J4B43
 
 	CALL	C6952			; try to load bootsector from any drive
 	RET	Z			; no valid bootdrive, quit to DiskBASIC
+
+	IF	DOS1 EQ 1
 	CALL	C51A9			; if disk has no volid, invoke DOS1 kernel. Otherwise start bootloader with Cx reset
+	ELSE
+	CALL	J4B23			; start bootloader with Cx reset
+	ENDIF
+
 	LD	HL,(BOTTOM)
-	LD	DE,BOT32
+	LD	DE,BOT32K
 	RST	DCOMPR			; at least 32 KB RAM ?
 	RET	NZ			; nope, quit to DiskBASIC
 	LD	A,(LF23C)		; start MSX-DOS2 from default drive
@@ -1234,8 +1354,12 @@ J4B0A:
 
 	CALL	C6952			; try to load bootsector from any drive
 	RET	Z			; no valid bootdrive, start DiskBASIC
+
+	IF	DOS1 EQ 1
 	CALL	C5243			; check if disk has a volumeid
 	RET	NZ			; nope, start DiskBASIC
+	ENDIF
+
 	LD	A,0C3H
 	CALL	C4C40			; enable XFER, SetRamPg1, SetRomPg1
 	SCF				; start bootloader with Cx set (MSXDOS disk system)
@@ -1582,7 +1706,13 @@ J4D00:	INC	HL
 	OR	A			; entry used ?
 	CALL	NZ,RDSLT		; yep, read MTOFF entry
 	OR	A			; disk interface has an MTOFF entry ?
+	
+	IF	DOS1 EQ 1
 	CALL	NZ,LF1DF		; yep, invoke disk interface MTOFF
+	ELSE
+	CALL	CALSLT
+	ENDIF
+
 	POP	BC
 	POP	HL
 	DJNZ	J4D00			; next entry
@@ -1603,7 +1733,7 @@ C4D1B:	PUSH	AF			; store VDP statusregister
 ;	     Outputs ________________________
 
 C4D26:	LD	DE,DRVTBL
-	LD	HL,DRVINT
+	LD	HL,HOOKSA
 	LD	B,4
 J4D2E:	LD	A,(DE)
 	AND	A			; DRVTBL entry used ?
@@ -1805,10 +1935,10 @@ C4E09:	EX	DE,HL
 	CALL	C402D			; get my slotid
 	PUSH	AF
 	LD	A,(DEVICE)		; disk interface number
-	LD	HL,DRVINT
+	LD	HL,HOOKSA
 	CALL	C4E04
 	ADD	HL,BC
-	ADD	HL,BC			; DRVINT entry
+	ADD	HL,BC			; HOOKSA entry
 	POP	AF
 	LD	(HL),A			; slotid disk interface
 	INC	HL
@@ -2089,6 +2219,9 @@ J4F7C:	XOR	A
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	4FB8H
+
+SRCHFR:
 C4FB8:	LD	C,011H
         JP	J4F7C
 
@@ -2099,6 +2232,9 @@ C4FB8:	LD	C,011H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	5006H
+
+SRCHNX:
 C5006:	LD	C,012H
         JP	J4F7C
 
@@ -2109,6 +2245,9 @@ C5006:	LD	C,012H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	501EH
+
+FILESI:
 C501E:	LD	C,023H
         JP	J4F7C
 
@@ -2119,6 +2258,9 @@ C501E:	LD	C,023H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	504EH
+
+LOGIN:
 C504E:	LD	C,018H
         JP	J4F7C
 
@@ -2129,6 +2271,9 @@ C504E:	LD	C,018H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	5058H
+
+SETDMA:
 C5058:	LD	C,01AH
         JP	J4F7C
 
@@ -2139,6 +2284,9 @@ C5058:	LD	C,01AH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	505DH
+
+GETEFA:
 C505D:	LD	C,01BH
         JP	J4F7C
 
@@ -2149,6 +2297,9 @@ C505D:	LD	C,01BH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	509FH
+
+DSKRES:
 C509F:	LD	C,00DH
         JP	J4F7C
 
@@ -2159,6 +2310,9 @@ C509F:	LD	C,00DH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	50A9H
+
+WRTFAT:
 C50A9:	LD	BC,0FF5FH
         LD	D,0
         JP	J4F7C
@@ -2170,6 +2324,9 @@ C50A9:	LD	BC,0FF5FH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	50C4H
+
+GETDRV:
 C50C4:	LD	C,019H
         JR	J50CA
 
@@ -2180,6 +2337,9 @@ C50C4:	LD	C,019H
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	50C8H
+
+SETRND:
 C50C8:	LD	C,024H
 J50CA:	JP	J4F7C
 
@@ -2190,6 +2350,9 @@ J50CA:	JP	J4F7C
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	50D5H
+
+SELDSK:
 C50D5:	LD	C,00EH
         JP	J4F7C
 
@@ -2200,6 +2363,9 @@ C50D5:	LD	C,00EH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	50E0H
+
+BUFIN:
 C50E0:	LD	C,00AH
         JP	J4F7C
 
@@ -2210,6 +2376,9 @@ C50E0:	LD	C,00AH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	5183H
+
+CRLF:
 C5183:	LD	E,13
 	CALL	C53A7			; Console output
 	LD	E,10
@@ -2218,6 +2387,8 @@ C5183:	LD	E,13
 ;
 ; 0518DH - 053A7H USED OTHERWISE IN DOS1 ROM
 ;
+
+	IF	DOS1 EQ 1
 
 ;	  Subroutine invoke DOS1 kernel if DOS1 key pressed
 ;	     Inputs  ________________________
@@ -2340,7 +2511,7 @@ J51AF:
 	ENDIF
 
 	LD	DE,DRVTBL
-	LD	HL,DRVINT
+	LD	HL,HOOKSA
 	LD	B,4
 J5202:	LD	A,(DE)
 	OR	A			; entry used ?
@@ -2377,13 +2548,13 @@ J5229:	LD	A,(DE)
 	LD	(DE),A
 	INC	DE
 	INC	HL
-	DJNZ	J5229			; H.TIMI to driver interrupt handler, DRVINT to current H.TIMI handler
+	DJNZ	J5229			; H.TIMI to driver interrupt handler, HOOKSA to current H.TIMI handler
 	POP	BC
 	POP	DE
 	POP	HL
 J5235:	INC	HL
 	INC	HL
-	INC	HL			; next DRVINT entry
+	INC	HL			; next HOOKSA entry
 	DJNZ	J5202			; next disk interface
 J523A:	LD	HL,A58A8
 	PUSH	HL			; start DOS1 kernel entry
@@ -2424,6 +2595,8 @@ I5253:	DEFB	"VOL_ID"
 S5253	EQU	$-I5253
         ENDIF
 
+	ENDIF
+
 	IF (ROMVER EQ 1) OR (ROMVER EQ 2)
 
 ;	  Subroutine start MSXDOS patch
@@ -2459,6 +2632,9 @@ C525F:	LD	(HL),A
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	535DH
+
+BUFOUT:
 ?535D:	EXX
 	PUSH	BC
 	EXX
@@ -2493,6 +2669,9 @@ C5379:	LD	A,(DE)
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	53A7H
+
+CONOUT:
 C53A7:	LD	C,2
 	JP	J4F7C
 
@@ -2537,6 +2716,9 @@ C53C0:	LD	HL,XF368
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	543CH
+
+CONSTA:
 C543C:	LD	C,00BH
         JP	J4F7C
 
@@ -2547,6 +2729,9 @@ C543C:	LD	C,00BH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	5445H
+
+CONIN:
 C5445:	LD	C,1
         JP	J4F7C
 
@@ -2557,6 +2742,9 @@ C5445:	LD	C,1
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	544EH
+
+IN:
 C544E:	LD	C,8
         JP	J4F7C
 
@@ -2567,6 +2755,9 @@ C544E:	LD	C,8
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	5454H
+
+RAWIO:
 C5454:	LD	C,6
         JP	J4F7C
 
@@ -2577,6 +2768,9 @@ C5454:	LD	C,6
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	5462H
+
+RAWINP:
 C5462:	LD	C,7
         DEFB	011H		; Pseudo LD DE,nnnn
 
@@ -2585,6 +2779,9 @@ C5462:	LD	C,7
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	5465H
+
+LIST:
 C5465:	LD	C,5
         JP	J4F7C
 
@@ -2595,6 +2792,9 @@ C5465:	LD	C,5
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	546EH
+
+READER:
 C546E:	LD	C,3
         JP	J4F7C
 
@@ -2605,6 +2805,9 @@ C546E:	LD	C,3
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	5474H
+
+PUNCH:
 C5474:	LD	C,4
         JP	J4F7C
 
@@ -2615,6 +2818,9 @@ C5474:	LD	C,4
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	553CH
+
+GETDAT:
 C553C:	LD	C,02AH
         JP	J4F7C
 
@@ -2625,6 +2831,9 @@ C553C:	LD	C,02AH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	5552H
+
+SETDAT:
 C5552:	LD	C,02BH
         JP	J4F7C
 
@@ -2635,6 +2844,9 @@ C5552:	LD	C,02BH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	55DBH
+
+GETTIM:
 C55DB:	LD	C,02CH
         JP	J4F7C
 
@@ -2645,6 +2857,9 @@ C55DB:	LD	C,02CH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	55E6H
+
+SETTIM:
 C55E6:	LD	C,02DH
         JP	J4F7C
 
@@ -2655,6 +2870,9 @@ C55E6:	LD	C,02DH
 ;	     Outputs ________________________
 ;         Remark     DOS1 kernel compatible (entry used by MSXDOS.SYS)
 
+	_DOSCP	55FFH
+
+SETRAW:
 C55FF:	LD	C,02EH
         JP	J4F7C
 
@@ -3216,11 +3434,11 @@ J598F:	POP	HL
 	POP	AF
 	DEC	A			; done all i/o channels ?
 	JP	P,J5951			; nope, next i/o channel
-	JP	J5A26			; quit
+	JP	J5A26			; restore and quit
 
 J5998:	POP	HL
 	POP	HL
-	JP	J5A26			; quit
+	JP	J5A26			; restore and quit
 
 ;	  Subroutine __________________________
 ;	     Inputs  A = attribute
@@ -3296,29 +3514,37 @@ C59DE:	CALL	BDOS			; DiskBASIC BDOS call
 ;	     Inputs  IX = replace return address, IYH = parameter block size
 ;	     Outputs ________________________
 
+;       This is what the stack looks like at entry:
+;
+;       prim    exp
+;       +0      +0      returnaddress C59E9 caller
+;       +2      +2      callf BIOS registers
+;       +6      +14     returnaddress CALLF caller
+;       +8      +16     returnaddress hook caller
+
 C59E9:	EI
-	PUSH	HL
-	PUSH	DE
-	PUSH	BC
-	PUSH	AF
+	PUSH	HL			; store
+	PUSH	DE			; store
+	PUSH	BC			; store
+	PUSH	AF			; store
 	LD	A,(LF348)
-	ADD	A,A
-	LD	HL,16
-	JR	NC,J59F9
-	LD	L,16+8
+	ADD	A,A			; MASTER disk ROM in expanded slot ?
+	LD	HL,16			; offset return address HOOK caller when primairy slot
+	JR	NC,J59F9		; nope,
+	LD	L,16+8			; offset return address HOOK caller when secundairy slot
 J59F9:	ADD	HL,SP
 	PUSH	IX
-	POP	BC
+	POP	BC			; return address replacement
 	LD	(HL),C
 	INC	HL
-	LD	(HL),B
+	LD	(HL),B			; replace return address
 	LD	HL,10
 	ADD	HL,SP
-	EX	DE,HL
+	EX	DE,HL			; pointer to new parameter block
 	JR	J5A13
 
 J5A07:	PUSH	IY
-	POP	BC
+	POP	BC			; parameter block size
 J5A0A:	LD	C,(HL)
 	LD	A,(DE)
 	LD	(HL),A
@@ -3326,22 +3552,22 @@ J5A0A:	LD	C,(HL)
 	LD	(DE),A
 	INC	HL
 	INC	DE
-	DJNZ	J5A0A
+	DJNZ	J5A0A			; exchange parameter block
 J5A13:	LD	A,(LF348)
-	ADD	A,A
-	LD	HL,18
-	JR	NC,J5A1E
-	LD	L,18+8
-J5A1E:	ADD	HL,SP
+	ADD	A,A			; MASTER disk ROM in expanded slot ?
+	LD	HL,18			; offset parameter block when primairy slot
+	JR	NC,J5A1E		; nope,
+	LD	L,18+8			; offset parameter block when secundairy slot
+J5A1E:	ADD	HL,SP			; pointer to parameter block
 	LD	A,E
 	SUB	L
 	LD	A,D
-	SBC	A,H
-	JR	C,J5A07
-J5A25:	POP	AF
-J5A26:	POP	BC
-	POP	DE
-	POP	HL
+	SBC	A,H			; parameter block moved ?
+	JR	C,J5A07			; nope, move
+J5A25:	POP	AF			; restore
+J5A26:	POP	BC			; restore
+	POP	DE			; restore
+	POP	HL			; restore
 	RET
 
 ;	  Subroutine H.GETP handler (get i/o channel control block if device is diskdevice)
@@ -3552,7 +3778,7 @@ C5B4F:	LD	IX,RETRTN
 	LD	IY,6*256
 	CALL	C59E9			; take control from hook caller (move parameters on stack)
 	CALL	C5B60			; read character from i/o channel
-	JP	J5A26			; quit
+	JP	J5A26			; restore and quit
 
 ;	  Subroutine read character from i/o channel
 ;	     Inputs  ________________________
@@ -3665,7 +3891,7 @@ C5BD6:	LD	IX,RETRTN
 	POP	AF
 	PUSH	AF
 	CALL	C5C2B			; write character to i/o channel
-	JP	J5A25			; quit
+	JP	J5A25			; restore and quit
 
 ;	  Subroutine H.NTFL handler (close i/o channel for diskdevice)
 ;	     Inputs  ________________________
@@ -4071,7 +4297,7 @@ C5E7E:	CALL	C6654			; check for BASIC character
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C5E82:	LD	IX,M6F0B
+C5E82:	LD	IX,ADRGET
 	JP	C664F
 
 ;	  Subroutine write word to file handle
@@ -4798,7 +5024,7 @@ J62A4:	CALL	C6284
 	LD	BC,(BUF+10+21)
 	LD	HL,(BUF+10+23)
 	CALL	C63BA
-	LD	IX,M537B
+	LD	IX,JPFOUT
 	CALL	C664F			; convert DAC to text, unformatted
 	INC	HL
 	PUSH	HL
@@ -6803,7 +7029,7 @@ C6E5D:	LD	A,D
 	LD	A,(LF2CF)		; BDOS data segment
 	LD	C,A			; segment
 	LD	A,(RAMAD3)
-	LD	B,A			; slot = primairy memorymapper
+	LD	B,A			; slot = primairy memory mapper
 	LD	HL,03C00H		; base address sector
 	LD	A,1			; 1 sector in segment
 	RET

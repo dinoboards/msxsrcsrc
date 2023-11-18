@@ -1,3 +1,9 @@
+; ROMVER
+; 0 = first ST version (2.30 fix level 0)
+; 1 = second ST version (2.30 fix level 1)
+; 2 = third ST version (2.30 fix level 2)
+; 3 = GT version (2.31)
+
 DOS1 kernel
 st v1 vs st v2	driver different
 st v2 vs st v3	driver different

@@ -81,7 +81,9 @@ _DOSCP	MACRO	X
 WBOOT   equ     00000H
 RDSLT   equ     0000CH
 WRSLT   equ     00014H
+OUTDO   equ     00018H
 CALSLT  equ     0001CH
+DCOMPR	equ	00020H
 ENASLT  equ     00024H
 IDBYT0  equ     0002BH
 CALLF   equ     00030H
@@ -102,29 +104,17 @@ PHYDIO  equ     00144H
 KILBUF  equ     00156H
 CALBAS  equ     00159H
 
-X003B   equ     0003BH                  ; helper routine in DOS memoryspace: store and change secundairy slotregister
-X0046   equ     00046H                  ; helper routine in DOS memoryspace: restore secundairy slotregister (RDSLT/WRSLT)
-X004B   equ     0004BH                  ; helper routine in DOS memoryspace: restore secundairy slotregister (CALSLT/CALLF)
-
 DATABA	equ	0F1C9H			; start of fixed diskvars
-PRTBUF  equ     0F1C9H                  ; output string (BDOS 9)
-BLKMOV  equ     0F1D9H                  ; XFER, transfer to DOS memory
-ENDJMP  equ     0F1E2H                  ; WBOOT, warm boot DOS system
-JPHL    equ     0F1E8H                  ; start handler in DOS memory
-LODNAM  equ     0F1F4H                  ; validate FCB filename
-IONAME  equ     0F1F7H                  ; reserved devicenames
-DEVDIR  equ     0F20BH                  ; direntry for devices
-MONTAB  equ     0F22BH                  ; days in month table
 CARPOS  equ     0F237H                  ; BDOS console output columnpos
 STARTP  equ     0F238H                  ; console columnpos at start of lineinput
 INSERT  equ     0F239H                  ; lineinput insert flag
 CRLFPO  equ     0F23AH                  ; lineinput secret message flag
 PFLAG   equ     0F23BH                  ; console output to printer flag
-DIRTYD  equ     0F23CH                  ; directory buffer changed flag
+DIRTYD  equ     0F23CH                  ; directory buffer dirty flag
 DMAADD  equ     0F23DH                  ; transferaddress
 BUFSEC  equ     0F23FH                  ; sectornumber in data buffer
 BUFDRN  equ     0F241H                  ; driveid of sector in data buffer
-DIRTYB  equ     0F242H                  ; data buffer changed flag
+DIRTYB  equ     0F242H                  ; data buffer dirty flag
 BUFDRI  equ     0F243H                  ; DPB pointer current operation
 DIRBFI  equ     0F245H                  ; sectornumber (offset) in directory buffer
 DIRBFD  equ     0F246H                  ; driveid of sector in directory buffer
@@ -1073,7 +1063,7 @@ A436C:  call    A440E                   ; validate FCB drive and filename
         ret     c                       ; invalid or not found, quit with error
         ret     nz                      ; device, quit with error
 A4376:  ld      a,0E5H
-        ld      (DIRTYD),a              ; flag directory buffer changed
+        ld      (DIRTYD),a              ; flag directory buffer dirty
         ld      (hl),a                  ; deleted direntry
         ld      l,(iy+26)
         ld      h,(iy+27)
@@ -1135,7 +1125,7 @@ A43C3:  ld      (de),a
         ld      bc,11
         ldir                            ; replace filename with new one
         ld      a,0FFH
-        ld      (DIRTYD),a              ; flag directory buffer changed
+        ld      (DIRTYD),a              ; flag directory buffer dirty
         ld      hl,NAME3
         ld      de,NAME1
         ld      bc,11+1
@@ -1312,11 +1302,11 @@ A44DB:  call    H.FATR
         ld      h,(ix+20)
         dec     hl
         ld      a,b                     ; DSKCHG status
-        or      (hl)                    ; combined with the FAT buffer status
+        or      (hl)                    ; combined with the FAT buffer dirty flag
         ld      a,(THISDR)              ; current driveid
         ld      hl,(BUFDRN)
         jp      m,A450A                 ; FAT buffer invalid OR diskchange unknown, read the FAT
-        ret     nz                      ; FAT buffer changed OR disk unchanged, do not read the FAT and quit
+        ret     nz                      ; FAT buffer dirty OR disk unchanged, do not read the FAT and quit
         cp      l                       ; current drive same as datasector buffer owner ?
         jr      nz,A4516                ; nope, read the FAT
         dec     h                       ; datasector buffer changed ?
@@ -1336,7 +1326,7 @@ A4516:  ld      a,0FFH
         ld      (DIRBFD),a              ; invalid dirsector buffer
         call    A45FA                   ; get FAT parameters
         dec     hl
-        ld      (hl),0                  ; FAT buffer unchanged
+        ld      (hl),0                  ; FAT buffer clean
         inc     hl
 A4522:  push    af
         call    A46D7                   ; read FAT sectors
@@ -1467,7 +1457,7 @@ A45C4:  ld      l,(ix+19)
         ld      h,(ix+20)
         dec     hl
         ld      a,(hl)
-        cp      1                       ; FAT buffer changed ?
+        cp      1                       ; FAT buffer dirty ?
         ret     nz                      ; nope, quit (?? return error if FAT buffer invalid)
 
 ;       Subroutine      write FAT buffer
@@ -1477,7 +1467,7 @@ A45C4:  ld      l,(ix+19)
 A45CF:  call    H.FATW
         call    A45FA                   ; get FAT parameters
         dec     hl
-        ld      (hl),0                  ; FAT buffer unchanged
+        ld      (hl),0                  ; FAT buffer clean
         inc     hl
 A45D9:  push    af
         push    de
@@ -1504,7 +1494,7 @@ A45E9:  pop     af
 A45EE:  ld      l,(ix+19)
         ld      h,(ix+20)
         dec     hl
-        ld      (hl),0                  ; FAT buffer unchanged
+        ld      (hl),0                  ; FAT buffer clean
         ld      a,0FFH                  ; error
         ret
 
@@ -1745,8 +1735,8 @@ A4720:  ld      b,h
 
 A472D:  ld      hl,DIRTYB
         xor     a
-        cp      (hl)                    ; datasector buffer changed ?
-        ld      (hl),a                  ; now it is unchanged
+        cp      (hl)                    ; datasector buffer dirty ?
+        ld      (hl),a                  ; now it is clean
         ret     z                       ; nope, quit
         ld      ix,(BUFDRI)             ; saved DPB pointer
         ld      hl,($BUFFE)             ; datasector buffer
@@ -1759,7 +1749,7 @@ A472D:  ld      hl,DIRTYB
 ;       Outputs         ________________________
 
 A4743:  ld      a,(DIRTYD)
-        or      a                       ; directory buffer changed ?
+        or      a                       ; directory buffer dirty ?
         ret     z                       ; nope, quit
 
 ;       Subroutine      write dirsector buffer
@@ -1768,7 +1758,7 @@ A4743:  ld      a,(DIRTYD)
 
 A4748:  call    H.DIRW
         xor     a
-        ld      (DIRTYD),a              ; directory buffer unchanged
+        ld      (DIRTYD),a              ; directory buffer clean
         ld      a,(DIRBFI)              ; current dirsector (offset)
         call    A460D                   ; setup dirsector parameters
 
@@ -2293,7 +2283,7 @@ A4A46:  call    H.BUFW
         ex      de,hl
         call    BLKMOV                  ; transfer from DOS memory
         ld      a,1
-        ld      (DIRTYB),a              ; flag datasector changed
+        ld      (DIRTYB),a              ; flag datasector dirty
         ret
 
 ;       Subroutine      last partial sector ?
@@ -2483,7 +2473,7 @@ A4B8E:  push    bc
         ld      b,000H                  ; number of sectors read
         jr      c,A4BC1                 ; sectors read does not include the sector in the datasector buffer
         ld      a,(DIRTYB)
-        or      a                       ; datasector buffer changed ?
+        or      a                       ; datasector buffer dirty ?
         jr      z,A4BC1                 ; nope, then no need to transfer the datasector buffer
         push    bc
         ld      c,(ix+2)
@@ -4499,7 +4489,7 @@ A5789:  ld      (hl),0C9H
         djnz    A5789                   ; nop, init EXTBIO,DISINT and ENAINT hooks
 A578E:  ld      hl,(BOTTOM)
         ld      de,0C001H
-        rst     020H                    ; at least 16Kb RAM ?
+        _RST	DCOMPR                  ; at least 16Kb RAM ?
         jr      nc,A57A3                ; nop, cancel disksystem initiazation
         ld      a,006H
         call    SNSMAT
@@ -4507,7 +4497,7 @@ A578E:  ld      hl,(BOTTOM)
         rrca                            ; SHIFT key pressed ?
         jr      c,A57A9                 ; nop, cont
         ld      a,007H
-        rst     018H                    ; beep
+        _RST    OUTDO                   ; beep
 A57A3:  ld      a,0FFH
         ld      (DISKID),a              ; disksystem initialization canceled
         ret
@@ -4535,7 +4525,7 @@ A57BD:  xor     a
         ld      hl,DRVTBL
 A57CD:  ld      (hl),a
         inc     hl
-        djnz    A57CD                   ; clear DRVTBL, DRVINT
+        djnz    A57CD                   ; clear DRVTBL, HOOKSA
         ld      hl,HOOKBE
         ld      b,069H
 A57D6:  ld      (hl),0C9H
@@ -4550,7 +4540,7 @@ A57D6:  ld      (hl),0C9H
         and     002H
         ld      (TARGET),a              ; saved CTRL key status for panthom drive
         ld      a,007H
-        rst     018H                    ; beep
+        _RST    OUTDO                   ; beep
         ld      hl,T5807
         ld      de,H.RUNC
         ld      bc,5
@@ -4560,7 +4550,7 @@ A57D6:  ld      (hl),0C9H
         pop     de                      ; base disk hardware driver workarea
         jr      A5825
 
-T5807:  rst     030H
+T5807:  _RST	CALLF
         defb    0
         defw    A5897
         ret
@@ -4588,11 +4578,11 @@ A5825:  call    A5FCD                   ; get my SLTWRK entry
         ld      (hl),d                  ; save base workarea in SLTWRK
         ld      hl,(MAXSEC)
         ld      de,SECLEN
-        rst     020H                    ; SECLEN sofar big enough ?
+        _RST	DCOMPR                  ; SECLEN sofar big enough ?
         jr      nc,A5838
         ld      (MAXSEC),de             ; nop, adjust
 A5838:  ld      de,DRVTBL               ; DRVTBL
-        ld      bc,00400H               ; 4 disk interfaces, number of drives = 0
+        ld      bc,4*256+0              ; 4 disk interfaces, number of drives = 0
 A583E:  ld      a,(de)
         and     a
         jr      z,A584B                 ; free entry, use it
@@ -4672,7 +4662,7 @@ A58A8:  call    A622D                   ; hook H.LOPD when H.CLEA is hooked (for
         ld      (MASTER),a              ; master diskrom slotid
         ld      hl,A7397
         ld      de,DATABA
-        ld      bc,0006EH
+        ld      bc,L7397
         ldir                            ; initialize some static disksystem variables
         ld      hl,M0034
         ld      de,KANJTA
@@ -4693,7 +4683,7 @@ A58A8:  call    A622D                   ; hook H.LOPD when H.CLEA is hooked (for
         ld      (YCONBF+130),a          ; ?? end marker con buffer
         ld      a,7
         ld      (FILMAX),a              ; max number of FCBs is 7
-        ld      hl,1461
+        ld      hl,365+365+365+366
         ld      (CURDAT),hl             ; default date when no clockchip is 1-1-1984
         ld      b,8
         ld      hl,$DOSON
@@ -4826,7 +4816,7 @@ A59F3:  ld      hl,A5B3A
         call    A5ADB                   ; start bootcode with Cx reset (some disk can take control from here)
         ld      hl,(BOTTOM)
         ld      de,08000H
-        rst     020H                    ; check if ram on both page 3 and 2
+        _RST	DCOMPR                  ; check if ram on both page 3 and 2
         ret     nz                      ; nope, start diskbasic
         ld      hl,RAMAD0
         ld      a,(EXPTBL+0)
@@ -5082,7 +5072,7 @@ A5BA0:  ld      sp,0C200H               ; switch to a temporary stack
         ld      a,0FFH
         ld      (CNSDFG),a              ; enable function keys
         ld      a,00CH
-        rst     018H                    ; clear screen
+        _RST    OUTDO                   ; clear screen
         ld      ix,M7D31
         call    CALBAS                  ; display BASIC startscreen
         call    A5F86
@@ -5990,7 +5980,7 @@ A61F1:  ld      de,TEMPST+30
         ld      (VALTYP),a
         call    VMOVE                   ; copy stringdescriptor
         ld      de,TEMPST+30+3
-        rst     020H
+        _RST	DCOMPR
         ld      (TEMPPT),hl
         ret     nz
         jp      A72F7
@@ -6106,7 +6096,7 @@ T62E8:  inc     sp
 T62ED:  ld      a,d
         cp      9                       ; diskdevice ?
         jp      nc,BLOAD+3              ; nope, resume BLOAD
-        rst     030H
+        _RST	CALLF
         defb    000H
         defw    A6AA7                   ; call BLOAD for diskdevice
         push    hl
@@ -6115,7 +6105,7 @@ T62ED:  ld      a,d
         ld      a,d
         cp      9                       ; diskdevice ?
         jp      nc,BSAVE+3              ; nope, resume BSAVE
-        rst     030H
+        _RST	CALLF
         defb    000H
         defw    A69E7
         ret
@@ -6607,7 +6597,10 @@ L63F4   EQU     $-C63F4
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C655C:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
+C655C:
+	.PHASE	003BH
+
+X003B:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
         LD      A,(YFFFF)
         CPL
         LD      L,A                     ; store current secundairy slotregister
@@ -6619,7 +6612,7 @@ C655C:  OUT     (0A8H),A                ; make secundairy slotregister accessabl
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-?6567:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
+X0046:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
         LD      A,L
         JR      J656F                   ; change secundairy slotregister, restore primairy slotregister and quit
 
@@ -6627,12 +6620,14 @@ C655C:  OUT     (0A8H),A                ; make secundairy slotregister accessabl
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-?656C:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
+X004B:  OUT     (0A8H),A                ; make secundairy slotregister accessable (switch page 3)
         LD      A,E
 J656F:  LD      (YFFFF),A
         LD      A,B
         OUT     (0A8H),A
         RET
+
+	.DEPHASE
 
 L655C   EQU     $-C655C
 
@@ -7386,7 +7381,7 @@ A69E7:  push    de
         ld      (SAVEND),de
         ex      (sp),hl
         ex      de,hl
-        rst     020H
+        _RST	DCOMPR
         jp      c,A7315
         ex      de,hl
         ex      (sp),hl
@@ -7449,7 +7444,7 @@ A6A5D:  ld      a,0FFH
 A6A6D:  call    A7165
 A6A70:  push    hl
         ld      de,(SAVENT)
-        rst     020H
+        _RST	DCOMPR
         push    af
         ld      c,l
         ld      b,h
@@ -7541,7 +7536,7 @@ A6B11:  ld      ix,FINPRT
 A6B1A:  call    A7165
 A6B1D:  push    hl
         ld      de,(SAVENT)
-        rst     020H
+        _RST	DCOMPR
         push    af
         ld      de,(FCBBAS)		; FCB for i/o channel 0
         call    A47B2                   ; random block read
@@ -7785,7 +7780,7 @@ A6C8B:  ex      de,hl
         ld      (BUF+12),hl
         ex      de,hl
         ld      hl,(BUF+10)
-        rst     020H
+        _RST	DCOMPR
         jp      c,A7306
         pop     de
         pop     hl
@@ -7840,10 +7835,10 @@ A6CD7:  scf
         jr      z,A6D6A
         ld      hl,(NULBUF)
         dec     hl
-        rst     020H
+        _RST	DCOMPR
         jr      c,A6D48
         ld      hl,(VARTAB)
-        rst     020H
+        _RST	DCOMPR
         jr      c,A6D48
         ld      e,c
         ld      d,000H
@@ -7851,7 +7846,7 @@ A6CD7:  scf
         add     hl,de
         ex      de,hl
         ld      hl,(FRETOP)
-        rst     020H
+        _RST	DCOMPR
         jr      c,A6D7D
         pop     af
 A6D2A:  ld      a,c
@@ -7938,7 +7933,7 @@ A6D7D:  pop     af
         ld      (VALTYP),a
         call    VMOVE                   ; copy stringdescriptor
         ld      de,TEMPST+30+3
-        rst     020H
+        _RST	DCOMPR
         ld      (TEMPPT),hl
         jp      z,A72F7
         pop     bc
@@ -8109,7 +8104,7 @@ A6EAE:  ld      hl,BUF+85
         ld      b,11
 A6EB3:  ld      a,(hl)
         inc     hl
-        rst     018H
+        _RST    OUTDO
         ld      a,b
         cp      004H
         jr      nz,A6EC3
@@ -8117,7 +8112,7 @@ A6EB3:  ld      a,(hl)
         cp      " "
         jr      z,A6EC2
         ld      a,"."
-A6EC2:  rst     018H
+A6EC2:  _RST    OUTDO
 A6EC3:  djnz    A6EB3
         call    CKCNTC
         pop     af                      ; output to printer ?
@@ -8134,7 +8129,7 @@ A6ED8:  and     a                       ; at start of line ?
         cp      b
         jr      nc,A6EE3
         ld      a," "
-        rst     018H
+        _RST    OUTDO
 A6EE3:  ld      ix,CRDO
         call    nc,A731E                ; yep, newline to OUTDO
 A6EEA:  ld      de,BUF+10
@@ -8628,7 +8623,7 @@ A72E6:  ld      (H.LOPD+0),a
         ld      (HIMSAV),de
         ret
 
-T72F2:  rst     030H
+T72F2:  _RST	CALLF
         defb    000H
         defw    A72E4
         ret
@@ -8690,12 +8685,12 @@ A7331:  add     hl,sp
         ld      d,(hl)
         push    hl
         ld      hl,BSAVE+3
-        rst     020H                    ; called from BSAVE ?
+        _RST	DCOMPR                  ; called from BSAVE ?
         pop     hl
         jr      z,A734A                 ; yep, adjust returnaddress for DiskBASIC BSAVE
         push    hl
         ld      hl,BLOAD+3
-        rst     020H                    ; called from BLOAD ?
+        _RST	DCOMPR                  ; called from BLOAD ?
         pop     hl
         jr      nz,A7350                ; nope, do not adjust returnaddress
         ld      de,BLDCHK
@@ -8773,26 +8768,29 @@ A738E:  add     hl,sp
         pop     hl
         ret
 
+A7397:
+	.PHASE	0F1C9H
+
 ;       Subroutine      BDOS 09 (output string)
 ;       Inputs          DE = address of string
 ;       Outputs         ________________________
 ;       Remark          is copied to 0F1C9H
 
-A7397:  call    $DOSOF                  ; enable ram on page 1
+PRTBUF: call    $DOSOF                  ; enable ram on page 1
         ld      a,(de)
         call    $DOSON                  ; enable master diskrom
         inc     de
         cp      '$'
         ret     z                       ; end of string, quit
         call    A53A8                   ; console output
-        jr      A7397                   ; next
+        jr      PRTBUF                  ; next
 
 ;       Subroutine      XFER (transfer)
 ;       Inputs          HL = source address, DE = destition address, BC = size
 ;       Outputs         ________________________
 ;       Remark          is copied to 0F1D9H
 
-        call    $DOSOF                  ; enable ram on page 1
+BLKMOV: call    $DOSOF                  ; enable ram on page 1
         ldir                            ; transfer
         call    $DOSON                  ; enable master diskrom
         ret
@@ -8802,7 +8800,7 @@ A7397:  call    $DOSOF                  ; enable ram on page 1
 ;       Outputs         ________________________
 ;       Remark          is copied to 0F1E2H
 
-        call    $DOSOF                  ; enable ram on page 1
+ENDJMP: call    $DOSOF                  ; enable ram on page 1
         jp      0                       ; WBOOT
 
 ;       Subroutine      start handler in DOS memory
@@ -8810,7 +8808,7 @@ A7397:  call    $DOSOF                  ; enable ram on page 1
 ;       Outputs         ________________________
 ;       Remark          is copied to 0F1E8H
 
-        ld      de,BLKMOV+5
+JPHL:   ld      de,BLKMOV+5
         push    de                      ; on return, enable master diskrom
         ld      e,(hl)
         inc     hl
@@ -8824,12 +8822,12 @@ A7397:  call    $DOSOF                  ; enable ram on page 1
 ;       Outputs         ________________________
 ;       Remark          is copied to 0F1F4H
 
-        jp      A5604
+LODNAM: jp      A5604
 
 ;       Data            table with reserved filenames (devicenames)
 ;       Remark          is copied to 0F1F7H
 
-        defb    "PRN "
+IONAME: defb    "PRN "
         defb    "LST "
         defb    "NUL "
         defb    "AUX "
@@ -8838,7 +8836,7 @@ A7397:  call    $DOSOF                  ; enable ram on page 1
 ;       Data            fake direntry for devices
 ;       Remark          is copied to 0F20BH
 
-        defb    "           "
+DEVDIR: defb    "           "
         defb    10000000b
         defs    10
         defw    0
@@ -8846,7 +8844,11 @@ A7397:  call    $DOSOF                  ; enable ram on page 1
         defw    0
         defw    0,0
 
-        defb    31,28,31,30,31,30,31,31,30,31,30,31
+MONTAB: defb    31,28,31,30,31,30,31,31,30,31,30,31
+	
+	.DEPHASE
+
+L7397	EQU	$-A7397
 
 ; DRIVER section starts here
 
