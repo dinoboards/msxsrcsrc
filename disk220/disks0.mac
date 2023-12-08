@@ -18,6 +18,11 @@ DOS2    EQU     1               ; DOS2 flag for diskdriver
         ASEG
         ORG     04000H
 
+BOT16K	EQU	0C000H			; lower of 16 KB RAM
+BOT32K	EQU	08000H			; lower of 32 KB RAM
+BOOTSZ	EQU	256			; maximum size of MSX bootloader in bootsector
+TMPSTK	EQU	BOT16K+BOOTSZ+256	; location of temporary stack
+TBASE	EQU	00100H			; start of MSX-DOS
 
 _RST    MACRO   X
         IFIDN   <X>,<SYNCHR>
@@ -57,7 +62,7 @@ ENASLT  EQU     0024H
 IDBYT0  EQU     002BH   ; ---L-
 IDBYT2  EQU     002DH   ; ---L-
 CALLF	EQU	0030H
-L0034   EQU     0034H   ; ----I
+CHAR_16 EQU     0034H   ; ----I
 KEYINT	EQU	0038H
 I$003B  EQU     003BH   ; ----I
 C$004B  EQU     004BH   ; -C---
@@ -72,7 +77,6 @@ CHPUT   EQU     00A2H   ; -C--I
 CKCNTC  EQU     00BDH   ; -C---
 ERAFNK  EQU     00CCH   ; -C---
 TOTEXT  EQU     00D2H   ; -C---
-J.0100  EQU     0100H   ; J---I
 SNSMAT  EQU     0141H   ; -C---
 KILBUF  EQU     0156H   ; ----I
 CALBAS  EQU     0159H   ; JC---
@@ -85,9 +89,8 @@ VMOVFM  EQU     2F08H   ; J----
 VMOVMF  EQU     2F10H   ; -C---
 MAKINT  EQU     2F99H   ; JC---
 CONDS   EQU     3042H   ; -C---
-INT     EQU     30D1H   ; -C---
+INT     EQU     30D1H		; integer part of float
 SGNMUL  EQU     325CH   ; -C---
-I$3C00  EQU     3C00H   ; ----I
 NULSTR  EQU     3FD6H   ; ----I
 
 
@@ -107,14 +110,14 @@ GETIN2  EQU     0520FH          ; evaluate integer operand
 GTBYTC  equ     0521BH          ; evaluate next byte operand
 GETBYT  equ     0521CH          ; evaluate byte operand
 CONINT  equ     0521FH          ; convert to byte
-M537B   EQU     537BH           ; convert DAC to text, unformatted
+JPFOUT  EQU     0537BH          ; convert DAC to text, unformatted (JPFOUT is not an offical name)
 GETUIN  equ     0542FH          ; evaluate address operand
 GETUI   equ     05432H          ; convert address to integer
 SCCPTR  equ     054F7H          ; convert pointers to linenumbers
 GETYPR  equ     05597H          ; GETYPR
 PTRGET  equ     05EA4H          ; get address of variable
 STRINI  equ     06627H          ; allocate temp string
-GETSPA  equ     0668EH          ; allocate stringspace
+GETSPA  equ     0668EH          ; allocate string space
 FRESTR  equ     067D0H          ; free temporary string
 FILEVL  equ     06A0EH          ; evaluate filespecification
 FILIDX  equ     06A6DH          ; get i/o channel pointer
@@ -136,16 +139,9 @@ M7D31   equ     07D31H          ; BASIC initscreen (without INITXT & CNSDFG)
 M7DE9   EQU     7DE9H           ; start MSX-BASIC program in ROM
 
 
-I.8000  EQU     8000H   ; ----I
-
-I$BC0B  EQU     0BC0BH  ; ----I
-I.BC20  EQU     0BC20H  ; ----I
-D.BE00  EQU     0BE00H  ; ---L-
-I$BE02  EQU     0BE02H  ; ----I
-
-I$C000  EQU     0C000H  ; ----I
-J$C01E  EQU     0C01EH  ; J----
-I.C200  EQU     0C200H  ; ----I
+I.BC00	EQU	0BC00H	                ; ramdisk boot sector
+D.BE00  EQU     0BE00H                  ; number of ramdisk segments
+I$BE02  EQU     0BE02H                  ; ramdisk segment table
 
 
 DATABA	equ	0F1C9H			; start of disk system static work area
@@ -1191,7 +1187,7 @@ J4960:  LD      (HL),0C9H
         LDIR    			; remove disk driver interrupt handler of MASTER disk interface
 J4986:  CALL    C402D                   ; GETSLT
         LD      (MASTER),A		; update disk system master slot id
-        LD      HL,L0034
+        LD      HL,CHAR_16
         LD      DE,KANJTA
         LD      BC,4
         LDIR				; initialize double byte header char table
@@ -1333,7 +1329,7 @@ J4A24:  INC     C			; next drive id
         LD      IY,(EXPTBL+0-1)
         CALL    CALSLT			; execute BASIC screen initialization
         CALL    C4C66			; patch H.LOPD if H.CLEAR is patched (to regain control of BASIC initialization from extension)
-        LD      SP,I.C200		; switch to temporary stack
+        LD      SP,TMPSTK		; switch to temporary stack
         LD      A,(H.STKE)
         CP      0C9H			; extension has patched H.STKE to take control of BASIC initialization ?
         LD      IX,M7D17		; continue BASIC initialization without ROM BASIC program execution
@@ -1356,7 +1352,7 @@ J4AC1:  LD      HL,J4B1B
         RET     Z			; no valid boot loader, start DiskBASIC
         CALL    C4AFB			; (boot loader flag = BASIC), execute boot loader
         LD      HL,(BOTTOM)
-        LD      DE,I.8000
+        LD      DE,BOT32K
         _RST    DCOMPR			; at least 32 Kb RAM ?
         RET     NZ			; nope, start DiskBASIC
         LD      A,(CUR_DRV)		; current drive
@@ -1367,7 +1363,7 @@ J4ADC:  LD      A,(BOOT_D)		; boot drive
 
 ; start MSXDOS
 
-J4ADF:  LD      SP,I.C200		; switch to temporary stack
+J4ADF:  LD      SP,TMPSTK		; switch to temporary stack
         PUSH    HL
         LD      HL,J4B1B
         EX      (SP),HL			; start DiskBASIC when failed
@@ -1402,7 +1398,7 @@ I4B19:  DEFW    J4B7B			; start DiskBASIC without running BASIC program file
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-J4B1B:  LD      SP,I.C200		; switch to temporary stack
+J4B1B:  LD      SP,TMPSTK		; switch to temporary stack
         CALL    C4C16			; disable page 1 support
         LD      HL,I4B07
         LD      DE,BUF+12
@@ -1463,7 +1459,7 @@ J4B70:  XOR     A
 
 J4B7B:  XOR     A
         LD      (BUF+12+3),A		; simple RUN statement
-J4B7F:  LD      SP,I.C200
+J4B7F:  LD      SP,TMPSTK
         LD      A,(RAMAD2)
         LD      H,HIGH 8000H
         CALL    ENASLT			; switch page 2 to disk system RAM slot
@@ -2576,7 +2572,7 @@ C5604:  LD      A,L
         CCF
         RET     C
         LD      A,H
-        CP      HIGH 0C200H
+        CP      HIGH TMPSTK
         RET     C
         LD      DE,(BOTTOM)
         SBC     HL,DE
@@ -2827,7 +2823,7 @@ C57D6:  LD      DE,BUF+10
         CALL    C6654			; check for BASIC character
         DEFB    "("
         LD      IX,FRMEVL
-        CALL    C664F
+        CALL    C664F			; evaluate expression
         PUSH    HL
         LD      IX,FRESTR
         CALL    C664F
@@ -3053,7 +3049,7 @@ C591A:  PUSH    DE
         JP      NZ,J6627		; type mismatch error
 J5932:  PUSH    BC
         LD      IX,DOCNVF
-        CALL    C664F
+        CALL    C664F			; convert DAC to other type
         POP     BC
         LD      HL,DAC
 J593E:  LD      B,0
@@ -3086,8 +3082,8 @@ J5951:  PUSH    AF
         INC     HL
         INC     HL
         INC     HL			; +4
-        LD      A,(HL)
-        CP      09H			; device = disk drive ?
+        LD      A,(HL)                  ; device
+        CP      09H			; disk drive ?
         JR      NC,J598F		; nope, next
         LD      A,(BUF+10)
         AND     A
@@ -3323,23 +3319,23 @@ C5A82:  EI
 	IF DOS201 EQ 1
 
         XOR     A
-        LD      (HL),A
+        LD      (HL),A                  ; record size = 1
         INC     HL			; +3
-        LD      (HL),A
+        LD      (HL),A                  ; clear backup character
 
 	ELSE
 
 	INC	HL			; +3
 	XOR	A
-	LD	(HL),A
+	LD	(HL),A                  ; clear backup character
 
 	ENDIF
 
         INC     HL			; +4
-        LD      (HL),D
+        LD      (HL),D                  ; update device
         INC     HL
         INC     HL			; +6
-        LD      (HL),A
+        LD      (HL),A                  ; position in buffer = 0
         LD      A,E
         PUSH    AF			; store i/o channel mode
         AND     82H			; i/o channel mode binary save or sequential output ?
@@ -3365,7 +3361,7 @@ J5AB7:  LD      A,E
         INC     HL			; +2
         LD      A,(RECSIZE)
         DEC     A
-        LD      (HL),A
+        LD      (HL),A                  ; update record size -1
         LD      DE,(PATHNAM)
         XOR     A
         LD      C,43H			; function = open file handle
@@ -3392,7 +3388,7 @@ J5AD4:  CP      1			; i/o channel mode = sequential input ?
         EX      DE,HL
         LD      HL,6
         ADD     HL,DE			; +6
-        LD      (HL),0FFH
+        LD      (HL),0FFH               ; position in buffer = end of buffer
         PUSH    HL
         EX      DE,HL
         CALL    C5B60			; read character from i/o channel
@@ -3424,7 +3420,7 @@ J5B0B:  XOR     A
         EX      DE,HL
         LD      HL,6
         ADD     HL,DE			; +6
-        LD      (HL),0FFH
+        LD      (HL),0FFH               ; position in buffer = end of buffer
         EX      DE,HL
         LD      BC,0
         LD      E,C
@@ -3543,7 +3539,7 @@ J5BAF:  SUB     1AH
         INC     HL
         INC     HL
         INC     HL			; +3
-        LD      (HL),0			; no backup character
+        LD      (HL),0			; clear backup character
         RET     NC			; not end of file, quit
         LD      (HL),A			; end of file, backup character = EOF
         RET
@@ -3668,7 +3664,7 @@ C5C39:  PUSH    HL			; store pointer to i/o channel
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5C51:  CALL    C6888
+C5C51:  CALL    C6888			; take control from hook caller
         PUSH    HL
         LD      IX,SCCPTR
         CALL    C664F
@@ -3813,7 +3809,7 @@ J5D66:  LD      A,0FFH
         XOR     A			; i/o channel = 0
         LD      IX,CLSFIL
         CALL    C664F			; close i/o channel
-        JP      J627A
+        JP      J627A			; restore BASIC pointer and output back to screen
 
 J5D76:  CALL    C6511			; store VRAM start address and number of bytes, get work area
 J5D79:  PUSH    HL			; store size of work area
@@ -3914,7 +3910,7 @@ J5DDF:  POP     DE			; restore device code
         LD      C,48H			; function = read from file handle
         CALL    C655D			; execute BDOS function (handle error)
 J5E1F:  LD      IX,FINPRT
-        CALL    C664F
+        CALL    C664F			; output back to screen
         POP     HL			; restore BASIC pointer
         RET
 
@@ -4050,7 +4046,7 @@ C5EAF:  PUSH    HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5EBB:  CALL    C6888
+C5EBB:  CALL    C6888			; take control from hook caller
         CALL    C665F			; get next BASIC character
         CALL    C6654			; check for BASIC character
         DEFB    "("
@@ -4069,7 +4065,7 @@ C5EBB:  CALL    C6888
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5EDC:  CALL    C6888
+C5EDC:  CALL    C6888			; take control from hook caller
         CALL    C5F09			; evaluate byte, check for "," and evaluate unsigned integer operand
         CALL    C665E			; get BASIC character
         RET     NZ
@@ -4115,255 +4111,255 @@ C5F09:  LD      IX,GETBYT
 C5F1E:  LD      IX,RETRTN
         LD      IY,4*256+0
         CALL    C59E9			; take control from caller (move parameters on stack)
-        LD      A,(HL)
-        CP      4			; i/o channel mode = random i/o ?
+        LD      A,(HL)			; i/o channel mode
+        CP      4			; random i/o ?
         JP      NZ,J65EA		; nope, bad file mode error
-        EX      (SP),HL
+        EX      (SP),HL			; store pointer to i/o channel, restore BASIC pointer
         CALL    C665E			; get BASIC character
-        JR      Z,J5F7D
+        JR      Z,J5F7D			; end of statement,
         CALL    C6654			; check for BASIC character
         DEFB    ","
         LD      IX,FRMEVL
-        CALL    C664F
-        PUSH    HL
-        CALL    C6147
+        CALL    C664F			; evaluate expression
+        PUSH    HL			; store BASIC pointer
+        CALL    C6147			; convert DAC to 32 bit integer
         LD      A,C
         OR      B
         OR      L
-        OR      H
-        JP      Z,J662D			; illegal function call error
+        OR      H			; record number = 0 ?
+        JP      Z,J662D			; yep, illegal function call error
         LD      A,C
         OR      B
         DEC     BC
         JR      NZ,J5F51
-        DEC     HL
+        DEC     HL			; record number zero based
 J5F51:  EX      DE,HL
-        POP     HL
-        EX      (SP),HL
-        PUSH    HL
-        PUSH    DE
+        POP     HL			; restore BASIC pointer
+        EX      (SP),HL			; store BASIC pointer, restore pointer to i/o channel
+        PUSH    HL			; store pointer to i/o channel
+        PUSH    DE			; store high word
         INC     HL
-        INC     HL
+        INC     HL			; +2
         LD      E,(HL)
-        LD      D,00H
-        INC     DE
-        CALL    C689F
+        LD      D,0
+        INC     DE			; record size
+        CALL    C689F			; multiply
         POP     IX
         PUSH    BC
         PUSH    IX
-        POP     BC
-        CALL    C68A2
+        POP     BC			; store low word result, restore high word
+        CALL    C68A2			; multiply high word
         LD      A,L
-        OR      H
-        JP      NZ,J662D		; illegal function call error
+        OR      H			; record within 32 bit limit ?
+        JP      NZ,J662D		; nope, illegal function call error
         LD      E,C
         LD      D,B
-        POP     HL
-        POP     BC
-        PUSH    BC
-        INC     BC
+        POP     HL			; restore low word result
+        POP     BC			; restore pointer to i/o channel
+        PUSH    BC			; store pointer to i/o channel
+        INC     BC			; +1
         LD      A,(BC)
-        LD      B,A
+        LD      B,A			; file handle
         XOR     A			; relative to the beginning of the file
         LD      C,4AH			; function = move file handle pointer 
         CALL    BDOS
-        POP     HL
-        EX      (SP),HL
-J5F7D:  EX      (SP),HL
-        INC     HL
-        LD      B,(HL)
-        INC     HL
+        POP     HL			; restore pointer to i/o channel
+        EX      (SP),HL			; store pointer to i/o channel, restore BASIC pointer
+J5F7D:  EX      (SP),HL			; store BASIC pointer, restore pointer to i/o channel
+        INC     HL			; +1
+        LD      B,(HL)			; file handle
+        INC     HL			; +2
         LD      E,(HL)
-        LD      D,00H
-        INC     DE
+        LD      D,0
+        INC     DE			; record size
         INC     HL
         INC     HL
         INC     HL
         INC     HL
         INC     HL
         INC     HL
-        INC     HL
+        INC     HL			; +9
         EX      DE,HL
-        POP     IX
-        POP     AF
-        PUSH    IX
-        AND     A
+        POP     IX			; restore BASIC pointer
+        POP     AF			; restore GET/PUT flag
+        PUSH    IX			; store BASIC pointer
+        AND     A			; PUT ?
         LD      C,48H			; function = read from file handle
-        JR      Z,J5F99
+        JR      Z,J5F99			; nope, GET
         LD      C,49H			; function = write to file handle
 J5F99:  CALL    C655D			; execute BDOS function (handle error)
-        JP      J627A
+        JP      J627A			; restore BASIC pointer and output back to screen
 
 ;         Subroutine field (H.FIEL)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5F9F:  CALL    C6888
+C5F9F:  CALL    C6888			; take control from hook caller
         CP      "#"
         CALL    Z,C665F			; get next BASIC character
         LD      IX,GETBYT
         CALL    C664F			; evaluate byte operand
-        JP      Z,J6630			; syntax error
-        PUSH    HL
+        JP      Z,J6630			; end of statement, syntax error
+        PUSH    HL			; store BASIC pointer
         LD      IX,FILIDX
-        CALL    C664F
+        CALL    C664F			; get pointer to i/o channel
         LD      E,L
-        LD      D,H
-        JP      Z,J6645			; file not open error
-        JP      C,J662D			; illegal function call error
-        LD      A,(HL)
-        CP      04H     ; 4 
-        JP      NZ,J65EA		; bad file mode error
+        LD      D,H			; store pointer to i/o channel
+        JP      Z,J6645			; i/o channel closed, file not open error
+        JP      C,J662D			; not a diskdrive device, illegal function call error
+        LD      A,(HL)			; i/o channel mode
+        CP      4			; random i/o ?
+        JP      NZ,J65EA		; nope, bad file mode error
         INC     HL
-        INC     HL
+        INC     HL			; +2
         LD      L,(HL)
-        LD      H,00H
-        INC     HL
-        LD      (BUF+10),HL
+        LD      H,0
+        INC     HL			; record size
+        LD      (BUF+10),HL		; store record size
         LD      HL,0
-        LD      (BUF+12),HL
-        LD      BC,9
-        POP     HL
+        LD      (BUF+12),HL		; total field size = 0
+        LD      BC,9			; offset = to i/o channel buffer
+        POP     HL			; restore BASIC pointer
 J5FDA:  EX      DE,HL
         ADD     HL,BC
-        EX      DE,HL
+        EX      DE,HL			; update pointer in buffer
         LD      A,(HL)
-        CP      2CH     ; ","
-        RET     NZ
-        PUSH    DE
+        CP      ","			; field definition follow ?
+        RET     NZ			; nope, quit
+        PUSH    DE			; store pointer in buffer
         LD      IX,GTBYTC
-        CALL    C664F
-        PUSH    AF
+        CALL    C664F			; evaluate ,byte operand
+        PUSH    AF			; store field size
         CALL    C6654			; check for BASIC character
         DEFB    "A"
         CALL    C6654			; check for BASIC character
         DEFB    "S"
         LD      IX,PTRGET
-        CALL    C664F
+        CALL    C664F			; get address of variable
         LD      IX,GETYPR
-        CALL    C664F
-        JP      NZ,J6627		; type mismatch error
-        POP     AF
-        EX      (SP),HL
-        PUSH    DE
-        PUSH    HL
+        CALL    C664F			; get DAC type
+        JP      NZ,J6627		; no string, type mismatch error
+        POP     AF			; restore field size
+        EX      (SP),HL			; store BASIC pointer, restore pointer in buffer
+        PUSH    DE			; store address of variable
+        PUSH    HL			; store pointer in buffer
         LD      HL,(BUF+12)
         LD      C,A
-        LD      B,00H
+        LD      B,0			; field size
         ADD     HL,BC
-        LD      (BUF+12),HL
+        LD      (BUF+12),HL		; update total field size
         EX      DE,HL
-        LD      HL,(BUF+10)
-        _RST    DCOMPR
-        JP      C,J6633			; field overflow error
-        POP     DE
-        POP     HL
-        LD      (HL),C
+        LD      HL,(BUF+10)		; record size
+        _RST    DCOMPR			; compare
+        JP      C,J6633			; total field size > record size, field overflow error
+	POP	DE			; restore pointer in buffer
+	POP	HL			; restore address of variable
+        LD      (HL),C			; size of string = field size
         INC     HL
         LD      (HL),E
         INC     HL
-        LD      (HL),D
-        LD      B,00H
-        POP     HL
-        JR      J5FDA
+        LD      (HL),D			; pointer to string = pointer in buffer
+        LD      B,0			; ?? B is already zero
+        POP     HL			; restore BASIC pointer
+        JR      J5FDA			; next field
 
 ;         Subroutine right set (H.RSET)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C6025:  DEFB	0F6H		        ; OR #37
+C6025:  DEFB	0F6H		        ; OR xx: trick to skip next instrunction
 
 ;         Subroutine left set (H.LSET)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C6026:  SCF
-        CALL    C6888
-        PUSH    AF
+C6026:  SCF				; LSET flag
+        CALL    C6888			; take control from hook caller
+        PUSH    AF			; store LSET flag
         LD      IX,PTRGET
-        CALL    C664F
+        CALL    C664F			; get address of variable
         LD      IX,GETYPR
-        CALL    C664F
-        JP      NZ,J6627		; type mismatch error
-        PUSH    DE
+        CALL    C664F			; get DAC type
+        JP      NZ,J6627		; not a string, type mismatch error
+        PUSH    DE			; store address of variable
         LD      IX,FRMEQL
-        CALL    C664F
-        POP     BC
-        EX      (SP),HL
-        PUSH    HL
-        PUSH    BC
+        CALL    C664F			; evaluate =expression
+        POP     BC			; restore address of variable
+        EX      (SP),HL			; store BASIC pointer, restore LSET flag
+        PUSH    HL			; store LSET flag
+        PUSH    BC			; store address of variable
         LD      IX,FRESTR
-        CALL    C664F
-        LD      B,(HL)
-        EX      (SP),HL
+        CALL    C664F			; free temporary string descriptor
+        LD      B,(HL)			; size of string
+        EX      (SP),HL			; store string descriptor, restore address of variable
         LD      A,(HL)
-        LD      C,A
-        PUSH    BC
-        PUSH    HL
-        PUSH    AF
+        LD      C,A			; size of field
+        PUSH    BC			; store size of string, size of field
+        PUSH    HL			; store address of variable
+        PUSH    AF			; store string released
         INC     HL
         LD      E,(HL)
         INC     HL
-        LD      D,(HL)
-        OR      A
-        JR      Z,J60B9
-        LD      HL,(NULBUF)
+        LD      D,(HL)			; pointer to string
+        OR      A			; size of field = 0 ?
+        JR      Z,J60B9			; yep, quit
+        LD      HL,(NULBUF)		; pointer to system i/o channel buffer
         DEC     HL
-        _RST    DCOMPR
-        JR      C,J6097
-        LD      HL,(VARTAB)
-        _RST    DCOMPR
-        JR      C,J6097
+        _RST    DCOMPR			; compare
+        JR      C,J6097			; pointer to buffer, skip allocation
+        LD      HL,(VARTAB)		; start of variable area
+        _RST    DCOMPR			; compare
+        JR      C,J6097			; not a string constant in program, skip allocation
         LD      E,C
-        LD      D,00H
+        LD      D,0			; size of field
         LD      HL,(STKTOP)
         ADD     HL,DE
         EX      DE,HL
         LD      HL,(FRETOP)
         _RST    DCOMPR
         JR      C,J60CC
-        POP     AF
-J6079:  LD      A,C
+        POP     AF			; restore string released
+J6079:  LD      A,C			; size of field
         LD      IX,GETSPA
-        CALL    C664F
-        POP     HL
-        POP     BC
-        EX      (SP),HL
+        CALL    C664F			; allocate string space
+        POP     HL			; restore address of variable
+        POP     BC			; restore size of string, size of field
+        EX      (SP),HL			; store address of variable, restore string descriptor
         PUSH    DE
         PUSH    BC
         LD      IX,FRESTR
-        CALL    C664F
+        CALL    C664F			; free temporary string descriptor
         POP     BC
         POP     DE
         EX      (SP),HL
         PUSH    BC
         PUSH    HL
         INC     HL
-        PUSH    AF
+        PUSH    AF			; store string released
         LD      (HL),E
         INC     HL
-        LD      (HL),D
-J6097:  POP     AF
+        LD      (HL),D			; update pointer to string
+J6097:  POP     AF			; restore string released
         POP     HL
         INC     HL
         LD      E,(HL)
         INC     HL
-        LD      D,(HL)
+        LD      D,(HL)			; pointer to string
         POP     BC
         POP     HL
         INC     HL
         LD      A,(HL)
         INC     HL
         LD      H,(HL)
-        LD      L,A
+        LD      L,A			; pointer to string
         LD      A,C
-        CP      B
-        JR      NC,J60A9
+        CP      B			; compare size of string with size of field
+        JR      NC,J60A9		; size of field >= size of string
         LD      B,A
 J60A9:  SUB     B
-        LD      C,A
-        POP     AF
-        CALL    NC,C60C3
+        LD      C,A			; size difference
+        POP     AF			; restore LSET flag
+        CALL    NC,C60C3		; RSET, add spaces (before)
         INC     B
 J60B0:  DEC     B
         JR      Z,J60BE
@@ -4377,16 +4373,16 @@ J60B9:  POP     BC
         POP     BC
         POP     BC
         POP     BC
-        POP     BC
-J60BE:  CALL    C,C60C3
+        POP     BC			; clean up stack
+J60BE:  CALL    C,C60C3			; LSET, add spaces (after)
         POP     HL
         RET
 
-;         Subroutine __________________________
+;         Subroutine add spaces
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C60C3:  LD      A,20H   ; " "
+C60C3:  LD      A," "
         INC     C
 J60C6:  DEC     C
         RET     Z
@@ -4394,51 +4390,51 @@ J60C6:  DEC     C
         INC     DE
         JR      J60C6
 
-J60CC:  POP     AF
-        POP     HL
-        POP     BC
-        EX      (SP),HL
+J60CC:  POP     AF			; store string released
+        POP     HL			; restore address of variable
+        POP     BC			; restore size of string, size of field
+        EX      (SP),HL			; store address of variable, restore string descriptor
         EX      DE,HL
-        JR      NZ,J60E0
-        PUSH    BC
+        JR      NZ,J60E0		; string not released, skip allocation
+        PUSH    BC			; store size of string, size of field
         LD      A,B
         LD      IX,STRINI
-        CALL    C664F
+        CALL    C664F			; allocate temp string
         CALL    C6107
-        POP     BC
-J60E0:  EX      (SP),HL
-        PUSH    BC
-        PUSH    HL
-        JP      J6079
+        POP     BC			; restore size of string, size of field
+J60E0:  EX      (SP),HL			; store , restore address of variable
+        PUSH    BC			; store size of string, size of field
+        PUSH    HL			; store address of variable
+        JP      J6079			; continue
 
 ;         Subroutine make integer (H.MKI)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C60E6:  LD      A,2
+C60E6:  LD      A,2			; size of string = 2
         DEFB    001H
 
 ;         Subroutine make single float (H.MKS)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C60E9:  LD      A,4
+C60E9:  LD      A,4			; size of string = 4
         DEFB    001H
 
 ;         Subroutine make double float (H.MKD)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C60EC:  LD      A,8
-        CALL    C6888
-        PUSH    AF
+C60EC:  LD      A,8			; size of string = 8
+        CALL    C6888			; take control from hook caller
+        PUSH    AF			; store size of string
         LD      IX,DOCNVF
-        CALL    C664F
-        POP     AF
+        CALL    C664F			; convert DAC to other type
+        POP     AF			; restore size of string
         LD      IX,STRINI
-        CALL    C664F
-        LD      HL,(DSCTMP+1)
-        CALL    VMOVMF
+        CALL    C664F			; allocate temp string
+        LD      HL,(DSCTMP+1)		; pointer to string
+        CALL    VMOVMF			; copy variable content from DAC
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
@@ -4447,9 +4443,9 @@ C60EC:  LD      A,8
 C6107:  LD      DE,DSCTMP
         LD      HL,(TEMPPT)
         LD      (DAC+2),HL
-        LD      A,03H   ; 3 
+        LD      A,3
         LD      (VALTYP),A
-        CALL    VMOVE
+        CALL    VMOVE			; copy string descriptor
         LD      DE,FRETOP
         _RST    DCOMPR
         LD      (TEMPPT),HL
@@ -4460,100 +4456,100 @@ C6107:  LD      DE,DSCTMP
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C6123:  LD      A,1
+C6123:  LD      A,2-1			; target size -1
         DEFB    001H
 
 ;         Subroutine convert to single float (H.CVS)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C6126:  LD      A,3
+C6126:  LD      A,4-1			; target size -1
         DEFB    001H
 
 ;         Subroutine convert to double float (H.CVD)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C6129:  LD      A,7
-        CALL    C6888
-        PUSH    AF
+C6129:  LD      A,8-1			; target size -1
+        CALL    C6888			; take control from hook caller
+        PUSH    AF			; store target size -1
         LD      IX,FRESTR
-        CALL    C664F
-        POP     AF
-        CP      (HL)
-        JP      NC,J662D		; illegal function call error
-        INC     A
+        CALL    C664F			; free temporary string descriptor
+        POP     AF			; resture target size -1
+        CP      (HL)			; field size to small ?
+        JP      NC,J662D		; yep, illegal function call error
+        INC     A			; target size
         INC     HL
         LD      C,(HL)
         INC     HL
         LD      H,(HL)
-        LD      L,C
-        LD      (VALTYP),A
-        JP      VMOVFM
+        LD      L,C			; pointer to string
+        LD      (VALTYP),A		; target type
+        JP      VMOVFM			; copy variable content to DAC
 
-;         Subroutine __________________________
+;         Subroutine convert DAC to 32 bit integer
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
 C6147:  LD      IX,GETYPR
-        CALL    C664F
-        JP      M,J61B3
-        JP      Z,J6627			; type mismatch error
+        CALL    C664F			; get DAC type
+        JP      M,J61B3			; integer,
+        JP      Z,J6627			; string, type mismatch error
         LD      HL,DAC+0
         LD      A,(HL)
-        AND     A
-        JP      M,J662D			; illegal function call error
+        AND     A			; positive float ?
+        JP      M,J662D			; nope, illegal function call error
         LD      DE,BUF+10
         LD      BC,8
-        LDIR
+        LDIR				; store DAC
         LD      HL,I61C0
         LD      DE,ARG
         LD      C,8
-        LDIR
-        CALL    DECDIV
-        AND     A
-        CALL    INT
+        LDIR				; 65536 (double float)
+        CALL    DECDIV			; DAC = DAC / ARG
+        AND     A			; DAC type = double float
+        CALL    INT			; integer part of float
         LD      IX,GETUI
-        CALL    C664F
-        PUSH    DE
+        CALL    C664F			; convert to unsigned integer
+        PUSH    DE			; store high word value
         EX      DE,HL
         LD      IX,FLTLIN
-        CALL    C664F
-        CALL    CONDS
+        CALL    C664F			; convert to single float
+        CALL    CONDS			; convert to double float
         LD      BC,06545H
         LD      DE,06053H
-        CALL    SGNMUL
+        CALL    SGNMUL			; *65536
         LD      HL,DAC
         PUSH    HL
         LD      DE,ARG
         LD      BC,8
-        LDIR
+        LDIR				; ARG = DAC
         LD      HL,BUF+10
         POP     DE
-        LD      C,08H   ; 8 
-        LDIR
-        CALL    DECSUB
+        LD      C,8
+        LDIR				; restore DAC
+        CALL    DECSUB			; DAC = DAC - ARG
         LD      IX,GETUI
-        CALL    C664F
+        CALL    C664F			; convert to unsigned integer
         LD      C,E
-        LD      B,D
-        POP     HL
+        LD      B,D			; low word value
+        POP     HL			; restore high word value
         RET
 
-J61B3:  LD      BC,(DAC+2)
+J61B3:  LD      BC,(DAC+2)		; integer in DAC
         INC     B
-        DEC     B
-        JP      M,J662D			; illegal function call error
-        LD      HL,0
+        DEC     B			; positive integer ?
+        JP      M,J662D			; nope, illegal function call error
+        LD      HL,0			; high word value = 0
         RET
 
-I61C0:  045H,065H,053H,060H,0,0,0,0
+I61C0:  DEFB	045H,065H,053H,060H,0,0,0,0
 
 ;         Subroutine end of file (H.EOF)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C61C8:  CALL    C6888
+C61C8:  CALL    C6888			; take control from hook caller
         PUSH    HL
         CALL    C5B60			; get character from i/o channel
         LD      HL,0
@@ -4573,7 +4569,7 @@ J61D5:  PUSH    AF
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C61E0:  CALL    C6888
+C61E0:  CALL    C6888			; take control from hook caller
         CALL    C665E			; get BASIC character
         JR      Z,J61F1
         CP      ","
@@ -4652,9 +4648,9 @@ J626E:  LD      IX,BUF+10
         CALL    BDOS
         JR      Z,J6240
         POP     AF
-J627A:  POP     HL
+J627A:  POP     HL			; restore BASIC pointer
         LD      IX,FINPRT
-        JP      C664F
+        JP      C664F			; output back to screen
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
@@ -4708,10 +4704,10 @@ J62A4:  CALL    C6284
         BIT     5,C
         LD      A,61H   ; "a"
         CALL    C62F6
-        LD      BC,(BUF+31)
-        LD      HL,(BUF+33)
+        LD      BC,(BUF+31+0)
+        LD      HL,(BUF+31+2)		; file size
         CALL    C63BA
-        LD      IX,M537B
+        LD      IX,JPFOUT
         CALL    C664F
         INC     HL
         PUSH    HL
@@ -4752,7 +4748,7 @@ C62FC:  LD      A,(HL)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C6303:  CALL    C6888
+C6303:  CALL    C6888			; take control from hook caller
         CALL    C6350			; evaluate file expression and check if disk drive
         CALL    C665E			; get BASIC character
         RET     NZ
@@ -4765,7 +4761,7 @@ C6303:  CALL    C6888
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C6315:  CALL    C6888
+C6315:  CALL    C6888			; take control from hook caller
         CALL    C6350			; evaluate file expression and check if disk drive
         PUSH    HL
         CALL    C59D1			; execute find first entry (normal attributes)
@@ -4827,8 +4823,8 @@ C635E:  LD      A,2
 ;            Outputs ________________________
 
 C6361:  LD      A,1
-        CALL    C6888
-        PUSH    AF
+        CALL    C6888			; take control from hook caller
+        PUSH    AF			; store function
         LD      IX,CONINT
         CALL    C664F
         LD      IX,FILIDX
@@ -4836,54 +4832,54 @@ C6361:  LD      A,1
         JP      C,J662D			; illegal function call error
         JP      Z,J6645			; file not open error
         INC     HL
-        LD      B,(HL)
+        LD      B,(HL)			; file handle
 
 	IF DOS201 EQ 1
 
         INC     HL
-        LD      C,(HL)
+        LD      C,(HL)			; record size -1
 
 	ENDIF
 
         LD      A,1			; relative to the current position
         LD      DE,0
-        LD      HL,0
+        LD      HL,0			; offset = 0
 
 
 	IF DOS201 EQ 1
 
-        PUSH    BC
+        PUSH    BC			; store file handle, record size -1
         LD      C,4AH			; function = move file handle pointer
 
         ELSE
 
         LD      C,4AH			; function = move file handle pointer
-        PUSH    BC
+        PUSH    BC			; store file handle, 4AH
 
         ENDIF
 
 
         CALL    C655D			; execute BDOS function (handle error)
-        POP     BC
-        POP     AF
-        DEC     A
+        POP     BC			; restore file handle, record size -1
+        POP     AF			; restore function
+        DEC     A			; LOC ?
 
 	IF DOS201 EQ 1
 
-        JR      NZ,J6399
-        PUSH    BC
-        CALL    C63E4
-        POP     BC
-        JR      J63B7
+        JR      NZ,J6399		; nope, return file size
+        PUSH    BC			; store file handle, record size -1
+        CALL    C63E4			; calculate LOC value
+        POP     BC			; restore file handle, record size -1
+        JR      J63B7			; return LOC value
 
 	ELSE
 
-	JR	Z,J63B7
+	JR	Z,J63B7			; yep, return current position
 
 	ENDIF
 
 J6399:  PUSH    HL
-        PUSH    DE
+        PUSH    DE			; store current position
         LD      A,2			; relative to the end of the file
         LD      DE,0
         LD      HL,0			; offset = 0
@@ -4894,59 +4890,60 @@ J6399:  PUSH    HL
 
 	ENDIF
 
-        PUSH    BC
+        PUSH    BC			; store file handle
         CALL    C655D			; execute BDOS function (handle error)
-        POP     BC
+        POP     BC			; restore file handle
         POP     IX
         EX      (SP),HL
         PUSH    DE
         PUSH    IX
-        POP     DE
-        XOR     A
+        POP     DE			; store file size, restore orginal position
+        XOR     A			; relative to start of the file
         CALL    C655D			; execute BDOS function (handle error)
         POP     DE
-        POP     HL
+        POP     HL			; restore file size
 J63B7:  LD      C,L
         LD      B,H
-        EX      DE,HL
+        EX      DE,HL			; value to HLBC
+
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C63BA:  PUSH    BC
+C63BA:  PUSH    BC			; store low word value
         LD      IX,FLTLIN
-        CALL    C664F
+        CALL    C664F			; convert to single float (high word value)
         LD      BC,06545H
         LD      DE,06053H
-        CALL    SGNMUL
+        CALL    SGNMUL			; *65536
         LD      HL,DAC
         LD      DE,ARG
         LD      BC,8
-        LDIR
-        POP     HL
+        LDIR				; ARG = DAC
+        POP     HL			; restore low word value
         LD      IX,FLTLIN
-        CALL    C664F
-        CALL    CONDS
-        JP      DECADD
+        CALL    C664F			; convert to single float (low word value)
+        CALL    CONDS			; convert to double float
+        JP      DECADD			; DAC = DAC + ARG
 
 
 	IF DOS201 EQ 1
 
-;         Subroutine __________________________
+;         Subroutine calculate LOC value
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C63E4:  INC     C
-        JR      NZ,J63EF
+C63E4:  INC     C			; record size = 256 ?
+        JR      NZ,J63EF		; nope, divide
         LD      A,L
         LD      L,H
         LD      H,E
         LD      E,D
-        LD      D,00H
+        LD      D,0
         JR      J6403
 
 J63EF:  XOR     A
-        LD      B,21H   ; "!"
+        LD      B,32+1
 J63F2:  ADC     A,A
         JR      C,J63F9
         CP      C
@@ -4976,7 +4973,7 @@ J6403:  OR      A
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C640D:  CALL    C6888
+C640D:  CALL    C6888			; take control from hook caller
         LD      IX,CONINT
         CALL    C664F
         AND     A
@@ -4990,7 +4987,7 @@ C640D:  CALL    C6888
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C6424:  CALL    C6888
+C6424:  CALL    C6888			; take control from hook caller
         CALL    C6350			; evaluate file expression and check if disk drive
         PUSH    HL
         CALL    C59D1			; execute find first entry (normal attributes)
@@ -5636,7 +5633,7 @@ I6775:  DEFB	0
         DEFB	"Directory not found",0
         DEFB	"RAM disk already exists",0
 
-;         Subroutine __________________________
+;         Subroutine take control from hook caller
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -5661,11 +5658,12 @@ J6896:  ADD     HL,SP
 ;            Outputs ________________________
 
 C689F:  LD      HL,0
+
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C68A2:  LD      A,11H   ; 17 
+C68A2:  LD      A,16+1
 J68A4:  RR      B
         RR      C
         DEC     A
@@ -5797,7 +5795,7 @@ J6980:  LD      A,(DE)
 J698A:  LD      A,C
         LD      (CUR_DRV),A		; update current drive
         LD      HL,($SECBUF)
-        LD      DE,0C000H
+        LD      DE,BOT16K
         LD      BC,256
         LDIR
         OR      A
@@ -5821,8 +5819,8 @@ C699B:  LD      (CUR_DRV),A		; update current drive
         LD      C,43H			; function = open file handle
         CALL    C69F5			; execute BDOS function (return orginal error code when aborted)
         JR      NZ,J69E7		; error, quit (optimize: a simple RET NZ)
-        LD      DE,J.0100
-        LD      HL,4000H-J.0100
+        LD      DE,TBASE
+        LD      HL,4000H-TBASE
         LD      C,48H			; function = read from file handle
         PUSH    BC			; store file handle
         CALL    C69F5			; execute BDOS function (return orginal error code when aborted)
@@ -5838,7 +5836,7 @@ C699B:  LD      (CUR_DRV),A		; update current drive
         LD      ($DOSON+0),A
         LD      ($DOSOF+0),A
         LD      (XFER+0),A		; enable page 1 support
-        JP      J.0100			; start MSXDOS2
+        JP      TBASE			; start MSXDOS2
 
 J69E7:  RET
 
@@ -6370,7 +6368,7 @@ C6D2E:  LD      A,(HL)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-J6D39:  LD      HL,I.BC20
+J6D39:  LD      HL,I.BC00+32
         LD      A,(DATA_S)		; BDOS data segment
         CALL    RD_SEG                  ; RD_SEG
         CP      "V"
@@ -6389,7 +6387,7 @@ J6D49:  EI
         LD      A,B
         LD      (RD_SCN),A		; store number of sectors
         EX      AF,AF'
-        LD      HL,I.BC20
+        LD      HL,I.BC00+32
         LD      A,(DATA_S)		; BDOS data segment
         CALL    RD_SEG                  ; RD_SEG
         EI 
@@ -6502,7 +6500,7 @@ C6DFF:  LD      A,D
         LD      C,A			; BDOS data segment
         LD      A,(RAMAD3)
         LD      B,A
-        LD      HL,I$3C00
+        LD      HL,I.BC00-8000H
         LD      A,1
         RET
 
@@ -6510,7 +6508,7 @@ J6E11:  CALL    GET_P2                  ; GET_P2
         PUSH    AF			; store current segment page 2
         LD      A,(DATA_S)		; BDOS data segment
         CALL    PUT_P2                  ; PUT_P2
-        LD      HL,(D.BE00)
+        LD      HL,(D.BE00)             ; number of ramdisk segments
         LD      H,00H
         ADD     HL,HL
         ADD     HL,HL
@@ -6531,8 +6529,8 @@ J6E11:  CALL    GET_P2                  ; GET_P2
         ADD     HL,HL
         ADD     HL,HL
         LD      E,H
-        LD      D,00H
-        LD      HL,I$BE02
+        LD      D,0
+        LD      HL,I$BE02               ; ramdisk segment table
         ADD     HL,DE
         ADD     HL,DE
         CALL    GET_P2                  ; GET_P2
@@ -6562,7 +6560,7 @@ C6E5B:  CALL    GET_P2                  ; GET_P2
         PUSH    AF			; store current segment page 2
         LD      A,(DATA_S)		; BDOS data segment
         CALL    PUT_P2                  ; PUT_P2
-        LD      A,(D.BE00)
+        LD      A,(D.BE00)              ; number of ramdisk segments
         OR      A
         JR      NZ,J6E73
         POP     AF
@@ -6572,7 +6570,7 @@ C6E5B:  CALL    GET_P2                  ; GET_P2
         RET
 
 J6E73:  EXX
-        LD      HL,I$BC0B
+        LD      HL,I.BC00+11
         LD      (HL),00H
         INC     HL
         LD      (HL),02H        ; 2 
@@ -6645,7 +6643,7 @@ J6EC4:  LD      B,H
         LD      (HL),00H
         INC     HL
         LD      HL,I6EE6
-        LD      DE,I.BC20
+        LD      DE,I.BC00+32
         LD      BC,11
         LDIR
         EXX

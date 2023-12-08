@@ -87,7 +87,7 @@ DCOMPR	equ	00020H
 ENASLT  equ     00024H
 IDBYT0  equ     0002BH
 CALLF   equ     00030H
-M0034   equ     00034H
+CHAR_16 equ     00034H
 KEYINT  equ     00038H
 LDIRMV  equ     00059H
 LDIRVM  equ     0005CH
@@ -248,6 +248,7 @@ PRTFLG  equ     0F416H
 CURLIN  equ     0F41CH
 KBUF    equ     0F41FH
 BUF     equ     0F55EH
+TMPBUF	equ	BUF+10			; temporary buffer
 TTYPOS  equ     0F661H
 VALTYP  equ     0F663H
 MEMSIZ  equ     0F672H
@@ -349,7 +350,7 @@ VMOVFM  equ     02F08H          ; copy variable content to DAC
 VMOVMF  equ     02F10H          ; copy variable content from DAC
 MAKINT  equ     02F99H          ; integer to DAC
 CONDS   equ     03042H          ; convert DAC from sgn to dbl
-INT     equ     030D1H          ; dbl to integer
+INT     equ     030D1H          ; integer part of float
 SGNMUL  equ     0325CH          ; sgn multiply
 NULSTR  equ     03FD6H          ; empty string
 ERROR   equ     0406FH          ; BASIC error
@@ -4664,7 +4665,7 @@ A58A8:  call    A622D                   ; hook H.LOPD when H.CLEA is hooked (for
         ld      de,DATABA
         ld      bc,L7397
         ldir                            ; initialize some static disksystem variables
-        ld      hl,M0034
+        ld      hl,CHAR_16
         ld      de,KANJTA
         ld      bc,4
         ldir                            ; initialize double byte header char table
@@ -4986,7 +4987,7 @@ T5B38:  defw    A5B92                   ; start DiskBASIC in direct mode
 
 A5B3A:  call    A5C60                   ; disable XFER,ENARAM,ENAKRN routines
         ld      hl,T5B27
-        ld      de,BUF+10
+        ld      de,TMPBUF
         ld      bc,L5B27
         ldir                            ; copy RUN"AUTOEXEC.BAS in BUF
         ld      hl,NOTFIR
@@ -5001,7 +5002,7 @@ A5B3A:  call    A5C60                   ; disable XFER,ENARAM,ENAKRN routines
         ld      hl,T5B38
         ld      (DISKVE),hl             ; setup disk errorhandler
         ld      hl,T5B1A
-        ld      de,BUF+10+L5B27
+        ld      de,TMPBUF+L5B27
         ld      bc,37                   ; a bit odd, should be L5B15
         push    de
         ldir                            ; setup FCB for autoexec.bas
@@ -5029,8 +5030,8 @@ A5B7D:  inc     hl
 A5B87:  xor     a
         ld      c,b
         ld      b,a
-        ld      de,BUF+14
-        ldir                            ; copy file name after the RUN" at BUF+10
+        ld      de,TMPBUF+4
+        ldir                            ; copy file name after the RUN" at TMPBUF
         ld      (de),a                  ; and a end of line marker
         jr      A5BA0                   ; start DiskBASIC and run specified basicfile
 
@@ -5044,7 +5045,7 @@ A5B92:  ld      sp,0C200H               ; switch to a temporary stack
 ;       Subroutine      start DiskBASIC in direct mode
 
 A5B9C:  xor     a
-        ld      (BUF+13),a              ; make it a ordinary RUN at BUF+10
+        ld      (TMPBUF+3),a            ; make it a ordinary RUN at TMPBUF
 
 ;       Subroutine      start DiskBASIC
 
@@ -5081,7 +5082,7 @@ A5BA0:  ld      sp,0C200H               ; switch to a temporary stack
         defb    0
         ld      hl,NTSTOP
         push    hl                      ; execute RUN command
-        ld      hl,BUF+10-1
+        ld      hl,TMPBUF-1
         push    hl                      ; basicpointer
         ld      hl,BUF+64
         push    hl
@@ -6759,21 +6760,21 @@ A6636:  push    hl
         push    de
         push    bc
         ld      a,d
-        ld      (BUF+10),a
+        ld      (TMPBUF+0),a
         call    A6657                   ; copy FILNAM to FCB
         call    A6645                   ; search file
         jr      A66A0
 
 A6645:  ld      hl,BUF+84
         ld      (DMAADD),hl             ; transferaddress in BUF
-        ld      de,BUF+10
+        ld      de,TMPBUF
         xor     a
-        ld      (BUF+10+12),a           ; clear EX byte of FCB
+        ld      (TMPBUF+12),a           ; clear EX byte of FCB
         call    A4FB8                   ; search for first
         inc     a
         ret
 
-A6657:  ld      de,BUF+10+1
+A6657:  ld      de,TMPBUF+1
 A665A:  ld      hl,FILNAM
         ld      bc,11
         ldir
@@ -6904,7 +6905,7 @@ A66FC:  ei
         ld      ix,RETRTN
         ld      iy,00400H
         call    A6663                   ; take control from caller (move parameters on stack)
-        call    A6FA9                   ; validate filename
+        call    A6FA9                   ; validate file name (wildcard not allowed)
         call    A65EA                   ; is file already open in one of the I/O channels ?
         jp      z,A7309                 ; yep, file already open error
         ld      (PTRFIL),hl             ; interpreter input/output device = i/o channel pointer
@@ -7333,7 +7334,7 @@ A6939:  ld      ix,M739A                ; quit loading & start (headloop/executi
         ret     nz			; nope, quit
         ld      (NLONLY),a              ; not loading basic program, close i/o channels when requested
         ld      hl,T69B9
-        ld      de,BUF+10
+        ld      de,TMPBUF
         ld      bc,5
         push    de
         ldir
@@ -7725,41 +7726,41 @@ A6C49:  call    A7380                   ; take control from caller
         ld      ix,GETBYT
         call    A731E                   ; evaluate byte operand
         jp      z,A7318			; zero, syntax error
-        push    hl
+        push    hl			; store BASIC pointer
         ld      ix,FILIDX
         call    A731E                   ; get i/o channel pointer
         ld      e,l
         ld      d,h
-        jp      z,A7300
-        jp      c,A7315
-        ld      a,(hl)
-        cp      4			; random i/o mode ?
+        jp      z,A7300			; i/o channel closed,
+        jp      c,A7315			; device is not a diskdrive,
+        ld      a,(hl)			; i/o channel mode
+        cp      4			; random i/o ?
         jp      nz,A7199		; nope, bad file mode error
-        inc     hl
+        inc     hl			; +1
         ld      a,(hl)
         inc     hl
         ld      h,(hl)
-        ld      l,a
-        ld      bc,0000EH
+        ld      l,a			; pointer to FCB
+        ld      bc,14
         add     hl,bc
         ld      c,(hl)
         inc     hl
-        ld      b,(hl)
-        ld      (BUF+10),bc
-        ld      hl,00000H
-        ld      (BUF+12),hl
-        ld      bc,00009H
-        pop     hl
+        ld      b,(hl)			; record size
+        ld      (TMPBUF+0),bc		; store record size
+        ld      hl,0
+        ld      (TMPBUF+2),hl		; total field size = 0
+        ld      bc,9			; offset to i/o channel buffer
+        pop     hl			; restore BASIC pointer
 A6C8B:  ex      de,hl
         add     hl,bc
-        ex      de,hl
+        ex      de,hl			; update pointer in i/o channel buffer
         ld      a,(hl)
-        cp      ","
-        ret     nz
-        push    de
+        cp      ","			; field variable seperator ?
+        ret     nz			; nope, quit
+        push    de			; store pointer in i/o channel buffer
         ld      ix,GTBYTC
         call    A731E                   ; skip basic char and evaluate byte operand
-        push    af
+        push    af			; store field size
         call    A72D0
         defb    "A"
         call    A72D0
@@ -7768,36 +7769,36 @@ A6C8B:  ex      de,hl
         call    A731E                   ; get address of variable
         ld      ix,GETYPR
         call    A731E                   ; GETYPR
-        jp      nz,A72FA
-        pop     af
-        ex      (sp),hl
-        push    de
-        push    hl
-        ld      hl,(BUF+12)
+        jp      nz,A72FA		; not a string,
+        pop     af			; restore field size
+        ex      (sp),hl			; store BASIC pointer, restore pointer in i/o channel buffer
+        push    de			; store pointer to string descriptor
+        push    hl			; store pointer in i/o channel buffer
+        ld      hl,(TMPBUF+2)
         ld      c,a
-        ld      b,000H
+        ld      b,0			; field size
         add     hl,bc
-        ld      (BUF+12),hl
+        ld      (TMPBUF+2),hl		; update total field size
         ex      de,hl
-        ld      hl,(BUF+10)
+        ld      hl,(TMPBUF+0)		; record size
         _RST	DCOMPR
         jp      c,A7306
-        pop     de
-        pop     hl
-        ld      (hl),c
+        pop     de			; restore pointer in i/o channel buffer
+        pop     hl			; restore pointer to string decriptor
+        ld      (hl),c			; update string size
         inc     hl
         ld      (hl),e
         inc     hl
-        ld      (hl),d
-        ld      b,000H
-        pop     hl
-        jr      A6C8B
+        ld      (hl),d			; update pointer to string
+        ld      b,0
+        pop     hl			; restore BASIC pointer
+        jr      A6C8B			; next
 
 ;       Subroutine      RSET statement (H.RSET)
 ;       Inputs          
 ;       Outputs         ________________________
 
-A6CD6:  defb    0F6H
+A6CD6:  defb    0F6H			; OR xx: trick to skip next instrunction
 
 ;       Subroutine      LSET statement (H.LSET)
 ;       Inputs          
@@ -8029,8 +8030,8 @@ A6DFB:  ld      ix,GETYPR
         ld      c,8
         ldir
         call    DECDIV                  ; dbl divide
-        and     a                       ; double real flag
-        call    INT                     ; dbl to integer
+        and     a			; DAC type = double float
+        call    INT                     ; integer part of float
         ld      ix,GETUI
         call    A731E                   ; convert address to integer
         push    de
@@ -8085,13 +8086,13 @@ A6E7D:  push    af
 
 A6E88:  call    A7380                   ; take control from caller
         ld      d,000H
-        jr      z,A6E95
-        call    A6F80
-        push    hl
+        jr      z,A6E95			; end of statement,
+        call    A6F80			; evaluate disk file specification, default file name = *.*
+        push    hl			; store BASIC pointer
         jr      A6E99
 
-A6E95:  push    hl
-        call    A6FFE
+A6E95:  push    hl			; store BASIC pointer
+        call    A6FFE			; file name = *.*
 A6E99:  call    A6F63
         ld      a,(PRTFLG)
         and     a                       ; output to printer ?
@@ -8132,9 +8133,9 @@ A6ED8:  and     a                       ; at start of line ?
         _RST    OUTDO
 A6EE3:  ld      ix,CRDO
         call    nc,A731E                ; yep, newline to OUTDO
-A6EEA:  ld      de,BUF+10
+A6EEA:  ld      de,TMPBUF
         xor     a
-        ld      (BUF+22),a
+        ld      (TMPBUF+12),a
         call    A5006                   ; search for next
         inc     a
         jr      nz,A6EAE
@@ -8148,14 +8149,14 @@ A6EF8:  pop     hl
 ;       Outputs         ________________________
 
 A6F00:  call    A7380                   ; take control from caller
-        call    A6F96
+        call    A6F96			; evaluate disk file specification with * wildcard support
         call    A72DA                   ; at end of statement ?
         ret     nz                      ; nope, quit
         call    A65EA                   ; is file already open in one of the I/O channels ?
         jp      z,A71A2
         call    A6F63
         push    hl
-        ld      de,BUF+10
+        ld      de,TMPBUF
         call    A436C                   ; delete file
         and     a			; error ?
         jp      nz,A7312		; yep, file not found error
@@ -8167,7 +8168,7 @@ A6F00:  call    A7380                   ; take control from caller
 ;       Outputs         ________________________
 
 A6F20:  call    A7380                   ; take control from caller
-        call    A6F96
+        call    A6F96			; evaluate disk file specification with * wildcard support
         call    A65EA                   ; is file already open in one of the I/O channels ?
         jp      z,A71A2
         call    A6F63
@@ -8179,18 +8180,18 @@ A6F20:  call    A7380                   ; take control from caller
         defb    "A"
         call    A72D0
         defb    "S"                     ; check for "AS"
-        call    A6F96
+        call    A6F96			; evaluate disk file specification with * wildcard support
         ld      a,d
-        ld      (BUF+26),a
+        ld      (TMPBUF+16),a
         push    hl
-        ld      hl,(BUF+10)
+        ld      hl,(TMPBUF+0)
         and     a
         jr      z,A6F51
         cp      l
         jp      nz,A71B7
-A6F51:  ld      de,BUF+27
+A6F51:  ld      de,TMPBUF+17
         call    A665A
-        ld      de,BUF+10
+        ld      de,TMPBUF
         call    A4392                   ; rename file
         and     a
         jp      nz,A71A5
@@ -8199,7 +8200,7 @@ A6F51:  ld      de,BUF+27
 
 A6F63:  call    A65E3
         inc     a
-        ld      (BUF+10),a
+        ld      (TMPBUF+0),a
         push    hl
         push    de
         call    A6657
@@ -8207,64 +8208,84 @@ A6F63:  call    A65E3
         pop     hl
         ret
 
+;       Subroutine      evaluate disk file specification
+;       Inputs          HL = BASIC pointer
+;       Outputs         ________________________
+
 A6F72:  ld      ix,FILEVL
-        call    A731E                   ; evaluate filespecification
+        call    A731E                   ; evaluate file specification
         ld      a,d
-        cp      009H
-        ret     c
+        cp      009H			; device = disk drive ?
+        ret     c			; yep, quit
         jp      A719C
-A6F80:  call    A6F72
-        push    hl
+
+;       Subroutine      evaluate disk file specification, default file name = *.*
+;       Inputs          HL = BASIC pointer
+;       Outputs         ________________________
+
+A6F80:  call    A6F72			; evaluate disk file specification
+        push    hl			; store BASIC pointer
         ld      hl,FILNAM
-        ld      b,00BH
+        ld      b,8+3
 A6F89:  ld      a,(hl)
         inc     hl
-        cp      " "
-        jr      nz,A6F9A
+        cp      " "			; space ?
+        jr      nz,A6F9A		; nope,
         djnz    A6F89
-        call    A6FFE
+        call    A6FFE			; file name = *.*
         jr      A6F9A
 
-A6F96:  call    A6F72
-        push    hl
+;       Subroutine      evaluate disk file specification with * wildcard support
+;       Inputs          HL = BASIC pointer
+;       Outputs         ________________________
+
+A6F96:  call    A6F72			; evaluate disk file specification
+        push    hl			; store BASIC pointer
 A6F9A:  ld      hl,FILNAM
-        ld      b,008H
-        call    A6FF5
-        ld      b,003H
-        call    A6FF5
-        pop     hl
-        defb    0F6H
-A6FA9:  scf
-        push    de
-        push    hl
+        ld      b,8
+        call    A6FF5			; expand * wildcard
+        ld      b,3
+        call    A6FF5			; expand * wildcard
+        pop     hl			; restore BASIC pointer
+        defb    0F6H			; OR xx: trick to skip next instrunction, clear Cx: ? character allowed
+
+;       Subroutine      validate file name (wildcard not allowed)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+A6FA9:  scf				; set Cx: ? character not allowed
+        push    de			; store DE
+        push    hl			; store HL
         ld      de,FILNAM
-        push    de
-        ld      b,11
-A6FB2:  push    bc
+        push    de			; store FILNAM
+        ld      b,8+3			; file name counter
+A6FB2:  push    bc			; store file name counter
         ld      a,(de)
         ld      hl,T6FCC
-        ld      bc,0000DH
+        ld      bc,S6FCC
         jr      c,A6FBD
         dec     bc
-A6FBD:  cpir
-        jr      z,A6FF2
-        pop     bc
+A6FBD:  cpir				; search illegal character
+        jr      z,A6FF2			; found,
+        pop     bc			; restore file name counter
         inc     de
-        djnz    A6FB2
-        pop     hl
+        djnz    A6FB2			; next
+        pop     hl			; restore FILNAM
         call    A6FD9
-        pop     hl
-        pop     de
+        pop     hl			; restore HL
+        pop     de			; restore DE
         ret
 
 T6FCC:  defb    '."/\[]:+=;,*?'
 
+S6FCC	equ	$-T6FCC
+
 A6FD9:  ld      a," "
-        cp      (hl)
-        jr      z,A6FF2
-        ld      b,007H
+        cp      (hl)			; file name starts with a space ?
+        jr      z,A6FF2			; yep,
+        ld      b,8-1
         call    A6FE5
-        ld      b,003H
+        ld      b,3
 A6FE5:  inc     hl
         cp      (hl)
         jr      z,A6FEC
@@ -8286,7 +8307,7 @@ A6FF5:  ld      a,(hl)
         ret
 
 A6FFE:  ld      hl,FILNAM
-        ld      b,00BH
+        ld      b,8+3
 A7003:  ld      (hl),"?"
         inc     hl
         djnz    A7003
@@ -8363,7 +8384,7 @@ A7074:  ld      e,a
 ;       Outputs         ________________________
 
 A707B:  call    A7380                   ; take control from caller
-        call    A6F80
+        call    A6F80			; evaluate disk file specification, default file name = *.*
         call    A65EA                   ; is file already open in one of the I/O channels ?
         jp      z,A71A2
         call    A6F63
@@ -8371,7 +8392,7 @@ A707B:  call    A7380                   ; take control from caller
         ld      a,(CURDRV)
         inc     a
         ld      (BUF+47),a
-        ld      hl,BUF+11
+        ld      hl,TMPBUF+1
         ld      de,BUF+48
         ld      bc,00024H
         ldir
@@ -8380,7 +8401,7 @@ A707B:  call    A7380                   ; take control from caller
         jr      z,A70C3                 ; yep,
         call    A72D0
         defb    0D9H                    ; check for TO token
-        call    A6F80
+        call    A6F80			; evaluate disk file specification, default file name = *.*
         call    A65EA                   ; is file already open in one of the I/O channels ?
         jp      z,A71A2
         call    A65E3
@@ -8463,9 +8484,9 @@ A713C:  pop     hl
         call    A456F                   ; close fcb
         ld      hl,BUF+84
         ld      (DMAADD),hl             ; transferaddress
-        ld      de,BUF+10
+        ld      de,TMPBUF
         xor     a
-        ld      (BUF+22),a
+        ld      (TMPBUF+12),a
         call    A5006                   ; search for next
         inc     a
         jp      nz,A70CA

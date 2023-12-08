@@ -53,18 +53,17 @@ Z1	ASET	0
 _D2:  	DEFB	0
         ENDM
 
-;
+
 KBDOS	EQU	0005H
 WRSLT	EQU	0014H
 CALSLT	EQU	001CH
 ENASLT	EQU	0024H
 IDBYT0	EQU	002BH
 KEYINT	EQU	0038H
-X003B	EQU	0003BH			; start of the slot switching helpers for MSX-DOS environment
-X0046   EQU     X003B+11                ; helper routine in DOS memoryspace: restore secundairy slotregister (RDSLT/WRSLT)
-X004B	EQU	X003B+16		; helper routine in DOS memoryspace: restore secundairy slotregister (CALSLT/CALLF)
-X005C	EQU	005CH			; ALL_SEG
-X005F	EQU	005FH			; FRE_SEG
+SSLOTL  EQU     0046H			; helper routine in DOS memory space: restore secundairy slot register (RDSLT/WRSLT)
+SSLOTE	EQU	004BH			; helper routine in DOS memory space: restore secundairy slot register (CALSLT/CALLF)
+$ALL_S	EQU	005CH			; ALL_SEG
+$FRE_S	EQU	005FH			; FRE_SEG
 CHPUT	EQU	00A2H
 CHGCPU	EQU	0180H
 GETCPU	EQU	0183H
@@ -111,8 +110,7 @@ SS_BDOS	EQU	0F2EBH                  ; saved secundairy slotregister TPA
 BDOS_ST	EQU	0F2FEH                  ; pointer to temporary stack BDOS
 KANJTA	EQU	0F30FH			; double byte header table
 P0_64K	EQU	0F314H			; TPA segment page 0
-LF327	EQU	0F327H			; AUX input hook
-LF32C	EQU	0F32CH                  ; AUX output hook
+AUXBOD	EQU	0F327H			; AUX input and output hooks
 RAMAD0	EQU	0F341H			; slotid DOS ram page 0
 RAMAD1	equ	0F342H			; slotid DOS ram page 1
 RAMAD2	equ	0F343H			; slotid DOS ram page 2
@@ -656,9 +654,9 @@ I43F6:	DEFW	$DOSON                  ; $DOSON
         DEFW	XFER                    ; XFER
         DEFW	R.0022
         DEFW	$AUXIN                  ; $AUXIN
-        DEFW	LF327
+        DEFW	AUXBOD+0
         DEFW	$AUXOU                  ; $AUXOU
-        DEFW	LF32C
+        DEFW	AUXBOD+5
         DEFW	GO_BIOS                 ; 
         DEFW	R.00F9
         DEFW	GO_BDOS
@@ -1106,7 +1104,7 @@ C.024E:	PUSH	BC
         LD	B,A
         AND	3FH
 R.0256:	OR	0
-        CALL	X004B			; restore secundairy slotregister (CALSLT/CALLF)
+        CALL	SSLOTE			; restore secundairy slotregister (CALSLT/CALLF)
         POP	DE
         POP	BC
         RET
@@ -1157,7 +1155,7 @@ R.029D:	RET
 ;	     Outputs ________________________
 
 R.02A4:	PUSH	HL
-        LD	HL,X005C                ; ALL_SEG
+        LD	HL,$ALL_S               ; ALL_SEG
         JR	J$02AE
 
 ;	  Subroutine free segment (F203)
@@ -1165,7 +1163,7 @@ R.02A4:	PUSH	HL
 ;	     Outputs ________________________
 
 R.02AA:	PUSH	HL
-        LD	HL,X005F                ; FRE_SEG
+        LD	HL,$FRE_S               ; FRE_SEG
 J$02AE:	PUSH	DE
         CALL	GO_BIOS
         POP	DE
@@ -1379,7 +1377,7 @@ J$035D:	DI
         JR	NZ,J$0382
         LD	A,E
         LD	(DFFFF),A               ; yep, change secundairy slot register directly
-J$0382:	CALL	NZ,X004B		; nope, restore secundairy slotregister (CALSLT/CALLF)
+J$0382:	CALL	NZ,SSLOTE		; nope, restore secundairy slotregister (CALSLT/CALLF)
         LD	(HL),E
         POP	HL
         LD	A,C
@@ -1456,7 +1454,7 @@ J$03B9:	LD	C,A
         JR	NZ,J$03DC
         LD	A,E
         LD	(DFFFF),A               ; yes, change secundairy slot register directly
-J$03DC:	CALL	NZ,X004B		; nope, restore secundairy slotregister (CALSLT/CALLF)
+J$03DC:	CALL	NZ,SSLOTE		; nope, restore secundairy slotregister (CALSLT/CALLF)
         LD	(HL),E
         POP	AF                      ; restore IFF2 flag
         JP	PO,J$03E5               ; maskable interrupts where disabled, leave disabled
@@ -1531,7 +1529,7 @@ C.0408:	PUSH	HL			; store pointer to slot masks
         JR	NZ,J$0432
         LD	A,L
         LD	(DFFFF),A               ; yep, change secundairy slot register directly
-J$0432:	CALL	NZ,X0046		; nope, restore secundairy slotregister (RDSLT/WRSLT)
+J$0432:	CALL	NZ,SSLOTL		; nope, restore secundairy slotregister (RDSLT/WRSLT)
         LD	A,(SS_TEMP)
         LD	C,A			; restore secundairy slot register
         LD	A,H
@@ -1718,7 +1716,7 @@ J4976:	LD	A,(HL)
         LD	B,5
 J4984:	LD	(DE),A
         INC	DE
-        DJNZ	J4984			; number of allocated system segments = 0, number of allocated user segments = 0, 3 unsed bytes
+        DJNZ	J4984			; number of allocated system segments = 0, number of allocated user segments = 0, 3 unused bytes
         JR	J4976			; next memory mapper
 
 J498A:	LD	(DE),A			; endmarker
@@ -2087,7 +2085,7 @@ J4B4D:	PUSH	DE
 ;	     Outputs ________________________
 
 C4B55:	LD	A,D
-        OR	E			; boardcast, build devicename table ?
+        OR	E			; broadcast, build devicename table ?
         JR	NZ,J4B61		; nope,
         LD	A,4
         CALL	C4BB2			; write devicenumber (4 = MAPPER)
@@ -2191,13 +2189,13 @@ C4BBE:	LD	A,L
         CCF
         RET	C
         LD	A,H
-        CP	0C2H
+        CP	HIGH 0C200H
         RET	C
         LD	DE,(BOTTOM)
         SBC	HL,DE
         RET	C
         LD	A,H
-        CP	02H	; 2 
+        CP	HIGH 512
         RET	C
         PUSH	BC
         LD	HL,0
@@ -2220,7 +2218,7 @@ C4BBE:	LD	A,L
         LD	HL,(HIMEM)
         ADD	HL,BC
         LD	(HIMEM),HL
-        LD	DE,-534
+        LD	DE,2*(2+9+256)
         ADD	HL,DE
         LD	(FILTAB),HL
         EX	DE,HL
@@ -2242,7 +2240,7 @@ C4BBE:	LD	A,L
 ?4C16:	LD	A,1
         LD	(MAXFIL),A
         LD	HL,(HIMEM)
-        LD	DE,-534
+        LD	DE,-2*(2+9+256)
         ADD	HL,DE
         LD	(FILTAB),HL
         LD	E,L
@@ -2269,7 +2267,7 @@ J4C3B:	LD	(STKTOP),HL
         INC	HL
         INC	HL
         INC	HL
-        LD	A,02H	; 2 
+        LD	A,2
 J4C4B:	EX	DE,HL
         LD	(HL),E
         INC	HL
@@ -2286,8 +2284,8 @@ J4C4B:	EX	DE,HL
         JR	NZ,J4C4B
         RET
 
-J4C5F:	LD	HL,L4D64		; errorstring table
-        CALL	C4C77			; copy errorstring to buffer
+J4C5F:	LD	HL,L4D64		; error string table
+        CALL	C4C77			; copy error string to buffer
         RET	Z			; found, quit
         PUSH	AF
         CP	64
@@ -2299,7 +2297,7 @@ J4C6F:	CALL	C4C74			; copy message to buffer
         RET
 
 ;	  Subroutine copy message to buffer
-;	     Inputs  A=messageid, DE=buffer
+;	     Inputs  A=message id, DE=buffer
 ;	     Outputs Zx set if found
 
 C4C74:	LD	HL,L4CA0
@@ -2312,8 +2310,8 @@ C4C77:	PUSH	BC
         PUSH	DE
         LD	E,A
         LD	A,(KANJTA+0)
-        OR	A			; double byte active ?
-        JR	Z,J4C85
+        OR	A			; double byte character active ?
+        JR	Z,J4C85			; nope,
         DEC	HL
         LD	A,(HL)
         DEC	HL

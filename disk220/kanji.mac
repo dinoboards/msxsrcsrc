@@ -66,11 +66,11 @@ CLSALL  EQU     6C1CH                   ; close all i/o channels
 
 IF247   EQU     0F247H                  ; unused DOS2 workspace, used because SLTWKR entry already used by DOS2
 
-DF30F   EQU     0F30FH                  ; double byte character headers
-
+KANJTA  EQU     0F30FH                  ; double byte character headers
 MASTER  EQU     0F348H                  ; slotid disksystem master ROM
-DF349   EQU     0F349H                  ; disksystem bottom (lowest address used by the disksystem)
-DF36B   EQU     0F36BH                  ; enable DOS RAM on page 1
+HIMSAV  EQU     0F349H                  ; disksystem bottom (lowest address used by the disksystem)
+$DOSOF  EQU     0F36BH                  ; enable DOS RAM on page 1
+
 WRPRIM  EQU     0F385H
 LINL40  EQU     0F3AEH
 LINL32  EQU     0F3AFH
@@ -274,7 +274,7 @@ J418C:  PUSH    AF
         CALL    C41F9                   ; get KANJI workspace
         BIT     5,(IX+1)                ; in KANJI mode ?
         JR      Z,J419D                 ; nope, quit
-        CALL    C541B
+        CALL    C541B                   ; keyboard scan
         LD      HL,SCNCNT
         INC     (HL)
 J419D:  POP     AF
@@ -542,12 +542,12 @@ C42E8:  LD      A,0C0H
 
 
 J42EA:  PUSH    HL
-        PUSH    AF
+        PUSH    AF                      ; store mode
         LD      HL,I41DF
         CALL    C419F                   ; initialize hooks
         CALL    C41F9                   ; get KANJI workspace
         SET     5,(IX+1)                ; flag in KANJI mode
-        POP     BC
+        POP     BC                      ; restore mode
         LD      A,(IX+0)
         AND     A                       ; KANJI already enabled ?
         PUSH    AF
@@ -639,28 +639,28 @@ J4394:  IN      A,(0DBH)
         SET     6,(HL)                  ; JIS2 rom found
 J43A3:  LD      A,(H.PHYD+0)
         CP      0C9H                    ; disk environment ?
-        JR      Z,J43B6                 ; nope,
+        JR      Z,J43B6                 ; nope, skip
         LD      HL,0A080H
-        LD      (DF30F+0),HL
+        LD      (KANJTA+0),HL
         LD      HL,0FDE0H
-        LD      (DF30F+2),HL            ; double byte character headers
+        LD      (KANJTA+2),HL           ; enable double byte character support
 J43B6:  CALL    C442D                   ; calculate and set kanji screenwidth
         CALL    C422A                   ; nothing (was hook H.TIMI)
         POP     AF
         POP     HL
-        JR      NZ,C4418                ; KANJI already enabled,
+        JR      NZ,C4418                ; KANJI already enabled, reset CHPUT variables
         LD      (SWPTMP+0),HL           ; save BASIC pointer
         CALL    C422A                   ; nothing (was hook EXTBIO)
         LD      IX,CLSALL
         CALL    C41FE                   ; close all i/o channels
         CALL    C6800                   ; initialize MSX-JE (when available)
         CALL    C,C7474                 ; no MSX-JE, initialize own simple japanese input frontend processor (do nothing)
-        PUSH    AF
+        PUSH    AF                      ; store MSX-JE found
         CALL    C4418                   ; reset CHPUT variables
-        POP     AF
+        POP     AF                      ; restore MSX-JE found
         LD      HL,(SWPTMP+0)           ; restore BASIC pointer
         RET     C                       ; no japanese input frontend processor, quit
-        PUSH    HL
+        PUSH    HL                      ; store BASIC pointer
         LD      HL,(CURLIN)
         LD      (OLDLIN),HL             ; save current line for CONT
         LD      HL,I445B
@@ -669,18 +669,18 @@ J43B6:  CALL    C442D                   ; calculate and set kanji screenwidth
         LDIR                            ; BASIC routine in HOLD8
         LD      A,(MAXFIL)
         LD      (I4460-I445B+HOLD8),A   ; MAXFILES
-        POP     HL
+        POP     HL                      ; restore BASIC pointer
         LD      A,L
         LD      (I4468-I445B+HOLD8),A
         LD      A,H
         LD      (I4470-I445B+HOLD8),A   ; OLDTXT for CONT
-        XOR     A
-        LD      (MAXFIL),A
+        XOR     A                       ; number of user i/o channels = 0
+        LD      (MAXFIL),A              ; update user i/o channels
         LD      HL,BUF
-        LD      (FILTAB),HL
+        LD      (FILTAB),HL             ; temporary i/o channel table in BUF
         LD      HL,BUF+2
-        LD      (BUF+0),HL
-        LD      (HL),A
+        LD      (BUF+0),HL              ; pointer to system i/o channel
+        LD      (HL),A                  ; i/o channel closed
         LD      HL,HOLD8
         LD      IX,NEWSTT
         JP      C41FE                   ; execute BASIC routine in HOLD8 (to reinitialize buffers)
@@ -703,8 +703,8 @@ C4418:  XOR     A
 
 C4420:  LD      A,(H.PHYD+0)
         CP      0C9H                    ; disk environment ?
-        JR      Z,C442D                ; nope, continue
-        LD      A,(DF36B)
+        JR      Z,C442D                 ; nope, continue
+        LD      A,($DOSOF+0)
         CP      0C3H                    ; MSXDOS ?
         RET     Z                       ; yep, quit
 
@@ -745,26 +745,26 @@ I445B:  DEFB    ":"
         DEFB    0CDH                    ; MAX
         DEFB    0B7H                    ; FILES
         DEFB    0EFH                    ; =
-        DEFB    00FH
+        DEFB    00FH                    ; byte number token
 I4460:  DEFB    0                       ; 0
-        DEFB    ":"
+        DEFB    ":"                     ; next statement
         DEFB    098H                    ; POKE
-        DEFB    00CH
+        DEFB    00CH                    ; hexadecimal number token
         DEFW    OLDTXT+0                ; &HF6C0
         DEFB    ","
-        DEFB    00FH
+        DEFB    00FH                    ; byte number token
 I4468:  DEFB    0                       ; 0
-        DEFB    ":"
+        DEFB    ":"                     ; next statement
         DEFB    098H                    ; POKE
-        DEFB    00CH
+        DEFB    00CH                    ; hexadecimal number token
         DEFW    OLDTXT+1                ; &HF6C1
         DEFB    ","
-        DEFB    00FH
+        DEFB    00FH                    ; byte number token
 I4470:  DEFB    0                       ; 0
-        DEFB    ":"
+        DEFB    ":"                     ; next statement
         DEFB    099H                    ; CONT
-        DEFB    0
-        DEFB    0,0
+        DEFB    0                       ; end of line
+        DEFW    0                       ; end of program
 
 I4476:  DEFB    000H,040H,020H,010H,008H,004H,002H,001H
 
@@ -800,8 +800,8 @@ J44A3:  LD      (IY+8),0
         CP      0C9H                    ; disk environment ?
         JR      Z,J44D1                ; nope,
         LD      HL,0
-        LD      (DF30F+0),HL
-        LD      (DF30F+2),HL
+        LD      (KANJTA+0),HL
+        LD      (KANJTA+2),HL           ; disable double byte character support
 J44D1:  POP     HL
         RET
 
@@ -866,7 +866,7 @@ J452C:  SUB     0EH     ; 14
         INC     A
         ADD     A,E
         LD      (CLMLST),A
-        CALL    C4583                  ; replace return address with RET
+        CALL    C4583                   ; take control from hook caller
         RET
 
 ;         Subroutine SCREEN handler
@@ -945,7 +945,7 @@ C456A:  IN      A,(0A8H)
         OR      C
         RET
 
-;         Subroutine replace return address with RET
+;         Subroutine take control from hook caller
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
@@ -1018,7 +1018,7 @@ C45BB:  LD      A,0C9H
 
 
 J45CC:  EI
-        CALL    C4583                   ; replace return address with RET
+        CALL    C4583                   ; take control from hook caller
         CALL    C41F9                   ; get KANJI workspace
         LD      A,(NORUSE)
         BIT     7,A
@@ -1537,8 +1537,8 @@ C4901:  LD      A,(CSRSW)
 
 
 J4908:  EI
-        CALL    C4583                  ; replace return address with RET
-        CALL    C41F9                  ; get KANJI workspace
+        CALL    C4583                   ; take control from hook caller
+        CALL    C41F9                   ; get KANJI workspace
         JR      J4926
 
 
@@ -1567,8 +1567,8 @@ C4918:  LD      A,(CSRSW)
 
 
 J491F:  EI
-        CALL    C4583                  ; replace return address with RET
-        CALL    C41F9                  ; get KANJI workspace
+        CALL    C4583                   ; take control from hook caller
+        CALL    C41F9                   ; get KANJI workspace
 J4926:  CALL    C4946
         RET     NC
 I492A:  LD      A,(CSTYLE)
@@ -2000,8 +2000,8 @@ J4AE5:  CALL    C4A7E
 
 
 J4AF3:  EI
-        CALL    C4583                  ; replace return address with RET
-        CALL    C41F9                  ; get KANJI workspace
+        CALL    C4583                   ; take control from hook caller
+        CALL    C41F9                   ; get KANJI workspace
         XOR     A
         LD      (CNSDFG),A
         PUSH    HL
@@ -2033,7 +2033,7 @@ C4B10:  LD      A,(CNSDFG)
 
 
 J4B17:  EI
-        CALL    C4583                   ; replace return address with RET
+        CALL    C4583                   ; take control from hook caller
 J4B1B:  CALL    C41F9                   ; get KANJI workspace
         CALL    C7E50
         AND     A
@@ -2482,8 +2482,8 @@ J4D41:  RES     7,H
 
 
 J4D56:  EI
-        CALL    C4583                  ; replace return address with RET
-        CALL    C41F9                  ; get KANJI workspace
+        CALL    C4583                   ; take control from hook caller
+        CALL    C41F9                   ; get KANJI workspace
         LD      A,0FFH
         LD      (DECCNT),A
         LD      A,(AUTFLG)
@@ -2497,8 +2497,8 @@ J4D56:  EI
 ;            Outputs ________________________
 
 J4D6C:  EI
-        CALL    C4583
-        CALL    C41F9                  ; get KANJI workspace
+        CALL    C4583                   ; take control from hook caller
+        CALL    C41F9                   ; get KANJI workspace
         XOR     A
         LD      (DECCNT),A
 J4D77:  LD      HL,(CSRY)
@@ -3623,7 +3623,7 @@ C53E6:  LD      A,(NORUSE)
         LD      A,(H.TOTE+0)
         CP      0C9H
         JR      Z,J5407
-        CALL    C541B
+        CALL    C541B                   ; keyboard scan
         LD      HL,SCNCNT
         INC     (HL)
 J5407:  LD      A,(SLTWRK+4)
@@ -3638,62 +3638,62 @@ J5407:  LD      A,(SLTWRK+4)
 J5419:  POP     AF
         RET
 
-;         Subroutine __________________________
+;         Subroutine keyboard scan
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
 C541B:  LD      HL,SCNCNT
-        DEC     (HL)
-        RET     NZ
-        LD      (HL),2
-        LD      HL,TRPTBL+36
-        LD      A,(HL)
-        LD      HL,TRPTBL+39
-        OR      (HL)
-        LD      HL,TRPTBL+42
-        OR      (HL)
-        LD      HL,TRPTBL+45
-        OR      (HL)
-        LD      HL,TRPTBL+48
-        OR      (HL)
+        DEC     (HL)                    ; update keyboard scan count
+        RET     NZ                      ; not time for keyboard scan, quit
+        LD      (HL),2                  ; keyboard scan count = 2
+        LD      HL,TRPTBL+12*3
+        LD      A,(HL)                  ; TRIG0
+        LD      HL,TRPTBL+13*3
+        OR      (HL)                    ; or TRIG1
+        LD      HL,TRPTBL+14*3
+        OR      (HL)                    ; or TRIG2
+        LD      HL,TRPTBL+15*3
+        OR      (HL)                    ; or TRIG3
+        LD      HL,TRPTBL+16*3
+        OR      (HL)                    ; or TRIG4
         RRCA
         JR      NC,J5482
-        XOR     A
-        CALL    C5840
-        AND     30H     ; "0"
-        PUSH    AF
-        LD      A,01H   ; 1 
-        CALL    C5840
-        AND     30H     ; "0"
+        XOR     A                       ; port = 0
+        CALL    C5840                   ; read joystick port
+        AND     30H                     ; only fire buttons
+        PUSH    AF                      ; store fire button status port 0
+        LD      A,1                     ; port = 1
+        CALL    C5840                   ; read joystick port
+        AND     30H                     ; only fire buttons
         RLCA
-        RLCA
-        POP     BC
-        OR      B
-        PUSH    AF
-        CALL    C57F2
-        AND     01H     ; 1 
-        POP     BC
-        OR      B
+        RLCA                            ; to b7/b6
+        POP     BC                      ; restore fire button status port 0
+        OR      B                       ; combine with fire button status port 1
+        PUSH    AF                      ; store fire button status
+        CALL    C57F2                   ; read keyboard row 8
+        AND     01H                     ; spacebar status
+        POP     BC                      ; restore fire button status
+        OR      B                       ; combine with spacebar status
         LD      C,A
         LD      HL,TRGFLG
         XOR     (HL)
         AND     (HL)
-        LD      (HL),C
+        LD      (HL),C                  ; update trigger status
         LD      C,A
         RRCA
-        LD      HL,TRPTBL+36
+        LD      HL,TRPTBL+12*3
         CALL    C,C5674                 ; raise trap
         RL      C
-        LD      HL,TRPTBL+48
+        LD      HL,TRPTBL+16*3
         CALL    C,C5674                 ; raise trap
         RL      C
-        LD      HL,TRPTBL+42
+        LD      HL,TRPTBL+14*3
         CALL    C,C5674                 ; raise trap
         RL      C
-        LD      HL,TRPTBL+45
+        LD      HL,TRPTBL+15*3
         CALL    C,C5674                 ; raise trap
         RL      C
-        LD      HL,TRPTBL+39
+        LD      HL,TRPTBL+13*3
         CALL    C,C5674                 ; raise trap
 J5482:  XOR     A
         LD      (CLIKFL),A
@@ -3702,7 +3702,7 @@ J5482:  XOR     A
         LD      HL,REPCNT
         DEC     (HL)
         RET     NZ
-        LD      (HL),01H        ; 1 
+        LD      (HL),1
         LD      HL,OLDKEY+0
         LD      DE,OLDKEY+1
         LD      BC,11-1
@@ -4224,43 +4224,48 @@ I57C2:	DEFB	0A6H,0C7H,0CCH,0A7H,0A9H,0AAH,0ABH,0ACH
         DEFB	0C9H,0D8H,0D3H,0D0H,0D7H,0BEH,0C0H,0BDH
         DEFB	0C4H,0B6H,0C5H,0CBH,0C3H,0BBH,0DDH,0AFH
 
-;         Subroutine __________________________
+;         Subroutine read keyboard row 8
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
 C57F2:  DI
         IN      A,(0AAH)
         AND     0F0H
-        ADD     A,08H   ; 8 
+        ADD     A,8
         OUT     (0AAH),A
         IN      A,(0A9H)
         EI
         RET
 
 C57FF:  LD      HL,MODE
-        BIT     0,(HL)
-        JR      Z,J580B
+        BIT     0,(HL)			; in SHIFT KANA mode ?
+        JR      Z,J580B                 ; nope,
         XOR     A
-        RES     0,(HL)
-        JR      J582B
+        RES     0,(HL)                  ; leave SHIFT KANA mode
+        JR      J582B                   ; update KANA led
 J580B:  LD      A,(KANAST)
-        INC     A
-        JR      Z,J5828
+        INC     A			; KANA ON ?
+        JR      Z,J5828                 ; yep, KANA OFF
         LD      A,(IDBYT2)
         AND     A                       ; MSX1 ?
-        JR      Z,J5826                 ; yep,
+        JR      Z,J5826                 ; yep, KANA ON
         LD      A,(NEWKEY+6)
         RRCA
-        JR      C,J5826
+        JR      C,J5826                 ; KANA ON
         XOR     A
         LD      (CHRCNT),A
         INC     A
-        SET     0,(HL)
-        JR      J582B
+        SET     0,(HL)                  ; enter SHIFT KANA mode
+        JR      J582B                   ; update KANA led
 J5826:  LD      A,0FFH
 J5828:  LD      (KANAST),A
+
+;         Subroutine update KANA led
+;            Inputs  ________________________
+;            Outputs ________________________
+
 J582B:  PUSH    AF
-        LD      A,0FH   ; 15 
+        LD      A,0FH
         OUT     (0A0H),A
         IN      A,(0A2H)
         AND     7FH
@@ -4279,18 +4284,18 @@ J583C:  OR      B
 ;            Outputs ________________________
 
 C5840:  LD      B,A
-        LD      A,0FH   ; 15 
+        LD      A,15
         DI
         OUT     (0A0H),A
         IN      A,(0A2H)
         DJNZ    J5850
         AND     0DFH
-        OR      4CH     ; "L"
+        OR      4CH
         JR      J5854
 J5850:  AND     0AFH
-        OR      03H     ; 3 
+        OR      03H
 J5854:  OUT     (0A1H),A
-        LD      A,0EH   ; 14 
+        LD      A,14
         OUT     (0A0H),A
         EI
         IN      A,(0A2H)
@@ -7182,7 +7187,7 @@ J6858:  PUSH    AF
         LD      A,(H.PHYD+0)
         CP      0C9H                    ; disk environment ?
         JR      Z,J6886
-        LD      (DF349),HL             ; yep, adjust disksystem bottom (lowest address used by the disksystem)
+        LD      (HIMSAV),HL             ; yep, adjust disksystem bottom (lowest address used by the disksystem)
 J6886:  POP     BC                      ; MSX-JE MIN2
         POP     DE                      ; MSX-JE jumptable
         POP     AF                      ; MSX-JE slotid
@@ -7832,7 +7837,7 @@ J6C38:  CALL    C6C4B
 J6C44:  EX      (SP),HL
         LD      A,H
         POP     HL
-        CALL    C4583                  ; replace return address with RET
+        CALL    C4583                   ; take control from hook caller
         RET
 
 ;         Subroutine __________________________
@@ -9064,11 +9069,11 @@ I744A:  DEFB    20H,21H
 	DEFB	5EH,5FH,60H,7BH,7CH,7DH,7EH,0A1H
 	DEFB	0A2H,0A3H,0A4H,0A5H,0B0H,2DH,0DEH,0DFH
 
-;         Subroutine __________________________
+;         Subroutine initialize own MSX-JE
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C7474:  SCF
+C7474:  SCF                             ; does not have own MSX-JE
         RET
 J7476:  LD      A,(IX+4)
         LD      (IX+4),00H

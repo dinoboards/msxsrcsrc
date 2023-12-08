@@ -15,14 +15,13 @@
         .Z80
         ASEG
         ORG	4000H
+
 CHSNS	equ	0009CH
 CHGET	equ	0009FH
 CHPUT	equ	000A2H
 LPTOUT	equ	000A5H
 LPTSTT	equ	000A8H
 KILBUF	equ	00156H
-
-BDOS	equ	0F37DH
 
 BASENT	EQU	04022H			; Start diskbasic
 
@@ -91,12 +90,14 @@ BASENT	EQU	04022H			; Start diskbasic
 
 .IPARM	equ	08BH
 
+DBUF    EQU     0080H
+
 DB064	EQU	0B064H	; start of BDOS data block chain
 IB066	EQU	0B066H	; cursor on string
 IB069	EQU	0B069H	; cursor off string
 DB06C	EQU	0B06CH	; screen output buffer
 IB0D0	EQU	0B0D0H	; history buffer
-IB1D0	EQU	0B1D0H	; con device console line input buffer
+IB1D0	EQU	0B1D0H	; CON device console line input buffer
 IB2D4	EQU	0B2D4H	; record buffer for CP/M sequential read
 IB6D4	EQU	0B6D4H	; bootsector buffer
 IB8D4	EQU	0B8D4H	; temporary directory entry save (used to move directory entry)
@@ -114,11 +115,11 @@ IB99A	EQU	0B99AH	; saved FIB for search next
 IB9DA	EQU	0B9DAH	; buffer
 IBA1A	EQU	0BA1AH	; drive assign table
 IBA23	EQU	0BA23H	; drive table pointer table
-IBA35	EQU	0BA35H	; memorymapper info table
+IBA35	EQU	0BA35H	; memory mapper info table
 IBA75	EQU	0BA75H	; upcase table
 DBB76	EQU	0BB76H	; screen output buffer in double byte character flag
 DBB77	EQU	0BB77H	; screen output buffer position (0-99)
-DBB78	EQU	0BB78H	; pointer in console line input buffer con device
+DBB78	EQU	0BB78H	; pointer in console line input buffer CON device
 DBB7A	EQU	0BB7AH	; force console buffered line input output to screen flag
 DBB7B	EQU	0BB7BH	; insert mode (0 = normal mode, <>0 = insert mode)
 DBB7C	EQU	0BB7CH	; size of line
@@ -134,7 +135,7 @@ DBB8A	EQU	0BB8AH	; console output duplicated to printer flag
 DBB8B	EQU	0BB8BH	; console column position
 DBB8D	EQU	0BB8DH	; stored input
 DBB8E	EQU	0BB8EH	; start cluster of file in sequential read buffer
-DBB90	EQU	0BB90H	; driveid in sequential read buffer (0FFH means invalid)
+DBB90	EQU	0BB90H	; drive id in sequential read buffer (0FFH means invalid)
 DBB91	EQU	0BB91H	; number of random records in sequential read buffer
 DBB92	EQU	0BB92H	; start random record number in sequential read buffer
 DBB95	EQU	0BB95H	; search first extend
@@ -191,69 +192,70 @@ IBE02	EQU	0BE02H	; ramdisk segment table
 
 JC206	EQU	0C206H	; debugger
 
-P0_LDIR	EQU	0F1D6H	; transfer with page 0
-P0_CALL	EQU	0F1D9H	; call main-bios
-$FLUSH	EQU	0F1DCH	; print string via chput
-GO_DRV	EQU	0F1DFH	; interslot call with prompt handler
-$IRQ	EQU	0F1E5H	; interrupt handler
-$RDSLT	EQU	0F1E8H	; RDSLT
-$WRSLT	EQU	0F1EBH	; WRSLT
-$CALSLT	EQU	0F1EEH	; CALSLT
-$ENASLT	EQU	0F1F1H	; ENASLT
-$CALLF	EQU	0F1F4H	; CALLF
-PUT_BD	EQU	0F1F7H	; enable BDOS segments
-PUT_US	EQU	0F1FAH	; enable DOS segments
-RD_SEG	EQU	0F206H	; RD_SEG
-WR_SEG	EQU	0F209H	; WR_SEG
-PUT_P2	EQU	0F224H	; PUT_P2
-CUR_DRV	EQU	0F23CH	; current drive id
-DTA_AD	EQU	0F23DH	; transfer address
+P0_LDIR	EQU	0F1D6H	                ; transfer with page 0
+P0_CALL	EQU	0F1D9H	                ; call main-bios
+$FLUSH	EQU	0F1DCH	                ; print string via chput
+GO_DRV	EQU	0F1DFH	                ; interslot call with prompt handler
+$IRQ	EQU	0F1E5H	                ; interrupt handler
+$RDSLT	EQU	0F1E8H	                ; RDSLT
+$WRSLT	EQU	0F1EBH	                ; WRSLT
+$CALSLT	EQU	0F1EEH	                ; CALSLT
+$ENASLT	EQU	0F1F1H	                ; ENASLT
+$CALLF	EQU	0F1F4H	                ; CALLF
+PUT_BD	EQU	0F1F7H	                ; enable BDOS segments
+PUT_US	EQU	0F1FAH	                ; enable DOS segments
+RD_SEG	EQU	0F206H	                ; RD_SEG
+WR_SEG	EQU	0F209H	                ; WR_SEG
+PUT_P2	EQU	0F224H	                ; PUT_P2
+CUR_DRV	EQU	0F23CH	                ; current drive id
+DTA_AD	EQU	0F23DH	                ; transfer address
 
 ; DOS Hooks
 
-H_BDOS	EQU	0F252H	; BDOS handler
-H_UP	EQU	0F255H	; Upcase routine
-H_16CH	EQU	0F258H	; check if double byte character
-H_CHIN	EQU	0F25BH	; low level keyboard input
-H_CHOU	EQU	0F25EH	; low level screen output
-H_CHST	EQU	0F261H	; low level check keyboard
-H_CHFL	EQU	0F264H	; low level screenbuffer
-H_LSTO	EQU	0F267H	; low level printer output
-H_LSTS	EQU	0F26AH	; low level check printer
+H_BDOS	EQU	0F252H	                ; BDOS handler
+H_UP	EQU	0F255H	                ; Upcase routine
+H_16CH	EQU	0F258H	                ; check if double byte character
+H_CHIN	EQU	0F25BH	                ; low level keyboard input
+H_CHOU	EQU	0F25EH	                ; low level screen output
+H_CHST	EQU	0F261H	                ; low level check keyboard
+H_CHFL	EQU	0F264H	                ; low level screenbuffer
+H_LSTO	EQU	0F267H	                ; low level printer output
+H_LSTS	EQU	0F26AH	                ; low level check printer
 
-RANDOM	EQU	0F2BAH	; random number, changed by interrupt
-ST_COU	EQU	0F2BDH	; no keyboard buffer check counter, also reset by interrupt
-CH_COU	EQU	0F2BEH	; down counter (to 1), every 100 ms
-TIM_TI	EQU	0F2BFH	; up counter (to 7), every 100 ms
-P0_SEG	EQU	0F2C7H	; current page 0 segment
-P0_TPA	EQU	0F2CBH	; saved DOS page 0 segment
-P2_TPA	EQU	0F2CDH	; saved DOS page 2 segment
-DATA_S	EQU	0F2CFH	; BDOS data segment
-$ERR_M	EQU	0F2DAH	; address message generator
-DSK_CHK	EQU	0F2ECH	; disk check level
-KDSK_V	EQU	0F300H	; pointer to diskerror handler
-KAB_VE	EQU	0F302H	; pointer to abort handler
-RAWFLG	EQU	0F30DH	; verify flag disk driver
-KANJTA	EQU	0F30FH	; double byte header table
-TARGET	EQU	0F33FH	; driveid for prompt routine
-RAMAD3	EQU	0F344H	; slot id RAM page 3 (= system mapper)
-$NUMDR	EQU	0F347H	; number of logical drives
-MASTER	EQU	0F348H	; slot id of disksystem rom
-$SECBUF	EQU	0F34DH	; pointer to disk driver sector buffer
-RM_DPB	EQU	0F353H	; pointer to ramdisk DPB
-$DPBLI	EQU	0F355H	; DPB pointer table (A: - G:)
-$AUXIN	EQU	0F371H	; AUX input jump
-$AUXOUT	EQU	0F374H	; AUX output jump
+RANDOM	EQU	0F2BAH	                ; random number, changed by interrupt handler
+ST_COU	EQU	0F2BDH	                ; no keyboard buffer check counter, also reset by interrupt
+CH_COU	EQU	0F2BEH	                ; down counter (to 1), every 100 ms
+TIM_TI	EQU	0F2BFH	                ; up counter (to 7), every 100 ms
+P0_SEG	EQU	0F2C7H	                ; current page 0 segment
+P0_TPA	EQU	0F2CBH	                ; saved DOS page 0 segment
+P2_TPA	EQU	0F2CDH	                ; saved DOS page 2 segment
+DATA_S	EQU	0F2CFH	                ; BDOS data segment
+$ERR_M	EQU	0F2DAH	                ; address message generator
+DSK_CHK	EQU	0F2ECH	                ; disk check level
+KDSK_V	EQU	0F300H	                ; pointer to diskerror handler
+KAB_VE	EQU	0F302H	                ; pointer to abort handler
+RAWFLG	EQU	0F30DH	                ; verify flag disk driver
+KANJTA	EQU	0F30FH	                ; double byte header table
+TARGET	EQU	0F33FH	                ; drive id for prompt routine
+RAMAD3	EQU	0F344H	                ; slot id RAM page 3 (= system mapper)
+$NUMDR	EQU	0F347H	                ; number of logical drives
+MASTER	EQU	0F348H	                ; slot id of disksystem rom
+$SECBUF	EQU	0F34DH	                ; pointer to disk driver sector buffer
+RM_DPB	EQU	0F353H	                ; pointer to ramdisk DPB
+$DPBLI	EQU	0F355H	                ; DPB pointer table (A: - G:)
+$AUXIN	EQU	0F371H	                ; AUX input jump
+$AUXOUT	EQU	0F374H	                ; AUX output jump
+BDOS	EQU	0F37DH                  ; BDOS (disk BASIC)
 
-LINLEN	EQU	0F3B0H	; current screenwidth
-CRTCNT	EQU	0F3B1H	; current screenheight
-CNSDFG	EQU	0F3DEH	; functionkey display on/off
-KBUF	EQU	0F41FH	; keyboard buffer, used for temporary stack
-DRVTBL	EQU	0FB21H	; table with disk interfaces
-INTFLG	EQU	0FC9BH	; used to detect CTRL-STOP
-ESCCNT	EQU	0FCA7H	; used to detect a ESC sequence
-EXPTBL	EQU	0FCC1H	; slot expansion table
-DFFFF	EQU	0FFFFH	; --SLI
+LINLEN	EQU	0F3B0H	                ; current screen width
+CRTCNT	EQU	0F3B1H	                ; current screen height
+CNSDFG	EQU	0F3DEH	                ; functionkey display on/off
+KBUF	EQU	0F41FH	                ; keyboard buffer, used for temporary stack
+DRVTBL	EQU	0FB21H	                ; table with disk interfaces
+INTFLG	EQU	0FC9BH	                ; used to detect CTRL-STOP
+ESCCNT	EQU	0FCA7H	                ; used to detect a ESC sequence
+EXPTBL	EQU	0FCC1H	                ; slot expansion table
+DFFFF	EQU	0FFFFH
 
 ; FCB structure
 
@@ -290,12 +292,12 @@ DFFFF	EQU	0FFFFH	; --SLI
 ; +28,2		pointer to device jump table (if device)
 ; +30		device flags
 ; +32,2		pointer to drive table
-; +34,2
-; +36
-; +37,2
-; +39,2
-; +41,2
-; +43,2
+; +34,2		current directory sector
+; +36		current directory entry in sector
+; +37,2		cluster number of parent directory
+; +39,2		start cluster of file
+; +41,2		current cluster of file
+; +43,2		current relative cluster of file
 ; +45,4		current file position
 ; +49		open mode
 ; +50
@@ -327,7 +329,6 @@ DFFFF	EQU	0FFFFH	; --SLI
 ; +29		media descriptor byte of disk
 ; +30,2		starting cluster of current directory (bit 15 = 1 means root)
 ; +32,64	current directory (ASCIIZ) without "drive:\" prefix
-
 
 
 ; device entry
@@ -481,13 +482,17 @@ J004E:	LD	(DFFFF),A		; update secundairy slot register
 
         DEFS	00080H-$,0
 
-        JP	C0A2D			; con input
-?0083:	JP	J0A6B			; con output
-?0086:	JP	C0A42			; con check input status
-?0089:	JP	C0B25			; lpt output
-?008C:	JP	C0B37			; lpt check output status
-?008F:	JP	J0B50			; aux output
-?0092:	JP	C0B46			; aux input
+        JP	C0A2D			; CON input
+?0083:	JP	J0A6B			; CON output
+?0086:	JP	C0A42			; CON check input status
+?0089:	JP	C0B25			; LPT output
+?008C:	JP	C0B37			; LPT check output status
+?008F:	JP	J0B50			; AUX output
+?0092:	JP	C0B46			; AUX input
+
+;         Subroutine initialize BDOS
+;            Inputs  ________________________
+;            Outputs ________________________
 
 J0095:	LD	IY,DBB80		; pointer to BDOS data
         LD	DE,RM_DPB		; pointer to ramdisk DPB
@@ -586,12 +591,12 @@ I012C:	defb	0FFH
         defb	"PRN        "
 
         defb	0FFH
-        defw	A0A03			; device jump table = null device jump table
+        defw	A0A03			; device jump table = NUL device jump table
         defb	0A0H			; device, ascii mode
         defb	"NUL        "
 
         defb	0FFH
-        defw	A09BF			; device jump table = aux device jump table
+        defw	A09BF			; device jump table = AUX device jump table
         defb	0A0H			; device, ascii mode
         defb	"AUX        "
 
@@ -796,8 +801,8 @@ J026A:	POP	BC
 
 J026D:	EI
         CALL	H_BDOS			; hook
-        CALL	C0278
-        LD	(DBBFD),A               ; save errorcode
+        CALL	C0278			; BDOS handler
+        LD	(DBBFD),A               ; save error code
         RET
 
 ;	  Subroutine BDOS handler (basic)
@@ -836,21 +841,123 @@ A029C:	LD	A,.IBDOS
 J029E:	LD	HL,0
         RET
 
-I02A2:	defw	A0CFB,A03A8,A03B6,A042E,A043D,A0441,A03D4,A03FE
-        defw	A03BE,A029C,A0456,A03CD,A0B90,A0B95,A0BAB,A3771
-        defw	A37B5,A37CF,A37E9,A38E6,A384C,A3893,A38CE,A3913
-        defw	A0BC6,A0BDC,A0BE4,A0BEC,A029C,A029C,A029C,A029C
-        defw	A029C,A3953,A3967,A3981,A39BA,A029C,A3D3F,A3D3B
-        defw	A3969,A029C,A1024,A1059,A10A3,A10AD,A0C48,A2576
-        defw	A2579,A0C50,A029C,A029C,A029C,A029C,A029C,A029C
-        defw	A029C,A029C,A029C,A029C,A029C,A029C,A029C,A029C
-        defw	A18C6,A1979,A18CA,A1DA6,A1D94,A1DEB,A1DF8,A1E08
-        defw	A1E1D,A1E2D,A1E3D,A1E81,A200D,A1F14,A1F3B,A1F60
-        defw	A1F85,A1FBE,A1F1E,A1F45,A1F6A,A1F9D,A1FE0,A0CCF
-        defw	A0CD5,A1836,A184D,A186D,A1882,A1894,A189D,A0CE0
-        defw	A2029,A2070,A0CFD,A029C,A029C,A0D05,A0D0A,A0D39
-        defw	A0D93,A0E44,A0E8B,A0EDE,A0EFF,A0F55,A0EB6,A0EC8
-        defw	A0ED2
+I02A2:	defw	A0CFB			; 00H, _TERM0 (CP/M P_TERMCPM)
+	defw	A03A8			; 01H, _CONIN (CP/M C_READ)
+	defw	A03B6			; 02H, _CONOUT (CP/M C_WRITE)
+	defw	A042E			; 03H, _AUXIN (CP/M A_READ)
+	defw	A043D			; 04H, _AUXOUT (CP/M A_WRITE)
+	defw	A0441			; 05H, _LSTOUT (CP/M L_WRITE)
+	defw	A03D4			; 06H, _DIRIO (CP/M C_RAWIO)
+	defw	A03FE			; 07H, _DIRIN (CP/M 2.2 incompatible: Get I/O byte)
+        defw	A03BE			; 08H, _INNOE (CP/M 2.2 incompatible: Set I/O byte)
+	defw	A029C			; 09H, _STROUT (CP/M 2.2 C_WRITESTR illegal function because it is handled elsewhere)
+	defw	A0456			; 0AH, _BUFIN (CP/M 2.2 C_READSTR)
+	defw	A03CD			; 0BH, _CONST (CP/M 2.2 C_STAT)
+	defw	A0B90			; 0CH, _CPMVER (CP/M 2.2 S_BDOSVER)
+	defw	A0B95			; 0DH, _DSKRST (CP/M 2.2 DRV_ALLRESET)
+	defw	A0BAB			; 0EH, _SELDSK (CP/M 2.2 DRV_SET)
+	defw	A3771			; 0FH, _FOPEN (CP/M 2.2 F_OPEN)
+        defw	A37B5			; 10H, _FCLOSE (CP/M 2.2 F_CLOSE)
+	defw	A37CF			; 11H, _SFIRST (CP/M 2.2 F_SFIRST)
+	defw	A37E9			; 12H, _SNEXT (CP/M 2.2 F_SNEXT)
+	defw	A38E6			; 13H, _FDEL (CP/M 2.2 F_DELETE)
+	defw	A384C			; 14H, _RDSEQ (CP/M 2.2 F_READ)
+	defw	A3893			; 15H, _WRSEQ (CP/M 2.2 F_WRITE)
+	defw	A38CE			; 16H, _FMAKE (CP/M 2.2 F_MAKE)
+	defw	A3913			; 17H, _FREN (CP/M 2.2 F_RENAME)
+        defw	A0BC6			; 18H, _LOGIN (CP/M 2.2 DRV_LOGINVEC)
+	defw	A0BDC			; 19H, _CURDRV (CP/M 2.2 DRV_GET)
+	defw	A0BE4			; 1AH, _SETDTA (CP/M 2.2 F_DMAOFF)
+	defw	A0BEC			; 1BH, _ALLOC (CP/M 2.2 incompatible: DRV_ALLOCVEC)
+	defw	A029C			; 1CH, illegal function (CP/M 2.2 DRV_SETRO)
+	defw	A029C			; 1DH, illegal function (CP/M 2.2 DRV_ROVEC)
+	defw	A029C			; 1EH, illegal function (CP/M 2.2 F_ATTRIB)
+	defw	A029C			; 1FH, illegal function (CP/M 2.2 DRV_DPB)
+        defw	A029C			; 20H, illegal function (CP/M 2.2 F_USERNUM)
+	defw	A3953			; 21H, _RDRND (CP/M 2.2 F_READRAND)
+	defw	A3967			; 22H, _WRRND (CP/M 2.2 F_WRITERAND)
+	defw	A3981			; 23H, _FSIZE (CP/M 2.2 F_SIZE)
+	defw	A39BA			; 24H, _SETRND (CP/M 2.2 F_RANDREC)
+	defw	A029C			; 25H, illegal function (CP/M 2.2 DRV_RESET)
+	defw	A3D3F			; 26H, _WRBLK (CP/M 2.2 illegal function)
+	defw	A3D3B			; 27H, _RDBLK (CP/M 2.2 illegal function)
+        defw	A3969			; 28H, _WRZER (CP/M 2.2 F_WRITEZF)
+	defw	A029C			; 29H, illegal function (CP/M 2.2 illegal function)
+	defw	A1024			; 2AH, _GDATE (CP/M 2.2 illegal function)
+	defw	A1059			; 2BH, _SDATE (CP/M 2.2 illegal function)
+	defw	A10A3			; 2CH, _GTIME (CP/M 2.2 illegal function)
+	defw	A10AD			; 2DH, _STIME (CP/M 2.2 illegal function)
+	defw	A0C48			; 2EH, _VERIFY (CP/M 2.2 illegal function)
+	defw	A2576			; 2FH, _RDABS (CP/M 2.2 illegal function)
+        defw	A2579			; 30H, _WRABS (CP/M 2.2 illegal function)
+	defw	A0C50			; 31H, _DPARM (CP/M 2.2 illegal function)
+	defw	A029C			; 32H, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 33H, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 34H, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 35H, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 36H, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 37H, illegal function (CP/M 2.2 illegal function)
+        defw	A029C			; 38H, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 39H, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 3AH, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 3BH, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 3CH, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 3DH, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 3EH, illegal function (CP/M 2.2 illegal function)
+	defw	A029C			; 3FH, illegal function (CP/M 2.2 illegal function)
+        defw	A18C6			; 40H, _FFIRST
+	defw	A1979			; 41H, _FNEXT
+	defw	A18CA			; 42H, _FNEW
+	defw	A1DA6			; 43H, _OPEN
+	defw	A1D94			; 44H, _CREATE
+	defw	A1DEB			; 45H, _CLOSE
+	defw	A1DF8			; 46H, _ENSURE
+	defw	A1E08			; 47H, _DUP
+        defw	A1E1D			; 48H, _READ
+	defw	A1E2D			; 49H, _WRITE
+	defw	A1E3D			; 4AH, _SEEK
+	defw	A1E81			; 4BH, _IOCTL
+	defw	A200D			; 4CH, _HTEST
+	defw	A1F14			; 4DH, _DELETE
+	defw	A1F3B			; 4EH, _RENAME
+	defw	A1F60			; 4FH, _MOVE
+        defw	A1F85			; 50H, _ATTR
+	defw	A1FBE			; 51H, _FTIME
+	defw	A1F1E			; 52H, _HDELETE
+	defw	A1F45			; 53H, _HRENAME
+	defw	A1F6A			; 54H, _HMOVE
+	defw	A1F9D			; 55H, _HATTR
+	defw	A1FE0			; 56H, _HFTIME
+	defw	A0CCF			; 57H, _GETDTA
+        defw	A0CD5			; 58H, _GETVFY
+	defw	A1836			; 59H, _GETCD
+	defw	A184D			; 5AH, _CHDIR
+	defw	A186D			; 5BH, _PARSE
+	defw	A1882			; 5CH, _PFILE
+	defw	A1894			; 5DH, _CHKCHR
+	defw	A189D			; 5EH, _WPATH
+	defw	A0CE0			; 5FH, _FLUSH
+        defw	A2029			; 60H, _FORK
+	defw	A2070			; 61H, _JOIN
+	defw	A0CFD			; 62H, _TERM
+	defw	A029C			; 63H, _DEFAB (illegal function because it is handled elsewhere)
+	defw	A029C			; 64H, _DEFER (illegal function because it is handled elsewhere)
+	defw	A0D05			; 65H, _ERROR
+	defw	A0D0A			; 66H, _EXPLAIN
+	defw	A0D39			; 67H, _FORMAT
+        defw	A0D93			; 68H, _RAMD
+	defw	A0E44			; 69H, _BUFFER
+	defw	A0E8B			; 6AH, _ASSIGN
+	defw	A0EDE			; 6BH, _GENV
+	defw	A0EFF			; 6CH, _SENV
+	defw	A0F55			; 6DH, _FENV
+	defw	A0EB6			; 6EH, _DSKCHK
+	defw	A0EC8			; 6FH, _DOSVER
+        defw	A0ED2			; 70H, _REDIR
+
+;	  Subroutine initialize buffered input history buffer
+;	     Inputs  ________________________
+;	     Outputs ________________________
 
 C0384:	LD	HL,IB0D0		; history buffer
         LD	(DBB82),HL		; initialize current line pointer in history buffer
@@ -981,12 +1088,7 @@ C0414:	LD	B,0			; file handle console input
         JR	NZ,J0439		; error, handle "input error"
         OR	E			; check for CTRL-C ?
         JR	Z,J0426			; no, skip CTRL-C check
-
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
-
-C0421:	LD	A,B
+	LD	A,B
         SUB	03H
         JR	Z,J0439			; CTRL-C, handle "input error"
 J0426:	LD	L,B
@@ -1005,7 +1107,7 @@ J042A:	LD	B,1			; file handle con output
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A042E:	LD	B,3			; file handle aux
+A042E:	LD	B,3			; file handle AUX
         LD	C,0FFH
         CALL	C1D51			; read from file handle
         OR	A
@@ -1019,14 +1121,14 @@ J0439:	LD	C,.INERR
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A043D:	LD	B,3			; file handle aux
+A043D:	LD	B,3			; file handle AUX
         JR	J0443
 
 ;	  Subroutine _LSTOUT
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A0441:	LD	B,4			; file handle lst
+A0441:	LD	B,4			; file handle LST
 J0443:	LD	C,0FFH
         LD	A,E
 J0446:	CALL	C1D2C			; write to file handle
@@ -1267,7 +1369,7 @@ J0588:	POP	DE
         RET
 
 ;	  Subroutine edit line
-;	     Inputs  ________________________
+;	     Inputs  DE = pointer to buffer
 ;	     Outputs ________________________
 
 C058B:	LD	HL,(DBB8B)		; console column position
@@ -1289,19 +1391,23 @@ J05A5:	LD	(DBB86),A		; update size of line
         XOR	A			; insert mode = off
         CALL	C06BC			; set insert mode and update cursor shape
 I05AC:	LD	DE,I05AC
-        PUSH	DE
-        PUSH	HL
+        PUSH	DE			; restart after key operation
+        PUSH	HL			; store pointer in buffer
         LD	HL,DBB86
         LD	A,(HL)
         CP	B			; current size of line > stored size of line ?
         JR	NC,J05B9		; nope,
         LD	(HL),B			; update stored size of line
-J05B9:	POP	HL
+J05B9:	POP	HL			; restore pointer in buffer
         CALL	C08B2			; ensure input from keyboard
+
+	IF	OPTM EQ 0
         OR	A
         RET	Z			; ?? can never occure
+	ENDIF
+
         CP	0AH			; LF key ?
-        RET	Z			; yep, quit
+        RET	Z			; yep, ignore
         CP	0DH			; return key ?
         JP	Z,J07A8
         CP	1DH			; cursor left key ?
@@ -1329,47 +1435,54 @@ J05EA:	JP	Z,J07A1
         LD	E,A			; store keyboard input
         LD	A,(DBB7B)
         OR	A			; insert mode ?
-        JP	NZ,J0653		; yep,
+        JP	NZ,J0653		; yep, insert character
         LD	A,(DBB86)
         CP	B			; current size of line = stored size of line ?
-        JR	Z,J063F			; yep,
+        JR	Z,J063F			; yep, at end of line
         INC	HL
         LD	A,E			; store keyboard input
         CALL	C17E0			; check for double byte header character if enabled
-        JR	NC,J062E		; nope,
+        JR	NC,J062E		; nope, continue
+
+; new double byte character
+
         LD	A,(DBB86)
         DEC	A
         CP	B
         JR	NZ,J0623
         INC	A
-        CP	C
+        CP	C			; does it fit in buffer ?
         DEC	HL
-        JP	NC,J06AB
+        JP	NC,J06AB		; nope, ensure key and beep
         INC	HL
         INC	A
         LD	(DBB86),A		; update stored size of line
-J0623:	LD	A,(HL)
+J0623:	LD	A,(HL)			; character from buffer
         CALL	C17E0			; check for double byte header character if enabled
-        INC	HL
-        CALL	NC,C07CD
-        DEC	HL
-        JR	J0678
+        INC	HL			; to double byte character
+        CALL	NC,C07CD                ; nope, if double byte header character in buffer, replace double byte charcter with space
+        DEC	HL			; to double byte header character
+        JR	J0678			; put double byte header character in buffer and handle double byte input
 
-J062E:	CALL	C07CD
-        JR	C,J06A3			; yep,
-        LD	A,(HL)
-        CP	20H
-        JR	C,J06A3
+; new single byte character
+
+J062E:	CALL	C07CD			; if double byte header character in buffer, replace double byte charcter with space
+        JR	C,J06A3			; double byte header character, put in buffer
+        LD	A,(HL)			; character from buffer
+        CP	20H			; control character ?
+        JR	C,J06A3			; yep, put in buffer
         LD	A,E
-        CP	20H	; " "
-        JR	C,J06A3
-        JR	J0649
+        CP	20H			; input control character ?
+        JR	C,J06A3			; yep, put in buffer
+        JR	J0649			; put in buffer
 
-J063F:	CP	C
-        JR	NC,J06AE
+; at end of line
+
+J063F:	CP	C			; end of buffer ?
+        JR	NC,J06AE		; yep, beep
         LD	A,E
         CALL	C17E0			; check for double byte header character if enabled
-        JR	C,J0659
+        JR	C,J0659			; yep, insert double byte character
         INC	HL
 J0649:	LD	(HL),E
         LD	A,E
@@ -1387,13 +1500,18 @@ J0649:	LD	(HL),E
 
 	ENDIF
 
+; insert character
+
 J0653:	LD	A,E
         CALL	C17E0			; check for double byte header character if enabled
-        JR	NC,J0687
+        JR	NC,J0687		; nope,
+
+; insert double byte character
+
 J0659:	LD	A,(DBB86)		; stored size of line
         INC	A
         CP	C
-        JR	NC,J06AB
+        JR	NC,J06AB		; ensure key and beep
         INC	A
         LD	(DBB86),A		; update stored size of line
         DEC	A
@@ -1403,7 +1521,7 @@ J0659:	LD	A,(DBB86)		; stored size of line
         PUSH	DE
         PUSH	BC
         LD	C,A
-        LD	B,00H
+        LD	B,0
         ADD	HL,BC
         LD	D,H
         LD	E,L
@@ -1418,14 +1536,16 @@ J0678:	LD	(HL),E
         CALL	C08B2			; ensure input from keyboard
         LD	(HL),A
         DEC	HL
-        CALL	C07DC
+        CALL	C07DC			; refresh line on screen
         INC	B
         INC	B
-        JP	C06FD
+        JP	C06FD			; cursor to position
+
+; insert single byte character
 
 J0687:	LD	A,(DBB86)		; stored size of line
         CP	C
-        JR	NC,J06AE
+        JR	NC,J06AE		; beep
         INC	A
         LD	(DBB86),A		; update stored size of line
         DEC	A
@@ -1434,7 +1554,7 @@ J0687:	LD	A,(DBB86)		; stored size of line
         PUSH	DE
         PUSH	BC
         LD	C,A
-        LD	B,00H
+        LD	B,0
         ADD	HL,BC
         LD	D,H
         LD	E,L
@@ -1444,9 +1564,9 @@ J0687:	LD	A,(DBB86)		; stored size of line
         POP	DE
 J06A2:	INC	HL
 J06A3:	LD	(HL),E
-        CALL	C07DC
+        CALL	C07DC			; refresh line on screen
         INC	B
-        JP	C06FD
+        JP	C06FD			; cursor to position
 
 J06AB:	CALL	C08B2			; ensure input from keyboard
 J06AE:	LD	A,7			; beep
@@ -1457,7 +1577,7 @@ J06AE:	LD	A,7			; beep
         POP	BC
         RET
 
-;	  Subroutine flip insert mode and update cursor shape
+;	  Subroutine INS key, flip insert mode and update cursor shape
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1488,39 +1608,45 @@ J06C5:	PUSH	BC
         POP	BC
         RET
 
+; cursor right key
+
 J06DB:	LD	A,(DBB86)		; stored size of line
-        CP	B
-        RET	Z
-        INC	HL
-        INC	B
-        LD	A,(HL)
+        CP	B			; at end of line ?
+        RET	Z			; yep, quit
+        INC	HL			; update pointer
+        INC	B			; position right
+        LD	A,(HL)			; character from buffer
         CALL	C17E0			; check for double byte header character if enabled
         JP	NC,C0836		; nope, character to console (make control character printable, allow force to screen)
         CALL	C0836			; character to console (make control character printable, allow force to screen)
-        INC	HL
-        INC	B
-        LD	A,(HL)
+        INC	HL			; update pointer
+        INC	B			; position right
+        LD	A,(HL)			; character from buffer
         JP	C0836			; character to console (make control character printable, allow force to screen)
 
+; HOME key
+
 J06F2:	LD	A,B
-        OR	A
-        RET	Z
-        LD	B,0
-        JR	C06FD
+        OR	A			; at start of line ?
+        RET	Z			; yep, quit
+        LD	B,0			; position at start of line
+        JR	C06FD			; cursor to position
+
+; cursor left key
 
 J06F9:	LD	A,B
-        OR	A
-        RET	Z
-        DEC	B
+        OR	A			; at start of line ?
+        RET	Z			; yep, quit
+        DEC	B			; position left
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine cursor to position
+;	     Inputs  B = position
 ;	     Outputs ________________________
 
 C06FD:	LD	HL,(DBB84)		; pointer to start of line
         LD	DE,(DBB87)		; initial console column position
-        PUSH	BC
-        INC	B
+        PUSH	BC			; store size
+        INC	B			; size+1 (starting at end of loop, allowing size = 0)
         JR	J0729
 
 J0708:	INC	HL
@@ -1540,14 +1666,15 @@ J0719:	CP	09H			; TAB ?
         JR	NZ,J0723		; nope,
         LD	A,E
         OR	07H
-        LD	E,A
-        JR	J0728
+        LD	E,A			; column position to TAB stop -1
+        JR	J0728			; to TAB stop
 
 J0723:	CP	20H			; control character ?
-        JR	NC,J0728		; nope,
-J0727:	INC	DE
-J0728:	INC	DE
-J0729:	DJNZ	J0708
+        JR	NC,J0728		; nope, column+1
+J0727:	INC	DE			; update column
+J0728:	INC	DE			; update column
+J0729:	DJNZ	J0708			; next
+
 J072B:	PUSH	HL
         LD	HL,(DBB8B)		; console column position
         OR	A
@@ -1563,11 +1690,16 @@ J073E:	POP	HL
         POP	BC
         RET
 
+; BS key, delete left
+
 J0741:	LD	A,B
-        OR	A
-        RET	Z
-        DEC	B
-        CALL	C06FD
+        OR	A			; position = 0 ?
+        RET	Z			; yep, quit
+        DEC	B			; position left
+        CALL	C06FD			; cursor to position
+
+; DEL key, delete right
+
 J0748:	LD	A,(DBB86)		; stored size of line
         CP	B
         RET	Z
@@ -1581,7 +1713,10 @@ J0748:	LD	A,(DBB86)		; stored size of line
         DEC	HL
         CALL	C17E0			; check for double byte header character if enabled
         LD	A,E
-        JR	NC,J0777
+        JR	NC,J0777		; nope,
+
+; delete right double byte character
+
         PUSH	HL
         LD	HL,DBB86
         DEC	(HL)			; update stored size of line
@@ -1602,6 +1737,8 @@ J0748:	LD	A,(DBB86)		; stored size of line
         POP	BC
         JR	J0784
 
+; delete right single byte character
+
 J0777:	PUSH	BC
         PUSH	HL
         LD	C,A
@@ -1614,32 +1751,36 @@ J0777:	PUSH	BC
         POP	HL
         POP	BC
 J0784:	INC	HL
-        CALL	C07DC
+        CALL	C07DC			; refresh line on screen
         DEC	HL
-        JP	C06FD
+        JP	C06FD			; cursor to position
 
-;	  Subroutine __________________________
+;	  Subroutine delete line on screen
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C078C:	XOR	A
-        CP	B
-        LD	B,A
-        CALL	NZ,C06FD
-        CALL	C07D7
-        LD	B,00H
-        CALL	C06FD
+        CP	B			; position = 0 ?
+        LD	B,A			; position = 0
+        CALL	NZ,C06FD		; nope, cursor to position
+        CALL	C07D7			; clear rest of line on screen
+        LD	B,0			; position = 0
+        CALL	C06FD			; cursor to position
         LD	HL,(DBB84)		; pointer to start of line
         LD	(HL),0
         DEC	HL
         RET
 
-J07A1:	CALL	C078C
+; ESC, SELECT, CTRL-U key
+
+J07A1:	CALL	C078C			; delete line on screen
         POP	DE
         JP	J0595
 
+; return key
+
 J07A8:	INC	HL
-        CALL	C07DC
+        CALL	C07DC			; refresh line on screen
         LD	HL,(DBB84)		; pointer to start of line
         LD	A,(DBB86)		; stored size of line
         LD	(HL),A
@@ -1648,20 +1789,24 @@ J07A8:	INC	HL
         LD	A,0DH			; CR
         CALL	C0836			; character to console (make control character printable, allow force to screen)
         POP	HL
-        XOR	A
+        XOR	A			; action = enter
         RET
+
+; cursor up key
 
 J07BF:	POP	HL
-        CALL	C078C
-        LD	A,1
+        CALL	C078C			; delete line on screen
+        LD	A,1			; action = previous line
         RET
+
+; cursor down key
 
 J07C6:	POP	HL
-        CALL	C078C
-        LD	A,2
+        CALL	C078C			; delete line on screen
+        LD	A,2			; action = next line
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine if double byte header character in buffer, replace double byte charcter with space
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1673,7 +1818,7 @@ C07CD:	LD	A,(HL)
         DEC	HL
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine clear rest of line on screen
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1682,8 +1827,8 @@ C07D7:	PUSH	BC
         PUSH	HL
         JR	J07E7
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine refresh line on screen
+;	     Inputs  B = current position
 ;	     Outputs ________________________
 
 C07DC:	PUSH	BC
@@ -1697,8 +1842,8 @@ J07E7:	LD	DE,(DBB8B)		; console column position
         LD	HL,(DBB7D)		; maximum console column position
         OR	A
         SBC	HL,DE
-        JR	Z,J0803
-        JR	C,J0803
+        JR	Z,J0803			; clear to end of line
+        JR	C,J0803			; clear to end of line
 J07F5:	LD	A,' '			; space
         CALL	C0836			; character to console (make control character printable, allow force to screen)
         DEC	HL
@@ -1706,6 +1851,9 @@ J07F5:	LD	A,' '			; space
         OR	L
         JR	NZ,J07F5
         LD	(DBB7D),DE		; update maximum console column position
+
+; clear to end of line
+
 J0803:	LD	A,1BH			; ESC
         CALL	C0A6C			; output character to screen
         LD	A,"K"
@@ -1716,11 +1864,11 @@ J0803:	LD	A,1BH			; ESC
         RET
 
 ;	  Subroutine text to console, update maximum column position
-;	     Inputs  ________________________
+;	     Inputs  HL = pointer to text, B = size of text
 ;	     Outputs ________________________
 
 C0811:	PUSH	BC
-        INC	B
+        INC	B                       ; +1 (starting at end of loop, allowing size = 0)
         JR	J081D
 
 J0815:	LD	A,(HL)
@@ -1917,7 +2065,7 @@ J0908:	CALL	C0A6C			; output character to screen
         BIT	0,(HL)			; console output duplicated to printer ?
         RET	Z			; nope, quit
         LD	E,A
-        JP	A0441
+        JP	A0441			; _LSTOUT
 
 ;	  Subroutine update console column position
 ;	     Inputs  ________________________
@@ -1945,7 +2093,7 @@ J091D:	DEC	HL
         LD	HL,0
         RET
 
-; con device jumptable
+; CON device jumptable
 
 A0932:	JP	J0941			; input
         JP	J098E			; output
@@ -1953,7 +2101,7 @@ A0932:	JP	J0941			; input
         JP	J0A1C			; check if output ready
         JP	J09B1			; get screensize
 
-; con device input handler
+; CON device input handler
 
 J0941:	BIT	5,C			; ascii mode ?
         JR	NZ,J094B		; yep, get character from console line buffered input
@@ -1962,20 +2110,20 @@ J0941:	BIT	5,C			; ascii mode ?
         XOR	A
         RET
 
-J094B:	LD	HL,(DBB78)		; pointer in console line input buffer con device
+J094B:	LD	HL,(DBB78)		; pointer in console line input buffer CON device
         LD	A,(HL)
         OR	A			; end of line ?
         JR	NZ,J0979		; nope,
-        LD	DE,IB1D0		; pointer to console line input buffer con device
+        LD	DE,IB1D0		; pointer to console line input buffer CON device
         LD	A,255
-        LD	(DE),A			; size of console line input buffer con device = 255
+        LD	(DE),A			; size of console line input buffer CON device = 255
         LD	A,0FFH			; force console output to screen
         CALL	C04B1			; console line buffered input
         LD	A,0AH			; LF
         CALL	C08EE			; character to screen (with TAB translation)
         LD	HL,IB1D0+1
         LD	E,(HL)
-        LD	D,0			; size of console line input con device
+        LD	D,0			; size of console line input CON device
         INC	HL			; pointer to buffer
         EX	DE,HL
         ADD	HL,DE			; end of console line input
@@ -1989,7 +2137,7 @@ J094B:	LD	HL,(DBB78)		; pointer in console line input buffer con device
         CP	1AH			; first character = end of file ?
         JR	Z,J0985			; yep,
 J0979:	INC	HL
-        LD	(DBB78),HL		; update pointer in console line input buffer con device
+        LD	(DBB78),HL		; update pointer in console line input buffer CON device
         LD	B,A			; start character
         CP	0AH			; LF ?
         LD	A,.EOL
@@ -1999,11 +2147,11 @@ J0979:	INC	HL
 
 J0985:	LD	B,A			; store EOF
         LD	(HL),0
-        LD	(DBB78),HL		; empty console line input con device
+        LD	(DBB78),HL		; empty console line input CON device
         LD	A,.EOF			; end of file 'error'
         RET
 
-; con device output handler
+; CON device output handler
 
 J098E:	BIT	5,C			; ascii mode ?
         JR	NZ,J0997		; yep,
@@ -2018,7 +2166,7 @@ J0997:	PUSH	AF
         XOR	A
         RET
 
-; con device check if input ready handler
+; CON device check if input ready handler
 
 J09A1:	BIT	5,C			; ascii mode ?
         JR	NZ,J09AB		; yep,
@@ -2032,7 +2180,7 @@ J09AB:	CALL	C0897			; get console status
         XOR	A
         RET
 
-; con device get screen size handler
+; CON device get screen size handler
 
 J09B1:	CALL	C0A20			; get screen size
         XOR	A
@@ -2043,11 +2191,11 @@ J09B1:	CALL	C0A20			; get screen size
 ;	     Outputs ________________________
 
 C09B6:	LD	HL,IB1D0+2
-        LD	(DBB78),HL		; pointer in console line input buffer con device = start of con device buffer
+        LD	(DBB78),HL		; pointer in console line input buffer CON device = start of CON device buffer
         LD	(HL),0			; console line input = empty line
         RET
 
-; aux device jumptable
+; AUX device jumptable
 
 A09BF:	JP	J09CE			; input
         JP	J09DD			; output
@@ -2055,9 +2203,9 @@ A09BF:	JP	J09CE			; input
         JP	J0A1C			; check if output ready
         JP	J0A17			; get srceensize
 
-; aux device input handler
+; AUX device input handler
 
-J09CE:	CALL	C0B46			; get character from aux device
+J09CE:	CALL	C0B46			; get character from AUX device
         LD	B,A			; store character
         CP	1AH			; EOF ?
         JR	Z,J0A14			; yep,
@@ -2067,13 +2215,13 @@ J09CE:	CALL	C0B46			; get character from aux device
         XOR	A
         RET
 
-; aux device output handler
+; AUX device output handler
 
-J09DD:	CALL	C0B51			; output character to aux device
+J09DD:	CALL	C0B51			; output character to AUX device
         XOR	A
         RET
 
-; lst/prn device jumptable
+; LST/PRN device jumptable
 
 A09E2:	JP	J0A12			; input
         JP	J09F1			; output
@@ -2081,7 +2229,7 @@ A09E2:	JP	J0A12			; input
         JP	J09FD			; check if output ready
         JP	J0A17			; get screensize
 
-; lst/prn device output handler
+; LST/PRN device output handler
 
 J09F1:	CALL	C0B25			; output character to printer
         JR	NC,J0A1A		; no error, quit
@@ -2089,14 +2237,14 @@ J09F1:	CALL	C0B25			; output character to printer
         LD	A,.STOP
         RET
 
-; lst/prn device check if output ready handler
+; LST/PRN device check if output ready handler
 
 J09FD:	CALL	C0B37			; get printer status
         LD	E,A
         XOR	A
         RET
 
-; null device jumptable
+; NUL device jumptable
 
 A0A03:	JP	J0A12			; input
         JP	J0A1A			; output
@@ -2184,6 +2332,8 @@ C0A6C:	CALL	H_CHOU
 
 	ENDIF
 
+	IF	(OPTM EQ 0) OR (USESBF EQ 1)
+
 	LD	E,A
         CP	1BH
         CALL	Z,C0AB9			; begin of an ESC sequence, flush screen output buffer (if any)
@@ -2215,6 +2365,8 @@ J0A91:	LD	A,2
         CP	07H
         JR	Z,C0ACE			; bell character, flush screen output buffer
         RET
+	
+	ENDIF
 
 ;	  Subroutine flush screen output buffer (if any)
 ;	     Inputs  ________________________
@@ -2313,7 +2465,7 @@ C0B37:	CALL	H_LSTS
         POP	IX
         RET
 
-;	  Subroutine get character from aux device
+;	  Subroutine get character from AUX device
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2333,7 +2485,7 @@ C0B46:	CALL	C0AB9			; flush screen output buffer (if any)
 
 J0B50:	LD	A,C
 
-;	  Subroutine output character to aux device
+;	  Subroutine output character to AUX device
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -2357,12 +2509,12 @@ C0B51:	CALL	C0AB9			; flush screen output buffer (if any)
 
 C0B5B:	PUSH	AF
         LD	A,(INTFLG)
-        SUB	03H
-        JR	Z,J0B65
+        SUB	03H			; CTRL-STOP pressed ?
+        JR	Z,J0B65			; yep,
         POP	AF
         RET
 
-J0B65:	LD	(INTFLG),A
+J0B65:	LD	(INTFLG),A		; clear CTRL-STOP flag
         LD	IX,KILBUF
         CALL	C0B78			; main-bios call KILBUF
         LD	A,.STOP
@@ -2399,7 +2551,7 @@ C0B78:	EX	AF,AF'
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A0B90:	LD	HL,0022H		; CP/M version 2.2
+A0B90:	LD	HL,256*00H+22H		; machine type = i8080, CP/M type = plain, CP/M version = 2.2
         XOR	A
         RET
 
@@ -2412,7 +2564,7 @@ A0B95:	LD	B,0FFH			; all drives
         CALL	A0CE0			; flush buffers
         LD	A,1
         LD	(CUR_DRV),A		; current drive id = A:
-        LD	HL,0080H
+        LD	HL,DBUF
         LD	(DTA_AD),HL		; transfer address to 00080H
         XOR	A
         LD	H,A
@@ -2680,7 +2832,7 @@ J0CEB:	LD	A,B
         LD	A,D
         OR	A
         RET	Z			; flush only, quit
-        LD	A,B			; driveid
+        LD	A,B			; drive id
         CALL	C2C78			; mark sector buffers of physical drive unused
         CALL	C3611			; disk change status of all drives to flushed
         XOR	A
@@ -2710,41 +2862,41 @@ A0D05:	LD	B,(IY+DBBFD-DBB80)      ; last BDOS errorcode
         RET
 
 ;	  Subroutine _EXPLAIN
-;	     Inputs  ________________________
+;	     Inputs  B = error code
 ;	     Outputs ________________________
 
-A0D0A:	LD	A,B
+A0D0A:	LD	A,B                     ; error code
         PUSH	DE
         PUSH	IY
-        LD	IY,(MASTER-1)
-        LD	IX,($ERR_M)
-        CALL	C001C
+        LD	IY,(MASTER-1)		; slot id master disk ROM
+        LD	IX,($ERR_M)		; error message handler
+        CALL	C001C                   ; call slot
         EI
         POP	IY
         LD	B,A
-        OR	A
+        OR	A                       ; built in explanation string ?
         DEC	HL
-        CALL	NZ,C0D26
+        CALL	NZ,C0D26                ; nope, convert byte number to string
         XOR	A
-        LD	(HL),A
+        LD	(HL),A                  ; end marker string
         POP	DE
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine convert byte number to string
+;	     Inputs  A = number (0-99), HL = pointer to string
 ;	     Outputs ________________________
 
-C0D26:	LD	C,0FFH
+C0D26:	LD	C,-1
 J0D28:	INC	C
-        SUB	0AH	; 10 
+        SUB	10
         JR	NC,J0D28
-        ADD	A,3AH	; ":"
-        PUSH	AF
+        ADD	A,'0'+10
+        PUSH	AF                      ; store ASCII digit
         LD	A,C
-        OR	A
-        CALL	NZ,C0D26
-        POP	AF
-        LD	(HL),A
+        OR	A                       ; tens = 0 ?
+        CALL	NZ,C0D26                ; nope, convert tens number to string
+        POP	AF                      ; restore ASCII digit
+        LD	(HL),A                  ; store ASCII digit
         INC	HL
         RET
 
@@ -2807,7 +2959,7 @@ J0D81:	SET	7,D
         LD	D,A
         EX	AF,AF'
         POP	HL
-        CALL	C304E
+        CALL	C304E			; format disk
         LD	BC,9
         ADD	HL,BC
         LD	(HL),0
@@ -2926,40 +3078,40 @@ J0E3B:	LD	(HL),0
 ;	     Outputs ________________________
 
 A0E44:	LD	A,B
-        CP	2
-        JR	C,J0E86
+        CP	2			; number of buffers >= 2 ?
+        JR	C,J0E86			; yep, quit
 J0E49:	LD	A,B
         CP	(IY+IBBFA-DBB80)	; same as current number of buffers ?
         JR	Z,J0E86			; yep, quit
-        JR	NC,J0E6E		; more as current, allocate extra buffer
-        LD	HL,(DBBF8)
+        JR	NC,J0E6E		; more as current, allocate extra buffers
+        LD	HL,(DBBF8)		; start of the buffer chain
         CALL	C2D2D			; flush buffer
         LD	E,(HL)
         INC	HL
-        LD	D,(HL)
+        LD	D,(HL)			; pointer to next buffer
         DEC	HL
-        LD	(DBBF8),DE
+        LD	(DBBF8),DE		; update start of the buffer chain
         CALL	C022B			; free BDOS data block
         LD	HL,0
         LD	(DBBF6),HL		; no last FAT buffer read
         LD	HL,IBBFA
-        DEC	(HL)
-        JR	J0E49
+        DEC	(HL)			; update number of buffers
+        JR	J0E49			; again
 
 J0E6E:	LD	HL,512+11
         CALL	C01CB			; allocate BDOS data block
-        JR	NZ,J0E86
-        LD	DE,(DBBF8)
-        LD	(DBBF8),HL
+        JR	NZ,J0E86		; error, quit
+        LD	DE,(DBBF8)		; start of the buffer chain
+        LD	(DBBF8),HL		; update start of the buffer chain
         LD	(HL),E
         INC	HL
-        LD	(HL),D
+        LD	(HL),D			; pointer to next buffer
         LD	HL,IBBFA
-        INC	(HL)
-        JR	J0E49
+        INC	(HL)			; update number of buffers
+        JR	J0E49			; again
 
 J0E86:	LD	B,(IY+IBBFA-DBB80)	; number of buffers
-        XOR	A
+        XOR	A			; no error
         RET
 
 ;	  Subroutine _ASSIGN
@@ -3040,7 +3192,7 @@ J0EDB:	LD	B,C
         XOR	A
         RET
 
-;	  Subroutine _GENV (get environment)
+;	  Subroutine _GENV
 ;	     Inputs  HL = pointer to environmentname, DE = pointer to buffer, B = size of buffer
 ;	     Outputs ________________________
 
@@ -3053,12 +3205,12 @@ A0EDE:	XOR	A			; segment type = TPA
 C0EDF:	LD	(DBBED),A		; update segment type
         XOR	A			; do upcasing
         PUSH	BC
-        CALL	C0FA2			; validate environmentname
+        CALL	C0FA2			; validate environment name
         POP	BC
         RET	NZ			; error, quit
         PUSH	DE
         PUSH	BC
-        LD	DE,DBBEE		; start of environmentchain
+        LD	DE,DBBEE		; start of environment chain
         CALL	C0F8B			; search for environment
         LD	DE,I0F76
         JR	NC,J0EF8		; not found, use empty string as value
@@ -3066,18 +3218,18 @@ C0EDF:	LD	(DBBED),A		; update segment type
         LD	E,C
 J0EF8:	POP	BC
         POP	HL
-        CALL	C0FC8			; copy environmentvalue to buffer
+        CALL	C0FC8			; copy environment value to buffer
         EX	DE,HL
         RET
 
-;	  Subroutine _SENV (set environment)
-;	     Inputs  HL = pointer to environmentname, DE = pointer to value
+;	  Subroutine _SENV
+;	     Inputs  HL = pointer to environment name, DE = pointer to value
 ;	     Outputs ________________________
 
 A0EFF:	XOR	A
         LD	(DBBED),A		; segment type = TPA
         XOR	A			; do upcasing
-        CALL	C0FA2			; validate environmentname
+        CALL	C0FA2			; validate environment name
         RET	NZ			; error, quit
         LD	A,B
         OR	A
@@ -3085,7 +3237,7 @@ A0EFF:	XOR	A
         EX	AF,AF'
         EX	DE,HL
         LD	A,0FFH			; no upcasing
-        CALL	C0FA2			; validate environmentvalue
+        CALL	C0FA2			; validate environment value
         RET	NZ			; error, quit
         LD	A,B
         OR	A
@@ -3120,15 +3272,15 @@ A0EFF:	XOR	A
         JR	J0F4A			; kill old version of environment if exists
 
 J0F46:	EX	DE,HL
-        LD	DE,DBBEE		; start of environmentchain
+        LD	DE,DBBEE		; start of environment chain
 J0F4A:	CALL	C0F8B			; search for environment
-        LD	HL,DBBEE		; start or environmentchain
+        LD	HL,DBBEE		; start or environment chain
         CALL	C,C2192			; found, remove element from chain
         XOR	A
         RET
 
 ;	  Subroutine _FENV
-;	     Inputs  DE = environmentnumber, HL = pointer to buffer, B = size of buffer
+;	     Inputs  DE = environment number, HL = pointer to buffer, B = size of buffer
 ;	     Outputs ________________________
 
 A0F55:	XOR	A
@@ -3158,6 +3310,8 @@ J0F71:	POP	BC
 I0F76:	DEFW	0
 
 
+	IF	OPTM EQ 1
+
 ;	  Subroutine 
 ;	     Inputs  ________________________
 ;	     Outputs 
@@ -3176,6 +3330,9 @@ J0F7B:	LD	A,H
         LD	(DBBEE),HL
         JR	J0F7B
 
+	ENDIF
+
+
 ;	  Subroutine search for environment
 ;	     Inputs  ________________________
 ;	     Outputs Cx set if found
@@ -3192,7 +3349,7 @@ C0F8B:	EX	DE,HL
         PUSH	HL
         INC	DE
         INC	DE
-        CALL	C0FF1
+        CALL	C0FF1			; check if environment
         LD	B,D
         LD	C,E
         POP	HL
@@ -3270,7 +3427,7 @@ J0FE3:	CALL	C1003			; read byte (environment)
         POP	HL
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine check if environment
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3693,13 +3850,13 @@ C1206:	PUSH	BC
         ADD	HL,DE
         LD	E,(HL)
         INC	HL
-        LD	D,(HL)			; memorymapper info table
+        LD	D,(HL)			; memory mapper info table
         INC	HL
         LD	A,(HL)
         INC	HL
         LD	H,(HL)
         LD	L,A
-        OR	H			; memorymapper segment table available (memorymapper in specified slot) ?
+        OR	H			; memory mapper segment table available (memory mapper in specified slot) ?
         JR	Z,J1253			; no, quit with error
         LD	A,(DE)
         INC	DE
@@ -3771,14 +3928,14 @@ J125F:	AND	0FH
         ADD	HL,DE
         LD	E,(HL)
         INC	HL
-        LD	D,(HL)
+        LD	D,(HL)			; memory mapper info table
         INC	HL
         LD	A,(HL)
         INC	HL
         LD	H,(HL)
         LD	L,A
-        OR	H
-        JR	Z,J128E
+        OR	H			; memory mapper segment table available (memory mapper in specified slot) ?
+        JR	Z,J128E			; nope, quit with error
         LD	A,(DE)
         CP	C
         JR	C,J128E
@@ -3803,51 +3960,51 @@ J128B:	DEC	(HL)
 J128E:	SCF
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine free user segments
+;	     Inputs  B = proces id
 ;	     Outputs ________________________
 
-C1290:	LD	C,10H	; 16 
+C1290:	LD	C,16			; mapper count = 16
         LD	HL,IBA35
 J1295:	LD	E,(HL)
         INC	HL
-        LD	D,(HL)
-        PUSH	DE
+        LD	D,(HL)			; memory mapper info table
+        PUSH	DE			; store pointer to memory mapper info table
         INC	HL
         LD	E,(HL)
         INC	HL
-        LD	D,(HL)
+        LD	D,(HL)			; memory mapper segment table
         INC	HL
-        EX	(SP),HL
+        EX	(SP),HL			; store pointer in, restore pointer to memory mapper info table
         LD	A,H
-        OR	L
-        JR	Z,J12BE
-        PUSH	BC
-        LD	C,(HL)
+        OR	L			; memory mapper in slot ?
+        JR	Z,J12BE			; nope, skip to next slot
+        PUSH	BC			; store mapper count
+        LD	C,(HL)			; segment count = number of segments
 J12A5:	LD	A,(DE)
-        INC	A
-        JR	Z,J12B9
+        INC	A			; segment = system reserved ?
+        JR	Z,J12B9			; yep, skip
+        DEC	A			; segment = free ?
+        JR	Z,J12B9			; yep, skip
         DEC	A
-        JR	Z,J12B9
-        DEC	A
-        CP	B
-        JR	C,J12B9
-        PUSH	HL
+        CP	B			; segment is user reserved and belongs to this proces or child proces ?
+        JR	C,J12B9			; nope, skip
+        PUSH	HL			; store pointer
         XOR	A
-        LD	(DE),A
+        LD	(DE),A			; free segment
         INC	HL
-        INC	(HL)
+        INC	(HL)			; update number of free segments
         INC	HL
         INC	HL
-        DEC	(HL)
-        POP	HL
+        DEC	(HL)			; update number of reserved segments
+        POP	HL			; restore pointer
 J12B9:	INC	DE
         DEC	C
-        JR	NZ,J12A5
-        POP	BC
-J12BE:	POP	HL
+        JR	NZ,J12A5		; next segment
+        POP	BC			; restore mapper count
+J12BE:	POP	HL			; restore pointer
         DEC	C
-        JR	NZ,J1295
+        JR	NZ,J1295		; next slot
         RET
 
 ;	  Subroutine parse path
@@ -3860,9 +4017,9 @@ C12C3:	LD	(IX+0),0FFH		; FIB indentifier
         LD	(DBB9E),DE		; pointer in parse string = start of parse string
         OR	A			; current drive ?
         JR	NZ,J12D7
-        LD	A,(CUR_DRV)		; yep, use driveid current drive
+        LD	A,(CUR_DRV)		; yep, use drive id current drive
 J12D7:	LD	D,A			; store drive id
-        CALL	C13BC			; try to parse driveindicator
+        CALL	C13BC			; try to parse drive indicator
         OR	A
         JR	Z,J12E9			; no drive specfied, use parameter
         CP	D
@@ -3889,7 +4046,7 @@ J1304:	CALL	NZ,C179C		; undo, undo get parse string character
         BIT	3,(IX+31)		; parse a volume name ?
         JR	Z,J1320			; nope,
         LD	DE,IB926		; file name buffer
-        CALL	C13E9
+        CALL	C13E9			; parse volume name
         JR	J1391
 
 J1320:	LD	DE,IB926		; file name buffer
@@ -3901,7 +4058,7 @@ J1320:	LD	DE,IB926		; file name buffer
         LD	DE,(DBB9E)		; pointer in parse string
         LD	(DBB9C),DE		; update pointer to last item in parse string
         LD	DE,IB926		; file name buffer
-        CALL	C14CB
+        CALL	C14CB			; next item
         JR	NZ,J13A6
         LD	DE,IB926		; file name buffer
         CALL	C16E7			; add item to whole path buffer
@@ -3944,7 +4101,7 @@ J1383:	XOR	A
         JR	NZ,J139D		; it is a device,
 J1391:	SET	4,(IY+DBBA0-DBB80)
         LD	DE,IB926		; file name buffer
-        CALL	C14CB
+        CALL	C14CB			; next item
         JR	NZ,J13A6
 J139D:	LD	(IX+30),A		; update device flags
         LD	DE,IB926		; file name buffer
@@ -3959,7 +4116,7 @@ J13A6:	PUSH	AF
 
 I13B1:	defb	"???????????"
 
-;	  Subroutine __________________________
+;	  Subroutine try to parse drive indicator
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3977,7 +4134,7 @@ C13BC:	LD	(IY+DBBA1-DBB80),00H	; reset parse string character flags
         CALL	C1782			; get parse string character
         JR	Z,J13E3			; end of parse string, no drive specifier
         CP	":"			; driveletter seperator ?
-        LD	A,B			; driveid
+        LD	A,B			; drive id
         LD	B,04H
         RET	Z			; yep, flag driveindicator found
         CALL	C179C			; undo get parse string characters
@@ -3986,7 +4143,7 @@ J13E6:	XOR	A
         LD	B,A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine parse volume name
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -3997,7 +4154,7 @@ C13E9:	PUSH	HL
         LD	B,A
         LD	(IY+DBBA1-DBB80),09H	; supress upcasing, volume name
         LD	C,0BH
-        CALL	C146C
+        CALL	C146C			; parse name
         DEC	D
         JR	NZ,J13FD
         SET	3,B
@@ -4049,7 +4206,7 @@ J1449:	RES	7,B
         CALL	C179C			; undo get parse string character
 J144E:	CALL	C179C			; undo get parse string character
 J1451:	CALL	C179C			; undo get parse string character
-J1454:	CALL	C146C
+J1454:	CALL	C146C			; parse name
         DEC	D
         JR	NZ,J145C
         SET	3,B			; flag main file name is specified
@@ -4058,11 +4215,11 @@ J145C:	CP	"."
         SET	4,B			; flag extention file name is specified
         CALL	C1782			; get parse string character
 J1465:	LD	C,3
-        CALL	C146C
+        CALL	C146C			; parse name
         POP	HL
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine parse name
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4119,7 +4276,7 @@ J14C4:	DEC	C
         INC	HL
         JR	J14C4
 
-;	  Subroutine __________________________
+;	  Subroutine next item
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4129,7 +4286,7 @@ C14CB:	XOR	A
         PUSH	DE
         BIT	6,(IY+DBBA0-DBB80)
         SET	6,(IY+DBBA0-DBB80)
-        CALL	Z,C151A
+        CALL	Z,C151A			; first directory
         POP	DE
         OR	A
         RET	NZ
@@ -4140,7 +4297,7 @@ C14CB:	XOR	A
         LD	A,B
         AND	18H
         RET	Z
-J14EF:	CALL	C15A6
+J14EF:	CALL	C15A6			; next directory
         OR	A
         RET
 
@@ -4175,7 +4332,7 @@ J1517:	POP	HL
         POP	BC
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine first directory
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4209,7 +4366,7 @@ J1547:	INC	HL
         LD	BC,-32
         ADD	HL,BC
         PUSH	DE
-        CALL	C159F
+        CALL	C159F			; initialize whole path buffer and select root directory
         POP	DE
         LD	B,0			; reset parse flags
 J1556:	PUSH	DE
@@ -4218,7 +4375,7 @@ J1556:	PUSH	DE
         BIT	3,(IY+DBBA0-DBB80)
         JR	Z,J156E
         LD	DE,IB910		; buffer
-        CALL	C15A6
+        CALL	C15A6			; next directory
         OR	A
         JR	NZ,J157E
         POP	AF
@@ -4244,23 +4401,23 @@ J1582:	POP	HL
         JR	Z,J1597
         INC	HL
         INC	HL
-        LD	(HL),00H
+        LD	(HL),0
 J1597:	POP	HL
         POP	BC
-        JR	NZ,C159F
 
 	IF	OPTM EQ 0
 
-        CALL	C1C4A
+        JR	NZ,C159F		; ,initialize whole path buffer and select root directory
+        CALL	C1C4A			; select sub directory (cluster number)
         RET
 
 	ELSE
 
-	JP	C1C4A
+	JP	Z,C1C4A			; select sub directory (cluster number)
 
 	ENDIF
 
-;	  Subroutine __________________________
+;	  Subroutine initialize whole path buffer and select root directory
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4268,16 +4425,16 @@ C159F:	CALL	C16BC			; initialize whole path buffer
 
 	IF	OPTM EQ 0
 
-        CALL	C1C47
+        CALL	C1C47			; select root directory
         RET
 	
 	ELSE
 
-	JP	C1C47
+	JP	C1C47			; select root directory
 	
 	ENDIF
 
-;	  Subroutine __________________________
+;	  Subroutine next directory
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4310,12 +4467,12 @@ J15CD:	POP	AF
 
 	IF	OPTM EQ 0
 
-        CALL	C1C3A
+        CALL	C1C3A			; select sub directory
         RET
 
 	ELSE
 
-	JP	C1C3A
+	JP	C1C3A			; select sub directory
 
 	ENDIF
 
@@ -4396,7 +4553,7 @@ J1628:	LD	(IX+0),A
         POP	BC
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine test name
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -4404,7 +4561,7 @@ C1637:	PUSH	AF
         CALL	C2553			; check if special subdirectory directory entry
         POP	BC
         JR	NC,J1640		; not a special subdirectory directory entry,
-        XOR	A
+        XOR	A			; no error
         RET
 
 J1640:	PUSH	HL
@@ -4464,9 +4621,9 @@ J1694:	LD	A,.IFNM
         OR	A
         RET
 
-;	  Subroutine check if devicename
+;	  Subroutine check if device name
 ;	     Inputs  DE = pointer to string
-;	     Outputs Cx set if devicename, Cx reset if no devicename
+;	     Outputs Cx set if device name, Cx reset if no device name
 
 C1698:	LD	HL,(DBBF4)		; start of device chain
         PUSH	HL			; store pointer to device info block
@@ -4779,7 +4936,7 @@ I1826:	defb	07FH,'|<>/',0FFH,' :;.,=+\"[]'
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A1836:	LD	A,B			; driveid
+A1836:	LD	A,B			; drive id
         LD	B,00H
         LD	IX,IB9DA		; buffer
         LD	C,09H			; parse flags =
@@ -4788,7 +4945,7 @@ A1836:	LD	A,B			; driveid
         CALL	C12C3			; parse path
         POP	DE
         RET	NZ
-        JP	A189D
+        JP	A189D			; _WPATH
 
 I184C:	defb	0
 
@@ -4796,7 +4953,7 @@ I184C:	defb	0
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A184D:	XOR	A			; default driveid
+A184D:	XOR	A			; default drive id
         LD	B,A
         LD	IX,IB9DA		; buffer
         LD	C,09H			; parse flags =
@@ -4813,7 +4970,7 @@ A184D:	XOR	A			; default driveid
         LD	(HL),D
 J1868:	INC	HL
         EX	DE,HL
-        JP	A189D
+        JP	A189D			; _WPATH
 
 ;	  Subroutine _PARSE
 ;	     Inputs  ________________________
@@ -4903,7 +5060,7 @@ J18CB:	LD	(DBBAF),A		; update search directory entry flags
         LD	A,(DE)
         INC	A			; is pointer to a FIB ?
         JR	Z,J18DF			; yep,
-        XOR	A			; default driveid
+        XOR	A			; default drive id
         LD	C,0AH			; parse flags =
         CALL	C12C3			; parse path
         RET	NZ
@@ -4931,7 +5088,7 @@ J18DF:	PUSH	HL
         JR	Z,J1977
         BIT	3,B
         JR	NZ,J1977
-        CALL	C1C3A
+        CALL	C1C3A			; select sub directory
         PUSH	BC
         PUSH	HL
         LD	BC,25
@@ -5061,7 +5218,7 @@ C19BC:	LD	(IY+DBBAF-DBB80),4	; search directory entry
 ;	     Outputs ________________________
 
 C19C8:	LD	(IY+DBBAF-DBB80),0	; create directory entry
-J19CC:	XOR	A			; default driveid
+J19CC:	XOR	A			; default drive id
         LD	IX,IB9DA		; buffer
         LD	C,08H			; parse flags =
         CALL	C12C3			; parse path
@@ -5163,7 +5320,7 @@ C1A53:	BIT	2,(IY+DBBAF-DBB80)	; search only ?
         PUSH	DE			; store pointer to file name buffer
         LD	A,(IX+31)
         AND	10H			; request file or directory ?
-        CALL	C1637
+        CALL	C1637			; test name
         POP	DE			; restore pointer to file name buffer
         RET	NZ			; error, quit
         BIT	7,(IX+31)
@@ -5456,7 +5613,7 @@ J1C37:	XOR	A
 J1C38:	POP	BC
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine select sub directory
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -5469,15 +5626,15 @@ C1C3A:	PUSH	HL			; store pointer to directory entry
         POP	HL			; restore pointer to directory entry
         LD	A,D
         OR	E			; directory entry has cluster chain ?
-        JR	NZ,C1C4A		; yep,
+        JR	NZ,C1C4A		; yep, select sub directory (cluster number)
 
-;	  Subroutine __________________________
+;	  Subroutine select root directory
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C1C47:	LD	DE,0FFFFH		; cluster number = root directory
 
-;	  Subroutine __________________________
+;	  Subroutine select sub directory (cluster number)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -5622,7 +5779,6 @@ J1D23:	LD	(DBBDE+2),A
 J1D29:	LD	A,(DE)
         OR	A
         RET
-
 
 ;	  Subroutine write to file handle
 ;	     Inputs  ________________________
@@ -5934,7 +6090,7 @@ J1EB4:	LD	E,(IX+30)
         BIT	7,E			; device ?
         RET	NZ			; yep, quit
 
-;	  Subroutine __________________________
+;	  Subroutine get mode of handle
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -5956,10 +6112,10 @@ J1ED5:	BIT	1,(IX+49)
         JR	NZ,J1EFA		; file mode no read, return not ready
         BIT	7,(IX+30)		; device ?
         JR	NZ,J1EFD		; yep, continue to device check if input handler
-        CALL	C1EBC
+        CALL	C1EBC			; get mode of handle
         BIT	6,E
         JR	NZ,J1EFA
-        LD	E,00H
+        LD	E,0
         RET
 
 J1EEB:	BIT	0,(IX+49)
@@ -5969,7 +6125,7 @@ J1EEB:	BIT	0,(IX+49)
         INC	HL
         BIT	7,(IX+30)		; device ?
         JR	NZ,J1EFD		; yep, continue to device check if output handler
-J1EFA:	LD	E,0FFH
+J1EFA:	LD	E,-1
         RET
 
 J1EFD:	LD	BC,6
@@ -6113,7 +6269,7 @@ A1F85:	EX	AF,AF'
         RET	NZ			; error, quit
         EX	AF,AF'
         OR	A
-        CALL	NZ,C24FD
+        CALL	NZ,C24FD		; , update attribute directory entry
         OR	A
         RET	NZ
         CALL	C1C7A			; get current directory entry
@@ -6141,7 +6297,7 @@ A1F9D:	EX	AF,AF'
         OR	A
         RET	NZ
         CALL	C1C7A			; get current directory entry
-        CALL	C24FD
+        CALL	C24FD			; update attribute directory entry
         RET	NZ
         CALL	C2288			; update FIB (directory entry changed)
 J1FB9:	LD	L,(IX+14)		; file attribute
@@ -6161,7 +6317,7 @@ A1FBE:	EX	AF,AF'
         RET	NZ			; error, quit
         EX	AF,AF'
         OR	A
-        CALL	NZ,C2522
+        CALL	NZ,C2522		; , update timestamp directory entry
         OR	A
         RET	NZ
         CALL	C1C7A			; get current directory entry
@@ -6200,7 +6356,7 @@ A1FE0:	EX	AF,AF'
         POP	BC
         OR	A
         RET	NZ
-        CALL	C2522
+        CALL	C2522			; update timestamp directory entry
         RET	NZ
         CALL	C2288			; update FIB (directory entry changed)
 J1FFF:	LD	E,(IX+15)
@@ -6226,7 +6382,7 @@ A200D:	PUSH	BC
         RET	NC			; invalid file handle, quit
         RET	Z			; file handle not in use, quit
         LD	B,0FFH
-        CALL	C2312
+        CALL	C2312			; compare with FIB
         RET	Z
 J2026:	XOR	A
         LD	B,A
@@ -6302,7 +6458,7 @@ A2070:	LD	A,B
         CP	(HL)			; valid proces id ?
         LD	A,.IPROC
         RET	NC			; nope, quit with invalid proces id error
-J207B:	CALL	C1290
+J207B:	CALL	C1290			; free user segments
         LD	HL,(DBBF0)		; start of the proces chain
         PUSH	HL			; store start of the proces chain
 J2082:	LD	A,H
@@ -6578,15 +6734,15 @@ J21CA:	PUSH	BC			; store counter
         RET
 
 I21E5:	defw	T21F4
-        defb	101b			; con read only
+        defb	101b			; CON read only
         defw	T21F4
-        defb	110b			; con write only
+        defb	110b			; CON write only
         defw	T21F4
-        defb	100b			; con read & write
+        defb	100b			; CON read & write
         defw	T21F8
-        defb	100b			; aux read & write
+        defb	100b			; AUX read & write
         defw	T21FC
-        defb	110b			; prn write only
+        defb	110b			; PRN write only
 
 T21F4:	defb	"CON",0
 T21F8:	defb	"AUX",0
@@ -6661,7 +6817,7 @@ C224A:	BIT	3,(IX+49)		; file deleted ?
         LD	BC,15
         ADD	HL,BC
         LD	C,(IX+39)
-        LD	B,(IX+40)
+        LD	B,(IX+40)		; start cluster of file
         LD	(HL),C
         INC	HL
         LD	(HL),B			; set start cluster directory entry
@@ -6748,7 +6904,7 @@ J22E9:	LD	L,(IX-3)
         SBC	HL,BC
         JR	Z,J22E9			; same as requested, next
         EX	DE,HL
-        CALL	C2312
+        CALL	C2312			; compare with FIB
         EX	DE,HL
         JR	NZ,J22E9		; , next
         LD	A,.FOPEN
@@ -6760,24 +6916,24 @@ J230A:	PUSH	BC
         OR	A
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine compare with FIB
+;	     Inputs  IX = pointer to FIB
 ;	     Outputs ________________________
 
 C2312:	BIT	7,(IX+30)		; device ?
         RET	NZ			; yep, quit
         LD	A,(DBBDE+1)
         SUB	(IY+DBBDE+2-DBB80)
-        CP	(IX+36)
+        CP	(IX+36)			; current directory entry in sector from FIB
         RET	NZ
         PUSH	HL
         LD	DE,(DBBDE+4)		; current directory sector
         LD	L,(IX+34)
-        LD	H,(IX+35)
+        LD	H,(IX+35)		; current directory sector from FIB
         OR	A
-        SBC	HL,DE
+        SBC	HL,DE			; same ?
         POP	HL
-        RET	NZ
+        RET	NZ			; nope, quit
         LD	E,(IX+32)
         LD	D,(IX+33)
         XOR	A
@@ -6855,8 +7011,8 @@ J2388:	CALL	C1C7A			; get current directory entry
         LD	A,0E5H
         LD	(DE),A			; mark directory entry as deleted
         POP	HL
-J23AE:	CALL	C2541
-        CALL	NZ,C34E9
+J23AE:	CALL	C2541			; mark directory entry as changed
+        CALL	NZ,C34E9		; , current directory invalid
         XOR	A
         RET
 
@@ -6887,7 +7043,7 @@ C23B6:	XOR	A
         LD	DE,IB91B
         LD	(DBBAD),DE		; pointer to file name buffer for search directory entry = file name buffer
         LD	A,0FFH			; device name check
-        CALL	C1637
+        CALL	C1637			; test name
         RET	NZ
         CALL	C2553			; check if special subdirectory directory entry
         RET	C			; it is, quit with error
@@ -6939,7 +7095,7 @@ C241B:	XOR	A
         LD	A,(HL)			; directory entry attribute
         POP	HL			; restore pointer to directory entry
         BIT	4,A
-        CALL	NZ,C34E9		; it is a subdirectory,
+        CALL	NZ,C34E9		; it is a subdirectory, current directory invalid
         PUSH	BC
         PUSH	HL			; store pointer to directory entry
         LD	HL,IB91B
@@ -7006,9 +7162,9 @@ J244E:	LD	(HL),A
         LDIR				; restore orginal directory entry
         POP	DE
         POP	HL
-        CALL	C2541
+        CALL	C2541			; mark directory entry as changed
         RET	Z
-        CALL	C34E9
+        CALL	C34E9			; current directory invalid
         LD	BC,(DBBE8)		; cluster number current directory
         PUSH	BC			; store cluster number current directory
         CALL	C1C3A
@@ -7034,7 +7190,7 @@ J24EF:	PUSH	HL
         POP	HL
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine update attribute directory entry
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -7061,7 +7217,7 @@ J2515:	XOR	C
 J2520:	POP	HL
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine update timestamp directory entry
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -7088,7 +7244,7 @@ C2522:	XOR	A
         POP	DE
         POP	HL
 
-;	  Subroutine __________________________
+;	  Subroutine mark directory entry as changed
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -7462,6 +7618,9 @@ J275A:	LD	A,D
         RES	7,D			; force to page offset
         RET
 
+
+	IF	OPTM EQ 1
+
 ;	  Subroutine zero write to FIB
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -7470,6 +7629,8 @@ J275A:	LD	A,D
 ?276B:	AND	04H			; segment type, operation = write
         OR	02H			; operation = write zero fill
         JR	C2779			; read/write from FIB
+
+	ENDIF
 
 ;	  Subroutine write to FIB
 ;	     Inputs  BC = size, DE = transfer address
@@ -7752,14 +7913,14 @@ J2938:	LD	BC,0			; start offset = 0
         RET	NZ			; error, quit with error
         LD	DE,(DBBB6)		; physical cluster (position in file)
         LD	(IX+41),E
-        LD	(IX+42),D		; update FIB
+        LD	(IX+42),D		; update current cluster of file in FIB
         LD	DE,(DBBBC)		; cluster number of position in file
         LD	(IX+43),E
-        LD	(IX+44),D		; update FIB
+        LD	(IX+44),D		; update current relative cluster of file in FIB
         RET
 
 ;	  Subroutine transfer sector partly
-;	     Inputs  BC = offset, (BBC0) = size
+;	     Inputs  BC = offset, (BC) = size
 ;	     Outputs ________________________
 
 C2954:	PUSH	HL			; store
@@ -7931,12 +8092,12 @@ J2A37:	JR	NZ,J2AB0		; error, clean up stack and quit with error
         PUSH	DE			; store cluster number
         CALL	C2DA4			; get FAT entry content
         BIT	7,D			; end of file cluster ?
-        CALL	Z,C301A			; nope,
+        CALL	Z,C301A			; nope, delete chain
         POP	DE			; restore cluster number
         LD	B,0FFH
         CALL	C2DF1			; reset deleted files status disk and set FAT entry
         LD	C,(IX+39)
-        LD	B,(IX+40)
+        LD	B,(IX+40)		; start cluster of file
         SCF
         EX	AF,AF'
         JR	J2AB4
@@ -7945,10 +8106,10 @@ J2A80:	EXX
         EX	AF,AF'
         POP	HL
         LD	E,(IX+39)
-        LD	D,(IX+40)
+        LD	D,(IX+40)		; start cluster of file
         LD	A,D
         OR	E
-        CALL	NZ,C301A
+        CALL	NZ,C301A		; , delete chain
         PUSH	DE
         LD	BC,0
         JR	J2AB4
@@ -7974,12 +8135,12 @@ J2AB2:	POP	DE
         RET
 
 J2AB4:	LD	(IX+39),C
-        LD	(IX+40),B
+        LD	(IX+40),B		; update start cluster of file
         XOR	A
         LD	(IX+41),C
-        LD	(IX+42),B
+        LD	(IX+42),B		; update current cluster of file = start cluster of file
         LD	(IX+43),A
-        LD	(IX+44),A
+        LD	(IX+44),A		; current relative cluster of file = 0
 J2AC7:	SET	7,(IX+49)		; file modified
         EXX
         EX	AF,AF'
@@ -8091,17 +8252,17 @@ J2B53:	LD	A,.FILE			; file allocation error
 C2B58:	PUSH	HL
         EX	DE,HL
         LD	E,(IX+41)
-        LD	D,(IX+42)
+        LD	D,(IX+42)		; current cluster of file
         LD	A,D
         OR	E
         JR	Z,J2B83
         LD	C,(IX+43)
-        LD	B,(IX+44)
+        LD	B,(IX+44)		; current relative cluster of file
         SBC	HL,BC
         JR	NC,J2B75
         ADD	HL,BC
         LD	E,(IX+39)
-        LD	D,(IX+40)
+        LD	D,(IX+40)		; start cluster of file
 J2B75:	EX	(SP),HL
         POP	BC
 J2B77:	LD	A,B
@@ -8149,8 +8310,8 @@ J2BAC:	CALL	C2C44			; buffer contains sector of drive ?
         LD	A,(HL)
         INC	HL
         LD	H,(HL)
-        LD	L,A
-        OR	H			; end of buffer chain ?
+        LD	L,A			; pointer to next buffer
+        OR	H			; end of chain ?
         JR	NZ,J2BAC		; nope, continue
         POP	HL			; last buffer
         INC	HL
@@ -8166,7 +8327,7 @@ J2BC5:	CALL	C2D2D			; flush buffer
         PUSH	HL
         INC	HL
         INC	HL
-        LD	(HL),C			; driveid
+        LD	(HL),C			; drive id
         INC	HL
         LD	A,B
         AND	02H
@@ -8248,7 +8409,7 @@ J2C37:	POP	BC
         XOR	A			; no error
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine buffer contains sector of drive ?
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -8378,7 +8539,7 @@ J2CB4:	LD	A,D
 J2CBB:	POP	HL
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine find marked sector buffer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -8406,30 +8567,30 @@ J2CC0:	PUSH	HL
 C2CD2:	CALL	C2D2D			; flush buffer
 
 ;	  Subroutine buffer at start of chain
-;	     Inputs  ________________________
+;	     Inputs  HL = pointer to buffer
 ;	     Outputs ________________________
 
 C2CD5:	PUSH	DE
         LD	DE,(DBBF8)		; start of buffer chain
         OR	A
         SBC	HL,DE
-        ADD	HL,DE
-        JR	Z,J2D1C
+        ADD	HL,DE			; buffer at the start of buffer chain ?
+        JR	Z,J2D1C			; yep, quit
         PUSH	BC
         PUSH	HL
-        LD	(DBBF8),HL
+        LD	(DBBF8),HL		; update start of the buffer chain
         LD	C,(HL)
         INC	HL
-        LD	B,(HL)
-        PUSH	BC
+        LD	B,(HL)			; pointer to next buffer
+        PUSH	BC			; store pointer to next buffer
         LD	(HL),D
         DEC	HL
-        LD	(HL),E
+        LD	(HL),E			; update pointer to next buffer
         EX	DE,HL
         LD	B,D
         LD	C,E
-        CALL	C2D1E
-        POP	BC
+        CALL	C2D1E			; search requested buffer
+        POP	BC			; restore pointer to next buffer
         JR	J2D16
 
 ;	  Subroutine buffer at end of chain
@@ -8439,30 +8600,30 @@ C2CD5:	PUSH	DE
 C2CF5:	LD	A,(HL)
         INC	HL
         OR	(HL)
-        DEC	HL
-        RET	Z
+        DEC	HL			; end of chain ?
+        RET	Z			; yep, quit
         PUSH	DE
         PUSH	BC
         PUSH	HL
         LD	E,(HL)
         INC	HL
-        LD	D,(HL)
-        PUSH	DE
+        LD	D,(HL)			; pointer to next buffer
+        PUSH	DE			; store pointer to next buffer
         XOR	A
         LD	(HL),A
         DEC	HL
-        LD	(HL),A
+        LD	(HL),A			; end of chain
         LD	B,H
-        LD	C,L
-        LD	HL,DBBF8
-        CALL	C2D1E
+        LD	C,L			; requested buffer = 
+        LD	HL,DBBF8		; start at buffer chain
+        CALL	C2D1E			; search requested buffer
         EX	DE,HL
         POP	DE
         LD	(HL),E
         INC	HL
         LD	(HL),D
         DEC	HL
-        CALL	C2D1E
+        CALL	C2D1E			; search requested buffer
 J2D16:	EX	DE,HL
         LD	(HL),C
         INC	HL
@@ -8472,21 +8633,21 @@ J2D16:	EX	DE,HL
 J2D1C:	POP	DE
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;	  Subroutine search requested buffer
+;	     Inputs  HL = pointer to starting buffer, BC = pointer to requested buffer
+;	     Outputs HL = pointer to requested buffer, DE = pointer to previous buffer
 
 C2D1E:	LD	E,(HL)
         INC	HL
-        LD	D,(HL)
+        LD	D,(HL)			; pointer to next buffer
         DEC	HL
         EX	DE,HL
         LD	A,H
-        OR	L
-        RET	Z
+        OR	L			; end of chain ?
+        RET	Z			; yep, quit
         SBC	HL,BC
-        ADD	HL,BC
-        JR	NZ,C2D1E
+        ADD	HL,BC			; next buffer = requested buffer ?
+        JR	NZ,C2D1E		; nope, next
         OR	A
         RET
 
@@ -8579,7 +8740,7 @@ J2DA2:	POP	HL
 ;	     Inputs  DE = cluster number, HL = pointer to drive table
 ;	     Outputs ________________________
 
-C2DA4:	CALL	C2E55
+C2DA4:	CALL	C2E55			; find cluster
         JR	Z,J2DB9			; no error, continue
 J2DA9:	XOR	A
         LD	(DBBEA),A		; a read diskoperation
@@ -8596,7 +8757,7 @@ J2DB9:	PUSH	HL
         LD	A,(DE)
         JR	NC,J2DC5		; even FAT entry
         LD	H,A
-        CALL	C2EB6			; shift
+        CALL	C2EB6			; shift 4 bits left
         LD	L,H
 J2DC5:	AND	0FH
         LD	H,A
@@ -8654,7 +8815,7 @@ C2DF4:	PUSH	DE
         CP	0FH+1
         JR	C,J2DFD
         LD	BC,0FFFH		; cluster 0F00-FFFF, use endmarker
-J2DFD:	CALL	C2E55
+J2DFD:	CALL	C2E55			; find cluster
         JR	Z,J2E13			; no error,
 J2E02:	LD	A,0FFH
         LD	(DBBEA),A		; a write diskoperation
@@ -8677,7 +8838,7 @@ J2E13:	PUSH	HL
 
 J2E20:	LD	H,B
         LD	L,C
-        CALL	C2EB6
+        CALL	C2EB6			; shift 4 bits left
         LD	A,(DE)
         AND	0FH
         OR	L
@@ -8707,7 +8868,7 @@ J2E52:	POP	HL
 J2E53:	POP	DE
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine find cluster
 ;	     Inputs  DE = cluster number, HL = pointer to drive table
 ;	     Outputs ________________________
 
@@ -8768,7 +8929,7 @@ J2EB1:	POP	HL
         POP	IX
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine shift 4 bits left
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -8953,7 +9114,7 @@ J2FB7:	POP	DE
         POP	DE
         LD	DE,(DBBA3)
         BIT	7,D
-        CALL	Z,C301A
+        CALL	Z,C301A			; , delete chain
         POP	DE
         LD	A,.DKFUL
         OR	A
@@ -9031,24 +9192,24 @@ J3006:	LD	(HL),A
         POP	HL			; restore pointer to drive table
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine delete chain
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C301A:	PUSH	DE			; store cluster number
         CALL	C2DA4			; get FAT entry content
-        POP	BC
-        PUSH	DE
+        POP	BC			; restore cluster number
+        PUSH	DE			; store next cluster number
         LD	D,B
-        LD	E,C
+        LD	E,C			; cluster number
         LD	BC,0			; free cluster
         CALL	C2DF4			; set FAT entry
-        POP	DE
+        POP	DE			; restore next cluster number
         LD	A,D
-        OR	E
-        RET	Z
-        BIT	7,D
-        JR	Z,C301A
+        OR	E			; free cluster ?
+        RET	Z			; yep, quit
+        BIT	7,D			; end of chain ?
+        JR	Z,C301A			; nope, next
         RET
 
 ;	  Subroutine get format choice string
@@ -9075,7 +9236,7 @@ C3031:	LD	A,4			; function = CHOICE
         XOR	A
         RET				; quit without error
 
-;	  Subroutine __________________________
+;	  Subroutine format disk
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -9183,7 +9344,8 @@ J30F5:	LD	DE,0			; sector = 0
 J3104:	LD	A,.NDOS
         RET
 
-I3107:	defb	0EBH,0FEH,090H
+I3107:	defb	0EBH,0FEH               ; x86 JMP +256
+        defb	090H                    ; x86 NOP
         defb	"MSXDOS23"
 
 I3112:
@@ -9374,7 +9536,7 @@ RW_UNIT:
 C326D:	CALL	C3282			; validate if same disk
         CALL	C34FA			; execute disk driver function
 
-;	  Subroutine __________________________
+;	  Subroutine next 0.5 seconds no disk change
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -9446,7 +9608,7 @@ J32D0:	POP	DE
         POP	BC
         RET
 
-;	  Subroutine compare disk serial bootsector and drive table
+;	  Subroutine compare disk serial boot sector and drive table
 ;	     Inputs  IX = pointer to bootsector, HL = pointer to drive table
 ;	     Outputs ________________________
 
@@ -9836,7 +9998,7 @@ J3496:	INC	HL
         LDIR
         POP	HL
 
-;	  Subroutine __________________________
+;	  Subroutine current directory invalid
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -9875,8 +10037,8 @@ C34FA:	CP	6
         PUSH	AF
         LD	A,(IX+8)
         DEC	A
-        LD	(TARGET),A		; setup driveid for prompt routine
-        LD	A,(IX+6)		; driveid for disk driver
+        LD	(TARGET),A		; setup drive id for prompt routine
+        LD	A,(IX+6)		; drive id for disk driver
         EX	AF,AF'
         LD	C,A			; store function
         CP	1			; function = DSKIO write ?
@@ -9913,7 +10075,7 @@ J3543:	LD	A,.INTER
         OR	A
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine execute
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -9945,7 +10107,7 @@ J3558:	EX	AF,AF'
         LD	A,C
         LD	C,(IX+29)		; media descriptor
         PUSH	BC
-        CALL	C35EC
+        CALL	C35EC			; execute disk driver function
         JR	C,J356A			; error,
         POP	BC
         XOR	A
@@ -9969,7 +10131,7 @@ A3571:	EX	AF,AF'
         LD	C,(IX+29)		; media descriptor
         LD	L,(IX+2)
         LD	H,(IX+3)		; pointer to DPB
-        CALL	C35EC
+        CALL	C35EC			; execute disk driver function
         JR	C,J3588			; error,
         XOR	A
         RET
@@ -9987,7 +10149,7 @@ A358C:	EX	AF,AF'
         LD	C,(IX+29)		; media descriptor
         LD	L,(IX+2)
         LD	H,(IX+3)		; pointer to DPB
-        CALL	C35EC
+        CALL	C35EC			; execute disk driver function
         LD	A,0FFH
         RET	C			; error,
         XOR	A
@@ -10000,7 +10162,7 @@ A358C:	EX	AF,AF'
 A35A2:	EX	AF,AF'
         LD	HL,04009H		; CHOICE
         EXX
-        CALL	C35EC
+        CALL	C35EC			; execute disk driver function
         EX	DE,HL
         XOR	A
         RET				; quit with no error
@@ -10017,7 +10179,7 @@ A35AD:	LD	HL,0400CH		; DSKFMT
         EX	AF,AF'
         LD	A,C
         POP	BC
-        CALL	C35EC
+        CALL	C35EC			; execute disk driver function
         JR	C,J35BE			; error,
         XOR	A
         RET
@@ -10065,7 +10227,7 @@ I35E2:	defb	9+1
 	defb	.NORAM			; 14, insufficient memory
         defb	.DISK			; 16, other error
 
-;	  Subroutine __________________________
+;	  Subroutine execute disk driver function
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -10090,7 +10252,7 @@ C35EC:	CALL	C0AB9			; flush screen output buffer (if any)
         EX	AF,AF'
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine disk change status of all drives to flushed
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -10254,7 +10416,7 @@ J36D3:	PUSH	HL
         LD	BC,8
         ADD	HL,BC
         POP	BC
-        LD	B,(HL)			; physical driveid
+        LD	B,(HL)			; physical drive id
         INC	HL
         LD	A,(HL)
         OR	A
@@ -10358,7 +10520,7 @@ I3755:	defb	.WPROT,0
         defb	.NOUPB,12
         defb	0,6+128
 
-;	  Subroutine _FOPEN (BDOS 0FH)
+;	  Subroutine _FOPEN
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -10385,8 +10547,8 @@ J3792:	CALL	C3D28			; copy file name back to FCB
         INC	HL
         LD	(HL),0			; reset high byte extent FCB
         POP	IX			; restore pointer to FCB
-        CALL	C3CDA			; setup dos2 specific FCB fields
-        XOR	A			; record 0 in extent
+        CALL	C3CDA			; setup DOS2 specific FCB fields
+        XOR	A			; record in extent = 0
         CALL	C3CAE			; setup random record from current extent FCB
         CALL	C3C74			; update record count in current extent FCB
         LD	A,(IB9DA+25)		; logical drive id
@@ -10406,7 +10568,7 @@ J37B1:	LD	HL,00FFH
 A37B5:	CALL	C39C3			; rebuild FIB from FCB
         JR	NZ,J37B1		; error, quit with error
         LD	DE,(DBB96)		; restore pointer to FCB
-        CALL	C3A3B
+        CALL	C3A3B			; update FIB with file name from FCB
         CALL	C2244			; ensure directory entry (when file is modified)
         OR	A			; error ?
         JR	NZ,J37B1		; yep,
@@ -10471,7 +10633,7 @@ J3802:	PUSH	DE
         LD	BC,18
         LDIR				; setup RC, AL and CR bytes
         LD	IX,IB975
-        XOR	A			; record 0 in extent
+        XOR	A			; record in extent = 0
         CALL	C3CAE			; setup random record from current extent FCB
         CALL	C3C74			; update record count of current extent FCB
         JR	C,A37E9			; file does not have the requested extent, search for next
@@ -10482,7 +10644,7 @@ J3802:	PUSH	DE
         CALL	C2711			; segment LDIR
         JP	J37AD			; quit without error
 
-;	  Subroutine _RDSEQ (BDOS 14H)
+;	  Subroutine _RDSEQ
 ;	     Inputs  DE = pointer to FCB
 ;	     Outputs ________________________
 
@@ -10491,11 +10653,11 @@ A384C:	CALL	C39C3			; rebuild FIB from FCB
         LD	IX,(DBB96)		; restore pointer to FCB
         CALL	C3CAB			; setup random record from current recordnumber FCB
         LD	A,(IB9DA+30)
-        BIT	7,A
-        JR	Z,J3876			; not a device,
+        BIT	7,A			; device ?
+        JR	Z,J3876			; nope,
         LD	BC,128			; size = 128
         LD	DE,(DTA_AD)		; transfer address
-        LD	IX,IB9DA		; buffer
+        LD	IX,IB9DA		; buffer (has FIB)
         XOR	A			; segment type = TPA
         CALL	C2775			; read from FIB
         JR	NZ,J388F		; error, quit with error
@@ -10509,13 +10671,13 @@ J3876:	CALL	C3B74			; get pointer to record if it is in the sequential read buff
         LD	HL,IB2D4
 J3883:	CALL	C3A4C			; transfer record from sequential read buffer
 J3886:	CALL	C3C56			; increase recordnumber FCB
-        CALL	C3CDA			; setup dos2 specific FCB fields
+        CALL	C3CDA			; setup DOS2 specific FCB fields
         JP	J37AD			; quit with ok
 
 J388F:	LD	HL,1
         RET
 
-;	  Subroutine _WRSEQ (BDOS 15H)
+;	  Subroutine _WRSEQ
 ;	     Inputs  DE = pointer to FCB
 ;	     Outputs ________________________
 
@@ -10524,7 +10686,7 @@ A3893:	CALL	C39C3			; rebuild FIB from FCB
         LD	IX,(DBB96)		; restore pointer to FCB
         CALL	C3CAB			; setup random record from current recordnumber FCB
         CALL	C3BA1			; if random record is in sequential read buffer then invalidate sequential read buffer
-        LD	IX,IB9DA		; buffer
+        LD	IX,IB9DA		; buffer (has FIB)
         LD	BC,128			; record size = 128
         LD	DE,(DTA_AD)		; transfer address
         XOR	A			; segment type = TPA
@@ -10532,7 +10694,7 @@ A3893:	CALL	C39C3			; rebuild FIB from FCB
         JR	NZ,J388F		; error, quit with error
         LD	IX,(DBB96)		; restore pointer to FCB
         CALL	C3C56			; increase recordnumber FCB
-        CALL	C3CDA			; setup dos2 specific FCB fields
+        CALL	C3CDA			; setup DOS2 specific FCB fields
         LD	A,(IX+32)
         LD	HL,(DBB96)		; restore pointer to FCB
         LD	BC,15
@@ -10657,7 +10819,7 @@ A3969:	LD	A,2			; operation = write with zero fill, segment type = TPA
         JR	NZ,J397D		; error, quit with error
 J3970:	LD	IX,(DBB96)		; restore pointer to FCB
         CALL	C3C74			; update record count in current extent FCB
-        CALL	C3CDA			; setup dos2 specific FCB fields
+        CALL	C3CDA			; setup DOS2 specific FCB fields
         JP	J37AD			; quit with ok
 
 J397D:	LD	HL,1
@@ -10709,22 +10871,22 @@ A39BA:	PUSH	DE
 
 C39C3:	EX	DE,HL
         LD	(DBB96),HL		; store pointer to FCB
-        LD	IX,IB9DA		; buffer
+        LD	IX,IB9DA		; buffer (for FIB)
         LD	(IX+0),0FFH		; FIB identifier
         LD	A,(HL)
         AND	0FH			; only B3-B0 of DR byte FCB
         LD	(IX+25),A		; update logical drive id of FIB
-        LD	DE,IB9DA+21
+        LD	DE,IB9DA+21		; FIB: file size
         LD	BC,16
         ADD	HL,BC
         LD	BC,4
-        LDIR				; FIB file size
-        LD	DE,IB9DA+26
+        LDIR				; copy file size to FIB
+        LD	DE,IB9DA+26		; FIB: serial number
         LD	BC,4
-        LDIR				; FIB serial number disk
+        LDIR				; copy serial number disk to FIB
         LD	DE,IB9DA+37
         LD	BC,8
-        LDIR
+        LDIR				; copy cluster number of parent directory, start cluster of file, current cluster of file, current relative cluster of file to FIB
         LD	A,(IX+42)
         LD	B,0
         BIT	6,A
@@ -10739,10 +10901,10 @@ J3A07:	BIT	4,A
         JR	Z,J3A0D
         SET	6,B			; set EOF flag
 J3A0D:	LD	(IX+30),B		; update device flag
-        LD	B,0
+        LD	B,0			; file not modified
         BIT	7,A
         JR	Z,J3A18
-        LD	B,80H
+        LD	B,80H			; file modified
 J3A18:	LD	(IX+49),B
         AND	0FH
         LD	(IX+42),A
@@ -10761,7 +10923,7 @@ J3A18:	LD	(IX+49),B
         LD	A,0B7H
         RET
 
-;	  Subroutine __________________________
+;	  Subroutine update FIB with file name from FCB
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -10775,10 +10937,10 @@ C3A3B:	LD	IX,IB9DA		; buffer
         CALL	C173A			; make ASCIIZ string of name
         RET
 	ELSE
-	JP	C173A
+	JP	C173A			; make ASCIIZ string of name
 	ENDIF
 
-;	  Subroutine __________________________
+;	  Subroutine transfer record from sequential read buffer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -10816,7 +10978,7 @@ C3A59:	PUSH	AF
         POP	AF			; restore attribute
         LD	B,A			; store attribute
         LD	A,(DE)
-        AND	0FH			; b3-b0 of DR byte (driveid)
+        AND	0FH			; b3-b0 of DR byte (drive id)
         LD	DE,IB8F4
 J3A7F:	LD	C,08H			; parse flags =
         CALL	C12C3			; parse path
@@ -10873,7 +11035,7 @@ J3ABD:	LD	(IB2D4+300),A
         LD	C,04H			; parse flags =
         LD	DE,IB2D4
         LD	IX,IB9DA		; buffer
-        XOR	A			; default driveid
+        XOR	A			; default drive id
         CALL	C12C3			; parse path
         POP	DE
         RET	NZ			; error, quit
@@ -10936,7 +11098,7 @@ C3B35:	EX	AF,AF'
         LD	B,(IX+35)		; random record from FCB
         PUSH	AF
         PUSH	BC			; store random record
-        CALL	C3CC7			; set filepos from random record (FIB)
+        CALL	C3CC7			; update current file position from random record number
         CALL	C3BA1			; if random record is in sequential read buffer then invalidate sequential read buffer
         POP	HL
         POP	AF			; restore random record
@@ -11008,7 +11170,7 @@ C3BA1:	CALL	C3BAB			; check sequential read buffer has drive and starting cluste
 ;	     Outputs ________________________
 
 C3BAB:	LD	A,(IX+0)
-        LD	B,A			; driveid FCB
+        LD	B,A			; drive id FCB
         LD	A,(DBB90)
         CP	B
         RET	NZ
@@ -11070,7 +11232,7 @@ J3BEC:	LD	A,B
         LD	A,(IX+27)
         LD	(DBB8E+1),A		; save start cluster of file FCB
         LD	A,(IX+0)
-        LD	(DBB90),A		; save driveid FCB
+        LD	(DBB90),A		; save drive id FCB
         XOR	A
         RET
 
@@ -11176,25 +11338,25 @@ J3CA6:	LD	A,B
 C3CAB:	LD	A,(IX+32)		; record in extent from FCB
 
 ;	  Subroutine setup random record from current extent FCB
-;	     Inputs  ________________________
+;	     Inputs  A = record in extent
 ;	     Outputs ________________________
 
-C3CAE:	PUSH	AF
+C3CAE:	PUSH	AF			; store record in extent
         LD	A,(IX+14)
         LD	B,A			; extent high byte from FCB
         LD	A,(IX+12)
         LD	C,A			; extent (low byte) from FCB
-        POP	AF
+        POP	AF			; record in extent
         ADD	A,A
         SRL	B
         RR	C
         RRA
         LD	(IX+33),A
         LD	(IX+34),C
-        LD	(IX+35),B
+        LD	(IX+35),B		; update random record number
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine update current file position from random record number
+;	     Inputs  BCA = random record number
 ;	     Outputs ________________________
 
 C3CC7:	LD	HL,IB9DA+45
@@ -11208,51 +11370,51 @@ C3CC7:	LD	HL,IB9DA+45
         INC	HL
         LD	(HL),C
         INC	HL
-        LD	(HL),B
+        LD	(HL),B			; update current file position in FIB
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine setup DOS2 specific FCB fields
+;	     Inputs  IX = pointer to FCB
 ;	     Outputs ________________________
 
 C3CDA:	PUSH	IX
-        POP	HL
+        POP	HL			; pointer to FCB
         LD	BC,16
-        ADD	HL,BC
+        ADD	HL,BC			; pointer in FCB, file size
         EX	DE,HL
         LD	HL,IB9DA+21
         LD	BC,4
-        LDIR				; file size
+        LDIR				; update file size
         LD	HL,IB9DA+26
         LD	BC,4
-        LDIR				; volume-id
+        LDIR				; update volume-id
         LD	HL,IB9DA+37
         LD	BC,8
-        LDIR
+        LDIR				; update cluster number of parent directory, start cluster of file, current cluster of file, current relative cluster of file
         LD	A,(IX+29)
         AND	0FH
         LD	B,A
         LD	A,(IB9DA+14)		; attribute
-        BIT	0,A
-        JR	Z,J3D09
+        BIT	0,A			; read-only ?
+        JR	Z,J3D09			; nope,
         SET	6,B			; read-only
 J3D09:	LD	A,(IB9DA+30)
-        BIT	7,A
-        JR	Z,J3D12			; not a device,
+        BIT	7,A			; device ?
+        JR	Z,J3D12			; nope,
         SET	5,B
 J3D12:	LD	A,(IB9DA+30)
-        BIT	6,A
-        JR	Z,J3D1B
+        BIT	6,A			; EOF ?
+        JR	Z,J3D1B			; nope,
         SET	4,B
 J3D1B:	LD	A,(IB9DA+49)
-        BIT	7,A
-        JR	Z,J3D24
+        BIT	7,A			; file modified ?
+        JR	Z,J3D24			; nope,
         SET	7,B
 J3D24:	LD	(IX+29),B
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
+;	  Subroutine copy file name back to FCB
+;	     Inputs  HL = pointer to FCB
 ;	     Outputs ________________________
 
 C3D28:	INC	HL
@@ -11284,7 +11446,7 @@ A3D3F:	XOR	A			; write, segment type = TPA
 J3D40:	EX	AF,AF'
         LD	A,.OV64K
         LD	(DB976),A		; assume 64K overflow error
-        PUSH	HL
+        PUSH	HL			; store number of records
         CALL	C39C3			; rebuild FIB from FCB
         JP	NZ,J3E13		; error,
         LD	IX,(DBB96)		; saved pointer to FCB
@@ -11317,10 +11479,10 @@ J3D69:	CALL	C3E3A			; multiply (random record * record size, high word part)
         LD	B,(IX+15)		; user record size
         CALL	C3E3A			; multiply
         LD	A,H
-        OR	L
-        JP	NZ,J3E16		; datasize larger then 64 Kb, error
+        OR	L			; size of data >= 64 Kb ?
+        JP	NZ,J3E16		; yep, error
         LD	C,E
-        LD	B,D			; datasize
+        LD	B,D			; size of data
         PUSH	BC
         EX	AF,AF'
         PUSH	AF
@@ -11369,7 +11531,7 @@ J3DE6:	POP	BC
         JR	Z,J3DEF
         INC	A
 J3DEF:	EX	AF,AF'
-        CALL	C3CDA			; setup dos2 specific FCB fields
+        CALL	C3CDA			; setup DOS2 specific FCB fields
         POP	DE
         LD	L,(IX+33)
         LD	H,(IX+34)

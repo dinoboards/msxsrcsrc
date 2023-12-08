@@ -63,9 +63,9 @@ CBFF0	EQU	0BFF0H
 S.PUTCHR	EQU	0139H
 
 
-DF30F	EQU	0F30FH	; double byte header definition used by the disksystem
-DF349	EQU	0F349H	; bottom of disksystem
-DF36B	EQU	0F36BH	; enable tpa (ram) on page 1
+KANJTA	EQU	0F30FH	; double byte header definition used by the disksystem
+HIMSAV	EQU	0F349H	; bottom of disksystem
+$DOSOF	EQU	0F36BH	; enable tpa (ram) on page 1
 
 WRPRIM  EQU     0F385H
 LINL40	EQU	0F3AEH
@@ -313,11 +313,11 @@ C40CB:	LD	A,(HOKVLD)
         LD	DE,EXTBIO+1
         LD	BC,3*5-1
         LD	(HL),0C9H
-        LDIR
+        LDIR                            ; initialize EXTBIO, DISINT and ENAINT
 J40E4:	LD	A,(EXTBIO+1)
-        LD	(SLTWRK+1),A
+        LD	(SLTWRK+1),A            ; store slot id EXTBIO handler
         LD	HL,(EXTBIO+2)
-        LD	(SLTWRK+2),HL
+        LD	(SLTWRK+2),HL           ; store address EXTBIO handler
         CALL	C44EB			; get slotid
         LD	H,A
         LD	L,0F7H
@@ -404,12 +404,12 @@ C4150:	DEC	A
 ;	     Outputs ________________________
 
 C4159:	LD	A,(SLTWRK+4)
-        AND	A
-        RET	NZ
+        AND	A                       ; interrupt handler in use ?
+        RET	NZ                      ; yep, quit
         LD	A,(H.TIMI+1)
-        LD	(SLTWRK+4),A
+        LD	(SLTWRK+4),A            ; store slot id interrupt handler
         LD	HL,(H.TIMI+2)
-        LD	(SLTWRK+5),HL
+        LD	(SLTWRK+5),HL           ; store address interrupt handler
         CALL	C44EB			; get slotid
         LD	H,A
         LD	L,0F7H
@@ -433,9 +433,9 @@ C417C:	CALL	C44EB			; get slotid
         SBC	HL,DE			; my H.TIMI handler ?
         RET	NZ			; nope, quit
         LD	A,(SLTWRK+4)
-        CP	0C9H
-        JR	Z,J419D
-        LD	HL,(SLTWRK+5)
+        CP	0C9H                    ; any chained interrupt handler ?
+        JR	Z,J419D                 ; nope,
+        LD	HL,(SLTWRK+5)           ; address chained interrupt handler
         DI
         LD	(H.TIMI+1),A
         JR	J41A2
@@ -446,7 +446,7 @@ J419D:	LD	L,A
 J41A2:	EI
         LD	(H.TIMI+2),HL
         XOR	A
-        LD	(SLTWRK+4),A
+        LD	(SLTWRK+4),A            ; interrupt handler not in use
         RET
 
 A41AB:	EI
@@ -524,12 +524,31 @@ I41D4:	DEFB	"PALETTE",0
         DEFW	A43FE
         DEFB	0
 
+;	  Subroutine CALL KANJI/KANJI0
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A4260:	XOR	A			; kanji mode 0, 8*16 characters
         DEFB	001H
+
+;	  Subroutine CALL KANJI1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A4262:	LD	A,040H			; kanji mode 1, 6*16 characters
         DEFB	001H
+
+;	  Subroutine CALL KANJI2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A4265:	LD	A,080H			; kanji mode 2, 8*8 characters
         DEFB	001H
+
+;	  Subroutine CALL KANJI3
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A4268:	LD	A,0C0H			; kanji mode 3, 6*8 characters
 J426A:	PUSH	HL
         PUSH	AF
@@ -540,7 +559,7 @@ J426A:	PUSH	HL
         POP	BC
         LD	A,(IX+0)
         AND	A
-        PUSH	AF
+        PUSH	AF                      ;
         LD	(IX+0),B		; kanji mode
         LD	A,24
         LD	(LINTTB),A
@@ -631,9 +650,9 @@ J4323:	LD	A,(H.PHYD+0)
         CP	0C9H			; disk system active ?
         JR	Z,J4336
         LD	HL,0A080H
-        LD	(DF30F+0),HL
+        LD	(KANJTA+0),HL
         LD	HL,0FDE0H
-        LD	(DF30F+2),HL		; yep, fill double byte header table disk system
+        LD	(KANJTA+2),HL		; yep, enable double byte support
 J4336:	CALL	C43AD			; calculate and set kanji screenwidth
         CALL	C4159			; hook H.TIMI if not already done
         POP	AF
@@ -690,7 +709,7 @@ C4398:	XOR	A
 C43A0:	LD	A,(H.PHYD+0)
         CP	0C9H			; disk system active ?
         JR	Z,C43AD			; nope, calculate and set kanji screenwidth and quit
-        LD	A,(DF36B)
+        LD	A,($DOSOF+0)
         CP	0C3H			; in DOS environment ?
         RET	Z			; yep, quit
 
@@ -722,8 +741,8 @@ J43C3:	JR	NZ,J43D3		; character width = 8, use screenwidth previous textmode
 J43CF:	ADD	HL,DE
         INC	A
         JR	C,J43CF			; /5
-J43D3:	LD	(LINLEN),A		; set screenwidth
-        LD	(IX+6),A
+J43D3:	LD	(LINLEN),A		; update screen width
+        LD	(IX+6),A                ; update screen width text mode
         POP	HL
         RET
 
@@ -761,6 +780,10 @@ I43F6:	DEFB	000H
         DEFB	002H
         DEFB	001H
 
+;	  Subroutine CALL ANK
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A43FE:	CALL	C4099			; get my SLTWRK entry
         BIT	5,(IX+1)
         RET	Z			; kanji driver already deactived, quit
@@ -788,8 +811,8 @@ J4423:	LD	(IY+8),0
         CP	0C9H			; disk system active ?
         JR	Z,J4451
         LD	HL,0
-        LD	(DF30F+0),HL
-        LD	(DF30F+2),HL		; yep, clear double byte header table
+        LD	(KANJTA+0),HL
+        LD	(KANJTA+2),HL		; disable double byte support
 J4451:	POP	HL
         RET
 
@@ -1000,9 +1023,9 @@ A454E:	EI
         BIT	7,A			; b7 set ?
         RET	NZ			; quit doing nothing
         LD	A,(OLDSCR)
-        LD	(SCRMOD),A
+        LD	(SCRMOD),A              ; restore previous text mode
         LD	A,(IX+6)
-        LD	(LINLEN),A
+        LD	(LINLEN),A              ; restore previous text mode width
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1139,10 +1162,10 @@ J4655:	LD	B,A
         CP	2
         LD	A,B
         JR	NC,J4661
-        LD	(IX+6),A
+        LD	(IX+6),A                ; update screen width text mode
 J4661:	INC	HL
         LD	A,(HL)
-        LD	(CRTCNT),A		; srceenlength
+        LD	(CRTCNT),A		; srceen length
 	LD	A,(IDBYT2)
         AND	A			; msx 1 ?
         JR	Z,J46AE			; yep, skip interlace
@@ -3503,7 +3526,7 @@ C5370:	LD	A,(NORUSE)
 ;	     Outputs ________________________
 
 I5381:	EI
-        PUSH	AF
+        PUSH	AF                      ; store VDP status
         LD	A,(H.TOTE+0)
         CP	0C9H			; kanji mode enabled ?
         JR	Z,J5391			; nope, use orginal keyboard handler
@@ -3514,9 +3537,9 @@ J5391:	LD	A,(SLTWRK+4)
         CP	0C9H			; need to pass control to a other H.TIMI handler ?
         JR	Z,J53A3			; nope, quit
         PUSH	AF
-        POP	IY
-        LD	IX,(SLTWRK+5)
-        POP	AF
+        POP	IY                      ; slot id interrupt handler
+        LD	IX,(SLTWRK+5)           ; address chained interrupt handler
+        POP	AF                      ; restore VDP status
         JP	CALSLT			; pass control to a other H.TIMI handler
 
 J53A3:	POP	AF
@@ -7043,7 +7066,7 @@ J67FD:	PUSH	AF
         LD	A,(H.PHYD+0)
         CP	0C9H			; disk system active ?
         JR	Z,J682B
-        LD	(DF349),HL		; yep, adjust lower of disksystem
+        LD	(HIMSAV),HL		; yep, adjust lower of disksystem
 J682B:	POP	BC
         POP	DE			; adres
         POP	AF			; slotid
@@ -7139,8 +7162,8 @@ J68B2:	BIT	1,(IY+8)
         JR	C,J68F1
         BIT	0,(IY+8)
         JR	NZ,J68D6
-        LD	A,3
-        CALL	C6A19			; MSX-JE release
+        LD	A,3                     ; function = release
+        CALL	C6A19			; MSX-JE
         CALL	C6878			; restore functionkey F1-F8 definitions
         CALL	C69CC
         CALL	NC,C6AC7
@@ -7150,10 +7173,10 @@ J68D1:	CALL	C69DB
 J68D6:	CALL	C6880			; save functionkey F1-F8 definitions
         LD	E,(IY+15)
         LD	D,(IY+16)
-        LD	A,2
-        CALL	C6A19			; MSX-JE invoke
-        LD	A,4
-        CALL	C6A19			; MSX-JE clear
+        LD	A,2                     ; function = invoke
+        CALL	C6A19			; MSX-JE
+        LD	A,4                     ; function = clear
+        CALL	C6A19			; MSX-JE
         CALL	C69E8
         CALL	C6A73
         JR	J68D1
@@ -7168,8 +7191,8 @@ J68F1:	BIT	0,(IY+8)
         JR	Z,J6950
 J6903:	CALL	C6B3A
         SET	1,(IY+8)
-J690A:	LD	A,6
-        CALL	C6A19			; MSX-JE dispatch
+J690A:	LD	A,6                     ; function = dispatch
+        CALL	C6A19			; MSX-JE
         BIT	2,A
         JR	Z,J691A
         CALL	C698F
@@ -7180,8 +7203,8 @@ J691A:	RRCA
         POP	AF
         RRCA
         JP	NC,J68B2
-        LD	A,7
-        CALL	C6A19			; MSX-JE get result
+        LD	A,7                     ; function = get result
+        CALL	C6A19			; MSX-JE
         LD	A,(HL)
         AND	A
         JP	Z,J68B2
@@ -7253,7 +7276,7 @@ C698F:	PUSH	HL
         DI
         RES	5,(HL)
         LD	HL,(GETPNT)
-        LD	B,00H
+        LD	B,0
 J69A5:	LD	A,(PUTPNT)
         CP	L
         JR	Z,J69B4
@@ -9769,7 +9792,7 @@ C7951:	LD	DE,546
         LD	A,(H.PHYD+0)
         CP	0C9H			; disk system active ?
         JR	Z,J7967
-        LD	(DF349),HL		; yep, adjust lower disk system
+        LD	(HIMSAV),HL		; yep, adjust lower disk system
 J7967:	POP	BC
         LD	SP,HL
         PUSH	BC
@@ -9783,7 +9806,7 @@ J7967:	POP	BC
         LD	(IY+0),21H		; ld hl,
         LD	(IY+3),0F7H		; rst fcall
         LD	(IY+5),LOW CBFF0
-        LD	(IY+6),HIGH CBFF0	; dw BFF0
+        LD	(IY+6),HIGH CBFF0	; simple MSX-JE entry point
         LD	(IY+7),0C9H		; ret
         XOR	A
         LD	(IY+8),A

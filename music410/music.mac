@@ -1766,10 +1766,10 @@ C5317:	PUSH	BC
 ;	  Unused code
 
 ?5323:	CALL	C5896			; check for "("
-        CALL	C6FDA
+        CALL	C6FDA			; evaluate unsigned integer operand
         PUSH	DE
         CALL	C5891			; check for ","
-J532D:	CALL	C6FDA
+J532D:	CALL	C6FDA			; evaluate unsigned integer operand
 
 J5330:	CALL	C589B			; check for ")"
         POP	BC
@@ -2046,13 +2046,13 @@ C550B:	CALL	C5317
 
 
 C5518:	CALL	C5896			; check for "("
-        CALL	C6FDA
+        CALL	C6FDA			; evaluate unsigned integer operand
         LD	A,(HL)
         CP	")"
         PUSH	DE
         JR	Z,J552A
         CALL	C5891			; check for ","
-        CALL	C6FDA
+        CALL	C6FDA			; evaluate unsigned integer operand
 J552A:	CALL	C589B			; check for ")"
         POP	BC
         LD	A,E
@@ -2279,7 +2279,7 @@ J5626:	LD	(BUF+0),DE
         JR	Z,J5652
         PUSH	DE
         PUSH	BC
-        CALL	C6FDA
+        CALL	C6FDA			; evaluate unsigned integer operand
         POP	BC
         EX	(SP),HL
         OR	A
@@ -2440,9 +2440,9 @@ C5721:	CALL	C70E9			; type in DAC
         LD	C,8
         LDIR				; ARG = 65536
         CALL	DECDIV			; divide
-        AND	A
-        CALL	INT			; convert DBL to INT
-        CALL	C6FE0			; convert to adres
+        AND	A			; DAC type = double float
+        CALL	INT			; integer part of float
+        CALL	C6FE0			; convert to unsigned integer
         PUSH	DE
         EX	DE,HL
         CALL	C6FC0			; convert to SGN
@@ -2459,7 +2459,7 @@ C5721:	CALL	C70E9			; type in DAC
         LD	C,8
         LDIR				; DAC = orginal
         CALL	DECSUB			; subtract
-        CALL	C6FE0			; convert to adres
+        CALL	C6FE0			; convert to unsigned integer
         LD	C,E
         LD	B,D
         POP	HL
@@ -2514,7 +2514,7 @@ J57AB:	CALL	C559A
 
 
 C57C6:	CALL	C5896			; check for "("
-        CALL	C6FDA
+        CALL	C6FDA			; evaluate unsigned integer operand
         CALL	C589B			; check for ")"
         PUSH	HL
         CALL	C57D6
@@ -6862,29 +6862,35 @@ C6F71:	LD	HL,(D.F99B)
         LD	B,0			; *6
         ADD	HL,BC
         RET
-;	-----------------
+
 J6F7D:	LD	E,33H
         DEFB	001H
+
         LD	E,35H
         DEFB	001H
+
         LD	E,38H
         DEFB	001H
+
 J6F86:	LD	E,02H
         DEFB	001H
+
 C6F89:	LD	E,05H
         DEFB	001H
+
 J6F8C:	LD	E,0DH
         DEFB	001H
+
         LD	E,06H
         DEFB	001H
+
 J6F92:	LD	E,07H
         CALL	C50C6			; is MSX MUSIC initialized ?
-        PUSH	DE
+        PUSH	DE			; store error
         CALL	NZ,C6BCF		; yep, stop background music
-        POP	DE
+        POP	DE			; restore error
         LD	IX,ERROR
         JR	J6FFC
-
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -6902,29 +6908,23 @@ J6FA8:	LD	IX,ISVAR
 ?6FAE:	LD	IX,FILEVL
         JR	J6FFC
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C6FB4:	LD	IX,PTRGET
         JR	J6FFC
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C6FBA:	LD	IX,DOCNVF
         JR	J6FFC
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C6FC0:	LD	IX,FLTLIN
         JR	J6FFC
@@ -6933,7 +6933,6 @@ C6FC0:	LD	IX,FLTLIN
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-
 C6FC6:	LD	A,(HL)
         EX	(SP),HL
         CP	(HL)
@@ -6941,11 +6940,9 @@ C6FC6:	LD	A,(HL)
         INC	HL
         EX	(SP),HL
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C6FCE:	LD	IX,CHRGTR
         JR	J6FFC
@@ -6954,24 +6951,19 @@ C6FCE:	LD	IX,CHRGTR
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-
 C6FD4:	LD	IX,FRMEVL
         JR	J6FFC
 
-
-;	  Subroutine __________________________
+;	  Subroutine evaluate unsigned integer operand
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C6FDA:	LD	IX,GETUIN
         JR	J6FFC
 
-
-;	  Subroutine __________________________
+;	  Subroutine convert to unsigned integer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C6FE0:	LD	IX,GETUI
         JR	J6FFC
@@ -6979,7 +6971,6 @@ C6FE0:	LD	IX,GETUI
 ;	  Subroutine evaluate byte operand
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C6FE6:	LD	IX,GETBYT
         JR	J6FFC
@@ -6994,11 +6985,9 @@ J6FEC:	LD	IX,NEWSTT
 C6FF2:	LD	IX,CLSALL
         JR	J6FFC
 
-
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-
 
 C6FF8:	LD	IX,FRESTR
 J6FFC:	LD	IY,(EXPTBL+0-1)

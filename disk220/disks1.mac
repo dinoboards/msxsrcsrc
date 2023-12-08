@@ -61,15 +61,15 @@ CALSLT  EQU     001CH
 ENASLT  EQU     0024H
 IDBYT0  EQU     002BH
 KEYINT  EQU     0038H
-C0046   EQU     0046H
-C004B   EQU     004BH
+SSLOTL  EQU     0046H
+SSLOTE  EQU     004BH
 C005C   EQU     005CH                   ; ALL_SEG in BDOS code segment
 C005F   EQU     005FH                   ; FRE_SEG in BDOS code segment
-C402D   EQU     402DH
-J4092   EQU     4092H
-J47D6   EQU     47D6H
+GETSLT  EQU     402DH
+J4092   EQU     4092H			; select ROM segment
+J47D6   EQU     47D6H			; initialize DOS2
 
-BDOS    EQU     0005H
+KBDOS   EQU     0005H
 
 I$B062  EQU     0B062H
 D.B064  EQU     0B064H
@@ -86,40 +86,38 @@ I$BBFF  EQU     0BBFFH
 C$BD02  EQU     0BD02H
 
 
-IF1D3   EQU     0F1D3H                  ; handlers
-CF1FD   EQU     0F1FDH                  ; enable DOS memory on page 0 handler
-IF200   EQU     0F200H
-CF218   EQU     0F218H                  ; PUT_P0
-CF224   EQU     0F224H                  ; PUT_P2
-DF23C   EQU     0F23CH                  ; default drive
+JUMPB   EQU     0F1D3H                  ; handlers
+P0_RAM  EQU     0F1FDH                  ; enable DOS memory on page 0 handler
+MAP_VE  EQU     0F200H
+PUT_P0  EQU     0F218H                  ; PUT_P0
+PUT_P2  EQU     0F224H                  ; PUT_P2
+CUR_DRV EQU     0F23CH                  ; default drive
 H.PROM  EQU     0F24FH
-DF2B8   EQU     0F2B8H                  ; number of VBLANK interrupts per 1/10 second
-DF2BA   EQU     0F2BAH                  ; 'random' number
-DF2C5   EQU     0F2C5H                  ; memory mapper table
-DF2C7   EQU     0F2C7H                  ; current segment page 0
-DF2C8   EQU     0F2C8H                  ; current segment page 1
-DF2C9   EQU     0F2C9H                  ; current segment page 2
-DF2CA   EQU     0F2CAH                  ; current segment page 3
-DF2CB   EQU     0F2CBH                  ; segment page 0 at BDOS entry
-DF2CC   EQU     0F2CCH                  ; segment page 1 at BDOS entry
-DF2CD   EQU     0F2CDH                  ; segment page 2 at BDOS entry
-DF2CF   EQU     0F2CFH                  ; BDOS data segment
-DF2D0   EQU     0F2D0H                  ; BDOS code segment
-DF2D1   EQU     0F2D1H                  ; temporary save stackpointer (KEYINT)
-DF2D3   EQU     0F2D3H                  ; pointer to temporary stack (KEYINT)
-LF2D5	EQU	0F2D5H			; saved EXTBIO hook
-DF2DC   EQU     0F2DCH                  ; pointer to prompt hander
-DF2DE   EQU     0F2DEH                  ; pointer to BDOS handler
-DF2E0   EQU     0F2E0H
-DF2E1   EQU     0F2E1H
-DF2E6   EQU     0F2E6H                  ; temporary save IX register BDOS call
-DF2EA   EQU     0F2EAH
-DF2EB   EQU     0F2EBH
-DF2FE   EQU     0F2FEH                  ; pointer to temporary stack (BDOS)
-DF30F   EQU     0F30FH                  ; double byte header table
-DF314   EQU     0F314H                  ; TPA segment table
-CF327   EQU     0F327H
-CF32C   EQU     0F32CH
+TIM_RA  EQU     0F2B8H                  ; number of VBLANK interrupts per 1/10 second
+RANDOM  EQU     0F2BAH                  ; 'random' number
+MAP_TAB EQU     0F2C5H                  ; memory mapper table
+P0_SEG  EQU     0F2C7H                  ; current segment page 0
+P1_SEG  EQU     0F2C8H                  ; current segment page 1
+P2_SEG  EQU     0F2C9H                  ; current segment page 2
+P3_SEG  EQU     0F2CAH                  ; current segment page 3
+P0_TPA  EQU     0F2CBH                  ; segment page 0 at BDOS entry
+P1_TPA  EQU     0F2CCH                  ; segment page 1 at BDOS entry
+P2_TPA  EQU     0F2CDH                  ; segment page 2 at BDOS entry
+DATA_S  EQU     0F2CFH                  ; BDOS data segment
+CODE_S  EQU     0F2D0H                  ; BDOS code segment
+SP_IRQ  EQU     0F2D1H                  ; temporary save stackpointer (KEYINT)
+IRQ_ST  EQU     0F2D3H                  ; pointer to temporary stack (KEYINT)
+$PROMPT EQU     0F2DCH                  ; pointer to prompt hander
+$BDOS   EQU     0F2DEH                  ; pointer to BDOS handler
+SS_TEMP EQU     0F2E0H
+RD_ADDR EQU     0F2E1H
+IX_BDOS EQU     0F2E6H                  ; temporary save IX register BDOS call
+PS_BDOS EQU     0F2EAH
+SS_BDOS EQU     0F2EBH
+BDOS_ST EQU     0F2FEH                  ; pointer to temporary stack (BDOS)
+KANJTA  EQU     0F30FH                  ; double byte header table
+P0_64K  EQU     0F314H                  ; TPA segment table
+AUXBOD	EQU	0F327H
 RAMAD0  EQU     0F341H
 RAMAD1  EQU     0F342H
 RAMAD2  EQU     0F343H
@@ -127,12 +125,12 @@ RAMAD3  EQU     0F344H
 MASTER  EQU     0F348H
 $DOSON  EQU     0F368H
 $DOSOF  EQU     0F36BH
-CF36E   EQU     0F36EH
-CF371   EQU     0F371H
-CF374   EQU     0F374H
-CF377   EQU     0F377H
-CF37A   EQU     0F37AH
-B.BDOS  EQU     0F37DH
+XFER    EQU     0F36EH
+$AUXIN  EQU     0F371H
+$AUXOU  EQU     0F374H
+GO_BIOS EQU     0F377H
+GO_BDOS EQU     0F37AH
+BDOS  	EQU     0F37DH
 
 RDPRIM  EQU     0F380H
 WRPRIM  EQU     0F385H
@@ -301,22 +299,22 @@ J410F:  DI
         CALL    C427F
         RET     C
         LD      A,1
-        LD      (DF23C),A               ; default drive = A:
+        LD      (CUR_DRV),A              ; default drive = A:
         LD      A,(IDBYT0)
         RLCA
         SBC     A,A
         ADD     A,6
-        LD      (DF2B8),A
-        LD      (DF2BA),A
-        LD      HL,DF314
-        LD      DE,DF2CB
+        LD      (TIM_RA),A
+        LD      (RANDOM),A
+        LD      HL,P0_64K
+        LD      DE,P0_TPA
         LD      BC,4
         LDIR
-        LD      A,(DF2CF)               ; BDOS data segment
-        CALL    CF224                   ; PUT_P2
+        LD      A,(DATA_S)              ; BDOS data segment
+        CALL    PUT_P2                  ; PUT_P2
         CALL    C418C
-        LD      A,(DF2D0)               ; BDOS code segment
-        CALL    CF218                   ; PUT_P0
+        LD      A,(CODE_S)              ; BDOS code segment
+        CALL    PUT_P0                  ; PUT_P0
         LD      HL,0C9F1H
         PUSH    HL
         LD      HL,0B0EDH
@@ -330,7 +328,7 @@ J410F:  DI
         LD      HL,6
         ADD     HL,SP
         PUSH    HL                      ; helper routine on stack
-        CALL    CF1FD                   ; enable DOS memory on page 0
+        CALL    P0_RAM                  ; enable DOS memory on page 0
         LD      HL,I4100
         LD      DE,0
         LD      BC,04000H-0100H
@@ -347,10 +345,10 @@ I416E:  POP     HL
         LD      A,(EXPTBL+0)
         LD      H,00H
         CALL    ENASLT                  ; select ROM BIOS on page 0
-        LD      A,(DF2CD)
-        CALL    CF224                   ; PUT_P2
-        LD      A,(DF2CB)
-        CALL    CF218                   ; PUT_P0
+        LD      A,(P2_TPA)
+        CALL    PUT_P2                  ; PUT_P2
+        LD      A,(P0_TPA)
+        CALL    PUT_P0                  ; PUT_P0
         EI
         EX      AF,AF'
         RET
@@ -483,16 +481,16 @@ C427F:  LD      HL,1595
         INC     DE
         LD      BC,200
         LDIR
-        LD      (DF2D3),HL
+        LD      (IRQ_ST),HL
         LD      BC,300
         LDIR
-        LD      (DF2FE),HL
+        LD      (BDOS_ST),HL
         EX      DE,HL
         LD      HL,I4418
         PUSH    DE
         LD      BC,I485F-I4418
         LDIR
-        LD      BC,IF1D3
+        LD      BC,JUMPB
         LD      HL,I485F
 J42AB:  LD      E,(HL)
         INC     HL
@@ -538,7 +536,7 @@ J42C8:  LD      C,(HL)
         LD      (HL),A
         POP     HL
         JR      J42C8
-J42DE:  LD      A,(DF2D0)               ; BDOS code segment
+J42DE:  LD      A,(CODE_S)              ; BDOS code segment
         LD      HL,01EEH
         ADD     HL,DE
         LD      (HL),A
@@ -729,17 +727,17 @@ I43F6:  DEFW    $DOSON
         DEFW    R0000
         DEFW    $DOSOF
         DEFW    R0009
-        DEFW    CF36E
+        DEFW    XFER
         DEFW    R0022
-        DEFW    CF371
-        DEFW    CF327
-        DEFW    CF374
-        DEFW    CF32C
-        DEFW    CF377
+        DEFW    $AUXIN
+        DEFW    AUXBOD+0
+        DEFW    $AUXOU
+        DEFW    AUXBOD+5
+        DEFW    GO_BIOS
         DEFW    R00D4
-        DEFW    CF37A
+        DEFW    GO_BDOS
         DEFW    R00DC
-        DEFW    B.BDOS
+        DEFW    BDOS
         DEFW    R0064
         DEFW    0
 
@@ -774,7 +772,7 @@ R0022:  PUSH    AF
         PUSH    HL
         PUSH    DE
         PUSH    BC
-        CALL    C402D
+        CALL    GETSLT
         PUSH    AF
         LD      A,(RAMAD1)
         LD      H,40H
@@ -808,7 +806,7 @@ R0045:  PUSH    DE
         EI
         POP     DE
         POP     BC
-        LD      HL,(DF2E1)
+        LD      HL,(RD_ADDR)
         EX      AF,AF'
         JR      C,J0057
         EX      DE,HL
@@ -820,9 +818,9 @@ J0057:  EX      AF,AF'
         EI
         RET
 
-R0064:  LD      (DF2E6),IX
+R0064:  LD      (IX_BDOS),IX
         LD      IY,(MASTER-1)
-        LD      IX,(DF2DE)
+        LD      IX,($BDOS)
         JP      CALSLT
 
 R0073:  EI
@@ -856,7 +854,7 @@ C0085:  EXX
 
 J0093:  POP     AF
         CALL    C0085
-        CALL    C402D
+        CALL    GETSLT
         PUSH    AF
         CALL    R0326                   ; GET_P2
         PUSH    AF
@@ -867,7 +865,7 @@ J0093:  POP     AF
 ;            Outputs ________________________
 
 C00A2:  LD      IY,(MASTER-1)
-        LD      IX,(DF2DC)
+        LD      IX,($PROMPT)
         CALL    CALSLT
         CALL    R0103
         POP     AF
@@ -907,7 +905,7 @@ R00D4:  CALL    R0103
         JR      R00E2
 
 R00DC:  CALL    R0103
-        CALL    BDOS
+        CALL    KBDOS
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
@@ -917,14 +915,14 @@ R00E2:  DI
         PUSH    AF
         JR      J00EF
 
-?.00E6: LD      A,(DF2EB)
+?.00E6: LD      A,(SS_BDOS)
         LD      (0),A
         LD      (LFFFF),A
-J00EF:  LD      A,(DF2EA)
+J00EF:  LD      A,(PS_BDOS)
         OUT     (0A8H),A
-        LD      A,(DF2CB)
+        LD      A,(P0_TPA)
         CALL    R030C                   ; PUT_P0
-        LD      A,(DF2CD)
+        LD      A,(P2_TPA)
         CALL    R0320                   ; PUT_P2
         POP     AF
         EI
@@ -940,25 +938,25 @@ R0103:  DI
 
 ?.0107: LD      A,(LFFFF)
         CPL
-        LD      (DF2EB),A
+        LD      (SS_BDOS),A
         AND     0CCH
         OR      00H
         LD      (0),A
         LD      (LFFFF),A
 J0118:  IN      A,(0A8H)
-        LD      (DF2EA),A
+        LD      (PS_BDOS),A
         AND     0CCH
         OR      00H
         OUT     (0A8H),A
         CALL    R0312                   ; GET_P0
-        LD      (DF2CB),A
+        LD      (P0_TPA),A
         CALL    R031C                   ; GET_P1
-        LD      (DF2CC),A
+        LD      (P1_TPA),A
         CALL    R0326                   ; GET_P2
-        LD      (DF2CD),A
-        LD      A,(DF2D0)
+        LD      (P2_TPA),A
+        LD      A,(CODE_S)
         CALL    R030C                   ; PUT_P0
-        LD      A,(DF2CF)
+        LD      A,(DATA_S)
         CALL    R0320                   ; PUT_P2
         POP     AF
         EI
@@ -968,7 +966,7 @@ R0144:  PUSH    AF
         DI
         CALL    R030C                   ; PUT_P0
         LDIR
-        LD      A,(DF2D0)
+        LD      A,(CODE_S)
         CALL    R030C                   ; PUT_P0
         EI
         POP     AF
@@ -978,18 +976,18 @@ R0154:  EX      AF,AF'
         PUSH    AF
         CALL    C0235
         NOP
-        LD      A,(DF2CB)
+        LD      A,(P0_TPA)
         CALL    R030C                   ; PUT_P0
-        LD      A,(DF2CD)
+        LD      A,(P2_TPA)
         CALL    R0320                   ; PUT_P2
         EI
         EX      AF,AF'
         CALL    CLPRM1
         EX      AF,AF'
         CALL    R0254
-        LD      A,(DF2D0)
+        LD      A,(CODE_S)
         CALL    R030C                   ; PUT_P0
-        LD      A,(DF2CF)
+        LD      A,(DATA_S)
         CALL    R0320                   ; PUT_P2
         JR      J0181
 
@@ -1002,24 +1000,24 @@ J0181:  POP     AF
 
 R0185:  CALL    C0235
         NOP
-        LD      A,(DF2CB)
+        LD      A,(P0_TPA)
         CALL    R030C                   ; PUT_P0
 J018F:  PUSH    HL
         PUSH    BC
         LD      B,(HL)
-        LD      A,(DF2CD)
+        LD      A,(P2_TPA)
         CALL    R0320                   ; PUT_P2
         LD      A,B
         EI
         CALL    C00A2
         DI
-        LD      A,(DF2CF)
+        LD      A,(DATA_S)
         CALL    R0320                   ; PUT_P2
         POP     BC
         POP     HL
         INC     HL
         DJNZ    J018F
-        LD      A,(DF2D0)
+        LD      A,(CODE_S)
         CALL    R030C                   ; PUT_P0
         CALL    R0254
         JR      J01B8
@@ -1033,17 +1031,17 @@ R01BA:  DI
         PUSH    AF
         PUSH    HL
         PUSH    BC
-        LD      HL,(DF2D3)
+        LD      HL,(IRQ_ST)
         OR      A
         SBC     HL,SP
         JR      C,J01CD
         LD      BC,200
         SBC     HL,BC
         JR      C,J01DE
-J01CD:  LD      (DF2D1),SP
-        LD      SP,(DF2D3)
+J01CD:  LD      (SP_IRQ),SP
+        LD      SP,(IRQ_ST)
         CALL    C01E6
-        LD      SP,(DF2D1)
+        LD      SP,(SP_IRQ)
         JR      J01E1
 
 J01DE:  CALL    C01E6
@@ -1067,11 +1065,11 @@ C01E6:  CALL    C0235
         PUSH    AF
         CALL    R0326                   ; GET_P2
         PUSH    AF
-        LD      A,(DF2CD)
+        LD      A,(P2_TPA)
         CALL    R0320                   ; PUT_P2
-        LD      A,(DF2CC)
+        LD      A,(P1_TPA)
         CALL    R0316                   ; PUT_P1
-        LD      A,(DF2CB)
+        LD      A,(P0_TPA)
         CALL    R030C                   ; PUT_P0
         CALL    KEYINT
         DI
@@ -1099,7 +1097,7 @@ C0225:  PUSH    BC
         LD      B,A
         AND     3FH     ; "?"
         OR      00H
-        CALL    C004B
+        CALL    SSLOTE
         POP     DE
         POP     BC
         RET
@@ -1112,7 +1110,7 @@ C0235:  DI
         JR      J0248
 
 ?.0238: LD      A,(0)
-        LD      (DF2E0),A
+        LD      (SS_TEMP),A
         AND     0FCH
         OR      00H
         LD      (0),A
@@ -1121,7 +1119,7 @@ J0248:  IN      A,(0A8H)
         AND     0FCH
         OR      00H
         OUT     (0A8H),A
-        LD      A,(DF2E0)
+        LD      A,(SS_TEMP)
         RET
 
 ;         Subroutine __________________________
@@ -1133,7 +1131,7 @@ R0254:  DI
 
 ?.0257: LD      A,(LFFFF)
         CPL
-        LD      (DF2E0),A
+        LD      (SS_TEMP),A
         AND     0FCH
         OR      00H
         LD      (0),A
@@ -1142,7 +1140,7 @@ J0268:  IN      A,(0A8H)
         AND     0FCH
         OR      00H
         OUT     (0A8H),A
-        LD      A,(DF2E0)
+        LD      A,(SS_TEMP)
         RET
 
 ?.0274: RET
@@ -1165,7 +1163,7 @@ R027B:  PUSH    HL
 R0281:  PUSH    HL
         LD      HL,C005F
 J0285:  PUSH    DE
-        CALL    CF377
+        CALL    GO_BIOS
         POP     DE
         POP     HL
         RET
@@ -1290,7 +1288,7 @@ J0306:  BIT     6,H
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-R030C:  LD      (DF2C7),A
+R030C:  LD      (P0_SEG),A
         OUT     (0FCH),A
         RET
 
@@ -1298,14 +1296,14 @@ R030C:  LD      (DF2C7),A
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-R0312:  LD      A,(DF2C7)
+R0312:  LD      A,(P0_SEG)
         RET
 
 ;         Subroutine PUT_P1 handler
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-R0316:  LD      (DF2C8),A
+R0316:  LD      (P1_SEG),A
         OUT     (0FDH),A
         RET
 
@@ -1313,14 +1311,14 @@ R0316:  LD      (DF2C8),A
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-R031C:  LD      A,(DF2C8)
+R031C:  LD      A,(P1_SEG)
         RET
 
 ;         Subroutine PUT_P2 handler
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-R0320:  LD      (DF2C9),A
+R0320:  LD      (P2_SEG),A
         OUT     (0FEH),A
         RET
 
@@ -1328,14 +1326,14 @@ R0320:  LD      (DF2C9),A
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-R0326:  LD      A,(DF2C9)
+R0326:  LD      A,(P2_SEG)
         RET
 
 ;         Subroutine GET_P3 handler
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-R032A:  LD      A,(DF2CA)
+R032A:  LD      A,(P3_SEG)
 
 ;         Subroutine PUT_P3 handler
 ;            Inputs  ________________________
@@ -1369,7 +1367,7 @@ J0334:  DI
         JR      NZ,J0359
         LD      A,E
         LD      (LFFFF),A
-J0359:  CALL    NZ,C004B
+J0359:  CALL    NZ,SSLOTE
         LD      (HL),E
         POP     HL
         LD      A,C
@@ -1440,7 +1438,7 @@ J0390:  LD      C,A
         JR      NZ,J03B3
         LD      A,E
         LD      (LFFFF),A
-J03B3:  CALL    NZ,C004B
+J03B3:  CALL    NZ,SSLOTE
         LD      (HL),E
         POP     AF                      ; restore IFF2 flag
         JP      PO,J03BC                ; maskable interrupts where disabled, leave disabled
@@ -1495,7 +1493,7 @@ C03DF:  PUSH    HL
         DI
         POP     DE
         LD      A,(DE)
-        LD      (DF2E0),A
+        LD      (SS_TEMP),A
         AND     (HL)
         INC     HL
         OR      (HL)
@@ -1511,8 +1509,8 @@ C03DF:  PUSH    HL
         JR      NZ,J0409
         LD      A,L
         LD      (LFFFF),A
-J0409:  CALL    NZ,C0046
-        LD      A,(DF2E0)
+J0409:  CALL    NZ,SSLOTL
+        LD      A,(SS_TEMP)
         LD      C,A
         LD      A,H
         POP     HL
@@ -1669,7 +1667,7 @@ C492F:  CALL    C49D7
         CALL    C4B68
         POP     DE
         RET     C
-        LD      (DF2C5),HL
+        LD      (MAP_TAB),HL
         EX      DE,HL
 J4946:  LD      A,(HL)
         OR      A
@@ -1687,7 +1685,7 @@ J4954:  LD      (DE),A
         DJNZ    J4954
         JR      J4946
 J495A:  LD      (DE),A
-        LD      HL,(DF2C5)
+        LD      HL,(MAP_TAB)
         LD      A,(HL)                  ; slotid primairy memory mapper
         PUSH    HL
         LD      (RAMAD3),A
@@ -1700,16 +1698,16 @@ J495A:  LD      (DE),A
         INC     HL
         LD      A,(HL)                  ; number of segments in primary memory mapper
         DEC     A
-        LD      (DF2CF),A               ; last segment for BDOS data
+        LD      (DATA_S),A              ; last segment for BDOS data
         DEC     A
-        LD      (DF2D0),A               ; second last segment for BDOS code
+        LD      (CODE_S),A              ; second last segment for BDOS code
         SUB     4                       ; four segments for TPA
         INC     HL
         LD      (HL),A                  ; free segments primary memory mapper
         INC     HL
         LD      (HL),4+1+1              ; 6 reserved segments primairy memory mapper
-        LD      DE,DF314
-        LD      HL,DF2C7
+        LD      DE,P0_64K
+        LD      HL,P0_SEG
         LD      A,4-1
 J498B:  LD      (DE),A
         INC     DE
@@ -1717,7 +1715,7 @@ J498B:  LD      (DE),A
         INC     HL
         DEC     A
         JP      P,J498B
-        LD      A,(DF2CF)               ; BDOS data segment
+        LD      A,(DATA_S)              ; BDOS data segment
         OUT     (0FEH),A
         LD      HL,I$BBFF
 J499B:  LD      (HL),00H
@@ -1726,7 +1724,7 @@ J499B:  LD      (HL),00H
         JR      NZ,J499B
         LD      HL,I$B062
         LD      (D.B064),HL
-        LD      HL,(DF2C5)
+        LD      HL,(MAP_TAB)
         LD      A,(HL)                  ; slotid primairy memory mapper
         INC     HL
         PUSH    HL
@@ -2004,7 +2002,7 @@ J4B0B:  LD      A,D
 ; Function 0: Build 
 
 J4B1A:  PUSH    HL
-        LD      HL,(DF2C5)
+        LD      HL,(MAP_TAB)
         LD      C,(HL)                  ; slotid primairy memory mapper
         INC     HL
         LD      D,(HL)                  ; number of segments in primairy memory mapper
@@ -2013,9 +2011,9 @@ J4B1A:  PUSH    HL
         POP     HL
         LD      A,C
         CALL    C4B5C                   ; slotid
-        LD      A,LOW IF200
+        LD      A,LOW MAP_VE
         CALL    C4B5C
-        LD      A,HIGH IF200
+        LD      A,HIGH MAP_VE
         CALL    C4B5C                   ; memory mapper jump table
         LD      A,E
         CALL    C4B5C                   ; number of free segments in primairy memory mapper
@@ -2029,7 +2027,7 @@ J4B1A:  PUSH    HL
 
 J4B43:  POP     DE
         POP     AF
-        LD      HL,(DF2C5)
+        LD      HL,(MAP_TAB)
         LD      A,(HL)                  ; slotid primairy memory mapper
         PUSH    AF
         PUSH    DE
@@ -2039,13 +2037,13 @@ J4B43:  POP     DE
 
 J4B4C:  POP     DE
         POP     AF
-        LD      HL,(DF2C5)
+        LD      HL,(MAP_TAB)
         LD      B,(HL)                  ; slotid primairy memory mapper
         INC     HL
         LD      A,(HL)                  ; number of segments in primairy memory mapper
         INC     HL
         LD      C,(HL)                  ; number of free segments in primairy memory mapper
-        LD      HL,IF200                ; memory mapper jump table
+        LD      HL,MAP_VE               ; memory mapper jump table
         PUSH    AF
         PUSH    DE
         RET
@@ -2168,6 +2166,7 @@ J4BF5:  EX      DE,HL
         DEC     A
         JR      NZ,J4BF5
         RET
+
 J4C09:  LD      HL,I4D0E
         CALL    C4C21
         RET     Z
@@ -2195,7 +2194,7 @@ C4C1E:  LD      HL,I4C4A
 C4C21:  PUSH    BC
         PUSH    DE
         LD      E,A
-        LD      A,(DF30F)
+        LD      A,(KANJTA+0)
         OR      A
         JR      Z,J4C2F
         DEC     HL
