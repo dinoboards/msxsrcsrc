@@ -137,48 +137,57 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
 
 ; START	SUBTTL	BISTRS
 
 	SUBTTL	BISTRS
 
 STRCMP:
-C65C8:  CALL    FRESTR                  ; free temporary string with type check
-        LD      A,(HL)                  ; size of string
+C65C8:  CALL    FRESTR                  ; check for string and free temporary string descriptor and string (string1)
+        LD      A,(HL)                  ; size of string1
         INC     HL
         LD      C,(HL)
         INC     HL
-        LD      B,(HL)                  ; pointer to string
-        POP     DE
-        PUSH    BC
-        PUSH    AF
-        CALL    FRETMP                  ; free temporary string (descriptor in DE)
-        POP     AF
-        LD      D,A
-        LD      E,(HL)                  ; size of string
+        LD      B,(HL)                  ; pointer to string1
+        POP     DE			; restore pointer to temporary string descriptor (string2)
+        PUSH    BC			; store pointer to string1
+        PUSH    AF			; store size of string1
+        CALL    FRETMP                  ; free temporary string (descriptor in DE) (string2)
+        POP     AF			; restore size of string1
+        LD      D,A			; store size of string1
+        LD      E,(HL)                  ; size of string2
         INC     HL
         LD      C,(HL)
         INC     HL
-        LD      B,(HL)                  ; pointer to string
+        LD      B,(HL)                  ; pointer to string2
         POP     HL
 J65DE:  LD      A,E
         OR      D                       ; end of both strings ?
         RET     Z                       ; yep, quit (A=0, equal)
         LD      A,D
-        SUB     1                       ; end of first string ?
+        SUB     1                       ; end of string1 ?
         RET     C                       ; yep, quit (A=FF, less)
         XOR     A
-        CP      E                       ; end of second string ?
+        CP      E                       ; end of string2 ?
         INC     A
         RET     NC                      ; yep, quit (A=1, bigger)
         DEC     D
         DEC     E                       ; adjust counter
-        LD      A,(BC)
+        LD      A,(BC)			; character string2
         INC     BC
-        CP      (HL)                    ; equal ?
+        CP      (HL)                    ; equal to character string1 ?
         INC     HL
         JR      Z,J65DE                 ; yep, next
-        CCF
+        CCF				; flip Cx
         JP      SIGNS                   ; set compare value
 
 ;       Subroutine      OCT$ function
@@ -211,8 +220,8 @@ C65FF:  CALL    FOUTB                   ; convert integer to binary text
 
 STR$:
 C6604:  CALL    FOUT                    ; convert DAC to text, unformatted
-J6607:  CALL    STRLIT                  ; analyse string and create temporary stringdescriptor
-        CALL    FREDAC                  ; free temporary string in DAC
+J6607:  CALL    STRLIT                  ; get string literal and create temporary string descriptor
+        CALL    FREDAC                  ; free temporary string descriptor and string (DAC)
         LD      BC,J6825
         PUSH    BC                      ; copy string to new temporary string, temporary stringdescriptor to heap and quit
 
@@ -223,36 +232,37 @@ J6607:  CALL    STRLIT                  ; analyse string and create temporary st
 STRCPY:
 C6611:  LD      A,(HL)                  ; size of string
         INC     HL
-        PUSH    HL
-        CALL    GETSPA                  ; allocate stringspace
-        POP     HL
+        PUSH    HL			; store pointer in string descriptor
+        CALL    GETSPA                  ; allocate string space
+        POP     HL			; restore pointer in string descriptor
         LD      C,(HL)
         INC     HL
         LD      B,(HL)                  ; pointer to string
-        CALL    C662A                   ; make temporary stringdescriptor
-        PUSH    HL
+        CALL    STRAD2                  ; create temporary string descriptor
+        PUSH    HL			; store pointer to temporary string descriptor
         LD      L,A                     ; size of string
         CALL    C67C7                   ; copy string
-        POP     DE
+        POP     DE			; restore pointer to temporary string descriptor
         RET
 
 ;       Subroutine      allocate temporary string of 1 char
 ;       Inputs          ________________________
-;       Outputs         DE = pointer to string, HL = descriptor
+;       Outputs         DE = pointer to string, HL = pointer to temporary string descriptor
 
 STRIN1:
 C6625:  LD      A,1
 
 ;       Subroutine      allocate temporary string
-;       Inputs          A = stringsize
-;       Outputs         DE = pointer to string, HL = descriptor
+;       Inputs          A = size of string
+;       Outputs         DE = pointer to string, HL = pointer to temporary string descriptor
 
-STRINI:
-C6627:  CALL    GETSPA                  ; allocate stringspace
+	_MSXCP	STRINI,6627H
 
-;       Subroutine      make temporary stringdescriptor
-;       Inputs          A = stringsize, DE = pointer to string
-;       Outputs         HL = pointer to temporary stringdescriptor
+C6627:  CALL    GETSPA                  ; allocate string space
+
+;       Subroutine      create temporary string descriptor
+;       Inputs          A = size of string, DE = pointer to string
+;       Outputs         HL = pointer to temporary string descriptor
 
 STRAD2:
 C662A:  LD      HL,DSCTMP
@@ -265,35 +275,35 @@ C662A:  LD      HL,DSCTMP
         POP     HL
         RET
 
-;       Subroutine      analyse string and create temporary stringdescriptor
-;       Inputs          HL = pointer to string to be analysed
+;       Subroutine      get string literal and create temporary string descriptor
+;       Inputs          HL = pointer to string literal-1
 ;       Outputs         ________________________
 
 
 STRLIT:
 C6635:  DEC     HL
 
-;       Subroutine      analyze string with " as endmarker (1st char is skipped) and create temporary stringdescriptor
-;       Inputs          ________________________
+;       Subroutine      get string literal and create temporary string descriptor
+;       Inputs          HL = pointer to string literal
 ;       Outputs         ________________________
 
 STRLTI:
 C6636:  LD      B,'"'
 
-;       Subroutine      analyze string with specified endmaker (1st char is skipped) and create temporary stringdescriptor
+;       Subroutine      get string literal (with specified endmarker) and create temporary string descriptor
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 STRLT3:
 C6638:  LD      D,B
 
-;       Subroutine      analyse string with specified endmarkers (1st char is skipped) and create temporary stringdescriptor
+;       Subroutine      get string literal (with specified endmarkers) and create temporary string descriptor
 ;       Inputs          HL = pointer to string to be analysed, B = end character 1, D = end character 2
 ;       Outputs         ________________________
 
 STRLT2:
-C6639:  PUSH    HL
-        LD      C,-1
+C6639:  PUSH    HL			; store pointer to string
+        LD      C,-1			; size = -1
 J663C:  INC     HL
         LD      A,(HL)
         INC     C
@@ -305,38 +315,44 @@ J663C:  INC     HL
         JR      NZ,J663C                ; nope, skip
 J6648:  CP      '"'                     ; string marker ?
         CALL    Z,CHRGTR                ; yep, get next BASIC character
-        EX      (SP),HL
+        EX      (SP),HL			; store pointer in string (restored later), restore pointer to string
         INC     HL
         EX      DE,HL
-        LD      A,C
-        CALL    C662A                   ; make temporary stringdescriptor
+        LD      A,C			; size of string
+        CALL    STRAD2                  ; create temporary string descriptor
 
-;       Subroutine      push temporary descriptor to temporary desciptor heap
+;       Subroutine      push temporary sring descriptor to temporary string descriptor heap
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 PUTNEW:
-J6654:  LD      DE,DSCTMP
+J6654:  LD      DE,DSCTMP		; string descriptor = temporary string descriptor
         DEFB    03EH                    ; LD A,xx, trick to skip next instruction
 
-;       Subroutine      push descriptor to temporary desciptor heap
-;       Inputs          DE = desciptor
+;       Subroutine      push string descriptor to temporary string descriptor heap
+;       Inputs          DE = pointer to string descriptor
 ;       Outputs         ________________________
 
 PUTTMP:
-C6658:  PUSH    DE
+C6658:  PUSH    DE			; store pointer to string descriptor
         LD      HL,(TEMPPT)
         LD      (DAC+2),HL
         LD      A,3
-        LD      (VALTYP),A
-        CALL    VMOVE                   ; HL = DE (valtyp)
+        LD      (VALTYP),A		; DAC = new string descriptor
+        CALL    VMOVE                   ; HL = DE (valtyp), copy temporary string descriptor to temporary string descriptor heap
         LD      DE,TEMPST+30+3
         _RST    DCOMPR                  ; temporary descriptor heap full ?
         LD      (TEMPPT),HL
-        POP     HL
-        LD      A,(HL)
+        POP     HL			; restore pointer to string descriptor
+        LD      A,(HL)			; size of string
         RET     NZ
+STERR:
+        IF      OPTM EQ 0
         LD      DE,16                   ; ?? LD E,16 should be enough ??
+        ELSE
+        LD      E,16
+        ENDIF
+
         JP      ERROR                   ; yep, string formula too complex error
 
 ;       Subroutine      skip first character, message to interpreter output
@@ -351,16 +367,16 @@ C6677:  INC     HL
 ;       Outputs         ________________________
 
 STROUT:
-C6678:  CALL    STRLIT                  ; analyse string and create temporary stringdescriptor
+C6678:  CALL    STRLIT                  ; get string literal and create temporary string descriptor
 
 ;       Subroutine      free string and string to interpreter output
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 STRPRT:
-C667B:  CALL    FREDAC                  ; free temporary string in DAC
-        CALL    GETBCD                  ; get size and address of string
-        INC     D
+C667B:  CALL    FREDAC                  ; free temporary string descriptor and string (DAC)
+        CALL    GETBCD                  ; get size and pointer to string
+        INC     D			; size+1
 J6682:  DEC     D
         RET     Z
         LD      A,(BC)
@@ -370,36 +386,53 @@ J6682:  DEC     D
         INC     BC
         JR      J6682
 
-;       Subroutine      allocate stringspace
+;       Subroutine      allocate string space
 ;       Inputs          A = size of string
-;       Outputs         DE = pointer to stringspace
+;       Outputs         DE = pointer to string space
 
-GETSPA:
+	_MSXCP	GETSPA,668EH
+
 C668E:  OR      A                       ; because size<>0, Zx is reset (no garbage collect done)
         DEFB    00EH                    ; LD C,xx, trick to skip next instruction
-C6690:  POP     AF
-        PUSH    AF
-        LD      HL,(STKTOP)
-        EX      DE,HL                   ; lowest stringspace
-        LD      HL,(FRETOP)
+
+C6690:  POP     AF			; restore garbage collect flag
+        PUSH    AF			; store garbage collect flag
+        LD      HL,(STKTOP)		; end of string heap (= top of BASIC stack)
+        EX      DE,HL
+        LD      HL,(FRETOP)		; string heap pointer
+
+	IF	OPTM EQ 0
         CPL
         LD      C,A
-        LD      B,0FFH
+        LD      B,0FFH			; -(size-1)
         ADD     HL,BC
-        INC     HL                      ; lower stringspace - stringsize = new lower
-        _RST    DCOMPR                  ; space available at bottom ?
-        JR      C,J66A9                 ; nope, try garbage collect
-        LD      (FRETOP),HL             ; new lower stringspace
+        INC     HL                      ; new string heap pointer
+
+	ELSE
+
+	LD	C,A
+	LD	B,0
+	SBC	HL,BC                   ; new string heap pointer
+
+	ENDIF
+
+        _RST    DCOMPR                  ; compare end of string heap with new string heap pointer
+        JR      C,J66A9                 ; out of string heap space, try garbage collect
+        LD      (FRETOP),HL             ; update string heap pointer
         INC     HL
         EX      DE,HL
-PPSWRT: POP     AF
+PPSWRT: POP     AF			; discard garbage collect flag
         RET
 
-J66A9:  POP     AF                      ; garbage collect already done ?
+J66A9:  POP     AF			; restore garbage collect flag
+        IF      OPTM EQ 0
         LD      DE,14                   ; ?? LD E,14 should be enough ??
-        JP      Z,ERROR                 ; yep, out of string space error
+	ELSE
+	LD	E,14
+	ENDIF
+        JP      Z,ERROR                 ; garbage collect done, out of string space error
         CP      A                       ; Zx set (garbage collect done)
-        PUSH    AF
+        PUSH    AF			; store garbage collect flag
         LD      BC,C6690
         PUSH    BC                      ; do a garbage collect and try allocate again
 
@@ -407,36 +440,43 @@ J66A9:  POP     AF                      ; garbage collect already done ?
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C66B6:  LD      HL,(MEMSIZ)             ; stringheap pointer to top of stringspace
-J66B9:  LD      (FRETOP),HL
+C66B6:  LD      HL,(MEMSIZ)             ; start of string heap (use as string heap pointer starting point)
+J66B9:  LD      (FRETOP),HL		; update string heap pointer
         LD      HL,0
-        PUSH    HL                      ; descriptor current top string
-        LD      HL,(STREND)
-        PUSH    HL                      ; current top string (strings in BASIC text or variables is excluded)
-        LD      HL,TEMPST               ; start with the temporary stringdescriptors
-C66C7:  LD      DE,(TEMPPT)
-        _RST    DCOMPR                  ; stringdescriptor heap empty ?
-        LD      BC,C66C7
-        JP      NZ,J6742                ; nope, adjust if new topstring and next descriptor
+        PUSH    HL                      ; pointer to string descriptor (+3) of top unheaped string = none found
+        LD      HL,(STREND)		; end of variable area
+        PUSH    HL                      ; pointer to top unheaped string = end of variable area (undefined)
+        LD      HL,TEMPST               ; temporary string descriptor pointer = start of temporary string descriptor heap
+
+; loop through temporary string descriptors
+
+C66C7:  LD      DE,(TEMPPT)		; end of temporary string descriptor heap
+        _RST    DCOMPR                  ; compare temporary string descriptor pointer with end of temporary string descriptor heap
+        LD      BC,C66C7		; continue with next temporary descriptor
+        JP      NZ,J6742                ; not end of temporary string descriptor heap, update top of unheaped string if higher
+
         LD      HL,PRMPRV
         LD      (TEMP9),HL
-        LD      HL,(ARYTAB)
-        LD      (ARYTA2),HL             ; stop searching when the array variables are reached
-        LD      HL,(VARTAB)             ; start searching in the simple variables
-J66E1:  LD      DE,(ARYTA2)
-        _RST    DCOMPR                  ; end of searcharea ?
-        JR      Z,J66FA                 ; yep,
+        LD      HL,(ARYTAB)		; start of array variable area
+        LD      (ARYTA2),HL             ; end of variable area = end of simple variable area
+        LD      HL,(VARTAB)             ; variable pointer = start of simple variable area
+
+; loop through variables
+
+J66E1:  LD      DE,(ARYTA2)		; end of variable area
+        _RST    DCOMPR                  ; compare variable pointer with end of variable area
+        JR      Z,J66FA                 ; end of variable area,
         LD      A,(HL)                  ; variable type
         INC     HL
         INC     HL
-        INC     HL                      ; skip variablename, to variable value
+        INC     HL                      ; skip variable name, to variable value
         CP      3                       ; string ?
-        JR      NZ,J66F4                ; nope, next variable
-        CALL    C6743                   ; adjust if new topstring
-        XOR     A
+        JR      NZ,J66F4                ; nope, offset = variable type, to next variable
+        CALL    C6743                   ; update top of unheaped string if higher
+        XOR     A			; offset = 0 (pointer already updated)
 J66F4:  LD      E,A
-        LD      D,0
-        ADD     HL,DE
+        LD      D,0			; offset
+        ADD     HL,DE			; update pointer to next variable
         JR      J66E1                   ; next variable
 
 J66FA:  LD      HL,(TEMP9)              ; current FN parameter block
@@ -445,8 +485,8 @@ J66FA:  LD      HL,(TEMP9)              ; current FN parameter block
         LD      D,(HL)
         LD      A,D
         OR      E                       ; end of FN parameter block list ?
-        LD      HL,(ARYTAB)
-        JR      Z,J671A                 ; yep, continue with the arrayvariables
+        LD      HL,(ARYTAB)		; start of array variable area
+        JR      Z,J671A                 ; yep, continue with the array variables
         EX      DE,HL
         LD      (TEMP9),HL              ; update current FN parameter block
         INC     HL
@@ -457,38 +497,42 @@ J66FA:  LD      HL,(TEMP9)              ; current FN parameter block
         INC     HL
         EX      DE,HL
         ADD     HL,DE
-        LD      (ARYTA2),HL
+        LD      (ARYTA2),HL		; update end of variable area
         EX      DE,HL
         JR      J66E1                   ; search FN parameter block variables
 
-J6719:  POP     BC
-J671A:  LD      DE,(STREND)
-        _RST    DCOMPR                  ; end of arrayvariables ?
+J6719:  POP     BC			; discard pointer in array variable
+
+; loop through array variables
+
+J671A:  LD      DE,(STREND)		; end of variable area
+        _RST    DCOMPR                  ; end of array variables ?
         JP      Z,J6763                 ; yep, move topstring up when possible
         LD      A,(HL)                  ; variable type
         INC     HL
-        CALL    MOVRM                   ; load from HL (arrayoffset and variablename)
-        PUSH    HL
-        ADD     HL,BC                   ; to next variable
+        CALL    MOVRM                   ; load from HL (array offset and variable name)
+        PUSH    HL			; store pointer in array variable
+        ADD     HL,BC                   ; pointer to next array variable
         CP      3                       ; string ?
-        JR      NZ,J6719                ; nope, next variable
-        LD      (TEMP8),HL              ; next variable
-        POP     HL
+        JR      NZ,J6719                ; nope, next array variable
+        LD      (TEMP8),HL              ; store pointer to next array variable
+        POP     HL			; restore pointer in array variable
         LD      C,(HL)
-        LD      B,0
+        LD      B,0			; array dimension
         ADD     HL,BC
         ADD     HL,BC
-        INC     HL                      ; to the first arrayelement
+        INC     HL                      ; to the first array element
 C6737:  EX      DE,HL
-        LD      HL,(TEMP8)
+        LD      HL,(TEMP8)		; pointer to next array variable
         EX      DE,HL
-        _RST    DCOMPR                  ; end of this arrayvariable ?
-        JR      Z,J671A                 ; yep, next arrayvariable
-        LD      BC,C6737                ; adjust if new topstring and next arrayelement
+        _RST    DCOMPR                  ; compare pointer to next array variable with pointer to next variable
+        JR      Z,J671A                 ; end of array variable, next array variable
+        LD      BC,C6737		; continue with next array element
+
 J6742:  PUSH    BC
 
-;       Subroutine      adjust if new topstring
-;       Inputs          ________________________
+;       Subroutine      update top of unheaped string if higher
+;       Inputs          HL = pointer to string descriptor
 ;       Outputs         ________________________
 
 C6743:  XOR     A
@@ -500,38 +544,38 @@ C6743:  XOR     A
         INC     HL
         RET     Z                       ; empty string, quit
         LD      B,H
-        LD      C,L
-        LD      HL,(FRETOP)
-        _RST    DCOMPR                  ; string above current top of heap ?
+        LD      C,L			; store pointer to next variable
+        LD      HL,(FRETOP)		; string heap pointer
+        _RST    DCOMPR                  ; compare string heap pointer with pointer to string
         LD      H,B
-        LD      L,C
-        RET     C                       ; yep, quit
-        POP     HL
-        EX      (SP),HL
-        _RST    DCOMPR                  ; string below current top string ?
-        EX      (SP),HL
-        PUSH    HL
+        LD      L,C			; restore pointer to next variable
+        RET     C                       ; string is in string heap, quit
+        POP     HL			; return address
+        EX      (SP),HL			; store return address, restore pointer to top unheaped string
+        _RST    DCOMPR                  ; compare end of variable area with pointer to string
+        EX      (SP),HL			; store pointer to top unheaped string, restore return address
+        PUSH    HL			; store return address
         LD      H,B
-        LD      L,C
-        RET     NC                      ; yep, quit
-        POP     BC                      ; return address
-        POP     AF
-        POP     AF                      ; discharge
-        PUSH    HL                      ; new current descriptor topstring +3
-        PUSH    DE                      ; new current topstring
-        PUSH    BC
+        LD      L,C			; restore pointer to next variable
+        RET     NC                      ; string is literal (in BASIC program), quit
+        POP     BC                      ; restore return address
+        POP     AF			; discard pointer to top unheaped string
+        POP     AF                      ; discard pointer to string descriptor (+3) of top unheaped string
+        PUSH    HL                      ; store new pointer to string descriptor (+3) of top unheaped string
+        PUSH    DE                      ; store new pointer to top unheaped string
+        PUSH    BC			; store return addres
         RET
 
-J6763:  POP     DE
-        POP     HL
+J6763:  POP     DE			; restore
+        POP     HL			; restore pointer to next string descriptor
         LD      A,H
         OR      L                       ; topstring found ?
         RET     Z                       ; nope, quit with garabage collect
         DEC     HL
         LD      B,(HL)
         DEC     HL
-        LD      C,(HL)                  ; current topstring
-        PUSH    HL
+        LD      C,(HL)                  ; pointer to string
+        PUSH    HL			; store pointer to string descriptor +1
         DEC     HL
         LD      L,(HL)                  ; size of string
         LD      H,0
@@ -541,16 +585,16 @@ J6763:  POP     DE
         DEC     HL
         LD      B,H
         LD      C,L                     ; end of string
-        LD      HL,(FRETOP)             ; top of stringspace is new end of string
-        CALL    BLTUC                   ; move data
-        POP     HL
+        LD      HL,(FRETOP)             ; string heap pointer
+        CALL    BLTUC                   ; move data (copy string to bottom of the string heap)
+        POP     HL			; restore pointer to string descriptor +1
         LD      (HL),C
         INC     HL
-        LD      (HL),B                  ; new address string
+        LD      (HL),B                  ; update pointer to string
         LD      H,B
         LD      L,C
         DEC     HL
-        JP      J66B9                   ; new stringheap pointer and continue garbage collect
+        JP      J66B9                   ; update string heap pointer and restart garbage collect
 
 CAT:
 J6787:  PUSH    BC
@@ -565,7 +609,11 @@ J6787:  PUSH    BC
         LD      HL,(DAC+2)
         PUSH    HL
         ADD     A,(HL)                  ; + size of 2nd string
+        IF      OPTM EQ 0
         LD      DE,15                   ; ?? LD E,15 should be enough ??
+	ELSE
+	LD	E,15
+	ENDIF
         JP      C,ERROR                 ; resulting length >255, string too long error
         CALL    STRINI                  ; allocate temporary string for result
         POP     DE
@@ -580,7 +628,7 @@ J6787:  PUSH    BC
         LD      HL,TSTOP
         EX      (SP),HL
         PUSH    HL
-        JP      PUTNEW                  ; push temporary descriptor to temporary desciptor heap and quit
+        JP      PUTNEW                  ; push temporary descriptor to temporary descriptor heap and quit
 
 ;       Subroutine      copy string (descriptor on stack)
 ;       Inputs          string descriptor on stack, DE = destination string
@@ -609,52 +657,53 @@ J67C8:  DEC     L
         INC     DE
         JR      J67C8
 
-;       Subroutine      FRESTR (free temporary string with type check)
+;       Subroutine      FRESTR (check for string and free temporary string descriptor and string)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-FRESTR:
+	_MSXCP	FRESTR,67D0H
+
 C67D0:  CALL    CHKSTR                  ; check if string
 
-;       Subroutine      free temporary string in DAC
-;       Inputs          DAC = string descriptor
+;       Subroutine      free temporary string descriptor and string (DAC)
+;       Inputs          DAC = pointer to temporary string descriptor
 ;       Outputs         ________________________
 
 FREDAC:
-C67D3:  LD      HL,(DAC+2)              ; descriptor
+C67D3:  LD      HL,(DAC+2)              ; pointer to temporary string descriptor
 
-;       Subroutine      free temporary string
+;       Subroutine      free temporary string descriptor and string
 ;       Inputs          HL = string descriptor
 ;       Outputs         ________________________
 
 FRETM2:
 C67D6:  EX      DE,HL
 
-;       Subroutine      free temporary string
-;       Inputs          DE = string descriptor
-;       Outputs         HL = string descriptor
+;       Subroutine      free temporary string descriptor and string
+;       Inputs          DE = pointer to temporary string descriptor
+;       Outputs         HL = pointer to temporary string descriptor
 
 FRETMP:
-C67D7:  CALL    FRETMS                  ; free descriptor if temporary and on top of heap
+C67D7:  CALL    FRETMS                  ; free temporary string descriptor if on top of the heap
         EX      DE,HL
-        RET     NZ                      ; no temporary descriptor on top of heap, quit
-        PUSH    DE
+        RET     NZ                      ; not freed, quit
+        PUSH    DE			; store pointer to freed temporary string descriptor
         LD      D,B
-        LD      E,C
+        LD      E,C			; pointer to string
         DEC     DE
         LD      C,(HL)                  ; size of string
-        LD      HL,(FRETOP)
+        LD      HL,(FRETOP)		; string heap pointer
         _RST    DCOMPR                  ; on top of string heap ?
         JR      NZ,J67EC                ; nope, quit
-        LD      B,A
+        LD      B,A			; 0
         ADD     HL,BC
-        LD      (FRETOP),HL             ; release string from heap
-J67EC:  POP     HL
+        LD      (FRETOP),HL             ; update string heap pointer
+J67EC:  POP     HL			; restore pointer to freed temporary string desciptor
         RET
 
-;       Subroutine      free descriptor if temporary and on top of heap
-;       Inputs          DE = descriptor
-;       Outputs         ________________________
+;       Subroutine      free temporary string descriptor if on top of the heap
+;       Inputs          DE = pointer to string descriptor
+;       Outputs         BC = pointer to string, Zx set if freed
 
 FRETMS:
 C67EE:  CALL    H.FRET
@@ -664,7 +713,7 @@ C67EE:  CALL    H.FRET
         DEC     HL
         LD      C,(HL)                  ; pointer to string
         DEC     HL
-        _RST    DCOMPR                  ; desciptor on top of the heap ?
+        _RST    DCOMPR                  ; descriptor on top of the heap ?
         RET     NZ                      ; nope, quit
         LD      (TEMPPT),HL             ; release descriptor from heap
         RET
@@ -681,7 +730,7 @@ C67FF:  LD      BC,SNGFLT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C6803:  CALL    FRESTR                  ; free temporary string with type check
+C6803:  CALL    FRESTR                  ; check for string and free temporary string descriptor and string
         XOR     A
         LD      D,A
         LD      A,(HL)                  ; size of string
@@ -725,8 +774,9 @@ C681B:  CALL    STRIN1                  ; allocate temporary string of 1 char
 SETSTR:
 C6821:  LD      HL,(DSCTMP+1)
         LD      (HL),E
+FINBCK:
 J6825:  POP     BC
-        JP      PUTNEW                  ; push temporary descriptor to temporary desciptor heap and quit
+        JP      PUTNEW                  ; push temporary descriptor to temporary descriptor heap and quit
 
 ;       Subroutine      STRING$ function
 ;       Inputs          ________________________
@@ -793,10 +843,10 @@ J6865:  EX      (SP),HL
 LEFTUS:
 C6868:  PUSH    HL
 C6869:  PUSH    HL
-        LD      A,(HL)
+        LD      A,(HL)			; size of string
         CP      B
         JR      C,J6870
-        LD      A,B
+        LD      A,B			; size of string
         DEFB    011H                    ; LD DE,xxxx, trick to skip next instruction
 J6870:  LD      C,0
         PUSH    BC
@@ -809,16 +859,16 @@ J6870:  LD      C,0
         INC     HL
         LD      H,(HL)
         LD      L,B
-        LD      B,00H
+        LD      B,0
         ADD     HL,BC
         LD      B,H
         LD      C,L
-        CALL    C662A                   ; make temporary stringdescriptor
+        CALL    STRAD2                  ; create temporary string descriptor
         LD      L,A
         CALL    C67C7                   ; copy string
         POP     DE
         CALL    FRETMP                  ; free temporary string (descriptor in DE)
-        JP      PUTNEW                  ; push temporary descriptor to temporary desciptor heap and quit
+        JP      PUTNEW                  ; push temporary descriptor to temporary descriptor heap and quit
 
 ;       Subroutine      RIGHT$ function
 ;       Inputs          ________________________
@@ -941,7 +991,7 @@ J6906:  _RST    SYNCHR
         _RST    SYNCHR
         DEFB    ")"                     ; check for )
         PUSH    HL
-        CALL    FRESTR                  ; free temporary string with type check
+        CALL    FRESTR                  ; check for string and free temporary string descriptor and string
         EX      DE,HL
         POP     BC
         POP     HL
@@ -1036,7 +1086,7 @@ J696E:  _RST    SYNCHR
         LD      E,(HL)
         INC     HL
         LD      D,(HL)
-        LD      HL,(STREND)
+        LD      HL,(STREND)		; end of variable area
         _RST    DCOMPR
         JR      C,J6993
         LD      HL,(TXTTAB)
@@ -1061,7 +1111,7 @@ J6993:  POP     HL
         PUSH    DE
         CALL    FRMEQL                  ; evaluate = expression
         PUSH    HL
-        CALL    FRESTR                  ; free temporary string with type check
+        CALL    FRESTR                  ; check for string and free temporary string descriptor and string
         EX      DE,HL
         POP     HL
         POP     BC
@@ -1133,16 +1183,16 @@ J69EF:  _RST    SYNCHR
 
 FRE:
 C69F2:  LD      HL,(STREND)
-        EX      DE,HL
+        EX      DE,HL			; end of variable area
         LD      HL,0
-        ADD     HL,SP
+        ADD     HL,SP			; Z80 stack pointer
         _RST    GETYPR                  ; get DAC type
-        JP      NZ,GIVDBL               ; not a string,
-        CALL    FREDAC                  ; free temporary string in DAC
+        JP      NZ,GIVDBL               ; not a string, subtract and convert to double float (number of bytes of free BASIC memory)
+        CALL    FREDAC                  ; free temporary string descriptor and string (DAC)
         CALL    C66B6                   ; garbage collect
-        LD      DE,(STKTOP)
-        LD      HL,(FRETOP)
-        JP      GIVDBL
+        LD      DE,(STKTOP)		; end of string heap (= top of BASIC stack)
+        LD      HL,(FRETOP)		; string heap pointer
+        JP      GIVDBL			; subtract and convert to double float (number of bytes of free string heap space)
 
 ; END	SUBTTL	BISTRS
 

@@ -112,6 +112,15 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
 
 ; START SUBTTL	INIT
 
@@ -138,7 +147,7 @@ C7C76:  LD      SP,VARWRK-10            ; temporary stack
         CALL    INIFNK                  ; initialize functionkeys
         XOR     A
         LD      (ENDBUF),A              ; endmarker for BUF
-        LD      (NLONLY),A              ; not loading basic program, close i/o channels when requested
+        LD      (NLONLY),A              ; end loading BASIC program, do not close i/o channels = false
         LD      A,","
         LD      (BUFMIN),A              ; dummy prefix for BUF
         LD      A,":"
@@ -187,6 +196,8 @@ J7D14:  CALL    C7D75                   ; do extension ROMs
 ; Entrypoint used by diskrom
 ; used when H.STKE was hooked by a extension ROM. BASIC programs in extension ROMs are NOT executed
 
+	_MSXCP	M7D17,7D17H
+
 J7D17:  LD      HL,(BOTTOM)
         XOR     A
         LD      (HL),A                  ; end of BASIC line before BASIC text
@@ -203,18 +214,22 @@ J7D17:  LD      HL,(BOTTOM)
 C7D29:
         ld      a,0FFH
         ld      (CNSDFG),a              ; KEY ON
-M7D2E:
+
+	_MSXCP	M7D2E,7D2EH
+
         IF      CNTRY EQ 0
 
-        call    INIT32
+        call    INIT32			; select text mode 32x24
         
         ELSE
 
-        call    INITXT                  ; text mode
+        call    INITXT                  ; select text mode 40x24
 
         ENDIF
 
-J7D31:  ld      hl,T7EF2
+	_MSXCP	M7D31,7D31H
+
+	ld      hl,T7EF2
         call    STROUT
         ld      hl,T7EE4
         call    STROUT
@@ -361,7 +376,9 @@ J7E09:  LD      HL,(08000H+8)
 
 ; Entrypoint used by diskrom to start extension ROM with basic program
 
-C7E14:  CALL    RUNC                    ; initialize interpreter, basic pointer at start of program
+	_MSXCP	M7E14,7E14H
+
+	CALL    RUNC                    ; initialize interpreter, basic pointer at start of program
         JP      NEWSTT                  ; execute new statement
 
 ;       Subroutine      read word from extension ROM
@@ -450,7 +467,7 @@ C7E6B:  PUSH    AF
 J7E72:  ADD     HL,DE
         DEC     A
         JP      P,J7E72
-        EX      DE,HL                   ; calculate FILTAB address
+        EX      DE,HL                   ; calculate location i/o channel pointer table
         LD      HL,(STKTOP)
         LD      B,H
         LD      C,L
@@ -476,7 +493,7 @@ J7E72:  ADD     HL,DE
         LD      (MAXFIL),A              ; set number of i/o channels (excluding i/o channel 0)
         LD      L,E
         LD      H,D
-        LD      (FILTAB),HL             ; start of i/o channel pointers
+        LD      (FILTAB),HL             ; update location i/o channel pointer table
         DEC     HL
         DEC     HL                      ; ?? why need a extra byte ??
         LD      (MEMSIZ),HL             ; start of the string heap

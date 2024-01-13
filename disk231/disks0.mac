@@ -163,6 +163,7 @@ BDOS_S	EQU	0F2FEH			; pointer to temporary stack for BDOS
 KDSK_V	EQU	0F300H			; pointer to diskerror handler
 KAB_VE	EQU	0F302H			; pointer to abort handler
 CPMCAL	EQU	0F306H			; CP/M BDOS call flag, used by MSXDOS1
+RAWFLG	EQU	0F30DH	                ; verify flag disk driver
 COUNTR	EQU	0F30EH			; date format
 KANJTA	EQU	0F30FH			; double byte header table
 DOS_VER	EQU	0F313H			; DOS2 version
@@ -354,7 +355,7 @@ DISINT	equ	0FFCFH
 ENAINT	equ	0FFD4H
 LFFFF	EQU	0FFFFH
 
-.BUFUL	EQU	D8H
+.BUFUL	EQU	0D8H
 
         INCLUDE	DISK.INC
 
@@ -1201,7 +1202,7 @@ J49BC:	LD	(HL),0C9H
 J4A07:	LD	($MAXSEC),HL		; save biggest sector size
 	INC	HL			; 1 extra for FAT valid flag
 	CALL	C4C78			; allocate memory (sector buffer and FAT flag)
-	LD	(HL),0			; FAT buffer flag = unchanged
+	LD	(HL),0			; FAT buffer flag = clean
 	INC	HL
 	LD	($SECBUF),HL		; sector buffer
 	LD	HL,RM_DPB
@@ -3682,7 +3683,7 @@ J5AB7:	LD	A,E			; file mode
 	LD	A,(RECSIZE+0)
 	DEC	A
 	LD	(HL),A			; update random record size - 1
-	LD	DE,PATHNAM)		; BASIC path buffer
+	LD	DE,(PATHNAM)		; BASIC path buffer
 	XOR	A			; read + write
 	LD	C,43H			; Open file handle
 	CALL	C59DE			; DiskBASIC BDOS call with error handling
@@ -6938,13 +6939,13 @@ J6D67:	PUSH	HL			; store HL
 ;	     Inputs  HL = pointer to ASCIIZ string
 ;	     Outputs ________________________
 
-C6D76:	PUSH	DE
-	PUSH	BC
+C6D76:	PUSH	DE			; store DE
+	PUSH	BC			; store BC
 	LD	DE,(BUF_3)		; destination = BDOS second temp buffer
 	LD	B,100			; maximum size ASCIIZ string = 100
 	CALL	C6D84			; copy ASCIIZ string
-	POP	BC
-	POP	DE
+	POP	BC			; restore BC
+	POP	DE			; restore DE
 	RET
 
 ;	  Subroutine copy ASCIIZ string
@@ -6958,7 +6959,7 @@ C6D84:	LD	A,(HL)
 	OR	A			; end of string ?
 	RET	Z			; yep, quit
 	DJNZ	C6D84			; next
-	LD	A,0D8H			; buffer full error
+	LD	A,.BUFUL		; buffer full error
 	RET
 
 ; DSKCHG routine for ramdisk

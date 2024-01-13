@@ -105,6 +105,15 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
 
 ; START SUBTTL  SPCDEV
 
@@ -114,7 +123,8 @@ _RST    MACRO   X
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-PARDEV:
+	_MSXCP	PARDEV,6F15H
+
 C6F15:  CALL    H.PARD                  ; hook device name parser: start of parser
         LD      A,(HL)
         CP      3AH                     ; 00H-39H ?
@@ -575,8 +585,8 @@ C71A2:  DEFW    J71B6                   ; open, check if output/append and open
 J71B6:  CALL    C72CD                   ; bad filename error if in random i/o mode
         CP      1			; sequential input mode ?
         JP      Z,DERNMF                ; yep, bad filename error
-J71BE:  LD      (PTRFIL),HL             ; update interpreter input/output device
-        LD      (HL),E			; update i/o channel mode
+J71BE:  LD      (PTRFIL),HL             ; redirect interpreter input/output device to i/o channel
+        LD      (HL),E			; update i/o channel file mode
 J71C2:  RET
 
 ;       Subroutine      sequential output (CRT device)
@@ -622,14 +632,14 @@ C71DB:  push    hl                      ; store pointer to channel
         call    A7125			; write file header to cassete
 A71F7:  pop     de                      ; restore file mode
         pop     hl                      ; restore pointer to channel
-        jr      J71BE                   ; update interpreter input/output device, set channel mode
+        jr      J71BE                   ; redir interpreter input/output to i/o channel, update file mode
 
 ; sequential input mode
 
 A71FB:  ld      c,0EAH			; header type = ASCII file
         call    A70B8			; read correct file header from cassete
         call    TAPIOF			; stop tape for input
-        jr      A71F7                   ; restore, update interpreter input/output device, set channel mode
+        jr      A71F7                   ; restore, redir interpreter input/output to i/o channel, update file mode
 
 ;       Subroutine      close (CAS device)
 ;       Inputs          HL = i/o channel pointer

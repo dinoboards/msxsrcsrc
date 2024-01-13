@@ -166,6 +166,15 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
 
 ; START	SUBTTL	BIMISC
 
@@ -306,9 +315,9 @@ J62B2:  LD      (HL),8
         LD      (STREND),HL             ; end of basicprogram workarea = begin of variable space (no array variables)
         CALL    CLSALL                  ; close all i/o channels
         LD      A,(NLONLY)
-        AND     01H                     ; loading basic program ?
-        JR      NZ,STKINI
-        LD      (NLONLY),A              ; nope, close i/o channels when requested
+        AND     01H                     ; loading BASIC program ?
+        JR      NZ,STKINI		; yep,
+        LD      (NLONLY),A              ; nope, do not close i/o channels = false
 
 ;       Subroutine      initialize stack
 ;       Inputs          ________________________
@@ -353,7 +362,8 @@ C6317:  LD      HL,(TEMP)
 ;       Inputs          HL = pointer to trap block
 ;       Outputs         ________________________
 
-ONTRP:
+	_MSXCP	ONTRP,631BH
+
 J631B:  DI
         LD      A,(HL)
         AND     00000100B               ; keep trap occured flag
@@ -370,7 +380,8 @@ J6329:  EI
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-OFFTRP:
+	_MSXCP	OFFTRP,632BH
+
 J632B:  DI
         LD      A,(HL)
         LD      (HL),0                  ; clear trap occured, trap not paused, trap disabled
@@ -380,7 +391,8 @@ J632B:  DI
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-STPTRP:
+	_MSXCP	STPTRP,6331H
+
 C6331:  DI
         LD      A,(HL)
         PUSH    AF
@@ -617,7 +629,13 @@ CONT:
 C6424:  LD      HL,(OLDTXT)             ; BASIC pointer = BASIC pointer for CONT
         LD      A,H
         OR      L                       ; is pointer valid ?
+
+	IF OPTM EQ 0
         LD      DE,17                   ; ?? LD E,17 should be enough ??
+	ELSE
+	LD	E,17
+	ENDIF
+
         JP      Z,ERROR                 ; nope, can not continue error
         LD      DE,(OLDLIN)
         LD      (CURLIN),DE             ; update current line number = line number for CONT
@@ -648,7 +666,7 @@ C643E:  CALL    PTRGET                  ; locate variable
         PUSH    DE
         PUSH    HL
         LD      HL,SWPTMP
-        CALL    VMOVE                   ; HL = DE (valtyp), store 1st var in SWPTMP
+        CALL    VMOVE                   ; HL = DE (valtyp), store 1st variable in SWPTMP
         LD      HL,(ARYTAB)
         EX      (SP),HL                 ; store start of BASIC array variables, restore BASIC pointer
         _RST    GETYPR                  ; get DAC type

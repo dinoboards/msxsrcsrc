@@ -111,6 +111,8 @@ RNDX    EQU     0F857H
         PUBLIC  SGNEXP
         PUBLIC  DBLEXP
         PUBLIC  INTEXP
+        PUBLIC  CONDS
+        PUBLIC  INT
 
         EXTRN   OVERR			; overflow error
         EXTRN   DV0ERR			; division by zero error
@@ -147,6 +149,15 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
 
 ; START SUBTTL	F4
 
@@ -157,7 +168,8 @@ _RST    MACRO   X
 ;       Inputs          (DAC) = first operand, (ARG) = second operand
 ;       Outputs         ________________________
 
-DECSUB:
+	_MSXCP	DECSUB,268CH
+
 C268C:  LD      HL,ARG+0
         LD      A,(HL)
         OR      A                       ; 2nd operand zero ?
@@ -170,14 +182,16 @@ C268C:  LD      HL,ARG+0
 ;       Inputs          (DAC) = first operand, (HL) = second operand
 ;       Outputs         ________________________
 
-DECADM:
+	_MSXCP	DECADM,2697H
+
 C2697:  CALL    VMOVAM                  ; ARG = HL
 
 ;       Subroutine      DECADD (dbl addition)
 ;       Inputs          (DAC) = first operand, (ARG) = second operand
 ;       Outputs         ________________________
 
-DECADD:
+	_MSXCP	DECADD,269AH
+
 C269A:  LD      HL,ARG+0
         LD      A,(HL)
         OR      A
@@ -238,6 +252,8 @@ J26F7:  CALL    C276B                   ; subtract mantissa
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+	_MSXCP	DECNRM,26FAH
+
 C26FA:  LD      HL,DAC+1
         LD      BC,8*256+0              ; mantissa + expansion byte, clear counter
 J2700:  LD      A,(HL)
@@ -285,6 +301,8 @@ J272D:  LD      A,C
 ;       Subroutine      DECROU (round up DAC)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
+
+	_MSXCP	DECROU,273CH
 
 C273C:  LD      HL,DAC+8                ; mantissa + expansion byte
         LD      B,7                     ; number of bytes = 7
@@ -454,7 +472,8 @@ J27E2:  POP     AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-DECMUL:
+	_MSXCP	DECMUL,27E6H
+
 C27E6:  CALL    SIGN                    ; get sign DAC
         RET     Z                       ; DAC is zero, quit (result is zero)
         LD      A,(ARG+0)
@@ -583,7 +602,8 @@ J2893:  LD      A,(DE)
 ;       Inputs          (DAC) = first operand, (ARG) = second operand
 ;       Outputs         ________________________
 
-DECDIV:
+	_MSXCP	DECDIV,289FH
+
 C289F:  LD      A,(ARG+0)
         OR      A                       ; operand2 is zero ?
         JP      Z,DV0ERR                ; yep, division by zero error
@@ -747,7 +767,8 @@ J2985:  LD      HL,DAC+8                ; include expansion byte
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-COS:
+	_MSXCP	COS,2993H
+
 C2993:  LD      HL,I2D63
         CALL    C2C3B                   ; DAC = DAC * 1/(2*pi)
         LD      A,(DAC+0)
@@ -762,7 +783,8 @@ C2993:  LD      HL,I2D63
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-SIN:
+	_MSXCP	SIN,29ACH
+
 C29AC:  LD      HL,I2D63
         CALL    C2C3B                   ; DAC = DAC * 1/(2*pi)
 J29B2:  LD      A,(DAC+0)
@@ -797,7 +819,8 @@ J29F5:  LD      HL,I2DEF		; sinus polynomial series
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-TAN:
+	_MSXCP	TAN,29FBH
+
 C29FB:  CALL    C2CCC                   ; push DAC
         CALL    COS                     ; COS DAC
         CALL    C2C6F                   ; exchange DAC with stack
@@ -812,7 +835,8 @@ C29FB:  CALL    C2CCC                   ; push DAC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-ATN:
+	_MSXCP	ATN,2A14H
+
 C2A14:  LD      A,(DAC+0)
         OR      A                       ; DAC zero ?
         RET     Z                       ; yep, result zero
@@ -861,7 +885,8 @@ C2A6C:  LD      HL,I2E30		; atan polynomial series
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-LOG:
+	_MSXCP	LOG,2A72H
+
 C2A72:  CALL    SIGN                    ; get sign DAC
         JP      M,FCERR                 ; DAC is negative, illegal function call
         JP      Z,FCERR                 ; DAC is zero, illegal function call
@@ -922,7 +947,8 @@ J2A92:  POP     AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-SQR:
+	_MSXCP	SQR,2AFFH
+
 C2AFF:  CALL    SIGN                    ; get sign DAC
         RET     Z                       ; DAC is zero, quit (result is zero)
         JP      M,FCERR                 ; DAC is negative, illegal function call
@@ -960,7 +986,8 @@ J2B23:  LD      (TEMP3),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-EXP:
+	_MSXCP	EXP,2B4AH
+
 C2B4A:  LD      HL,I2D09
         CALL    C2C3B                   ; DAC = DAC * 0.43429448190324 (log(e))
         CALL    C2CCC                   ; push DAC
@@ -1028,7 +1055,8 @@ J2BD1:  LD      A,(TEMP3)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-RND:
+	_MSXCP	RND,2BDFH
+
 C2BDF:  CALL    SIGN                    ; get sign DAC
         LD      HL,RNDX
         JR      Z,J2C15                 ; DAC is zero, use current RNDX value
@@ -1059,7 +1087,8 @@ J2C15:  CALL    C2C5C                   ; DAC = RNDX
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-RNDINI:
+	_MSXCP	RNDINI,2C24H
+
 C2C24:  LD      DE,I2D01
         LD      HL,RNDX
         JR      C2C6A                   ; RNDX = 0.40649651372358 and quit
@@ -1112,17 +1141,23 @@ C2C47:  CALL    C2C50                   ; ARG =
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+	_MSXCP	MAF,2C4DH
+
 C2C4D:  LD      HL,DAC
 
 ;       Subroutine      MAM (copy HL to ARG)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+	_MSXCP	MAM,2C50H
+
 C2C50:  LD      DE,ARG
 
 ;       Subroutine      MOV8DH (copy HL to DE)
 ;       Inputs          HL = source, DE = destination
 ;       Outputs         ________________________
+
+	_MSXCP	MOV8DH,2C53H
 
 J2C53:  EX      DE,HL
         CALL    C2C6A                   ; copy double real
@@ -1133,11 +1168,15 @@ J2C53:  EX      DE,HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+	_MSXCP	MFA,2C59H
+
 C2C59:  LD      HL,ARG
 
 ;       Subroutine      MFM (copy HL to DAC)
 ;       Inputs          HL = source
 ;       Outputs         ________________________
+
+	_MSXCP	MFM,2C5CH
 
 C2C5C:  LD      DE,DAC
         JR      J2C53
@@ -1161,12 +1200,16 @@ C2C67:  LD      DE,DAC
 ;       Inputs          DE = source, HL = destination
 ;       Outputs         ________________________
 
+	_MSXCP	MOV8HD,2C6AH
+
 C2C6A:  LD      B,8
         JP      MOVE1                   ; copy bytes
 
 ;       Subroutine      XTF (exchange DAC with stack)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
+
+	_MSXCP	XTF,2C6FH
 
 C2C6F:  POP     HL
         LD      (FBUFFR),HL             ; store return address
@@ -1209,7 +1252,7 @@ C2C9A:  LD      (FBUFFR),HL             ; store pointer to polynomial series
 ;       Outputs         ________________________
 
 C2CA3:  LD      A,(HL)
-        PUSH    AF			; save length of series
+        PUSH    AF			; store length of series
         INC     HL
         PUSH    HL
         LD      HL,FBUFFR
@@ -1234,12 +1277,16 @@ J2CB1:  POP     AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+	_MSXCP	PHA,2CC7H
+
 C2CC7:  LD      HL,ARG+7
         JR      J2CCF
 
 ;       Subroutine      PHF (push DAC on stack)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
+
+	_MSXCP	PHF,2CCCH
 
 C2CCC:  LD      HL,DAC+7
 J2CCF:  LD      A,4
@@ -1258,12 +1305,16 @@ J2CD2:  LD      B,(HL)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+	_MSXCP	PPA,2CDCH
+
 C2CDC:  LD      HL,ARG
         JR      J2CE4
 
 ;       Subroutine      PPF (pop DAC from stack)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
+
+	_MSXCP	PPF,2CE1H
 
 C2CE1:  LD      HL,DAC
 J2CE4:  LD      A,4
@@ -1404,7 +1455,8 @@ I2E30:  DEFB    8
 ;       Inputs          ________________________
 ;       Outputs         Zx set and A = 000H if zero, Zx reset and Cx set and A = 0FFH if negative, Zx reset and Cx reset and A = 001H if postive
 
-SIGN:
+	_MSXCP	SIGN,2E71H
+
 C2E71:  LD      A,(DAC+0)
         OR      A               ; DAC is zero ?
         RET     Z               ; yep, quit
@@ -1412,7 +1464,8 @@ C2E71:  LD      A,(DAC+0)
 J2E77:  CPL
 J2E78:  RLA
 
-SIGNS:
+	_MSXCP	SIGNS,2E79H
+
 J2E79:  SBC     A,A             ; negative ?
         RET     NZ              ; yep, quit
         INC     A
@@ -1430,7 +1483,8 @@ J2E7D:  XOR     A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-ABSFN:
+	_MSXCP	ABSFN,2E82H
+
 C2E82:  CALL    VSIGN                   ; get sign DAC
         RET     P                       ; already postive, quit
 
@@ -1447,7 +1501,8 @@ C2E86:  _RST    GETYPR                  ; get DAC type
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-NEG:
+	_MSXCP	NEG,2E8DH
+
 C2E8D:  LD      HL,DAC+0
         LD      A,(HL)
         OR      A                       ; operand is zero ?
@@ -1460,14 +1515,16 @@ C2E8D:  LD      HL,DAC+0
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-SGN:
+	_MSXCP	SGN,2E97H
+
 C2E97:  CALL    VSIGN                   ; get sign DAC
 
-;       Subroutine      __________________________
+;       Subroutine      convert signed byte to integer and store in DAC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-CONIA:
+	_MSXCP	CONIA,2E9AH
+
 C2E9A:  LD      L,A
         RLA
         SBC     A,A
@@ -1499,7 +1556,8 @@ C2EAB:  LD      A,H
 ;       Inputs          DAC = single real
 ;       Outputs         ________________________
 
-PUSHF:
+	_MSXCP	PUSHF,2EB1H
+
 C2EB1:  EX      DE,HL
         LD      HL,(DAC+2)
         EX      (SP),HL
@@ -1514,14 +1572,16 @@ C2EB1:  EX      DE,HL
 ;       Inputs          HL = address
 ;       Outputs         ________________________
 
-MOVFM:
+	_MSXCP	MOVFM,2EBEH
+
 C2EBE:  CALL    MOVRM                   ; load from HL (single)
 
 ;       Subroutine      MOVFR (DAC =)
 ;       Inputs          DEBC = single real
 ;       Outputs         ________________________
 
-MOVFR:
+	_MSXCP	MOVFR,2EC1H
+
 C2EC1:  EX      DE,HL
         LD      (DAC+2),HL
         LD      H,B
@@ -1534,7 +1594,8 @@ C2EC1:  EX      DE,HL
 ;       Inputs          none
 ;       Outputs         DEBC = single real
 
-MOVRF:
+	_MSXCP	MOVRF,2ECCH
+
 C2ECC:  LD      HL,(DAC+2)
         EX      DE,HL
         LD      HL,(DAC+0)
@@ -1546,7 +1607,8 @@ C2ECC:  LD      HL,(DAC+2)
 ;       Inputs          HL = address
 ;       Outputs         DEBC = single real
 
-MOVRMI:
+	_MSXCP	MOVRMI,2ED6H
+
 C2ED6:  LD      C,(HL)
         INC     HL
         LD      B,(HL)
@@ -1561,7 +1623,8 @@ C2ED6:  LD      C,(HL)
 ;       Inputs          HL = address
 ;       Outputs         BCDE =
 
-MOVRM:
+	_MSXCP	MOVRM,2EDFH
+
 C2EDF:  LD      E,(HL)
         INC     HL
 
@@ -1569,7 +1632,8 @@ C2EDF:  LD      E,(HL)
 ;       Inputs          HL = pointer to stringdescriptor
 ;       Outputs         D = size of string, BC = address of string
 
-GETBCD:
+	_MSXCP	GETBCD,2EE1H
+
 C2EE1:  LD      D,(HL)
         INC     HL
         LD      C,(HL)
@@ -1587,14 +1651,16 @@ C2EE6:  INC     HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-MOVMF:
+	_MSXCP	MOVMF,2EE8H
+
 C2EE8:  LD      DE,DAC
 
 ;       Subroutine      MOVE ( =)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-MOVE:
+	_MSXCP	MOVE,2EEBH
+
 C2EEB:  LD      B,4
         JR      MOVE1                   ; copy bytes
 
@@ -1602,21 +1668,24 @@ C2EEB:  LD      B,4
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-VMOVAM:
+	_MSXCP	VMOVAM,2EEFH
+
 C2EEF:  LD      DE,ARG
 
 ;       Subroutine      MOVVFM (DE = HL)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-MOVVFM:
+	_MSXCP	MOVVFM,2EF2H
+
 C2EF2:  EX      DE,HL
 
 ;       Subroutine      VMOVE (copy variable content)
 ;       Inputs          HL = source variable pointer, DE = destination variable pointer, (VALTYP) = variabletype
 ;       Outputs         ________________________
 
-VMOVE:
+	_MSXCP	VMOVE,2EF3H
+
 C2EF3:  LD      A,(VALTYP)
         LD      B,A
 
@@ -1647,14 +1716,16 @@ C2EFE:  LD      A,(DE)
 ;       Inputs          _______________________
 ;       Outputs         ________________________
 
-VMOVFA:
+	_MSXCP	VMOVFA,2F05H
+
 C2F05:  LD      HL,ARG
 
 ;       Subroutine      VMOVFM (DAC = HL)
 ;       Inputs          _______________________
 ;       Outputs         ________________________
 
-VMOVFM:
+	_MSXCP	VMOVFM,2F08H
+
 C2F08:  LD      DE,C2EF2                ; afterwards DE = HL
         JR      J2F13                   ; load DAC address
 
@@ -1669,7 +1740,8 @@ C2F0D:  LD      HL,ARG
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-VMOVMF:
+	_MSXCP	VMOVMF,2F10H
+
 C2F10:  LD      DE,VMOVE                ; afterwards HL = DE
 J2F13:  PUSH    DE
         LD      DE,DAC+0
@@ -1683,7 +1755,8 @@ J2F13:  PUSH    DE
 ;       Inputs          DEBC = first operand, (DAC) = second operand
 ;       Outputs         ________________________
 
-FCOMP:
+	_MSXCP	FCOMP,2F21H
+
 C2F21:  LD      A,C
         OR      A
         JP      Z,SIGN                  ; get sign DAC and quit
@@ -1701,11 +1774,9 @@ C2F21:  LD      A,C
         XOR     C
         RET
 
-
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
 
 C2F3B:  LD      A,C
         CP      (HL)
@@ -1730,7 +1801,8 @@ C2F3B:  LD      A,C
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-ICOMP:
+	_MSXCP	ICOMP,2F4DH
+
 C2F4D:  LD      A,D
         XOR     H                       ; sign equal ?
         LD      A,H
@@ -1746,7 +1818,8 @@ J2F59:  JP      SIGNS
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-XDCOMP:
+	_MSXCP	XDCOMP,2F5CH
+
 C2F5C:  LD      DE,ARG+0
         LD      A,(DE)
         OR      A
@@ -1784,7 +1857,8 @@ C2F83:  CALL    XDCOMP                  ; compare double real
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-FRCINT:
+	_MSXCP	FRCINT,2F8AH
+
 C2F8A:  _RST    GETYPR                  ; get DAC type
         LD      HL,(DAC+2)
         RET     M                       ; already integer, quit
@@ -1794,6 +1868,7 @@ C2F8A:  _RST    GETYPR                  ; get DAC type
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+FDBINT:
 C2F92:  CALL    C305D                   ; convert real to signed integer
         JP      C,OVERR                 ; overflow error
         EX      DE,HL
@@ -1803,7 +1878,8 @@ C2F92:  CALL    C305D                   ; convert real to signed integer
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-MAKINT:
+	_MSXCP	MAKINT,2F99H
+
 C2F99:  LD      (DAC+2),HL
 
 
@@ -1834,7 +1910,8 @@ J2FAF:  POP     DE                      ; remove return address
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-FRCSNG:
+	_MSXCP	FRCSNG,2FB2H
+
 C2FB2:  _RST    GETYPR                  ; get DAC type
         RET     PO                      ; already single real, quit
         JP      M,C2FC8                 ; integer, convert integer (DAC) to single real and quit
@@ -1864,7 +1941,8 @@ C2FC8:  LD      HL,(DAC+2)
 ;       Inputs          HL = integer value
 ;       Outputs         ________________________
 
-CONSIH:
+	_MSXCP	CONSIH,2FCBH
+
 C2FCB:  LD      A,H
 J2FCC:  OR      A
         PUSH    AF                      ; store sign flag
@@ -1947,7 +2025,8 @@ J3030:  DEFW    -10000
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-FRCDBL:
+	_MSXCP	FRCDBL,303AH
+
 C303A:  _RST    GETYPR                  ; get DAC type
         RET     NC                      ; already double real, quit
         JP      Z,TMERR                 ; string, type mismatch error
@@ -1957,7 +2036,8 @@ C303A:  _RST    GETYPR                  ; get DAC type
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-$CDS:
+	_MSXCP	CONDS,3042H
+
 C3042:  LD      HL,0
         LD      (DAC+4),HL
         LD      (DAC+6),HL
@@ -1983,7 +2063,8 @@ J3055:  JP      J2F9E
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-CHKSTR:
+	_MSXCP	CHKSTR,3058H
+
 C3058:  _RST    GETYPR                  ; get DAC type
         RET     Z                       ; already string, quit
         JP      TMERR                   ; not a string, type mismatch error
@@ -2076,7 +2157,8 @@ C30BA:  SCF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-FIXER:
+	_MSXCP	FIXER,30BEH
+
 C30BE:  _RST    GETYPR                  ; get DAC type
         RET     M                       ; integer, quit doing nothing
         CALL    SIGN                    ; get sign DAC
@@ -2092,6 +2174,9 @@ C30BE:  _RST    GETYPR                  ; get DAC type
 VINT:
 C30CF:  _RST    GETYPR                  ; get DAC type
         RET     M                       ; integer, quit doing nothing
+
+	_MSXCP	INT,30D1H
+
         LD      HL,DAC+7+1
         LD      C,14                    ; 14 BCD digits
         JR      NC,J30E0                ; double real,
@@ -2171,7 +2256,8 @@ J3129:  INC     E
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-UMULT:
+	_MSXCP	UMULT,314AH
+
 C314A:  PUSH    HL
         LD      HL,0
         LD      A,B
@@ -2196,7 +2282,8 @@ J3164:  EX      DE,HL
 ;       Inputs          DE = operand1, HL = operand2
 ;       Outputs         ________________________
 
-ISUB:
+	_MSXCP	ISUB,3167H
+
 C3167:  LD      A,H
         RLA
         SBC     A,A
@@ -2210,7 +2297,8 @@ C3167:  LD      A,H
 ;       Inputs          DE = operand1, HL = operand2
 ;       Outputs         ________________________
 
-IADD:
+	_MSXCP	IADD,3172H
+
 C3172:  LD      A,H
         RLA
         SBC     A,A                     ; sign flag
@@ -2239,7 +2327,8 @@ J3175:  LD      B,A
 ;       Inputs          DE = operand1, HL = operand2
 ;       Outputs         ________________________
 
-IMULT:
+	_MSXCP	IMULT,3193H
+
 C3193:  LD      A,H
         OR      L
         JP      Z,MAKINT                ; store integer 0 in DAC and quit
@@ -2299,7 +2388,8 @@ J31D8:  LD      A,B
 ;       Inputs          DE = operand1, HL = operand2
 ;       Outputs         ________________________
 
-IDIV:
+	_MSXCP	IDIV,31E6H
+
 C31E6:  LD      A,H
         OR      L                       ; operand2 is zero ?
         JP      Z,DV0ERR                ; yep, division by zero error
@@ -2386,7 +2476,8 @@ C3236:  XOR     A                       ; sign flag = positive
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-IMOD:
+	_MSXCP	IMOD,323AH
+
 C323A:  PUSH    DE
         CALL    IDIV                    ; integer divide
         XOR     A
@@ -2428,7 +2519,8 @@ C3257:  CALL    C2E8D                   ; NEG DAC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-SGNMUL:
+	_MSXCP	SGNMUL,325CH
+
 C325C:  CALL    C3280                   ; store single real as double real in ARG
         CALL    C3042                   ; convert DAC from single real to double real
         JP      DECMUL                  ; DAC * ARG and quit
@@ -2496,7 +2588,8 @@ J3297:  POP     HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-FIN:
+	_MSXCP	FIN,3299H
+
 C3299:  EX      DE,HL                   ; store pointer to text
         LD      BC,00FFH                ; decimal point count = 0, no decimal point flag
         LD      H,B
@@ -2788,14 +2881,16 @@ C3412:  LD      BC,STROUI
 ;       Inputs          B = number of digits before floating point, C = number of digits after floating point
 ;       Outputs         ________________________
 
-FOUT:
+	_MSXCP	FOUT,3425H
+
 C3425:  XOR     A                       ; clear format flags
 
 ;       Subroutine      PUFOUT (convert DAC to text, formatted)
 ;       Inputs          A = format flags, B = number of digits before floating point, C = number of digits after floating point
 ;       Outputs         ________________________
 
-PUFOUT:
+	_MSXCP	PUFOUT,3426H
+
 C3426:  CALL    C375F                   ; initialize for DAC convert to text
         AND     08H                     ; force sign flag ?
         JR      Z,J342F                 ; nope,
@@ -3335,7 +3430,8 @@ I3710:  DEFW    10000
 ;       Inputs          ________________________
 ;       Outputs         HL = pointer to text buffer
 
-FOUTB:
+	_MSXCP	FOUTB,371AH
+
 C371A:  LD      B,1                     ; bit count = bit
         JR      J3724
 
@@ -3343,7 +3439,8 @@ C371A:  LD      B,1                     ; bit count = bit
 ;       Inputs          ________________________
 ;       Outputs         HL = pointer to text buffer
 
-FOUTO:
+	_MSXCP	FOUTO,371EH
+
 C371E:  LD      B,3                     ; bit count = octal
         JR      J3724
 
@@ -3351,7 +3448,8 @@ C371E:  LD      B,3                     ; bit count = octal
 ;       Inputs          ________________________
 ;       Outputs         HL = pointer to text buffer
 
-FOUTH:
+	_MSXCP	FOUTH,3722H
+
 C3722:  LD      B,4                     ; bit count = hexdecimal
 J3724:  PUSH    BC                      ; store bit count
         CALL    FRQINT                  ; convert address to integer
@@ -3492,7 +3590,8 @@ J37C5:  LD      A,B
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-SGNEXP:
+	_MSXCP	SGNEXP,37C8H
+
 C37C8:  CALL    C3280                   ; store single real as double real in ARG
         CALL    C3042                   ; convert DAC from single real to double real
         CALL    C2CC7                   ; push ARG
@@ -3503,7 +3602,8 @@ C37C8:  CALL    C3280                   ; store single real as double real in AR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-DBLEXP:
+	_MSXCP	DBLEXP,37D7H
+
 C37D7:  LD      A,(ARG+0)
         OR      A                       ; 2nd operand is zero ?
         JP      Z,J3843                 ; yep, store integer 1 in DAC
@@ -3557,7 +3657,8 @@ J382A:  CALL    C304F                   ; DAC type = double real
 ;       Inputs          DE = operand1, HL = operand2
 ;       Outputs         ________________________
 
-INTEXP:
+	_MSXCP	INTEXP,383FH
+
 C383F:  LD      A,H
         OR      L                       ; 2nd operand is zero ?
         JR      NZ,J3849                ; nope,

@@ -51,7 +51,7 @@ H.OUTD  equ     0FEE4H
 OUTDO:
 A1B45:  push    af
         call    H.OUTD
-        call    ISFLIO                  ; ISFLIO (is file output ?)
+        call    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         jr      z,A1B56                 ; nope,
         pop     af
         ld      ix,FILOUT               ; seq. output
@@ -65,15 +65,15 @@ A1B56:  ld      a,(PRTFLG)
         jr      nz,A1BAB                ; yep, to printer
         pop     af
 
-;       Subroutine      OUTDLP
+;       Subroutine      OUTDLP (OUTDO line printer)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 OUTDLP:
 A1B63:  push    af
-        cp      009H                    ; tab ?
-        jr      nz,A1B76                ; nop
-A1B68:  ld      a,020H
+        cp      9                       ; tab ?
+        jr      nz,A1B76                ; nope,
+A1B68:  ld      a,' '
         call    OUTDLP                  ; OUTDLP
         ld      a,(LPTPOS)
         and     007H
@@ -81,11 +81,11 @@ A1B68:  ld      a,020H
         pop     af
         ret
 ;
-A1B76:  sub     00DH
+A1B76:  sub     13
         jr      z,A1B84                 ; cr, LPTPOS = 0
-        jr      c,A1B87
-        cp      013H
-        jr      c,A1B87                 ; control char, don't increase
+        jr      c,A1B87			; control code, keep position
+        cp      20H-13
+        jr      c,A1B87                 ; control code, keep position
         ld      a,(LPTPOS)
         inc     a                       ; increase LPTPOS
 A1B84:  ld      (LPTPOS),a

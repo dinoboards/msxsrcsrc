@@ -130,21 +130,31 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
 
 ; START SUBTTL  SPCDSK
 
         SUBTTL  SPCDSK
 
-;       Subroutine      evaluate filespecification
+;       Subroutine      evaluate file specification
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-FILEVL:
+	_MSXCP	FILEVL,6A0EH
+
 C6A0E:  CALL    FRMEVL                  ; evaluate expression
-        PUSH    HL
+        PUSH    HL			; store BASIC pointer
         CALL    FRESTR                  ; free temporary string with type check
         LD      A,(HL)
-        OR      A                       ; stringsize zero ?
+        OR      A                       ; empty string ?
         JR      Z,J6A47                 ; yep, bad filename error
         INC     HL
         LD      E,(HL)
@@ -155,28 +165,28 @@ C6A0E:  CALL    FRMEVL                  ; evaluate expression
         CALL    PARDEV                  ; parse device name
         PUSH    AF                      ; store device code
         LD      BC,FILNAM
-        LD      D,11
+        LD      D,8+3
         INC     E
-J6A29:  DEC     E                       ; end of filespecification string ?
-        JR      Z,J6A61                 ; yep, fill remaining FILNAME with spaces
+J6A29:  DEC     E                       ; end of file specification string ?
+        JR      Z,J6A61                 ; yep, fill remaining FILNAM with spaces
         LD      A,(HL)
-        CP      20H                     ; control characters ?
+        CP      20H                     ; control character ?
         JR      C,J6A47                 ; yep, bad filename error
-        CP      '.'                     ; filename/extension seperator ?
+        CP      '.'                     ; file name/extension seperator ?
         JR      Z,J6A4D                 ; yep, handle extension
         LD      (BC),A
         INC     BC
         INC     HL
         DEC     D                       ; FILNAM full ?
         JR      NZ,J6A29                ; nope, next
-J6A3B:  POP     AF
-        PUSH    AF
+J6A3B:  POP     AF			; restore device code
+        PUSH    AF			; store device code
         LD      D,A                     ; device code
         LD      A,(FILNAM+0)
-        INC     A                       ; first character FILNAME charactercode 255 ?
-        JR      Z,J6A47                 ; yep, bad filename error (because this is internally used as runflag)
-        POP     AF
-        POP     HL
+        INC     A                       ; first character FILNAM charactercode 255 ?
+        JR      Z,J6A47                 ; yep, bad filename error (because this is internally used as run flag)
+        POP     AF			; restore device code
+        POP     HL			; restore BASIC pointer
         RET
 
 J6A47:  JP      DERNMF                  ; bad filename
@@ -185,43 +195,44 @@ J6A4A:  INC     HL
         JR      J6A29
 
 J6A4D:  LD      A,D
-        CP      0BH
-        JP      Z,J6A47
-        CP      03H
-        JP      C,J6A47
-        JR      Z,J6A4A
-        LD      A,20H
+        CP      8+3			; empty file name ?
+        JP      Z,J6A47			; yep, bad file name error
+        CP      3			; size file name > 8 ?
+        JP      C,J6A47			; yep, bad file name error
+        JR      Z,J6A4A			; size file name = 8, skip over seperator and continue with file extension
+        LD      A,' '
         LD      (BC),A
         INC     BC
-        DEC     D
-        JR      J6A4D
+        DEC     D			; add space
+        JR      J6A4D			; next
 
 J6A61:  LD      A,' '
         LD      (BC),A
         INC     BC
         DEC     D
-        JR      NZ,J6A61
-        JR      J6A3B
+        JR      NZ,J6A61		; next
+        JR      J6A3B			; finish
 
-;       Subroutine      get i/o channel pointer (DAC)
+;       Subroutine      get pointer to i/o channel (DAC)
 ;       Inputs          (DAC) = i/o channel number
 ;       Outputs         HL = i/o channel pointer
 
 C6A6A:  CALL    CONINT                  ; check for byte value
 
-;       Subroutine      get i/o channel pointer
+;       Subroutine      get pointer to i/o channel
 ;       Inputs          A = i/o channel number
 ;       Outputs         HL = i/o channel pointer
 
-FILIDX:
-C6A6D:  LD      L,A
+	_MSXCP	FILIDX,6A6DH
+
+C6A6D:  LD      L,A			; store i/o channel number
         LD      A,(MAXFIL)
-        CP      L
-        JP      C,DERBFN                ; bad filenumber error
+        CP      L			; i/o channel number valid ?
+        JP      C,DERBFN                ; nope, bad filenumber error
         LD      H,0
         ADD     HL,HL
         EX      DE,HL
-        LD      HL,(FILTAB)
+        LD      HL,(FILTAB)		; table with i/o channel pointers
         ADD     HL,DE
         LD      A,(HL)
         INC     HL
@@ -233,19 +244,19 @@ C6A6D:  LD      L,A
         LD      A,(HL)
         OR      A                       ; i/o channel open ?
         RET     Z                       ; nope, quit
-        PUSH    HL
+        PUSH    HL			; store pointer to i/o channel
         LD      DE,4
-        ADD     HL,DE
-        LD      A,(HL)
-        CP      9                       ; device i/o channel a diskdrive ?
-        JR      NC,J6A99                ; nope, not a diskdrive device
+        ADD     HL,DE			; +4
+        LD      A,(HL)			; device code
+        CP      9                       ; device = disk drive ?
+        JR      NC,J6A99                ; nope, not a disk drive device
         CALL    H.GETP                  ; hook for disk
         JP      DERIER                  ; internal error (should not return to here)
 
-J6A99:  POP     HL
+J6A99:  POP     HL			; restore pointer to i/o channel
         LD      A,(HL)
         OR      A			; Zx reset (i/o channel is open)
-        SCF				; i/o channel device is not a diskdrive
+        SCF				; i/o channel device is not a disk drive
         RET
 
 ;       Subroutine      evaluate i/o channel operand and set current i/o channel, store BASIC pointer on stack
@@ -265,9 +276,9 @@ C6A9E:  DEC     HL
 ;       Outputs         ________________________
 
 SETFIL:
-C6AAA:  CALL    FILIDX                  ; get i/o channel pointer
+C6AAA:  CALL    FILIDX                  ; get pointer to i/o channel
         JP      Z,DERFNO                ; i/o channel not open, file not open error
-        LD      (PTRFIL),HL             ; interpreter input/output device = i/o channel
+        LD      (PTRFIL),HL             ; redir interpreter input/output device to i/o channel
         CALL    H.SETF
         RET
 
@@ -278,7 +289,7 @@ C6AAA:  CALL    FILIDX                  ; get i/o channel pointer
 OPEN:
 C6AB7:  LD      BC,FINPRT
         PUSH    BC
-        CALL    FILEVL                  ; evaluate filespecification
+        CALL    FILEVL                  ; evaluate file specification
         LD      A,(HL)
         CP      82H                     ; FOR token ?
         LD      E,4                     ; random i/o mode
@@ -317,7 +328,7 @@ J6AE4:  _RST    SYNCHR
         CALL    Z,CHRGTR                ; yep, get next BASIC character
         CALL    GETBYT                  ; evaluate byte operand
         OR      A                       ; i/o channel 0 ?
-        JP      Z,DERBFN                ; yep, bad filenumber
+        JP      Z,DERBFN                ; yep, bad file number
         CALL    H.NOFO                  ; open statement extension hook
         DEFB    01EH                    ; LD E,xx, trick to skip next instruction
 
@@ -325,71 +336,73 @@ J6AE4:  _RST    SYNCHR
 ;       Inputs          A = i/o channel number, D = device code, E = file mode, HL = BASIC pointer
 ;       Outputs         ________________________
 
-OPNFIL:
-C6AFA:  PUSH    DE
+	_MSXCP	OPNFIL,6AFAH
+
+C6AFA:  PUSH    DE			; store device code and file mode
         DEC     HL
-        LD      E,A
+        LD      E,A			; store i/o channel number
         _RST    CHRGTR                  ; end of statement ?
         JP      NZ,SNERR                ; nope, syntax error
-        EX      (SP),HL
-        LD      A,E
-        PUSH    AF
-        PUSH    HL
-        CALL    FILIDX                  ; get i/o channel pointer
+        EX      (SP),HL			; store BASIC pointer, restore device code and file mode
+        LD      A,E			; i/o channel number
+        PUSH    AF			; store i/o channel number
+        PUSH    HL			; store device code and file mode
+        CALL    FILIDX                  ; get pointer to i/o channel
         JP      NZ,DERFAO               ; i/o channel already open, file already open
-        POP     DE
+        POP     DE			; restore device code and file mode
         LD      A,D
-        CP      9                       ; diskdrive device ?
+        CP      9                       ; disk drive device ?
         CALL    H.NULO                  ; open for disk hook
         JP      C,DERIER                ; internal error
-        PUSH    HL
+        PUSH    HL			; store pointer to i/o channel
         LD      BC,4
-        ADD     HL,BC
-        LD      (HL),D			; device code
+        ADD     HL,BC			; +4
+        LD      (HL),D			; update device code
         LD      A,0                     ; function open
-        POP     HL
+        POP     HL			; restore pointer to i/o channel
         CALL    GENDSP                  ; i/o function dispatcher
-        POP     AF
-        POP     HL
+        POP     AF			; restore i/o channel number
+        POP     HL			; restore BASIC pointer
         RET
 
 ;       Subroutine      close i/o channel
 ;       Inputs          A = i/o channel number
 ;       Outputs         ________________________
 
-CLSFIL:
-C6B24:  PUSH    HL
-        OR      A                       ; i/o channel 0 ?
+	_MSXCP	CLSFIL,6B24H
+
+C6B24:  PUSH    HL			; store HL
+        OR      A                       ; i/o channel 0 (system) ?
         JR      NZ,J6B30                ; nope, skip check
         LD      A,(NLONLY)
-        AND     01H                     ; loading basic program ?
+        AND     01H                     ; loading BASIC program ?
         JP      NZ,POPHR2               ; yep, quit
-J6B30:  CALL    FILIDX                  ; get i/o channel pointer
-        JR      Z,J6B4A                 ; i/o channel not open,
+J6B30:  CALL    FILIDX                  ; get pointer to i/o channel
+        JR      Z,J6B4A                 ; i/o channel not open, skip close i/o channel
         LD      (PTRFIL),HL             ; interpreter input/output device = i/o channel (only temporary)
-        PUSH    HL
-        JR      C,J6B41                 ; not a diskdrive device,
+        PUSH    HL			; store pointer to i/o channel
+        JR      C,J6B41                 ; not a disk drive device, use i/o function dispatcher
         CALL    H.NTFL                  ; close for disk hook
         JP      DERIER                  ; internal error (should not return to here)
 
 J6B41:  LD      A,2                     ; function close
         CALL    GENDSP                  ; i/o function dispatcher
         CALL    C6CEA			; clear buffer of interpreter i/o channel
-        POP     HL
-J6B4A:  PUSH    HL
+        POP     HL			; restore pointer to i/o channel
+J6B4A:  PUSH    HL			; store pointer to i/o channel
         LD      DE,7
-        ADD     HL,DE
+        ADD     HL,DE			; +7
         LD      (HL),A			; clear i/o channel flags
         LD      H,A
         LD      L,A
         LD      (PTRFIL),HL             ; interpreter input/output device = keyboard/screen
-        POP     HL
-        ADD     A,(HL)
+        POP     HL			; restore pointer to i/o channel
+        ADD     A,(HL)			; file mode, Zx set if i/o channel already closed, Zx reset if i/o channel closed
         LD      (HL),0			; i/o channel closed
-        POP     HL
+        POP     HL			; restore HL
         RET
 
-;       Subroutine      RUN statement (with filespecification)
+;       Subroutine      RUN statement (with file specification)
 ;       Inputs          Zx reset
 ;       Outputs         ________________________
 
@@ -411,44 +424,44 @@ C6B5D:  DEFB    0F6H                    ; OR 0AFH, so A<>0 and Cx=0 (RUN flag no
 MERGE:
 C6B5E:  XOR     A                       ; A=0 and Cx=0 (RUN flag not set)
         PUSH    AF                      ; store flags
-        CALL    FILEVL                  ; evaluate filespecification
+        CALL    FILEVL                  ; evaluate file specification
         CALL    H.MERG
-        POP     AF
-        PUSH    AF
-        JR      Z,J6B76                 ; MERGE statement, skip ,R option check, do close i/o channels
+        POP     AF			; restore flags
+        PUSH    AF			; store flags
+        JR      Z,J6B76                 ; MERGE statement, skip ,R option check, close user i/o channels
         LD      A,(HL)
-        SUB     ','
+        SUB     ','			; extra operand ?
         OR      A
-        JR      NZ,J6B76                ; no ,R option, do close i/o channels
+        JR      NZ,J6B76                ; nope, close user i/o channels
         _RST    CHRGTR                  ; get next BASIC character
         _RST    SYNCHR
         DEFB    'R'                     ; check for R
-        POP     AF
-        SCF                             ; set RUN flag
-        PUSH    AF                      ; do not close i/o channels
-J6B76:  PUSH    AF
-        XOR     A                       ; i/o channel 0
+        POP     AF			; restore flags
+        SCF                             ; set RUN flag, do not close i/o channels = true
+        PUSH    AF                      ; store flags
+J6B76:  PUSH    AF			; store close i/o channels flag
+        XOR     A                       ; i/o channel 0 (system)
         LD      E,1                     ; input file mode
         CALL    C6AFA                   ; open i/o channel
-        LD      HL,(PTRFIL)
+        LD      HL,(PTRFIL)		; pointer to i/o channel
         LD      BC,7
-        ADD     HL,BC			; i/o channel flags
-        POP     AF
+        ADD     HL,BC			; +7
+        POP     AF			; restore close user i/o channels flag
         SBC     A,A
-        AND     80H                     ; do not close i/o channels flag
-        OR      01H                     ; set basic program loading flag
+        AND     80H                     ; if do not close user i/o channels flag, set do not close i/o channels flag
+        OR      01H                     ; set BASIC program loading flag
         LD      (NLONLY),A
-        POP     AF
-        PUSH    AF
+        POP     AF			; restore flags
+        PUSH    AF			; store flags
         SBC     A,A
         LD      (FILNAM+0),A            ; 000H for LOAD only, 0FFH for LOAD and RUN
-        LD      A,(HL)
-        OR      A                       ; binairy load ?
+        LD      A,(HL)			; i/o channel flags
+        OR      A                       ; load binairy BASIC file ?
         JP      M,J6BD4                 ; yep,
-        POP     AF
-        CALL    NZ,SCRTCH               ; yep, clear basic program
-        XOR     A
-        CALL    SETFIL                  ; redirect interpreter input/output to i/o channel 0
+        POP     AF			; restore flags
+        CALL    NZ,SCRTCH               ; LOAD or RUN, clear basic program
+	XOR     A			; i/o channel 0 (system)
+        CALL    SETFIL                  ; redirect interpreter input/output to i/o channel
         JP      MAIN                    ; mainloop
 
 ;       Subroutine      SAVE statement
@@ -456,7 +469,7 @@ J6B76:  PUSH    AF
 ;       Outputs         ________________________
 
 SAVE:
-C6BA3:  CALL    FILEVL                  ; evaluate filespecification
+C6BA3:  CALL    FILEVL                  ; evaluate file specification
         CALL    H.SAVE
         DEC     HL
         _RST    CHRGTR                  ; end of statement ?
@@ -471,13 +484,13 @@ C6BA3:  CALL    FILEVL                  ; evaluate filespecification
         LD      E,2                     ; use ascii save
 J6BB7:  PUSH    AF
         LD      A,D
-        CP      9                       ; diskdrive device ?
+        CP      9                       ; disk drive device ?
         JR      C,J6BC2                 ; yep,
         LD      E,2                     ; output file mode
         POP     AF
         XOR     A                       ; use ascii save
         PUSH    AF
-J6BC2:  XOR     A                       ; i/o channel 0
+J6BC2:  XOR     A                       ; i/o channel 0 (system)
         CALL    C6AFA                   ; open i/o channel
         POP     AF
         JR      C,J6BCE                 ; binairy save,
@@ -492,7 +505,7 @@ J6BD4:  CALL    H.BINL
         JP      DERNMF                  ; bad filename
 
 ;       Subroutine      get i/o channel device
-;       Inputs          (PTRFIL) = pointer to i/o channel control block
+;       Inputs          (PTRFIL) = pointer to i/o channel
 ;       Outputs         ________________________
 ;       Unused Code     Not called from anywhere, leftover from a early Microsoft BASIC ?
 
@@ -500,68 +513,139 @@ J6BD4:  CALL    H.BINL
         PUSH    DE
         LD      HL,(PTRFIL)
         LD      DE,4
-        ADD     HL,DE
+        ADD     HL,DE			; +4
         LD      A,(HL)			; device code
         POP     DE
         POP     HL
         RET
 
-J6BE7:  JR      NZ,J6C02                ; not end of statement, evaluate channels
-        PUSH    HL                      ; store BASIC pointer
-J6BEA:  PUSH    BC
-        PUSH    AF
-        LD      DE,I6BF3
-        PUSH    DE
-        PUSH    BC
-        OR      A
-        RET                             ; close i/o channel
+;       Subroutine      close i/o channel(s)
+;       Inputs          ________________________
+;       Outputs         ________________________
 
-I6BF3:  POP     AF
-        POP     BC
+	IF	OPTM EQ 0
+
+RTALLR:
+J6BE7:  JR      NZ,J6C02                ; not end of statement, close specified i/o channels
+
+; close all i/o channels
+
+J6BE9:  PUSH    HL                      ; store BASIC pointer
+J6BEA:  PUSH    BC			; store subroutine
+        PUSH    AF			; store i/o channel number
+        LD      DE,I6BF3
+        PUSH    DE			; continue here
+        PUSH    BC			; store subroutine
+        OR      A			; ??
+        RET                             ; execute subroutine
+
+; continue close all i/o channels
+
+I6BF3:  POP     AF			; restore i/o channel number
+        POP     BC			; restore subroutine
         DEC     A
         JP      P,J6BEA                 ; next channel
         POP     HL                      ; restore BASIC pointer
         RET
 
-I6BFB:  POP     BC                      ; close i/o channel routine
-        POP     HL                      ; basic pointer
+; continue close specified i/o channels
+
+I6BFB:  POP     BC                      ; restore subroutine
+        POP     HL                      ; restore BASIC pointer
         LD      A,(HL)
-        CP      ','
-        RET     NZ
+        CP      ','			; more operands ?
+        RET     NZ			; nope, quit
         _RST    CHRGTR                  ; get next BASIC character
-J6C02:  PUSH    BC
+
+; close specified i/o channels
+
+J6C02:  PUSH    BC			; store subroutine
         LD      A,(HL)
-        CP      '#'
+        CP      '#'			; i/o channel indicator ?
         CALL    Z,CHRGTR                ; yep, get next BASIC character
         CALL    GETBYT                  ; evaluate byte operand
-        EX      (SP),HL
-        PUSH    HL
+        EX      (SP),HL			; store BASIC pointer, restore subroutine
+        PUSH    HL			; store subroutine
         LD      DE,I6BFB
-        PUSH    DE
-        SCF
-        JP      (HL)                    ; close i/o channel
+        PUSH    DE			; continue here
+        SCF				; ??
+        JP      (HL)                    ; execute subroutine
+
+	ELSE
+
+; close all i/o channels
+
+J6BE7:  PUSH    HL                      ; store BASIC pointer
+	LD	A,(MAXFIL)		; highest i/o channel number
+J6BE8:  PUSH    AF			; store i/o channel number
+	CALL	CLSFIL			; close i/o channel
+	POP     AF			; restore i/o channel number
+        DEC     A
+        JP      P,J6BE8                 ; next channel
+        POP     HL                      ; restore BASIC pointer
+        RET
+
+; close specified i/o channels
+
+J6C02:  LD      A,(HL)
+        CP      '#'			; i/o channel indicator ?
+        CALL    Z,CHRGTR                ; yep, get next BASIC character
+        CALL    GETBYT                  ; evaluate byte operand
+        PUSH    HL			; store BASIC pointer
+	CALL	CLSFIL			; close i/o channel
+	POP	HL			; restore BASIC pointer
+        LD      A,(HL)
+        CP      ','			; more operands ?
+        RET     NZ			; nope, quit
+        _RST    CHRGTR                  ; get next BASIC character
+	JR	J6C02			; next operand
+	
+	DEFS	6C14H-$,0		; keep CLOSE at same entry point
+
+	ENDIF
+
 
 ;       Subroutine      CLOSE statement
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 CLOSE:
-C6C14:  LD      BC,CLSFIL               ; close i/o channel routine
-        LD      A,(MAXFIL)              ; default = all channels
+C6C14:
+	IF	OPTM EQ 0
+	LD      BC,CLSFIL               ; close i/o channel routine
+        LD      A,(MAXFIL)              ; default = all i/o channels
         JR      J6BE7                   ; close i/o channel(s)
+	ELSE
+	JR	NZ,J6C02		; close specific i/o channels
+	JR	J6BE7			; close all i/o channels
+
+	DEFS	6C1CH-$,0		; keep CLSALL at same entry point
+
+	ENDIF
+
 
 ;       Subroutine      close all i/o channels
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-CLSALL:
+	_MSXCP	CLSALL,6C1CH
+
 C6C1C:  LD      A,(NLONLY)
-        OR      A                       ; do not close i/o channels flag set ?
+        OR      A                       ; do not close i/o channels ?
         RET     M                       ; yep, quit doing nothing
+
+	IF	OPTM EQ 0
         LD      BC,CLSFIL               ; close i/o channel routine
         XOR     A                       ; 'end of statement' flag
-        LD      A,(MAXFIL)              ; all channels
+        LD      A,(MAXFIL)              ; all i/o channels
         JR      J6BE7                   ; close i/o channels
+	ELSE
+	JR	J6BE7			; close all i/o channels
+
+	DEFS	6C2AH-$,0		; keep LFILES at same entry point
+
+	ENDIF
+
 
 ;       Subroutine      LFILES statement
 ;       Inputs          ________________________
@@ -580,17 +664,17 @@ C6C2F:  CALL    H.FILE                  ; FILES hook
         JP      FCERR                   ; illegal function call
 
 ;       Subroutine      do random input/output
-;       Inputs          ________________________
+;       Inputs          HL = BASIC pointer, A = GET/PUT flag
 ;       Outputs         ________________________
 
 GETPUT:
 J6C35:  PUSH    AF                      ; store GET/PUT flag
         CALL    C6A9E			; evaluate i/o channel operand and set current i/o channel, store BASIC pointer on stack
-        JR      C,J6C41			; device is not a diskdrive,
+        JR      C,J6C41			; device is not a disk drive,
         CALL    H.DGET                  ; GET/PUT for disk hook
         JP      DERNMF                  ; bad filename
 
-J6C41:  POP     DE                      ; dispose BASIC pointer
+J6C41:	POP     DE                      ; restore BASIC pointer
         POP     BC                      ; restore GET/PUT flag
         LD      A,4                     ; function random i/o
         JP      GENDSP                  ; i/o function dispatcher
@@ -604,7 +688,7 @@ C6C48:  PUSH    HL
         PUSH    DE
         PUSH    BC
         PUSH    AF
-        CALL    ISDDEV                  ; current i/o channel a diskdrive device ?
+        CALL    ISDDEV                  ; current i/o channel a disk drive device ?
         JR      NC,J6C57                ; nope,
         CALL    H.FILO                  ; sequential output for disk hook
         JP      DERNMF                  ; bad filename
@@ -616,20 +700,20 @@ J6C57:  POP     AF
         CALL    GENDSP                  ; i/o function dispatcher
         JP      POPAL2			; pop registers and quit
 
-;       Subroutine      current i/o channel a diskdrive device ?
+;       Subroutine      current i/o channel a disk drive device ?
 ;       Inputs          ________________________
-;       Outputs         ________________________
+;       Outputs         HL = pointer to i/o channel, A = device code, Cx set if disk drive device
 
 ISDDEV:
-C6C62:  PUSH    DE
+C6C62:  PUSH    DE			; store DE
         LD      HL,(PTRFIL)
         EX      DE,HL
         LD      HL,4
-        ADD     HL,DE
+        ADD     HL,DE			; +4
         LD      A,(HL)			; device code
         EX      DE,HL
-        POP     DE
-        CP      9
+        POP     DE			; restore DE
+        CP      9			; is a disk drive device ?
         RET
 
 ;       Subroutine      get sequential input
@@ -640,7 +724,7 @@ INDSKC:
 C6C71:  PUSH    HL
 J6C72:  PUSH    DE
         PUSH    BC
-        CALL    ISDDEV                  ; current i/o channel a diskdrive device ?
+        CALL    ISDDEV                  ; current i/o channel a disk drive device ?
         JR      NC,J6C7F                ; nope,
 I6C79:  CALL    H.INDS                  ; sequential input for disk hook
         JP      DERIER                  ; internal error (should not return to here)
@@ -739,11 +823,11 @@ J6CF6:  LD      (HL),A
 
 ;       Subroutine      get pointer to buffer of interpreter i/o channel
 ;       Inputs          ________________________
-;       Outputs         ________________________
+;       Outputs         HL = pointer to i/o channel buffer
 
 C6CFB:  LD      HL,(PTRFIL)
         LD      DE,9
-        ADD     HL,DE
+        ADD     HL,DE			; +9
         RET
 
 ;       Subroutine      LOC function
@@ -752,10 +836,10 @@ C6CFB:  LD      HL,(PTRFIL)
 
 LOC:
 C6D03:  CALL    H.SAVD
-        CALL    C6A6A                   ; get i/o channel pointer (DAC)
+        CALL    C6A6A                   ; get pointer to i/o channel (DAC)
         JR      Z,J6D2B                 ; i/o channel not open, file not open
         LD      A,10                    ; function loc
-        JR      C,J6D30                 ; not a diskdrive device, i/o function dispatcher and quit
+        JR      C,J6D30                 ; not a disk drive device, i/o function dispatcher and quit
         CALL    H.LOC                   ; LOC for disk
         JR      J6D36                   ; internal error (should not return to here)
 
@@ -765,10 +849,10 @@ C6D03:  CALL    H.SAVD
 
 LOF:
 C6D14:  CALL    H.SAVD
-        CALL    C6A6A                   ; get i/o channel pointer (DAC)
+        CALL    C6A6A                   ; get pointer to i/o channel (DAC)
         JR      Z,J6D2B                 ; i/o channel not open, file not open
         LD      A,12                    ; function lof
-        JR      C,J6D30                 ; not a diskdrive device, i/o function dispatcher and quit
+        JR      C,J6D30                 ; not a disk drive device, i/o function dispatcher and quit
         CALL    H.LOF                   ; LOF for disk
         JR      J6D36                   ; internal error (should not return to here)
 
@@ -778,10 +862,10 @@ C6D14:  CALL    H.SAVD
 
 EOF:
 C6D25:  CALL    H.SAVD
-        CALL    C6A6A                   ; get i/o channel pointer (DAC)
+        CALL    C6A6A                   ; get pointer to i/o channel (DAC)
 J6D2B:  JP      Z,DERFNO                ; i/o channel not open, file not open
-        LD      A,14                    ; function close
-J6D30:  JP      C,GENDSP                ; not a diskdrive device, i/o function dispatcher and quit
+        LD      A,14                    ; function eof
+J6D30:  JP      C,GENDSP                ; not a disk drive device, i/o function dispatcher and quit
         CALL    H.EOF                   ; EOF for disk
 J6D36:  JP      DERIER                  ; internal error (should not return to here)
 
@@ -791,9 +875,9 @@ J6D36:  JP      DERIER                  ; internal error (should not return to h
 
 FPOS:
 C6D39:  CALL    H.SAVD
-        CALL    C6A6A                   ; get i/o channel pointer (DAC)
+        CALL    C6A6A                   ; get pointer to i/o channel (DAC)
         LD      A,16                    ; function fpos
-        JR      C,J6D30                 ; i/o channel open AND not a diskdrive device, i/o function dispatcher and quit
+        JR      C,J6D30                 ; i/o channel open AND not a disk drive device, i/o function dispatcher and quit
         CALL    H.FPOS                  ; FPOS for disk
         JR      J6D36                   ; internal error (should not return to here)
 
@@ -802,10 +886,10 @@ C6D39:  CALL    H.SAVD
 ;       Outputs         ________________________
 
 DIRDO:
-J6D48:  CALL    ISFLIO                  ; interpreter input/output device = file ?
+J6D48:  CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         JP      Z,GONE                  ; nope, execute direct statement
-        XOR     A
-        CALL    CLSFIL                  ; close i/o channel 0
+        XOR     A			; i/o channel = 0 (system)
+        CALL    CLSFIL                  ; close i/o channel
         JP      ERRFDR                  ; direct statement in file error
 
 ; END   SUBTTL  SPCDSK

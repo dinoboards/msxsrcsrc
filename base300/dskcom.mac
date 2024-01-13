@@ -98,6 +98,15 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
 
 ; START SUBTTL	DSKCOM
 
@@ -109,26 +118,26 @@ _RST    MACRO   X
 ;       Outputs         ________________________
 
 FILINP:
-C6D55:  LD      C,1
+C6D55:  LD      C,1			; required file mode = sequential input
 
 ;       Subroutine      redirect interpreter input/output if i/o channel specified
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 FILGET:
-C6D57:  CP      "#"
-        RET     NZ
-        PUSH    BC
+C6D57:  CP      "#"			; i/o channel indicator ?
+        RET     NZ			; nope, quit
+        PUSH    BC			; store required file mode
         CALL    GTBYTC                  ; skip basic char and evaluate byte operand
         _RST    SYNCHR
         DEFB    ","                     ; check for ,
         LD      A,E
-        PUSH    HL
+        PUSH    HL			; store BASIC pointer
         CALL    SETFIL                  ; redirect interpreter input/output to i/o channel
-        LD      A,(HL)
-        POP     HL
-        POP     BC
-        CP      C                       ; correct filemode ?
+        LD      A,(HL)			; file mode
+        POP     HL			; restore BASIC pointer
+        POP     BC			; restore required file mode
+        CP      C                       ; correct file mode ?
         JR      Z,J6D79                 ; yep, quit
         CP      4                       ; random mode ?
         JR      Z,J6D79                 ; yep, quit
@@ -137,18 +146,18 @@ C6D57:  CP      "#"
         LD      A,C
         CP      2                       ; request output mode ?
 J6D76:  JP      NZ,DERBFN               ; nope, bad filenumber
-J6D79:  LD      A,(HL)
+J6D79:  LD      A,(HL)			; BASIC character
         RET
 
-;       Subroutine      close i/o channel 0 and load HL from (TEMP)
+;       Subroutine      close system i/o channel and load HL from (TEMP)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 PRGFIN:
 C6D7B:  LD      BC,GTMPRT               ; load BASIC pointer from (TEMP)
         PUSH    BC
-        XOR     A
-        JP      CLSFIL                  ; close i/o channel 0
+        XOR     A			; i/o channel = 0 (system)
+        JP      CLSFIL                  ; close i/o channel
 
 FILIND:
 J6D83:  _RST    GETYPR                  ; get DAC type
@@ -173,7 +182,7 @@ J6DA3:  PUSH    AF
         PUSH    BC
         PUSH    HL
 J6DA6:  CALL    INDSKC                  ; get sequential input
-        JP      C,DERRPE
+        JP      C,DERRPE                ; error, input past end error
         CP      20H
         JR      NZ,J6DB4
         INC     D
@@ -253,7 +262,9 @@ J6E30:  LD      C,A
 
 J6E3C:  LD      A,18                    ; function backup
         CALL    GENDSP                  ; i/o function dispatcher
-NOSKCR:
+
+	_MSXCP	NOSKCR,6E41H
+
 J6E41:  POP     HL
 J6E42:  LD      (HL),00H
         LD      HL,BUFMIN
@@ -289,46 +300,71 @@ C6E61:  OR      A
         POP     AF
         JP      J6E42
 
-DERNMF:
+; bad filename error
+
+	_MSXCP	DERNMF,6E6BH
+
 J6E6B:  LD      E,56
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
 
-DERFAO:
+; file already open error
+
+	_MSXCP	DERFAO,6E6EH
+
 J6E6E:  LD      E,54
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
+
+; direct statement in file error
 
 ERRFDR:
 J6E71:  LD      E,57
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
 
+; file not found error
+
 DERFNF:
 J6E74:  LD      E,53
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
 
-DERFNO:
+; file not open error
+
+	_MSXCP	DERFNO,6E77H
+
 J6E77:  LD      E,59
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
+
+; field overflow error
 
 DERFOV:
 J6E7A:  LD      E,50
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
 
+; bad file number error
+
 DERBFN:
 J6E7D:  LD      E,52
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
 
-DERIER:
+; internal error
+
+	_MSXCP	DERIER,6E80H
+
 J6E80:  LD      E,51
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
+
+; input past end error
 
 DERRPE:
 J6E83:  LD      E,55
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
 
-DERSOO:
+; sequential i/o only error
+
+	_MSXCP	DERSOO,6E86H
+
 J6E86:  LD      E,58
         XOR     A
-        LD      (NLONLY),A              ; not loading basic program, close i/o channels when requested
+        LD      (NLONLY),A              ; end loading BASIC program, do not close i/o channels = false
         LD      (FLBMEM),A
         JP      ERROR
 
@@ -336,22 +372,23 @@ J6E86:  LD      E,58
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-BSAVE:
+	_MSXCP	BSAVE,6E92H
+
 C6E92:  CALL    FILEVL                  ; evaluate filespecification
-        PUSH    DE                      ; save devicecode
+        PUSH    DE                      ; store device code
         _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    C6F0B                   ; evaluate BLOAD/BSAVE address operand
         EX      DE,HL
         LD      (SAVENT),HL
         EX      DE,HL                   ; assume start address = execute address
-        PUSH    DE                      ; save start address
+        PUSH    DE                      ; store start address
         _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    C6F0B                   ; evaluate BLOAD/BSAVE address operand
         EX      DE,HL
         LD      (SAVEND),HL
-        EX      DE,HL                   ; save end address
+        EX      DE,HL                   ; store end address
         DEC     HL
         _RST    CHRGTR                  ; end of statement ?
         JR      Z,J6EB9                 ; yep, skip execute address
@@ -360,9 +397,9 @@ C6E92:  CALL    FILEVL                  ; evaluate filespecification
         CALL    C6F0B                   ; evaluate BLOAD/BSAVE address operand
         EX      DE,HL
         LD      (SAVENT),HL
-        EX      DE,HL                   ; save execute address
+        EX      DE,HL                   ; store execute address
 J6EB9:  POP     BC                      ; start address
-        POP     DE                      ; devicecode
+        POP     DE                      ; device code
         PUSH    HL
         PUSH    BC
         LD      A,D
@@ -374,7 +411,8 @@ J6EB9:  POP     BC                      ; start address
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-BLOAD:
+	_MSXCP	BLOAD,6EC6H
+
 C6EC6:  CALL    FILEVL                  ; evaluate filespecification
         PUSH    DE
         XOR     A
@@ -395,9 +433,9 @@ C6EC6:  CALL    FILEVL                  ; evaluate filespecification
 J6EE3:  CALL    C6F0B                   ; evaluate BLOAD/BSAVE address operand (offset)
         LD      B,D
         LD      C,E                     ; offset
-J6EE8:  POP     DE                      ; devicecode
-        PUSH    HL
-        PUSH    BC
+J6EE8:  POP     DE                      ; device code
+        PUSH    HL                      ; store BASIC pointer
+        PUSH    BC                      ; store offset
         LD      A,D
         CP      0FFH                    ; device is CAS ?
         JP      Z,CBLOAD                ; BLOAD from cassette
@@ -407,29 +445,33 @@ J6EE8:  POP     DE                      ; devicecode
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-BLDFIN:
+	_MSXCP	BLDFIN,6EF4H
+
 J6EF4:  LD      A,(RUNBNF)
         OR      A                       ; execute after load ?
         JR      Z,J6F06                 ; nope, close channel and quit
-        XOR     A
+        XOR     A			; i/o channel = 0 (system)
         CALL    CLSFIL                  ; close i/o channel 0
         LD      HL,POPHR2
         PUSH    HL                      ; after this, retore BASIC pointer and continue
-        LD      HL,(SAVENT)
+        LD      HL,(SAVENT)             ; execute address
         JP      (HL)                    ; start code
 
 J6F06:  POP     HL                      ; restore BASIC pointer
-        XOR     A
+        XOR     A			; i/o channel = 0 (system)
         JP      CLSFIL                  ; close i/o channel 0
 
 ;       Subroutine      evaluate BLOAD/BSAVE address operand
 ;       Inputs          ________________________
 ;       Outputs         ________________________
+;       Remark          duplicate of GETUIN
+
+	_MSXCP	M6F0B,6F0BH
 
 C6F0B:  CALL    FRMEVL                  ; evaluate expression
-        PUSH    HL
+        PUSH    HL                      ; store BASIC pointer
         CALL    FRQINT                  ; convert address to integer
-        POP     DE
+        POP     DE                      ; restore BASIC pointer
         EX      DE,HL
         RET
 

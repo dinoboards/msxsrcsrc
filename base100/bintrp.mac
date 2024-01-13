@@ -435,6 +435,15 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
 KEYWRD  MACRO   X,Y
 G       ASET    0
 Q       ASET    0
@@ -992,8 +1001,11 @@ I3D75:  DEFB    0
         DEFB    "File not OPEN",0 
 
 INTXT:
-I3FD2:  DEFB    " in ",0
-NULSTR  EQU     $-1
+I3FD2:  DEFB    " in "
+
+	_MSXCP	NULSTR,3FD6H
+
+	DEFB	0
 
 REDDY:
 I3FD7:  DEFB    "Ok",13,10,0
@@ -1043,8 +1055,8 @@ J3FF9:  LD      BC,25-3
 FNINP:
 C4001:  CALL    FRQINT                  ; convert address to integer
         LD      B,H
-        LD      C,L
-        IN      A,(C)
+        LD      C,L			; I/O address
+        IN      A,(C)			; read I/O port
         JP      SNGFLT                  ; byte to DAC
 
 ;       Subroutine      evaluate address operand and byte operand seperated by a ","
@@ -1052,11 +1064,11 @@ C4001:  CALL    FRQINT                  ; convert address to integer
 ;       Outputs         ________________________
 
 C400B:  CALL    GETUIN                  ; evaluate address operand
-        PUSH    DE
+        PUSH    DE			; store address
         _RST    SYNCHR
         DEFB    ","			; check for ,
         CALL    GETBYT                  ; evaluate byte operand
-        POP     BC
+        POP     BC			; restore address
         RET
 
 ;       Subroutine      OUT statement
@@ -1074,8 +1086,8 @@ C4016:  CALL    C400B                   ; evaluate address operand and byte oper
 
 FNWAIT:
 C401C:  CALL    C400B                   ; evaluate address operand and byte operand seperated by a ","
-        PUSH    BC
-        PUSH    AF
+        PUSH    BC			; store I/O address
+        PUSH    AF			; store AND parameter
         LD      E,0                     ; assume no XOR parameter
         DEC     HL
         _RST    CHRGTR                  ; end of statement ?
@@ -1083,11 +1095,11 @@ C401C:  CALL    C400B                   ; evaluate address operand and byte oper
         _RST    SYNCHR
         DEFB    ","			; check for ,
         CALL    GETBYT                  ; evaluate byte operand
-J402C:  POP     AF
+J402C:  POP     AF			; restore AND parameter
         LD      D,A                     ; AND parameter
-        POP     BC                      ; i/o address
+        POP     BC                      ; restore I/O address
 J402F:  CALL    CKCNTC                  ; handle CTRL/STOP or STOP pressed, no resume
-        IN      A,(C)
+        IN      A,(C)			; read I/O port
         XOR     E
         AND     D
         JR      Z,J402F
@@ -1112,7 +1124,8 @@ J404C:  JP      ENDCON                  ; END without closing i/o channels, clea
 J404F:  LD      HL,(DATLIN)
         LD      (CURLIN),HL
 
-SNERR:
+	_MSXCP	SNERR,4055H
+
 J4055:  LD      E,2
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
 
@@ -1144,17 +1157,19 @@ MOERR:
 J406A:  LD      E,24
         DEFB    001H			; LD BC,xxxx, trick to skip next instruction
 
-TMERR:
+	_MSXCP	TMERR,406DH
+
 J406D:  LD      E,13
 
 ;       Subroutine      BASIC error
 ;       Inputs          E = errornumber
 ;       Outputs         ________________________
 
-ERROR:
+	_MSXCP	ERROR,406FH
+
 J406F:  CALL    H.ERRO                  ; hook start of the BASIC error routine
         XOR     A
-        LD      (NLONLY),A              ; not loading basic program, close i/o channels when requested
+        LD      (NLONLY),A              ; end loading BASIC program, do not close i/o channels = false
         LD      HL,(VLZADR)
         LD      A,H
         OR      L
@@ -1178,8 +1193,9 @@ J4096:  LD      BC,I40A4                ; continue with error after stack intial
 ;       Inputs          -
 ;       Outputs         -
 
-READYR:
-J409B:  LD      BC,STPRDY               ; continue with ok and mainloop (+POP)
+	_MSXCP	READYR,409BH
+
+J409B:  LD      BC,STPRDY               ; continue with ok and main loop (+POP)
 J409E:  LD      HL,(SAVSTK)             ; restore stack pointer
         JP      STKERR                  ; reinitialize stack
 
@@ -1258,14 +1274,14 @@ J4110:  LD      A,7
         CALL    NZ,INPRT                ; nope, "in" number to interpreter output
         DEFB    03EH                    ; LD A,xx, trick to skip next instruction
 
-;       Subroutine      ok and mainloop (+POP)
+;       Subroutine      ok and main loop (+POP)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 STPRDY:
 J411E:  POP     BC
 
-;       Subroutine      ok and mainloop
+;       Subroutine      ok and main loop
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -1278,12 +1294,12 @@ J411F:  CALL    TOTEXT                  ; force text screenmode
         LD      HL,REDDY                ; "Ok" message
         CALL    STROUT                  ; message to interpreter output
 
-;       Subroutine      mainloop
+;       Subroutine      main loop
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 MAIN:
-J4134:  CALL    H.MAIN                  ; hook start mainloop
+J4134:  CALL    H.MAIN                  ; hook start main loop
         LD      HL,0FFFFH
         LD      (CURLIN),HL             ; interpreter in direct mode
         LD      HL,ENDPRG
@@ -1292,34 +1308,36 @@ J4134:  CALL    H.MAIN                  ; hook start mainloop
         OR      A                       ; in auto line number mode ?
         JR      Z,J415F                 ; nope, skip auto line number
         LD      HL,(AUTLIN)             ; current auto line number
-        PUSH    HL
+        PUSH    HL			; store auto line number
         CALL    LINPRT                  ; number to interpreter output
-        POP     DE
-        PUSH    DE
+        POP     DE			; restore auto line number
+        PUSH    DE			; store auto line number
         CALL    FNDLIN                  ; search line number from start of program
         LD      A,"*"
         JR      C,J415B                 ; found, existing line indicator
         LD      A," "                   ; not found, new line indicator
 J415B:  _RST    OUTDO                   ; lineindicator to interpreter output
         LD      (AUTFLG),A              ; store line exist status
-J415F:  CALL    ISFLIO                  ; interpreter input/output device = file ?
-        JR      NZ,J4170                ; yep,
+J415F:  CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
+        JR      NZ,J4170                ; yep, get line from i/o channel
         CALL    PINLIN                  ; get line from keyboard
         JR      NC,J4173                ; not aborted, continue
         XOR     A
         LD      (AUTFLG),A              ; quit auto line number mode
-        JP      MAIN                    ; mainloop
+        JP      MAIN                    ; main loop
 
 J4170:  CALL    DSKCHI                  ; get line from interpreter input file
-NTSTOP:
+
+	_MSXCP	NTSTOP,4173H
+
 J4173:  _RST    CHRGTR                  ; get next BASIC character
         INC     A
         DEC     A                       ; empty line ?
-        JR      Z,MAIN                  ; yep, restart mainloop
-        PUSH    AF
+        JR      Z,MAIN                  ; yep, restart main loop
+        PUSH    AF			; store line has line number
         CALL    LINGET                  ; collect line number
         JR      NC,J4184                ; line number ok,
-        CALL    ISFLIO                  ; interpreter input/output device = file ?
+        CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         JP      Z,SNERR                 ; nope, syntax error
 J4184:  CALL    C4514                   ; skip space chars
         LD      A,(AUTFLG)
@@ -1329,108 +1347,115 @@ J4184:  CALL    C4514                   ; skip space chars
         JR      NZ,J4195                ; nope,
         CP      (HL)                    ; yep, is this the "*" char ?
         JR      NZ,J4195
-        INC     HL                      ; yep, skip it
+        INC     HL                      ; yep, skip
 J4195:  LD      A,D
-        OR      E
-        JR      Z,J419F
+        OR      E			; line number = 0 ?
+        JR      Z,J419F			; 
         LD      A,(HL)
-        CP      " "
+        CP      " "			; space ?
         JR      NZ,J419F
-        INC     HL
-J419F:  PUSH    DE
+        INC     HL			; yep, skip
+J419F:  PUSH    DE			; store line number
         CALL    C42B2                   ; encode BASIC line
-        POP     DE
-        POP     AF
+        POP     DE			; restore line number
+        POP     AF			; restore line has line number
         LD      (SAVTXT),HL             ; store BASIC pointer = KBFMIN
         CALL    H.DIRD
-        JR      C,J41B4
+        JR      C,J41B4			; line has line number, add line to BASIC program
         XOR     A
         LD      (AUTFLG),A              ; quit auto line number mode
         JP      DIRDO                   ; handle direct statement
 
-J41B4:  PUSH    DE
-        PUSH    BC
+J41B4:  PUSH    DE			; store line number
+        PUSH    BC			; store size of BASIC line
         _RST    CHRGTR                  ; get next BASIC character
-        OR      A
-        PUSH    AF                      ; Zx set if empty line
+        OR      A			; empty line flag (Zx set), no auto line flag
+        PUSH    AF                      ; store empty and auto line flag
         LD      A,(AUTFLG)
         AND     A                       ; in auto line number mode ?
         JR      Z,J41C2                 ; nope,
-        POP     AF
-        SCF                             ; auto line number mode
-        PUSH    AF
-J41C2:  LD      (DOT),DE
+        POP     AF			; restore empty and auto line flag
+        SCF                             ; set auto line flag
+        PUSH    AF			; store empty and auto line flag
+J41C2:  LD      (DOT),DE		; update last line number
         LD      HL,(AUTINC)
-        ADD     HL,DE                   ; new line number for auto line number mode
-        JR      C,J41D7                 ; >65535, end auto line number mode
-        PUSH    DE
+        ADD     HL,DE                   ; next auto line number = current line number + auto increment value
+        JR      C,J41D7                 ; overflow, end auto line number mode
+        PUSH    DE			; store current line number
         LD      DE,65530
-        _RST    DCOMPR
-        POP     DE                      ; new line number < 65530 ?
-        LD      (AUTLIN),HL             ; new auto line number
-        JR      C,J41DB                 ; yep, contine
+        _RST    DCOMPR			; next auto line number < 65530 ?
+        POP     DE                      ; restore current line number
+        LD      (AUTLIN),HL             ; update auto line number
+        JR      C,J41DB                 ; yep, continue
 J41D7:  XOR     A
         LD      (AUTFLG),A              ; quit auto line number mode
 J41DB:  CALL    FNDLIN                  ; search line number from start of program
         JR      C,C41ED                 ; extact match found,
-        POP     AF
-        PUSH    AF
+
+; line not found
+
+        POP     AF			; restore empty and auto line flag
+        PUSH    AF			; store empty and auto line flag
         JR      NZ,J41EA                ; not found + non empty line,
         JP      NC,USERR                ; not found + no auto + empty line, undefined line number error
-                                        ; not found + auto + empty, do nothing
-J41E7:  PUSH    BC
-        JR      FINI
 
-J41EA:  OR      A                       ; flag line addition
-        JR      J41F4
+J41E7:  PUSH    BC			; store pointer to BASIC line
+        JR      FINI			; exit
 
-C41ED:  POP     AF
-        PUSH    AF
-        JR      NZ,J41F3                ; found + non empty line, flag line removeable
+; not found + non empty line, add line
+
+J41EA:  OR      A                       ; line flag = no remove first
+        JR      J41F4			; continue
+
+; line found
+
+C41ED:  POP     AF			; restore empty and auto line flag
+        PUSH    AF			; store empty and auto line flag
+        JR      NZ,J41F3                ; found + non empty line, remove first
         JR      C,J41E7                 ; found + auto + empty line, do nothing
-                                        ; found + no auto + empty line, flag line removeable
-J41F3:  SCF
-J41F4:  PUSH    BC
-        PUSH    AF
-        PUSH    HL
+
+J41F3:  SCF				; line flag = remove first
+J41F4:  PUSH    BC			; store pointer to BASIC line
+        PUSH    AF			; store remove line first flag
+        PUSH    HL			; store pointer to next BASIC line
         CALL    DEPTR                   ; convert to line pointers to line numbers if needed
-        POP     HL
-        POP     AF
-        POP     BC
-        PUSH    BC
-        CALL    C,C5405                 ; flag remove, remove line
-        POP     DE
-        POP     AF                      ; empty line ?
-        PUSH    DE
-        JR      Z,FINI                  ; yep, skip line adding
-        POP     DE
+        POP     HL			; restore pointer to next BASIC line
+        POP     AF			; restore remove line first flag
+        POP     BC			; restore pointer to BASIC line
+        PUSH    BC			; store pointer to BASIC line
+        CALL    C,C5405                 ; remove line first, remove line
+        POP     DE			; restore pointer to BASIC line
+        POP     AF                      ; restore empty and auto line flag
+        PUSH    DE			; store pointer to BASIC line
+        JR      Z,FINI                  ; empty line, skip line adding
+        POP     DE			; restore pointer to BASIC line
         LD      HL,0
         LD      (ONELIN),HL             ; disable ERROR handler
         LD      HL,(VARTAB)
-        EX      (SP),HL
-        POP     BC
-        PUSH    HL
-        ADD     HL,BC
-        PUSH    HL
-        CALL    BLTU                    ; check for enough stackspace and move data
-        POP     HL
-        LD      (VARTAB),HL
+        EX      (SP),HL			; store start of variable area, restore size of BASIC line
+        POP     BC			; restore start of variable area
+        PUSH    HL			; store size of BASIC line
+        ADD     HL,BC			; new start of variable area
+        PUSH    HL			; store new start of variable area
+        CALL    BLTU                    ; check for enough stackspace and move data (moves the BASIC variables)
+        POP     HL			; restore new start of variable area
+        LD      (VARTAB),HL		; update start of variable area
         EX      DE,HL
-        LD      (HL),H
-        POP     BC
-        POP     DE
-        PUSH    HL
+        LD      (HL),H			; update line link (invalid)
+        POP     BC			; restore size of BASIC line
+        POP     DE			; restore line number
+        PUSH    HL			; store pointer to BASIC line
         INC     HL
-        INC     HL
+        INC     HL			; skip line link
         LD      (HL),E
         INC     HL
-        LD      (HL),D
+        LD      (HL),D			; update line number
         INC     HL
         LD      DE,KBUF
         DEC     BC
         DEC     BC
         DEC     BC
-        DEC     BC
+        DEC     BC			; exclude line link and number
 J422E:  LD      A,(DE)
         LD      (HL),A
         INC     HL
@@ -1438,29 +1463,30 @@ J422E:  LD      A,(DE)
         DEC     BC
         LD      A,C
         OR      B
-        JR      NZ,J422E
+        JR      NZ,J422E		; copy BASIC line
 
 FINI:
 J4237:  CALL    H.FINI
-        POP     DE
-        CALL    C4257                   ; setup BASIC linelinks from this point
+        POP     DE			; restore pointer to BASIC line
+        CALL    C4257                   ; setup BASIC line links from this point
         LD      HL,(PTRFIL)
-        LD      (TEMP2),HL              ; store interpreter input/output device
-        CALL    RUNC                    ; initialize interpreter, basic pointer at start of program
+        LD      (TEMP2),HL              ; store interpreter input/output i/o channel
+        CALL    RUNC                    ; initialize interpreter, BASIC pointer at start of program
         CALL    H.FINE
         LD      HL,(TEMP2)
-        LD      (PTRFIL),HL             ; restore interpreter input/output device
+        LD      (PTRFIL),HL             ; restore interpreter input/output i/o channel
         JP      MAIN                    ; main loop
 
-;       Subroutine      setup BASIC linelinks
+;       Subroutine      setup BASIC line links
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-LINKER:
+	_MSXCP	LINKER,4253H
+
 C4253:  LD      HL,(TXTTAB)
         EX      DE,HL
 
-;       Subroutine      setup BASIC linelinks from this point
+;       Subroutine      setup BASIC line links from this point
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
@@ -1471,11 +1497,11 @@ C4257:  LD      H,D
         OR      (HL)                    ; end of program ?
         RET     Z                       ; yep, quit
         INC     HL
-        INC     HL                      ; skip over linenuber
+        INC     HL                      ; skip over line number
 J425F:  INC     HL
         LD      A,(HL)
 J4261:  OR      A                       ; end of BASIC line ?
-        JR      Z,J4272                 ; yep, fill linelink
+        JR      Z,J4272                 ; yep, fill line link
         CP      20H                     ; character or non numeric token ?
         JR      NC,J425F                ; yep, next
         CP      0BH                     ; multi byte numeric token ?
@@ -1488,7 +1514,7 @@ J4272:  INC     HL
         EX      DE,HL
         LD      (HL),E
         INC     HL
-        LD      (HL),D
+        LD      (HL),D			; update line link
         JR      C4257                   ; next line
 
 ;       Subroutine      evaluate line number (range) and search start line number
@@ -1521,7 +1547,8 @@ C4293:  EX      (SP),HL                 ; store BASIC pointer, restore return ad
 ;       Inputs          DE = line number to search
 ;       Outputs         Zx set if line number found, Cx reset,Zx reset if bigger line number found, BC = start of found line, HL = start of next line
 
-FNDLIN:
+	_MSXCP	FNDLIN,4295H
+
 C4295:  LD      HL,(TXTTAB)             ; start of BASIC program
 
 ;       Subroutine      search line number
@@ -1532,7 +1559,7 @@ C4298:  LD      B,H
         LD      C,L                     ; store start of line
         LD      A,(HL)
         INC     HL
-        OR      (HL)                    ; endpointer ?
+        OR      (HL)                    ; end of BASIC program ?
         DEC     HL
         RET     Z                       ; yep, quit
         INC     HL
@@ -1547,7 +1574,7 @@ C4298:  LD      B,H
         LD      A,(HL)
         INC     HL
         LD      H,(HL)
-        LD      L,A                     ; start of next line
+        LD      L,A                     ; get line link, start of next line
         CCF
         RET     Z                       ; exact match, quit (Cx set)
         CCF
@@ -2094,7 +2121,8 @@ J45FD:  LD      B,82H
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-NEWSTT:
+	_MSXCP	NEWSTT,4601H
+
 C4601:  CALL    H.NEWS
         LD      (SAVSTK),SP             ; store stack pointer
         CALL    ISCNTC                  ; handle CTRL/STOP or STOP pressed
@@ -2160,7 +2188,8 @@ J4646:  CALL    H.GONE
 ;       Inputs          ________________________
 ;       Outputs         Zx set if end of statement, Cx set if numeric
 
-CHRGTR:
+	_MSXCP	CHRGTR,4666H
+
 C4666:  CALL    H.CHRG
         INC     HL
 
@@ -2268,7 +2297,9 @@ C46E8:  LD      A,(CONSAV)
         INC     HL
         LD      D,(HL)
         EX      DE,HL                   ; line number
-FLTLIN:
+
+	_MSXCP	FLTLIN,46FFH
+
 J46FF:  JP      CONSUI                  ; convert unsigned integer to single real
 
 J4702:  LD      A,(CONTYP)
@@ -2357,7 +2388,8 @@ C4755:  _RST    CHRGTR                  ; get next BASIC character
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-INTID2:
+	_MSXCP	INTID2,4756H
+
 C4756:  CALL    GETIN2                  ; evaluate integer operand
         RET     P
 
@@ -2365,7 +2397,8 @@ C4756:  CALL    GETIN2                  ; evaluate integer operand
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-FCERR:
+	_MSXCP	FCERR,475AH
+
 C475A:  LD      E,5
         JP      ERROR                   ; illegal function call
 
@@ -2383,7 +2416,8 @@ C475F:  LD      A,(HL)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-LINGET:
+	_MSXCP	LINGET,4769H
+
 C4769:  DEC     HL
 
 ;       Subroutine      collect line number
@@ -2530,7 +2564,8 @@ C47EB:  LD      A,(CONSAV)
         LD      L,C                     ; update BASIC pointer
         RET
 
-USERR:
+	_MSXCP	USERR,481CH
+
 J481C:  LD      E,8
         JP      ERROR                   ; undefined line number error
 
@@ -2645,7 +2680,7 @@ J4893:  LD      B,A
         CP      B
         LD      A,B                     ; result expression of the same type as variable ?
         JR      Z,J48A1                 ; yep, no need to convert
-        CALL    C517A                   ; convert to DAC to new type
+        CALL    DOCNVF                  ; convert to DAC to new type
 J489E:  LD      A,(VALTYP)
 J48A1:  LD      DE,DAC
         CP      2                       ; integer ?
@@ -2871,7 +2906,7 @@ J49D2:  LD      A,H
         POP     HL
         LD      (AUTLIN),HL
         POP     BC
-        JP      MAIN                    ; mainloop
+        JP      MAIN                    ; main loop
 
 ;       Subroutine      IF statement
 ;       Inputs          ________________________
@@ -2953,7 +2988,7 @@ J4A2E:  JP      Z,FINPRT                ; return interpreter output to screen an
         LD      HL,(DAC+2)
         INC     (HL)
         CALL    H.PRTF
-        CALL    ISFLIO                  ; interpreter input/output device = file ?
+        CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         JR      NZ,J4A89                ; yep,
         LD      HL,(DAC+2)
         LD      A,(PRTFLG)
@@ -2981,16 +3016,16 @@ J4A8D:  CALL    Z,STRPRT                ; free string and string to interpreter 
 
 J4A94:  CALL    H.COMP
         LD      BC,8
-        LD      HL,(PTRFIL)
-        ADD     HL,BC
-        CALL    ISFLIO                  ; interpreter input/output device = file ?
+        LD      HL,(PTRFIL)		; pointer to interpreter i/o channel
+        ADD     HL,BC			; +8
+        CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         LD      A,(HL)			; position in buffer
         JR      NZ,J4ABF                ; yep,
         LD      A,(PRTFLG)
         OR      A                       ; interpreter output to screen ?
         JR      Z,J4AB1                 ; yep,
         LD      A,(LPTPOS)
-        CP      0EEH
+        CP      238
         JR      J4AB9
 
 J4AB1:  LD      A,(CLMLST)
@@ -3015,17 +3050,17 @@ J4AC6:  PUSH    AF
         JR      Z,J4AEF
         LD      BC,8
         LD      HL,(PTRFIL)
-        ADD     HL,BC
-        CALL    ISFLIO                  ; interpreter input/output device = file ?
+        ADD     HL,BC			; +8
+        CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         LD      A,(HL)			; position in buffer
         JR      NZ,J4AEF                ; yep,
         LD      A,(PRTFLG)
         OR      A                       ; interpreter output to screen ?
         JP      Z,J4AEC                 ; yep,
-        LD      A,(LPTPOS)
+        LD      A,(LPTPOS)		; printer position in line
         JR      J4AEF
 
-J4AEC:  LD      A,(TTYPOS)
+J4AEC:  LD      A,(TTYPOS)		; screen position in line
 J4AEF:  CPL
         ADD     A,E
         JR      NC,J4AFA
@@ -3042,7 +3077,8 @@ J4AFA:  POP     HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-FINPRT:
+	_MSXCP	FINPRT,4AFFH
+
 C4AFF:  CALL    H.FINP
         XOR     A
         LD      (PRTFLG),A              ; interpreter output to screen
@@ -3177,7 +3213,7 @@ J4BB9:  OR      A
         PUSH    BC
         JP      Z,J485A                 ; skip to end of statement
         PUSH    DE
-J4BD1:  CALL    ISFLIO                  ; interpreter input/output device = file ?
+J4BD1:  CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         JP      NZ,FILIND               ; yep,
         _RST    GETYPR                  ; get DAC type
         PUSH    AF
@@ -3225,7 +3261,7 @@ J4C0E:  EX      (SP),HL
         EX      DE,HL
         JP      NZ,RESFIN               ; set new DATA pointer and quit
         PUSH    DE
-        CALL    ISFLIO                  ; interpreter input/output device = file ?
+        CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         JR      NZ,J4C2B                ; yep, skip extra ignored
         LD      A,(HL)
         OR      A
@@ -3264,7 +3300,8 @@ J4C57:  _RST    CHRGTR                  ; get next BASIC character
 ;       Inputs          HL = BASIC pointer
 ;       Outputs         ________________________
 
-FRMEQL:
+	_MSXCP	FRMEQL,4C5FH
+
 C4C5F:  _RST    SYNCHR
         DEFB    0EFH                    ; check for =
         DEFB    001H                    ; LD BC,xxxx, trick to skip next instruction
@@ -3281,7 +3318,8 @@ C4C62:  _RST    SYNCHR
 ;       Inputs          HL = BASIC pointer
 ;       Outputs         ________________________
 
-FRMEVL:
+	_MSXCP	FRMEVL,4C64H
+
 C4C64:  DEC     HL
 
 
@@ -3583,10 +3621,10 @@ J4E15:  CP      0EDH                    ; POINT token ?
         CP      "#"
         JR      NZ,J4E53                ; no fileid, varptr for variables
         CALL    GTBYTC                  ; skip basic char and evaluate byte operand
-        PUSH    HL
-        CALL    FILIDX                  ; get i/o channel pointer
+        PUSH    HL			; store BASIC pointer
+        CALL    FILIDX                  ; get pointer to i/o channel
         EX      DE,HL
-        POP     HL
+        POP     HL			; restore BASIC pointer
         JR      J4E56
 
 J4E53:  CALL    PTRGTV                  ; locate variable (search only)
@@ -4053,7 +4091,7 @@ J5069:  LD      A,80H
         POP     HL
         LD      (TEMP3),HL
         POP     AF
-        CALL    C517A                   ; convert to DAC to new type
+        CALL    DOCNVF                  ; convert to DAC to new type
         LD      C,4
         CALL    GETSTK                  ; check if enough stackspace for 4 words
         LD      HL,-8
@@ -4197,7 +4235,8 @@ J5156:  LD      HL,(PRMSTK)
 ;       Inputs          A = new type, (VALTYP) = current type, (DAC) = current value
 ;       Outputs         ________________________
 
-DOCNVF:
+	_MSXCP	DOCNVF,517AH
+
 C517A:  PUSH    HL
         AND     07H
         LD      HL,I3D47
@@ -4324,7 +4363,8 @@ C520E:  _RST    CHRGTR                  ; get next BASIC character
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-GETIN2:
+	_MSXCP	GETIN2,520FH
+
 C520F:  CALL    FRMEVL                  ; evaluate expression
 
 ;       Subroutine      __________________________
@@ -4344,21 +4384,24 @@ C5212:  PUSH    HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-GTBYTC:
+	_MSXCP	GTBYTC,521BH
+
 C521B:  _RST    CHRGTR                  ; get next BASIC character
 
 ;       Subroutine      evaluate byte operand
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-GETBYT:
+	_MSXCP	GETBYT,521CH
+
 C521C:  CALL    FRMEVL                  ; evaluate expression
 
 ;       Subroutine      check for byte value
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-CONINT:
+	_MSXCP	CONINT,521FH
+
 C521F:  CALL    INTFR2
         JP      NZ,FCERR                ; illegal function call
         DEC     HL
@@ -4393,8 +4436,8 @@ J5236:  LD      HL,0FFFFH
         INC     HL
         LD      A,B
         OR      C                       ; end of program ?
-        JP      Z,READY                 ; yep, ok and mainloop
-        CALL    ISFLIO                  ; interpreter input/output device = file ?
+        JP      Z,READY                 ; yep, ok and main loop
+        CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         CALL    Z,ISCNTC                ; nope, handle CTRL/STOP or STOP pressed
         PUSH    BC                      ; store start of next line
         LD      C,(HL)
@@ -4406,7 +4449,7 @@ J5236:  LD      HL,0FFFFH
         EX      DE,HL
         _RST    DCOMPR                  ; compare with end line number
         POP     BC
-        JP      C,STPRDY                ; all done, ok and mainloop (+POP)
+        JP      C,STPRDY                ; all done, ok and main loop (+POP)
         EX      (SP),HL
         PUSH    HL
         PUSH    BC
@@ -4440,7 +4483,8 @@ C527B:  LD      A,(HL)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-BUFLIN:
+	_MSXCP	BUFLIN,5284H
+
 C5284:  LD      BC,BUF
         LD      D,255
         XOR     A
@@ -4612,6 +4656,9 @@ J5361:  DEC     HL
         CP      0CH
         JP      Z,FOUTH                 ; convert integer to hexadecimal text
         LD      HL,(CONLO)
+
+	_MSXCP	JPFOUT,537BH
+
         JP      FOUT                    ; convert DAC to text, unformatted
 
 I537E:  POP     BC
@@ -4760,9 +4807,13 @@ C5423:  CALL    GETUIN                  ; evaluate address operand
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-GETUIN:
+	_MSXCP	GETUIN,542FH
+
 C542F:  CALL    FRMEVL                  ; evaluate expression
-GETUI:  PUSH    HL                      ; store BASIC pointer
+
+	_MSXCP	GETUI,5432H
+
+	PUSH    HL                      ; store BASIC pointer
         CALL    FRQINT                  ; convert address to integer
         EX      DE,HL
         POP     HL                      ; restore BASIC pointer
@@ -4912,7 +4963,7 @@ C54EA:  LD      A,(PTRFLG)
 
 SCCALL:
 J54F1:  LD      BC,STPRDY
-        PUSH    BC                      ; ok and mainloop (+POP)
+        PUSH    BC                      ; ok and main loop (+POP)
         DEFB    0FEH                    ; CP xx, skip to J54F7
 
 ;       Subroutine      convert line numbers to pointers
@@ -4926,7 +4977,8 @@ C54F6:  DEFB    0F6H                    ; OR xx, skip next instruction, A<>0 (no
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-SCCPTR:
+	_MSXCP	SCCPTR,54F7H
+
 J54F7:  XOR     A                       ; now line numbers
         LD      (PTRFLG),A
         LD      HL,(TXTTAB)
@@ -5026,7 +5078,8 @@ C5583:  PUSH    HL
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-SYNCHR:
+	_MSXCP	SYNCHR,558CH
+
 C558C:  LD      A,(HL)			; get BASIC character
         EX      (SP),HL
         CP      (HL)			; same as required ?
@@ -5039,7 +5092,8 @@ C558C:  LD      A,(HL)			; get BASIC character
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-GETYPR:
+	_MSXCP	GETYPR,5597H
+
 C5597:  LD      A,(VALTYP)
         CP      8
         JR      NC,J55A3

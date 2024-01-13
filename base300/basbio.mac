@@ -81,6 +81,15 @@ _RST    MACRO   X
         ENDIF
         ENDM
 
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
 
 ; START SUBTTL 	BIO
 
@@ -116,7 +125,8 @@ C731C:  CALL    LPTOUT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-CRDONZ:
+	_MSXCP	CRDONZ,7323H
+
 C7323:  LD      A,(TTYPOS)
         OR      A
         RET     Z
@@ -125,7 +135,8 @@ C7323:  LD      A,(TTYPOS)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-CRDO:
+	_MSXCP	CRDO,7328H
+
 C7328:  CALL    H.CRDO
         LD      A,0DH
         _RST    OUTDO
@@ -137,7 +148,7 @@ C7328:  CALL    H.CRDO
 ;       Outputs         ________________________
 
 CRFIN:
-C7331:  CALL    ISFLIO                  ; interpreter input/output device = file ?
+C7331:  CALL    ISFLIO                  ; interpreter input/output redirected to i/o channel ?
         JR      Z,J7338                 ; nope,
         XOR     A
         RET
@@ -194,11 +205,11 @@ C7367:  _RST    OUTDO
 
 DSKCHI:
 C7374:  CALL    H.DSKC
-        LD      B,255
-        LD      HL,BUF
+        LD      B,255			; number of space left in buffer
+        LD      HL,BUF			; pointer in buffer = input buffer
 J737C:  CALL    INDSKC                  ; get sequential input
-        JR      C,J7397
-        LD      (HL),A
+        JR      C,J7397			; end of file, handle
+        LD      (HL),A			; store character
         CP      0DH                     ; CR ?
         JR      Z,J7391                 ; yep, stop input
         CP      09H                     ; TAB ?
@@ -208,15 +219,18 @@ J737C:  CALL    INDSKC                  ; get sequential input
 J738E:  INC     HL
         DJNZ    J737C                   ; next
 J7391:  XOR     A
-        LD      (HL),A                  ; endmarker
-        LD      HL,BUFMIN
+        LD      (HL),A                  ; add end marker
+        LD      HL,BUFMIN		; return pointer to before buffer (,)
         RET
 
 J7397:  INC     B                       ; empty line ?
         JR      NZ,J7391                ; nope, return line
-C739A:  LD      A,(NLONLY)
+
+	_MSXCP	LDREOF,739AH
+
+	LD      A,(NLONLY)
         AND     80H
-        LD      (NLONLY),A              ; basic program not loading
+        LD      (NLONLY),A              ; do not close i/o channels = false
         CALL    PRGFIN                  ; close i/o channel 0 and load HL from (TEMP)
         LD      A,(FILNAM+0)
         AND     A                       ; RUN after LOAD ?
@@ -228,7 +242,8 @@ C739A:  LD      A,(NLONLY)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-DIOERR:
+	_MSXCP	DIOERR,73B2H
+
 J73B2:  LD      E,19
         JP      ERROR                   ; device i/o error
 

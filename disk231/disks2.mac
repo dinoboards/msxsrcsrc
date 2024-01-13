@@ -99,7 +99,7 @@ DB06C	EQU	0B06CH	; screen output buffer
 IB0D0	EQU	0B0D0H	; history buffer
 IB1D0	EQU	0B1D0H	; CON device console line input buffer
 IB2D4	EQU	0B2D4H	; record buffer for CP/M sequential read
-IB6D4	EQU	0B6D4H	; bootsector buffer
+IB6D4	EQU	0B6D4H	; boot sector buffer
 IB8D4	EQU	0B8D4H	; temporary directory entry save (used to move directory entry)
 IB8F4	EQU	0B8F4H	; ASCIIZ file name of FCB (used by C3A59)
 IB901	EQU	0B901H	; ? buffer
@@ -180,7 +180,7 @@ DBBF0	EQU	0BBF0H	; start of the proces chain
 DBBF2	EQU	0BBF2H	; start of the FIB chain
 DBBF4	EQU	0BBF4H	; start of device chain
 DBBF6	EQU	0BBF6H	; last FAT buffer read
-DBBF8	EQU	0BBF8H	; start of the buffer chain
+DBBF8	EQU	0BBF8H	; start of the sector buffer chain
 IBBFA	EQU	0BBFAH	; number of buffers
 DBBFB	EQU	0BBFBH	; DPB ramdisk
 DBBFD	EQU	0BBFDH	; last BDOS errorcode
@@ -312,16 +312,16 @@ DFFFF	EQU	0FFFFH
 ; +5		flags
 ; +6		drive id used within interface driver
 ; +7		
-; +8		drivename
-; +9		1/10 seconds+2 that disk cannot be changed (0 = init, 1 = error)
+; +8		drive name
+; +9		1/10 seconds+2 that disk cannot be changed (0 = initialize, 1 = invalid)
 ; +10		cluster mask
 ; +11		cluster shift
-; +12,2		number of reserved sectors (bootarea)
+; +12,2		number of reserved sectors (boot area)
 ; +14		number of FAT's
 ; +15		remainder of directory entries (no whole sector)
-; +16		number of directorysectors (whole sectors)
+; +16		number of directory sectors (whole sectors)
 ; +17		number of sectors per FAT
-; +18,2		first sector of rootdirectory
+; +18,2		first sector of root directory
 ; +20,2		first sector of data area
 ; +22,2		number of clusters+1 on disk
 ; +24		dirty flag Bit 0 = 1, when on a DOS2 disk file(s) have been deleted
@@ -629,7 +629,7 @@ J0193:	LD	(IX+2),C
         LD	(IX+3),B		; save pointer to DPB
         LD	A,(BC)			; drive id from DPB
         INC	A
-        LD	(IX+8),A		; prompt drive id
+        LD	(IX+8),A		; update drive id (1 based)
         LD	L,A
         LD	H,0
         INC	BC
@@ -2961,8 +2961,8 @@ J0D81:	SET	7,D
         POP	HL
         CALL	C304E			; format disk
         LD	BC,9
-        ADD	HL,BC
-        LD	(HL),0
+        ADD	HL,BC			; +9
+        LD	(HL),0			; disk change counter = initialize
         RET
 
 ;	  Subroutine _RAMD
@@ -3013,7 +3013,7 @@ J0DCA:	LD	A,(DBE00)
         LD	A,8			; drive id ramdisk
         PUSH	HL
         POP	IX
-        LD	(IX+8),A		; prompt drive id
+        LD	(IX+8),A		; drive id (1 based)
         LD	(IX+9),0		; driver drive id
         LD	(IX+30+1),0FFH		; starting cluster current directory = root directory
         LD	C,A			; store drive id
@@ -3079,18 +3079,18 @@ J0E3B:	LD	(HL),0
 
 A0E44:	LD	A,B
         CP	2			; number of buffers >= 2 ?
-        JR	C,J0E86			; yep, quit
+        JR	C,J0E86			; nope, quit
 J0E49:	LD	A,B
         CP	(IY+IBBFA-DBB80)	; same as current number of buffers ?
         JR	Z,J0E86			; yep, quit
         JR	NC,J0E6E		; more as current, allocate extra buffers
-        LD	HL,(DBBF8)		; start of the buffer chain
-        CALL	C2D2D			; flush buffer
+        LD	HL,(DBBF8)		; start of the sector buffer chain
+        CALL	C2D2D			; flush sector buffer
         LD	E,(HL)
         INC	HL
         LD	D,(HL)			; pointer to next buffer
         DEC	HL
-        LD	(DBBF8),DE		; update start of the buffer chain
+        LD	(DBBF8),DE		; update start of the sector buffer chain
         CALL	C022B			; free BDOS data block
         LD	HL,0
         LD	(DBBF6),HL		; no last FAT buffer read
@@ -3101,8 +3101,8 @@ J0E49:	LD	A,B
 J0E6E:	LD	HL,512+11
         CALL	C01CB			; allocate BDOS data block
         JR	NZ,J0E86		; error, quit
-        LD	DE,(DBBF8)		; start of the buffer chain
-        LD	(DBBF8),HL		; update start of the buffer chain
+        LD	DE,(DBBF8)		; start of the sector buffer chain
+        LD	(DBBF8),HL		; update start of the sector buffer chain
         LD	(HL),E
         INC	HL
         LD	(HL),D			; pointer to next buffer
@@ -3155,12 +3155,12 @@ J0EAC:	LD	(HL),A			; reset assigment
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-A0EB6:	OR	A
-        JR	Z,J0EC2
+A0EB6:	OR	A			; function = get ?
+        JR	Z,J0EC2			; yep, return current setting
         LD	A,B
-        OR	A
-        JR	Z,J0EBF
-        LD	A,0FFH
+        OR	A			; new value = 0 ?
+        JR	Z,J0EBF			; yep, disk check level = strong
+        LD	A,0FFH			; disk check level = weak
 J0EBF:	LD	(DSK_CHK),A		; set disk check level
 J0EC2:	LD	A,(DSK_CHK)
         LD	B,A			; return disk check level
@@ -5476,14 +5476,14 @@ J1B7D:	LD	(DE),A
         INC	HL
         INC	DE
         LD	BC,10
-        LDIR				; copy reset of file name to direntry
-        CALL	C2C56			; mark buffer last read as changed
-        LD	(DE),A			; fileattribute
+        LDIR				; copy rest of file name to directory entry
+        CALL	C2C56			; mark buffer last read as dirty
+        LD	(DE),A			; file attribute
         EX	DE,HL
         LD	B,20
 J1B8D:	INC	HL
         LD	(HL),C
-        DJNZ	J1B8D			; rest of direntry fields clear
+        DJNZ	J1B8D			; rest of directory entry fields clear
         POP	DE
         BIT	7,D
         JR	Z,J1B98			; subdirectory, use given cluster number for first cluster
@@ -5781,7 +5781,7 @@ J1D29:	LD	A,(DE)
         RET
 
 ;	  Subroutine write to file handle
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 C1D2C:	EX	AF,AF'
@@ -5826,7 +5826,7 @@ J1D43:	EX	AF,AF'
 	ENDIF
 
 ;	  Subroutine read from file handle
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 C1D51:	CALL	C2140			; get pointer to FIB of file handle
@@ -5935,7 +5935,7 @@ J1DE9:	POP	HL
         RET
 
 ;	  Subroutine _CLOSE
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1DEB:	CALL	C2140			; get pointer to FIB of file handle
@@ -5946,7 +5946,7 @@ A1DEB:	CALL	C2140			; get pointer to FIB of file handle
         JR	J1DFD
 
 ;	  Subroutine _ENSURE
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1DF8:	CALL	C2140			; get pointer to FIB of file handle
@@ -5959,7 +5959,7 @@ J1DFD:	CALL	C2244			; ensure directory entry (when file is modified)
         RET
 
 ;	  Subroutine _DUP
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1E08:	CALL	C2140			; get pointer to FIB of file handle
@@ -5977,7 +5977,7 @@ A1E08:	CALL	C2140			; get pointer to FIB of file handle
         RET
 
 ;	  Subroutine _READ
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1E1D:	PUSH	DE
@@ -5994,7 +5994,7 @@ A1E1D:	PUSH	DE
         RET
 
 ;	  Subroutine _WRITE
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1E2D:	PUSH	DE
@@ -6011,7 +6011,7 @@ A1E2D:	PUSH	DE
         RET
 
 ;	  Subroutine _SEEK
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1E3D:	EX	AF,AF'
@@ -6051,7 +6051,7 @@ J1E6D:	ADD	HL,DE			; add low word offset
         RET
 
 ;	  Subroutine _IOCTL
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1E81:	EX	AF,AF'
@@ -6160,7 +6160,7 @@ A1F14:	CALL	C19BC			; open file and create or update FIB
 	ENDIF
 
 ;	  Subroutine _HDELETE
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1F1E:	CALL	C2140			; get pointer to FIB of file handle
@@ -6199,7 +6199,7 @@ A1F3B:	PUSH	HL
 	ENDIF
 
 ;	  Subroutine _HRENAME
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1F45:	PUSH	HL
@@ -6237,7 +6237,7 @@ A1F60:	PUSH	HL
 	ENDIF
 
 ;	  Subroutine _HMOVE
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1F6A:	PUSH	HL
@@ -6280,7 +6280,7 @@ A1F85:	EX	AF,AF'
         RET
 
 ;	  Subroutine _HATTR
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1F9D:	EX	AF,AF'
@@ -6335,7 +6335,7 @@ A1FBE:	EX	AF,AF'
         RET
 
 ;	  Subroutine _HFTIME
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A1FE0:	EX	AF,AF'
@@ -6367,7 +6367,7 @@ J1FFF:	LD	E,(IX+15)
         RET
 
 ;	  Subroutine _HTEST
-;	     Inputs  ________________________
+;	     Inputs  B = file handle
 ;	     Outputs ________________________
 
 A200D:	PUSH	BC
@@ -6570,7 +6570,7 @@ J2121:	LD	A,C
 
 ;	  Subroutine find free file handle
 ;	     Inputs  ________________________
-;	     Outputs ________________________
+;	     Outputs B = free file handle, A = error code
 
 C212B:	PUSH	DE
         PUSH	IX
@@ -6825,7 +6825,7 @@ C224A:	BIT	3,(IX+49)		; file deleted ?
         EX	DE,HL
         LD	BC,4
         LDIR				; set filesize directory entry
-        CALL	C2C56			; mark buffer last read as changed
+        CALL	C2C56			; mark buffer last read as dirty
         POP	HL
 
 ;	  Subroutine update FIB (directory entry changed)
@@ -7012,7 +7012,7 @@ J2388:	CALL	C1C7A			; get current directory entry
         LD	(DE),A			; mark directory entry as deleted
         POP	HL
 J23AE:	CALL	C2541			; mark directory entry as changed
-        CALL	NZ,C34E9		; , current directory invalid
+        CALL	NZ,C34E9		; , current subdirectory invalid
         XOR	A
         RET
 
@@ -7095,7 +7095,7 @@ C241B:	XOR	A
         LD	A,(HL)			; directory entry attribute
         POP	HL			; restore pointer to directory entry
         BIT	4,A
-        CALL	NZ,C34E9		; it is a subdirectory, current directory invalid
+        CALL	NZ,C34E9		; it is a subdirectory, current subdirectory invalid
         PUSH	BC
         PUSH	HL			; store pointer to directory entry
         LD	HL,IB91B
@@ -7151,7 +7151,7 @@ J244E:	LD	(HL),A
         LDIR				; save directory entry
         POP	HL
         LD	(HL),0E5H		; mark directory entry as deleted
-        CALL	C2C56			; mark buffer last read as changed
+        CALL	C2C56			; mark buffer last read as dirty
         POP	HL
         CALL	C1C04			; get registered directory entry
         CALL	C1C7A			; get current directory entry
@@ -7164,7 +7164,7 @@ J244E:	LD	(HL),A
         POP	HL
         CALL	C2541			; mark directory entry as changed
         RET	Z
-        CALL	C34E9			; current directory invalid
+        CALL	C34E9			; current subdirectory invalid
         LD	BC,(DBBE8)		; cluster number current directory
         PUSH	BC			; store cluster number current directory
         CALL	C1C3A
@@ -7185,7 +7185,7 @@ J24EF:	PUSH	HL
         LD	(HL),C
         INC	HL
         LD	(HL),B			; update starting cluster
-        CALL	C2C56			; mark buffer last read as changed
+        CALL	C2C56			; mark buffer last read as dirty
         XOR	A
         POP	HL
         RET
@@ -7202,22 +7202,22 @@ C24FD:	XOR	A
         PUSH	HL
         LD	HL,11
         ADD	HL,DE
-        LD	A,(HL)
-        LD	B,0DDH
-        BIT	4,A
-        JR	NZ,J2515
-        LD	B,0D8H
+        LD	A,(HL)			; current attribute
+        LD	B,11011101B		; assume directory: ignore archive, hidden
+        BIT	4,A			; directory ?
+        JR	NZ,J2515		; yep,
+        LD	B,11011000B		; file: ignore archive, system, hidden, read only
 J2515:	XOR	C
         AND	B
         LD	A,.IATTR
         JR	NZ,J2520
-        LD	(HL),C
-        CALL	C2C56			; mark buffer last read as changed
+        LD	(HL),C			; update attribute
+        CALL	C2C56			; mark buffer last read as dirty
         XOR	A
 J2520:	POP	HL
         RET
 
-;	  Subroutine update timestamp directory entry
+;	  Subroutine update time stamp directory entry
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -7230,7 +7230,7 @@ C2522:	XOR	A
         PUSH	DE
         CALL	C1C7A			; get current directory entry
         LD	HL,22
-        ADD	HL,DE
+        ADD	HL,DE			; +22
         EX	DE,HL
         EX	(SP),HL
         EX	DE,HL
@@ -7254,7 +7254,7 @@ C2541:	PUSH	HL
         BIT	4,(HL)
         JR	NZ,J254C
         SET	5,(HL)
-J254C:	CALL	C2C56			; mark buffer last read as changed
+J254C:	CALL	C2C56			; mark buffer last read as dirty
         POP	HL
         LD	A,00H
         RET
@@ -7317,13 +7317,13 @@ J258E:	LD	A,.OV64K		; check for warparound page3 - page0
         CALL	C2C67			; flush sector buffers of drive table
         CALL	C2C77			; mark sector buffers of drive table unused
         LD	DE,9
-        ADD	HL,DE
-        LD	(HL),1
+        ADD	HL,DE			; +9
+        LD	(HL),1			; disk change counter = invalid
         XOR	A
         RET
 
 ;	  Subroutine read/write sectors
-;	     Inputs  DE = transfer address, B = number of sectors
+;	     Inputs  DE = transfer address, B = number of sectors, HL = pointer to drive table, IX = pointer to FIB
 ;	     Outputs ________________________
 
 C25B7:	XOR	A
@@ -7333,38 +7333,38 @@ C25B7:	XOR	A
         AND	04H			; segment type
         LD	DE,(DBBC2)		; transfer address
         CALL	C274F			; get segment number
-        SET	7,D			; page 2
-        EX	AF,AF'
-        PUSH	HL
+        SET	7,D			; transfer address in page 2
+        EX	AF,AF'			; store segment number
+        PUSH	HL			; store pointer to drive table
         LD	HL,0C000H-0200H
         OR	A
-        SBC	HL,DE
-        JR	C,J263A
+        SBC	HL,DE			; overflow to page 3 ?
+        JR	C,J263A			; yep,
         LD	A,H
         SRL	A
-        INC	A
-        CP	B
-        JR	C,J25DA
-        LD	A,B
-J25DA:	LD	C,A
-        POP	HL
+        INC	A			; number of sectors in page 2 +1
+        CP	B			; number of sectors requested > number of sectors in page 2 +1 ?
+        JR	C,J25DA			; yep, use number of sectors in page 2 +1
+        LD	A,B			; use number of sectors requested
+J25DA:	LD	C,A			; store number of sectors in this transfer
+        POP	HL			; restore pointer to drive table
         SUB	B
         NEG
         LD	B,A
         PUSH	BC
-        LD	B,C
-        EX	AF,AF'
-        LD	C,A
-        PUSH	BC
-        XOR	A
-J25E6:	PUSH	BC
+        LD	B,C			; number of sectors in this transfer
+        EX	AF,AF'			; restore segment number
+        LD	C,A			; store segment number
+        PUSH	BC			; store number of sectors this transfer, segment number
+        XOR	A			; ignore occured = false
+J25E6:	PUSH	BC			; store number of sectors left, segment number
+        PUSH	DE			; store transfer address
         PUSH	DE
-        PUSH	DE
-        EX	(SP),IX
+        EX	(SP),IX			; store pointer to FIB, restore transfer address
         LD	DE,(DBBB4)		; physical sector
         PUSH	DE			; store physical sector
-        DEC	A
-        JR	Z,J2602
+        DEC	A			; ignore occured ?
+        JR	Z,J2602			; skip
         LD	A,0			; function = DSKIO read
         BIT	0,(IY+DBBC4-DBB80)	; read operation ?
         JR	NZ,J25FD		; yep,
@@ -7372,16 +7372,16 @@ J25E6:	PUSH	BC
 J25FD:	CALL	C326D			; execute disk driver read/write sectors (with disk check)
         JR	J2604
 
-J2602:	LD	B,1
-J2604:	EX	AF,AF'
+J2602:	LD	B,1			; number of sectors = 1
+J2604:	EX	AF,AF'			; store error code, error flag
         POP	DE			; restore physical sector
-        POP	IX
-        PUSH	HL
+        POP	IX			; restore pointer to FIB
+        PUSH	HL			; store pointer to drive table
         LD	L,B
-        LD	H,0
-        ADD	HL,DE
-        LD	(DBBB4),HL		; physical sector
-        POP	HL
+        LD	H,0			; number of sectors
+        ADD	HL,DE			; update physical sector
+        LD	(DBBB4),HL		; store new physical sector
+        POP	HL			; restore pointer to drive table
         POP	DE			; restore transfer address
         LD	A,D			; high byte transfer address
         ADD	A,B
@@ -7392,7 +7392,7 @@ J2604:	EX	AF,AF'
         SUB	B
         NEG
         LD	B,A
-        EX	AF,AF'
+        EX	AF,AF'			; restore error code, error flag
         PUSH	DE			; store new transfer address
         LD	DE,(DBBB4)		; physical sector
         CALL	NZ,C36AC		; error occured, handle error (ignore is valid)
@@ -7400,84 +7400,84 @@ J2604:	EX	AF,AF'
         INC	B
         DEC	B			; number of sectors left = 0 ?
         JR	NZ,J25E6		; nope, next block
-        POP	BC
-        CALL	C2651			; correct buffer
-        POP	BC
+        POP	BC			; restore sectors left, segment number
+        CALL	C2651			; update to/from sector buffer
+        POP	BC			; restore sectors left, number of sectors
         LD	A,(IY+DBBC2+1-DBB80)	; high byte transfer address
         ADD	A,C
         ADD	A,C
         LD	(IY+DBBC2+1-DBB80),A	; update high byte transfer address
         JP	C25B7			; read/write sectors
 
-J263A:	POP	HL
-        DEC	B
-        PUSH	BC
-        LD	DE,512
+J263A:	POP	HL			; restore pointer to drive table
+        DEC	B			; update number of sectors left
+        PUSH	BC			; store number of sectors left
+        LD	DE,512			; number of bytes = 512
         LD	B,E
-        LD	C,E
+        LD	C,E			; start offset = 0
         CALL	C26A6			; read/write sector
-        POP	BC
+        POP	BC			; restore number of sectors left
         INC	(IY+DBBB4-DBB80+0)
         JR	NZ,J264E
         INC	(IY+DBBB4-DBB80+1)	; update physical sector
 J264E:	JP	C25B7			; read/write sectors
 
-;	  Subroutine correct buffer
-;	     Inputs  ________________________
+;	  Subroutine update to/from sector buffer
+;	     Inputs  DE = sector number, B = number of sectors, C = segment number
 ;	     Outputs ________________________
 
-C2651:	CALL	C2C8D			; mark buffers of drive table
-J2654:	PUSH	BC
+C2651:	CALL	C2C8D			; mark sector buffers of drive table
+J2654:	PUSH	BC			; store number of sectors, segment number
         EXX
         CALL	C2CBD			; find marked sectorbuffer
         JR	Z,J26A3			; no more, quit
         LD	BC,4
-        ADD	HL,BC
+        ADD	HL,BC			; +4
         LD	E,(HL)
         INC	HL
         LD	D,(HL)			; sector number of buffer
         EX	DE,HL
         LD	BC,(DBBB4)		; physical sector
-        SBC	HL,BC
-        POP	BC
+        SBC	HL,BC			; offset sector with sector in buffer
+        POP	BC			; restore number of sectors, segment number
         LD	A,H
-        INC	A
-        JR	NZ,J2683
+        INC	A			; sector range includes sector in buffer ?
+        JR	NZ,J2683		; nope, next buffer
         LD	A,L
-        ADD	A,B
-        JR	NC,J2683
+        ADD	A,B			; sector range includes sector in buffer ?
+        JR	NC,J2683		; nope, next buffer
         DEC	DE
-        DEC	DE
+        DEC	DE			; +3
         EX	DE,HL
         BIT	0,(IY+DBBC4-DBB80)	; read operation ?
-        JR	NZ,J2686		; yep,
-        DEC	HL
+        JR	NZ,J2686		; yep, check if dirty buffer
+        DEC	HL			; +2
         LD	(HL),0			; buffer = invalid
         DEC	HL
-        DEC	HL
-        CALL	C2CD5			; buffer at start of chain
+        DEC	HL			; +0
+        CALL	C2CD5			; sector buffer at start of chain
 J2683:	EXX
         JR	J2654			; next buffer
 
-J2686:	BIT	7,(HL)
-        JR	Z,J2683
-        LD	A,C
+J2686:	BIT	7,(HL)			; sector buffer dirty ?
+        JR	Z,J2683			; nope, next buffer
+        LD	A,C			; segment number
         EXX
-        PUSH	DE
+        PUSH	DE			; store sector number
         EXX
         LD	BC,8
-        ADD	HL,BC
-        EX	(SP),HL
+        ADD	HL,BC			; +11
+        EX	(SP),HL			; store pointer to buffer, restore sector number
         LD	D,E
-        LD	E,B
+        LD	E,B			; low byte offset = 0
         ADD	HL,DE
         ADD	HL,DE
         EX	DE,HL
-        RES	7,D
-        POP	HL
-        LD	BC,512
+        RES	7,D			; address in page 0
+        POP	HL			; restore pointer to buffer
+        LD	BC,512			; sector size
         CALL	P0_LDIR			; transfer with page 0
-        JR	J2683
+        JR	J2683			; next buffer
 
 J26A3:	EXX
         POP	BC
@@ -7522,7 +7522,7 @@ J26D9:	LD	B,2			; no real read, ignore not problem
         POP	DE			; restore start offset
         ADD	HL,DE
         LD	BC,11
-        ADD	HL,BC
+        ADD	HL,BC			; pointer in buffer
         POP	BC			; restore size
         PUSH	DE			; store start offset
         PUSH	BC			; store size
@@ -7535,12 +7535,12 @@ J26D9:	LD	B,2			; no real read, ignore not problem
         ADD	HL,BC
         LD	(DBBC2),HL		; update transfer address
         BIT	0,(IY+DBBC4-DBB80)	; read operation ?
-        CALL	Z,C2C56			; nope, mark buffer last read as changed
+        CALL	Z,C2C56			; nope, mark buffer last read as dirty
         POP	HL			; restore number of bytes
         ADD	HL,BC			; end offset
         BIT	1,H			; at the end of the sector ?
         LD	HL,(DBBF6)		; last buffer read
-        CALL	NZ,C2CD2		; yep, flush buffer, buffer at start of chain
+        CALL	NZ,C2CD2		; yep, flush sector buffer, sector buffer at start of chain
         EX	(SP),IX			; store pointer to drive table, restore pointer to FIB
         POP	HL			; restore pointer to drive table
         RET
@@ -7920,7 +7920,7 @@ J2938:	LD	BC,0			; start offset = 0
         RET
 
 ;	  Subroutine transfer sector partly
-;	     Inputs  BC = offset, (BC) = size
+;	     Inputs  BC = offset, (0BBC0H) = size, IX = pointer to FIB
 ;	     Outputs ________________________
 
 C2954:	PUSH	HL			; store
@@ -8011,7 +8011,7 @@ C29D4:	PUSH	HL			; store pointer to drive table
         LD	E,(IX+47)
         LD	D,(IX+48)		; current position in file
         PUSH	DE
-        PUSH	BC
+        PUSH	BC			; store current position in file
         CALL	C2B23			; convert position in file to cluster, sector and offset
         JR	NZ,J2A37		; error, clean up stack and quit with error
         LD	(DBBBC),DE		; store cluster
@@ -8108,17 +8108,17 @@ J2A80:	EXX
         LD	E,(IX+39)
         LD	D,(IX+40)		; start cluster of file
         LD	A,D
-        OR	E
-        CALL	NZ,C301A		; , delete chain
+        OR	E			; file has cluster chain ?
+        CALL	NZ,C301A		; yep, delete chain
         PUSH	DE
-        LD	BC,0
+        LD	BC,0			; start cluster of file = 0
         JR	J2AB4
 
 J2A94:	POP	HL
         LD	A,(IY+DBBC4-DBB80)
         AND	02H			; write zero fill operation ?
         CALL	C2F5E			; allocate clusters
-        JR	NZ,J2AB1
+        JR	NZ,J2AB1		; error, quit
         DEC	DE
         BIT	7,D
         JR	NZ,J2AB4
@@ -8297,13 +8297,13 @@ C2B88:	LD	B,1			; real read, ignore not recommended
 
 C2B96:	LD	A,1			; only one time
 J2B98:	LD	(DBBA2),A
-        LD	C,(IX+8)
+        LD	C,(IX+8)		; drive id (1 based)
         LD	HL,(DBBF6)		; last buffer read
         LD	A,H
         SUB	01H
         CALL	NC,C2C44		; buffer contains sector of drive ?
         RET	Z			; yep, quit
-        LD	HL,(DBBF8)		; start of the buffer chain
+        LD	HL,(DBBF8)		; start of the sector buffer chain
         PUSH	HL
 J2BAC:	CALL	C2C44			; buffer contains sector of drive ?
         JP	Z,J2C37			; yep,
@@ -8315,39 +8315,39 @@ J2BAC:	CALL	C2C44			; buffer contains sector of drive ?
         JR	NZ,J2BAC		; nope, continue
         POP	HL			; last buffer
         INC	HL
-        INC	HL
+        INC	HL			; +2
         BIT	7,(HL)
         DEC	HL
         LD	A,(HL)
         DEC	HL
-        JR	Z,J2BC5
+        JR	Z,J2BC5			; yep, this buffer
         LD	L,(HL)
-        LD	H,A
-J2BC5:	CALL	C2D2D			; flush buffer
-        PUSH	HL
+        LD	H,A			; pointer to next buffer
+J2BC5:	CALL	C2D2D			; flush sector buffer
+        PUSH	HL			; store pointer to sector buffer
         INC	HL
-        INC	HL
-        LD	(HL),C			; drive id
-        INC	HL
+        INC	HL			; +2
+        LD	(HL),C			; update drive id
+        INC	HL			; +3
         LD	A,B
         AND	02H
-        LD	(HL),A			; flag
-        INC	HL
+        LD	(HL),A			; update flag
+        INC	HL			; +4
         LD	(HL),E
         INC	HL
-        LD	(HL),D			; sector number
-        INC	HL
+        LD	(HL),D			; update sector number
+        INC	HL			; +6
         LD	A,(IY+DBBA2-DBB80)
         LD	(HL),A			; times
-        INC	HL
+        INC	HL			; +7
         LD	C,(IX+17)
         LD	(HL),C			; offset = number of sectors per FAT
+        INC	HL			; +8
+        PUSH	DE			; store sector number
         INC	HL
-        PUSH	DE
         INC	HL
-        INC	HL
-        INC	HL			; the buffer itself
-        PUSH	HL
+        INC	HL			; +11, the buffer itself
+        PUSH	HL			; store pointer to buffer
         LD	E,L
         LD	D,H
         INC	DE
@@ -8356,11 +8356,11 @@ J2BC5:	CALL	C2D2D			; flush buffer
         LD	BC,512-1
         LDIR				; clear buffer
         POP	BC
-        EX	(SP),IX
-        POP	HL
+        EX	(SP),IX			; store pointer to drive table, restore pointer to buffer
+        POP	HL			; restore pointer to drive table
         LD	(IX-2),L
-        LD	(IX-1),H
-        POP	DE
+        LD	(IX-1),H		; update pointer to drive table
+        POP	DE			; restore sector number
         BIT	0,B			; actually read the sector ?
         JR	Z,J2C33			; nope, then finish
 J2BFF:	PUSH	BC
@@ -8372,8 +8372,8 @@ J2C06:	LD	A,E
         ADD	A,C
         LD	E,A
         JR	NC,J2C0C
-        INC	D
-J2C0C:	PUSH	DE
+        INC	D			; update sector number to next FAT
+J2C0C:	PUSH	DE			; store sector number
         PUSH	BC
         LD	B,1			; 1 sector
         LD	A,(DATA_S)
@@ -8381,7 +8381,7 @@ J2C0C:	PUSH	DE
         LD	A,0			; function = DSKIO read
         CALL	C326D			; execute disk driver read/write sectors (with disk check)
         POP	BC
-        POP	DE
+        POP	DE			; restore sector number
         JR	Z,J2C31			; no error,
         CP	.NOUPB			; unexpected disk change ?
         JR	Z,J2C23			; yep,
@@ -8405,7 +8405,7 @@ J2C33:	EX	(SP),HL
 J2C37:	POP	BC
         SET	1,(IY+DBBA9-DBB80)	; force read directory sector
         LD	(DBBF6),HL		; last buffer read
-        CALL	C2CF5			; buffer at end of chain
+        CALL	C2CF5			; sector buffer at end of chain
         XOR	A			; no error
         RET
 
@@ -8415,30 +8415,30 @@ J2C37:	POP	BC
 
 C2C44:	PUSH	HL
         INC	HL
+        INC	HL			; +2
+        LD	A,(HL)
+        SUB	C			; sector buffer holds sector of requested drive ?
+        JR	NZ,J2C54		; nope, quit
+        INC	HL
+        INC	HL			; +4
+        LD	A,(HL)
+        SUB	E			; sector buffer holds requested sector ?
+        JR	NZ,J2C54		; nope, quit
         INC	HL
         LD	A,(HL)
-        SUB	C
-        JR	NZ,J2C54
-        INC	HL
-        INC	HL
-        LD	A,(HL)
-        SUB	E
-        JR	NZ,J2C54
-        INC	HL
-        LD	A,(HL)
-        SUB	D
+        SUB	D			; sector buffer holds requested sector ?
 J2C54:	POP	HL
         RET
 
-;	  Subroutine mark buffer last read as changed
+;	  Subroutine mark buffer last read as dirty
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 C2C56:	LD	HL,(DBBF6)		; last FAT buffer read
         INC	HL
         INC	HL
-        INC	HL
-        SET	7,(HL)			; buffer changed flag
+        INC	HL			; +3
+        SET	7,(HL)			; buffer dirty flag
         RET
 
 ;	  Subroutine flush sector buffers of logical drive
@@ -8447,93 +8447,98 @@ C2C56:	LD	HL,(DBBF6)		; last FAT buffer read
 
 C2C5F:	PUSH	BC
         PUSH	HL
-        CALL	C362C			; translate drive assigment and get pointer to drive tabel
+        CALL	C362C			; translate drive assigment and get pointer to drive table
         POP	HL
         POP	BC
         DEFB	0FEH			; CP xx : trick to skip next instruction
 
 ;	  Subroutine flush sector buffers of drive table
-;	     Inputs  ________________________
+;	     Inputs  HL = pointer to drive table
 ;	     Outputs ________________________
 
-C2C67:	DEFB	0F6H			; OR xx : trick to skip next instruction
+C2C67:	DEFB	0F6H			; OR xx : trick to skip next instruction, use drive table
 
 ;	  Subroutine flush sector buffers of physical drive
-;	     Inputs  ________________________
+;	     Inputs  A = physical drive id
 ;	     Outputs ________________________
 
 C2C68:	SCF				; use drive id
-        CALL	C2C8B			; mark sector buffers of drive
+        CALL	C2C8B			; mark sector buffers of drive or drive table
         PUSH	HL
 J2C6D:	CALL	C2CBD			; find marked sectorbuffer
         JR	Z,J2CBB			; no more,
-        CALL	C2D2D			; flush buffer
+        CALL	C2D2D			; flush sector buffer
         JR	J2C6D			; next
 
 ;	  Subroutine mark sector buffers of drive table unused
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C2C77:	DEFB	0F6H			; OR xx : trick to skip next instruction
+C2C77:	DEFB	0F6H			; OR xx : trick to skip next instruction, use drive table
 
 ;	  Subroutine mark sector buffers of physical drive unused
-;	     Inputs  ________________________
+;	     Inputs  A = physical drive id
 ;	     Outputs ________________________
 
 C2C78:	SCF				; use drive id
         CALL	C2C8B			; mark sector buffers of drive
         PUSH	HL
 J2C7D:	CALL	C2CBD			; find marked sectorbuffer
-        JR	Z,J2CBB			; no more,
-        CALL	C2CD5			; buffer at start of chain
+        JR	Z,J2CBB			; no more, quit
+        CALL	C2CD5			; sector buffer at start of chain
         INC	HL
-        INC	HL
-        LD	(HL),00H		; sectorbuffer unused
-        JR	J2C7D
+        INC	HL			; +2
+        LD	(HL),0			; sectorbuffer unused
+        JR	J2C7D			; next
 
-;	  Subroutine mark buffers of drive
-;	     Inputs  ________________________
+;	  Subroutine mark sector buffers of drive or drive table
+;	     Inputs  Cx = set, use drive id, Cx = reset, use drive table, A = drive id (Cx set), HL = pointer to drive table (Cx reset)
 ;	     Outputs ________________________
 
-C2C8B:	JR	C,J2C96			; use physical drive id
+C2C8B:	JR	C,C2C96			; use physical drive id
 
-;	  Subroutine mark buffers of drive table
-;	     Inputs  ________________________
+;	  Subroutine mark sector buffers of drive table
+;	     Inputs  HL = pointer to drive table
 ;	     Outputs ________________________
 
-C2C8D:	PUSH	HL
+C2C8D:	PUSH	HL			; store pointer to drive table
         PUSH	BC
         LD	BC,8
-        ADD	HL,BC
+        ADD	HL,BC			; +8
         LD	A,(HL)			; physical drive id
         POP	BC
-        POP	HL
-J2C96:	PUSH	HL
+        POP	HL			; restore pointer to drive table
+
+;	  Subroutine mark sector buffers of drive
+;	     Inputs  A = drive id
+;	     Outputs ________________________
+
+C2C96:	PUSH	HL
         PUSH	DE
         PUSH	BC
-        LD	B,A
-        LD	HL,(DBBF8)		; start of buffer chain
+        LD	B,A			; store physical drive id
+        LD	HL,(DBBF8)		; start of sector buffer chain
 J2C9D:	LD	E,(HL)
         INC	HL
-        LD	D,(HL)
+        LD	D,(HL)			; pointer to next sector buffer
         INC	HL
-        LD	A,(HL)
+        LD	A,(HL)			; drive id
         INC	HL
-        RES	0,(HL)
-        OR	A
-        JR	Z,J2CB4
-        CP	B
-        JR	Z,J2CB2
+        RES	0,(HL)			; unmark sector buffer
+        OR	A			; sector buffer unused ?
+        JR	Z,J2CB4			; yep, next
+        CP	B			; sector buffer holds sector of requested drive ?
+        JR	Z,J2CB2			; yep, mark
         RLCA
-        JR	C,J2CB4
+        JR	C,J2CB4			; yep, next
         LD	A,B
-        INC	A
-        JR	NZ,J2CB4
-J2CB2:	SET	0,(HL)
+        INC	A			; all drives ?
+        JR	NZ,J2CB4		; nope, next
+J2CB2:	SET	0,(HL)			; mark sector buffer
 J2CB4:	LD	A,D
         OR	E			; end of buffer chain ?
         EX	DE,HL
-        JR	NZ,J2C9D		; nope, continue
+        JR	NZ,J2C9D		; nope, next
         POP	BC
         POP	DE
 J2CBB:	POP	HL
@@ -8543,57 +8548,57 @@ J2CBB:	POP	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C2CBD:	LD	HL,(DBBF8)		; start of buffer chain
+C2CBD:	LD	HL,(DBBF8)		; start of sector buffer chain
 J2CC0:	PUSH	HL
         INC	HL
         INC	HL
-        INC	HL
-        BIT	0,(HL)
-        RES	0,(HL)
+        INC	HL			; +3
+        BIT	0,(HL)			; sector buffer marked ?
+        RES	0,(HL)			; clear sector buffer mark
         POP	HL
-        RET	NZ
+        RET	NZ			; yep, quit
         LD	A,(HL)
         INC	HL
         LD	H,(HL)
-        LD	L,A
+        LD	L,A			; pointer to next sector buffer
         OR	H			; end of buffer chain ?
         JR	NZ,J2CC0		; nope, continue
         RET
 
-;	  Subroutine flush buffer, buffer at start of chain
+;	  Subroutine flush sector buffer, sector buffer at start of chain
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C2CD2:	CALL	C2D2D			; flush buffer
+C2CD2:	CALL	C2D2D			; flush sector buffer
 
-;	  Subroutine buffer at start of chain
+;	  Subroutine sector buffer at start of chain
 ;	     Inputs  HL = pointer to buffer
 ;	     Outputs ________________________
 
 C2CD5:	PUSH	DE
-        LD	DE,(DBBF8)		; start of buffer chain
+        LD	DE,(DBBF8)		; start of sector buffer chain
         OR	A
         SBC	HL,DE
-        ADD	HL,DE			; buffer at the start of buffer chain ?
+        ADD	HL,DE			; sector buffer at the start of buffer chain ?
         JR	Z,J2D1C			; yep, quit
         PUSH	BC
-        PUSH	HL
-        LD	(DBBF8),HL		; update start of the buffer chain
+        PUSH	HL			; store pointer to sector buffer
+        LD	(DBBF8),HL		; update start of the sector buffer chain
         LD	C,(HL)
         INC	HL
-        LD	B,(HL)			; pointer to next buffer
-        PUSH	BC			; store pointer to next buffer
+        LD	B,(HL)			; pointer to next sector buffer
+        PUSH	BC			; store pointer to next sector buffer
         LD	(HL),D
         DEC	HL
-        LD	(HL),E			; update pointer to next buffer
+        LD	(HL),E			; update pointer to next sector buffer
         EX	DE,HL
         LD	B,D
-        LD	C,E
-        CALL	C2D1E			; search requested buffer
+        LD	C,E			; pointer to old next buffer
+        CALL	C2D1E			; search requested sector buffer
         POP	BC			; restore pointer to next buffer
-        JR	J2D16
+        JR	J2D16			; update pointer to next buffer and quit
 
-;	  Subroutine buffer at end of chain
+;	  Subroutine sector buffer at end of chain
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -8615,15 +8620,15 @@ C2CF5:	LD	A,(HL)
         LD	(HL),A			; end of chain
         LD	B,H
         LD	C,L			; requested buffer = 
-        LD	HL,DBBF8		; start at buffer chain
-        CALL	C2D1E			; search requested buffer
+        LD	HL,DBBF8		; start at sector buffer chain
+        CALL	C2D1E			; search requested sector buffer
         EX	DE,HL
         POP	DE
         LD	(HL),E
         INC	HL
         LD	(HL),D
         DEC	HL
-        CALL	C2D1E			; search requested buffer
+        CALL	C2D1E			; search requested sector buffer
 J2D16:	EX	DE,HL
         LD	(HL),C
         INC	HL
@@ -8633,7 +8638,7 @@ J2D16:	EX	DE,HL
 J2D1C:	POP	DE
         RET
 
-;	  Subroutine search requested buffer
+;	  Subroutine search requested sector buffer
 ;	     Inputs  HL = pointer to starting buffer, BC = pointer to requested buffer
 ;	     Outputs HL = pointer to requested buffer, DE = pointer to previous buffer
 
@@ -8651,7 +8656,7 @@ C2D1E:	LD	E,(HL)
         OR	A
         RET
 
-;	  Subroutine flush buffer
+;	  Subroutine flush sector buffer
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -8846,7 +8851,7 @@ J2E20:	LD	H,B
         INC	DE
         LD	A,H
         LD	(DE),A
-J2E2D:	CALL	C2C56			; mark buffer last read as changed
+J2E2D:	CALL	C2C56			; mark buffer last read as dirty
         BIT	0,(IY+DBBA9-DBB80)	; FAT entry in 2 sectors ?
         JR	Z,J2E52			; nope, quit
         LD	BC,8
@@ -8858,7 +8863,7 @@ J2E2D:	CALL	C2C56			; mark buffer last read as changed
         EX	(SP),IX
         PUSH	AF
         CALL	C2B88			; get FAT sector
-        CALL	C2C56			; mark buffer last read as changed
+        CALL	C2C56			; mark buffer last read as dirty
         LD	BC,512+7
         ADD	HL,BC
         POP	AF
@@ -8983,12 +8988,12 @@ J2EEE:	PUSH	BC
         JR	J2F07
 
 J2EFA:	CALL	C2B88			; get FAT sector
-        CALL	C2D2D			; flush buffer
+        CALL	C2D2D			; flush sector buffer
         PUSH	HL
-        CALL	C2C56			; mark buffer last read as changed
+        CALL	C2C56			; mark buffer last read as dirty
         SET	6,(HL)
         POP	HL
-J2F07:	CALL	C2CD2			; flush buffer, buffer at start of chain
+J2F07:	CALL	C2CD2			; flush sector buffer, sector buffer at start of chain
         INC	HL
         INC	HL
         LD	(HL),00H		; buffer not used
@@ -9004,8 +9009,8 @@ J2F14:	LD	A,B
         LD	DE,0
         LD	B,1			; real read, ignore not recommended
         CALL	C2B96			; get sector
-        CALL	C2CD5			; buffer at start of chain
-        CALL	C2C56			; mark buffer last read as changed
+        CALL	C2CD5			; sector buffer at start of chain
+        CALL	C2C56			; mark buffer last read as dirty
         LD	DE,46
         ADD	HL,DE
         POP	BC
@@ -9165,23 +9170,23 @@ J2FF5:	PUSH	BC			; store sector counter
 
 	IF	OPTM EQ 0
         JR	NZ,J2FFB
-        CALL	C2CD5			; buffer at start of chain
+        CALL	C2CD5			; sector buffer at start of chain
 	ELSE
-	CALL	Z,C2CD5			; buffer at start of chain
+	CALL	Z,C2CD5			; sector buffer at start of chain
 	ENDIF
 
 J2FFB:	LD	B,0			; no real read, ignore not recommended
         CALL	C2B96			; get sector
         PUSH	HL			; store pointer to buffer
         LD	BC,11
-        ADD	HL,BC			; pointer to sector buffer
+        ADD	HL,BC			; pointer to buffer
         XOR	A
 J3006:	LD	(HL),A
         INC	HL
         LD	(HL),A
         INC	HL
         DJNZ	J3006			; clear sector buffer
-        CALL	C2C56			; mark buffer last read as changed
+        CALL	C2C56			; mark buffer last read as dirty
         POP	HL			; restore pointer to buffer
         POP	BC			; restore sector counter
         DEC	DE			; previous sector
@@ -9280,20 +9285,20 @@ J3081:	LD	B,1			; number of sectors = 1
         LD	A,(IX+0)
         CP	0F8H			; media descriptor 0F8H-0FFH ?
         JR	C,J3104			; nope, not a dos disk error
-        LD	C,A
-        PUSH	BC			; store sub function
+        LD	C,A			; media descriptor
+        PUSH	BC			; store sub function, media descriptor
         LD	DE,0			; sectors = 0
         LD	B,1			; number of sectors = 1
         LD	A,(DATA_S)
         LD	C,A			; BDOS datasegment
         LD	A,0			; function = DSKIO read
         CALL	C34FA			; execute disk driver function
-        POP	BC			; restore sub function
+        POP	BC			; restore sub function, media descriptor
         RET	NZ			; error, quit
-        PUSH	BC			; store sub function
-        LD	A,C
-        CALL	C33A8			; create bootsector BPB
-        POP	BC			; restore sub function
+        PUSH	BC			; store sub function, media descriptor
+        LD	A,C			; media descriptor
+        CALL	C33A8			; update BPB boot sector from DPB
+        POP	BC			; restore sub function, media descriptor
         RET	NZ			; error, quit
         BIT	0,B			; write volume id ?
         JR	Z,J30F5			; nope, write bootsector and quit
@@ -9432,14 +9437,14 @@ J31BD:	PUSH	IX
         ADD	HL,BC
         EX	DE,HL			; DE = pointer disk serial of FIB
         POP	HL			; restore pointer to drive table
-        CALL	C364D			; update counter of all drives
+        CALL	C364D			; update disk change counter of all drives
         PUSH	IX
         PUSH	HL
         LD	C,9
-        ADD	HL,BC
-        LD	A,(HL)
+        ADD	HL,BC			; +9
+        LD	A,(HL)			; disk change counter
         OR	A
-        JR	Z,J31E4			; special value 0 (INIT), do not flush dirty sector buffers of drive
+        JR	Z,J31E4			; initialize, do not flush dirty sector buffers of drive
         LD	C,10H
         ADD	HL,BC			; disk serial of drive table
         LD	C,A
@@ -9465,7 +9470,7 @@ J31ED:	POP	HL
         JR	Z,J3217			; unchanged,
 J31FA:	CALL	C331B			; read bootsector and make valid
         LD	C,0			; flag do not update drive table
-J31FF:	CALL	C3273			; next 0.5 seconds no disk change
+J31FF:	CALL	C3273			; restart disk change counter
         PUSH	DE
         CALL	C32E9			; get pointer to disk serial of bootsector
         POP	DE
@@ -9475,7 +9480,7 @@ J320A:	POP	HL
         JR	NZ,J3219		; not equal, error!
         DEC	C
         JR	NZ,J3217		; do not update drive table, quit
-        CALL	C3427			; update drive table with bootsector BPB
+        CALL	C3427			; update drive table and DPB from BPB boot sector
         CALL	C2C77			; mark sector buffers of drive table unused
 J3217:	JR	J3268			; quit
 
@@ -9490,28 +9495,28 @@ J3219:	LD	A,.WFILE		; "wrong disk for file" error
 
 J3229:	POP	HL
         CALL	C2C67			; flush sector buffers of drive table
-        CALL	C364D			; update counter of all drives
+        CALL	C364D			; update disk change counter of all drives
         PUSH	IX
         PUSH	HL
         LD	DE,9
-        ADD	HL,DE
-        LD	A,(HL)
+        ADD	HL,DE			; +9
+        LD	A,(HL)			; disk change counter
         POP	HL
         DEC	B			; type = flush dirty sector buffers ?
         JR	Z,J3255			; yep, skip
         OR	A
-        JR	Z,J324C			; special value 0 (INIT), treat as disk changed
+        JR	Z,J324C			; initialize, treat as disk changed
         DEC	A
-        JR	Z,J324C			; special value 1 (ERROR), treat as disk changed
+        JR	Z,J324C			; invalid, treat as disk changed
         DEC	A
         JR	NZ,J3258		; within 0.5 seconds of last diskoperation of drive, skip
         CALL	C32B2			; get disk change status
         JR	C,J324C			; disk driver does not know, treat this as disk changed
         JR	Z,J3258			; unchanged,
 J324C:	CALL	C331B			; read bootsector and make valid
-J324F:	CALL	C3427			; update drive table with bootsector BPB
+J324F:	CALL	C3427			; update drive table and DPB from BPB boot sector
         CALL	C2C77			; mark sector buffers of drive table unused
-J3255:	CALL	C3273			; next 0.5 seconds no disk change
+J3255:	CALL	C3273			; restart disk change counter
 J3258:	POP	DE
         PUSH	DE
         PUSH	HL
@@ -9536,38 +9541,38 @@ RW_UNIT:
 C326D:	CALL	C3282			; validate if same disk
         CALL	C34FA			; execute disk driver function
 
-;	  Subroutine next 0.5 seconds no disk change
+;	  Subroutine restart disk change counter
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 SET_TIMEOUT:
-C3273:	PUSH	HL
-        CALL	C364D			; update counter of all drives
-        EX	(SP),IX
+C3273:	PUSH	HL			; store pointer to drive table
+        CALL	C364D			; update disk change counter of all drives
+        EX	(SP),IX			; store IX, restore pointer to drive table
         LD	(IX+9),2+5		; next 0.5 seconds no disk change
-        EX	(SP),IX
-        POP	HL
+        EX	(SP),IX			; store pointer to drive table, restore IX
+        POP	HL			; restore pointer to drive table
         OR	A
         RET
 
 ;	  Subroutine validate if same disk
-;	     Inputs  ________________________
+;	     Inputs  HL = pointer to drive table
 ;	     Outputs ________________________
 
 VAL_SAME:
-C3282:	CALL	C364D			; update counter of all drives
+C3282:	CALL	C364D			; update disk change counter of all drives
         PUSH	AF
         PUSH	DE
         PUSH	HL
         LD	DE,9
-        ADD	HL,DE
+        ADD	HL,DE			; +9
         LD	A,2
-        CP	(HL)
+        CP	(HL)			; disk change counter = initialize or invalid ?
         POP	HL
-        JR	C,J32AF			; special values, quit
+        JR	C,J32AF			; yep, quit
         PUSH	BC
-        CALL	Z,C32B2			; get disk change status
-        JR	Z,J32AE			; unchanged,
+        CALL	Z,C32B2			; disk change counter finished, get disk change status
+        JR	Z,J32AE			; unchanged, quit
         PUSH	IX
 J329A:	CALL	C331B			; read bootsector and make valid
         CALL	C32D3			; compare disk serial bootsector and drive table
@@ -9593,14 +9598,14 @@ C32B2:	PUSH	BC
         LD	A,2			; function = DSKCHG
         CALL	C34FA			; execute disk driver function
         JR	Z,J32C5			; no error,
-        CP	.NRDY
+        CP	.NRDY			; not ready ?
         LD	DE,0FFFFH
-        CALL	Z,C36AF			; handle error (ignore not recommended)
+        CALL	Z,C36AF			; yep, handle error (ignore not recommended)
         LD	B,0FFH			; "disk changed"
-J32C5:	DEC	B
-        JR	Z,J32D0			; disk unchanged, quit
-        INC	B
-        JR	NZ,J32D0		; disk changed, quit
+J32C5:	DEC	B			; disk unchanged ?
+        JR	Z,J32D0			; yep, quit with unchanged
+        INC	B			; disk changed ?
+        JR	NZ,J32D0		; yep, quit with changed
         LD	A,(DSK_CHK)
         INC	A			; if disk check level weak, return unchanged status
         SCF				; if disk check level strong, return changed status
@@ -9702,7 +9707,7 @@ J3321:	LD	DE,0			; sector = 0
         LD	A,(IX+0)
         CP	0F8H			; media descriptor must be 0F8H-0FFH
         JR	C,J3362			; invalid mediadescriptor, not a dos disk and quit
-        CALL	C33A8			; create bootsector BPB
+        CALL	C33A8			; update BPB boot sector from DPB
         JR	NZ,J3364		; error,
         LD	(IX+32),00H
 J335F:	POP	DE
@@ -9714,13 +9719,13 @@ J3364:	LD	DE,0FFFFH
         CALL	C36AF			; handle error (ignore not recommended)
         JR	J3321			; try again
 
-;	  Subroutine validate bootsector and update DPB
-;	     Inputs  IX = pointer to bootsector, HL = pointer to DPB
+;	  Subroutine validate boot sector and update DPB
+;	     Inputs  IX = pointer to boot sector, HL = pointer to DPB
 ;	     Outputs ________________________
 
 FIND_UPB:
-C336C:	PUSH	IX
-        EX	(SP),HL
+C336C:	PUSH	IX			; store pointer to boot sector
+        EX	(SP),HL			; store pointer to DPB, restore pointer to boot sector
         LD	DE,11
         ADD	HL,DE
         LD	D,(HL)
@@ -9749,7 +9754,7 @@ C336C:	PUSH	IX
         INC	HL
         DEC	A
         CP	0CH
-        JR	NC,J33A5		; lowbyte not 1-12, quit with error
+        JR	NC,J33A5		; low byte not 1-12, quit with error
         LD	A,(HL)
         OR	A
         POP	HL
@@ -9757,65 +9762,65 @@ C336C:	PUSH	IX
         LD	A,3			; function = GETDPB
 
 	IF	OPTM EQ 0
-        CALL	Z,C34FA			; highbyte zero (ok), execute disk driver function
+        CALL	Z,C34FA			; high byte zero (ok), execute disk driver function
         RET
 	ELSE
-	RET	NZ
-	JP	C34FA
+	RET	NZ			; high byte not zero, quit with error
+	JP	C34FA			; execute disk driver function
 	ENDIF
 
 J33A5:	POP	HL
         OR	H
         RET
 
-;	  Subroutine create bootsector BPB
-;	     Inputs  ________________________
+;	  Subroutine update BPB boot sector from DPB 
+;	     Inputs  HL = pointer to drive table, IX = pointer to boot sector buffer
 ;	     Outputs ________________________
 
-C33A8:	LD	B,A
+C33A8:	LD	B,A			; media descriptor
         LD	A,3			; function = GETDPB
         CALL	C34FA			; execute disk driver function
         RET	NZ			; error, quit
-        PUSH	HL
+        PUSH	HL			; store pointer to drive table
         LD	DE,2
-        ADD	HL,DE
+        ADD	HL,DE			; +2
         LD	E,(HL)
         INC	HL
-        LD	D,(HL)
-        PUSH	DE
-        EX	(SP),IX			; IX = pointer to DPB
-        POP	HL
-        PUSH	HL
+        LD	D,(HL)			; pointer to DPB
+        PUSH	DE			; store pointer to DPB
+        EX	(SP),IX			; store pointer to boot sector buffer, restore pointer to DPB
+        POP	HL			; restore pointer to boot sector buffer
+        PUSH	HL			; store pointer to boot sector buffer
         LD	DE,11
-        ADD	HL,DE
+        ADD	HL,DE			; +11
         LD	C,(IX+2)
         LD	B,(IX+3)		; sector size (DPB)
         LD	(HL),C
         INC	HL
-        LD	(HL),B
+        LD	(HL),B			; update sector size (BPB)
         INC	HL
         LD	A,(IX+6)		; cluster mask (DPB)
         INC	A
-        LD	(HL),A
+        LD	(HL),A			; update sectors per cluster (BPB)
         INC	HL
         LD	C,(IX+8)
         LD	B,(IX+9)		; first FAT sector (DPB)
         LD	(HL),C
         INC	HL
-        LD	(HL),B
+        LD	(HL),B			; first FAT sector (BPB)
         INC	HL
         LD	A,(IX+10)		; number of FAT copies (DPB)
-        LD	(HL),A
+        LD	(HL),A			; number of FATs (BPB)
         INC	HL
         EX	DE,HL
         LD	L,(IX+12)
         LD	H,(IX+13)		; first data sector (DPB)
-        PUSH	HL
+        PUSH	HL			; store first data sector
         LD	C,(IX+17)
-        LD	B,(IX+18)		; first rootdirectory sector (DPB)
+        LD	B,(IX+18)		; first root directory sector (DPB)
         OR	A
-        SBC	HL,BC
-        LD	B,(IX+5)
+        SBC	HL,BC			; number of root directory sectors = first data sector - first root directory sector
+        LD	B,(IX+5)		; directory shift
 J33F3:	ADD	HL,HL
         DJNZ	J33F3
         DEC	HL
@@ -9825,217 +9830,217 @@ J33F3:	ADD	HL,HL
         EX	DE,HL
         LD	(HL),E
         INC	HL
-        LD	(HL),D
+        LD	(HL),D			; number of root directory entries (BPB)
         INC	HL
         EX	DE,HL
         LD	L,(IX+14)
         LD	H,(IX+15)		; maximum cluster (DPB)
-        DEC	HL
+        DEC	HL			; number of clusters
         LD	B,(IX+7)		; cluster shift (DPB)
         DEFB	00EH			; LD C,xx : trick to skip next instruction
 
 J340D:	ADD	HL,HL
         DJNZ	J340D
-        POP	BC
-        ADD	HL,BC
+        POP	BC			; restore first data sector
+        ADD	HL,BC			; total number of sectors = first data sector + number of clusters * sectors per cluster
         EX	DE,HL
         LD	(HL),E
         INC	HL
-        LD	(HL),D
+        LD	(HL),D			; update number of sectors (BPB)
         INC	HL
-        LD	A,(IX+1)		; mediadescriptor (DPB)
+        LD	A,(IX+1)		; media descriptor (DPB)
         LD	(HL),A
-        INC	HL
+        INC	HL			; update media descriptor (BPB)
         LD	A,(IX+16)		; number of sectors per FAT (DPB)
         LD	(HL),A
         INC	HL
         XOR	A
-        LD	(HL),A
-        POP	IX
-        POP	HL
+        LD	(HL),A			; update number of sectors per FAT (BPB)
+        POP	IX			; restore pointer to boot sector buffer
+        POP	HL			; restore pointer to drive table
         RET
 
-;	  Subroutine update drive table with bootsector BPB info
-;	     Inputs  HL = pointer to drive table, IX = pointer to bootsector
+;	  Subroutine update drive table and DPB from BPB boot sector
+;	     Inputs  HL = pointer to drive table, IX = pointer to boot sector
 ;	     Outputs ________________________
 
-C3427:	PUSH	HL
+C3427:	PUSH	HL			; store pointer to drive table
         LD	BC,10
-        ADD	HL,BC
-        LD	A,(IX+13)
+        ADD	HL,BC			; +10
+        LD	A,(IX+13)		; logical sectors per cluster
         DEC	A
-        LD	(HL),A
+        LD	(HL),A			; cluster mask
         INC	HL
-        LD	C,00H
+        LD	C,1-1
 J3434:	INC	C
         RRCA
         JR	C,J3434
-        LD	(HL),C
+        LD	(HL),C			; update cluster shift
         INC	HL
         LD	E,(IX+14)
         LD	(HL),E
         INC	HL
         LD	D,(IX+15)
-        LD	(HL),D
+        LD	(HL),D			; first FAT sector = number of reserved sectors
         INC	HL
-        PUSH	DE
-        LD	B,(IX+16)
-        LD	(HL),B
+        PUSH	DE			; store first FAT sector
+        LD	B,(IX+16)		; number of FATs
+        LD	(HL),B			; update number of FATs
         INC	HL
         LD	E,(IX+17)
-        LD	D,(IX+18)
-        LD	A,E
-        AND	0FH
-        LD	(HL),A
-        LD	A,04H
+        LD	D,(IX+18)		; first root directory sector
+        LD	A,E			; low byte first root directory sector
+        AND	0FH			; directory mask
+        LD	(HL),A			; number of directory entries in remainder sector
+	LD	A,4			; directory shift
 J3456:	SRL	D
         RR	E
         DEC	A
-        JR	NZ,J3456
-        CP	(HL)
+        JR	NZ,J3456		; number of directory sectors (complete sectors)
+        CP	(HL)			; incomplete directory sector ?
         INC	HL
-        LD	(HL),E
+        LD	(HL),E			; update number of complete directory sectors
         INC	HL
         JR	NC,J3464
-        INC	DE
-J3464:	LD	A,(IX+22)
-        LD	(HL),A
+        INC	DE			; incomplete sector, directory sectors +1
+J3464:	LD	A,(IX+22)		; sectors per FAT
+        LD	(HL),A			; update number of sectors per FAT
         INC	HL
-        EX	(SP),HL
-        PUSH	DE
-        LD	E,A
-        XOR	A
-        LD	D,A
+        EX	(SP),HL			; store pointer, restore first FAT sector
+        PUSH	DE			; store number of directory sectors
+        LD	E,A			; number of sectors per FAT
+        XOR	A			; low byte = 0
+        LD	D,A			; high byte = 0
 J346E:	ADD	A,E
         JR	NC,J3472
         INC	D
 J3472:	DJNZ	J346E
-        LD	E,A
-        ADD	HL,DE
+        LD	E,A			; number of FAT sectors = number of sectors per FAT * number of FATs
+        ADD	HL,DE			; first directory sector = first FAT sector + number of FAT sectors
         EX	DE,HL
-        POP	HL
-        ADD	HL,DE
-        EX	(SP),HL
+        POP	HL			; restore number of directory sectors
+        ADD	HL,DE			; first data sector = number of directory sectors + first directory sector
+        EX	(SP),HL			; store first data sector, restore pointer
         LD	(HL),E
         INC	HL
-        LD	(HL),D
+        LD	(HL),D			; update first directory sector
         INC	HL
-        POP	DE
+        POP	DE			; restore first data sector
         LD	(HL),E
         INC	HL
-        LD	(HL),D
+        LD	(HL),D			; update first data sector
         INC	HL
-        PUSH	HL
+        PUSH	HL			; store pointer
         LD	L,(IX+19)
-        LD	H,(IX+20)
+        LD	H,(IX+20)		; total logical sectors
         OR	A
-        SBC	HL,DE
-J348D:	DEC	C
-        JR	Z,J3496
+        SBC	HL,DE			; number of data sectors = total logical sectors - first data sector
+J348D:	DEC	C			; cluster shift done ?
+        JR	Z,J3496			; yep, continue
         SRL	H
-        RR	L
-        JR	J348D
+        RR	L			; shift right
+        JR	J348D			; next
 
-J3496:	INC	HL
+J3496:	INC	HL			; maximum cluster number = number of clusters +1
         EX	DE,HL
-        POP	HL
+        POP	HL			; restore pointer
         LD	(HL),E
         INC	HL
-        LD	(HL),D
+        LD	(HL),D			; update maximum cluster number
         INC	HL
-        PUSH	HL
+        PUSH	HL			; store pointer
         CALL	C32E9			; get pointer to disk serial of bootsector
-        POP	DE
+        POP	DE			; restore pointer
         DEC	HL
         LD	BC,5
-        LDIR
+        LDIR				; update disk serial
         EX	DE,HL
-        LD	A,(IX+21)
-        LD	(HL),A
-        POP	HL
-        PUSH	HL
+        LD	A,(IX+21)		; media descriptor
+        LD	(HL),A			; update media descriptor
+        POP	HL			; restore pointer to drive table
+        PUSH	HL			; store pointer to drive table
         INC	HL
-        INC	HL
+        INC	HL			; +2
         LD	E,(HL)
         INC	HL
-        LD	D,(HL)
+        LD	D,(HL)			; pointer to DPB
         EX	DE,HL
         INC	HL
-        LD	(HL),A
+        LD	(HL),A			; update DPB media sescriptor
         INC	HL
-        LD	(HL),00H
+        LD	(HL),LOW 512
         INC	HL
-        LD	(HL),02H
+        LD	(HL),HIGH 512		; update DPB sector size
         INC	HL
         LD	(HL),0FH
-        INC	HL
+        INC	HL			; update DPB directory mask
         LD	(HL),04H
-        INC	HL
+        INC	HL			; update DPB directory shift
         EX	DE,HL
         LD	BC,7
-        ADD	HL,BC
+        ADD	HL,BC			; +10
         LD	BC,5
-        LDIR
-        LD	C,(HL)
+        LDIR				; update DPB cluster mask, cluster shift, first FAT sector, number of FATs
+        LD	C,(HL)			; number of directory entries in incomplete sector
         INC	HL
-        LD	A,(HL)
+        LD	A,(HL)			; number of complete directory sectors
         INC	HL
         ADD	A,A
         ADD	A,A
         ADD	A,A
-        ADD	A,A
-        OR	C
-        LD	(DE),A
+        ADD	A,A			; *16
+        OR	C			; number of root directory entries = 16* number of complete sectors + number of directory entries incomplete sector
+        LD	(DE),A			; update DPB number of root directory entries
         INC	DE
-        PUSH	HL
+        PUSH	HL			; store pointer
         INC	HL
         INC	HL
         INC	HL
         LD	BC,4
-        LDIR
-        POP	HL
+        LDIR				; update DPB first data sector, maximum cluster number
+        POP	HL			; restore pointer
         LD	BC,3
-        LDIR
-        POP	HL
+        LDIR				; update DPB number of sectors per FAT, first root directory sector
+        POP	HL			; restore pointer to drive table
 
-;	  Subroutine current directory invalid
-;	     Inputs  ________________________
+;	  Subroutine current subdirectory invalid
+;	     Inputs  HL = pointer to drive table
 ;	     Outputs ________________________
 
-C34E9:	PUSH	HL
-        PUSH	BC
-        LD	BC,31
-        ADD	HL,BC
-        POP	BC
+C34E9:	PUSH	HL			; store pointer to drive table
+        PUSH	BC			; store BC
+        LD	BC,30+1
+        ADD	HL,BC			; +31
+        POP	BC			; restore BC
         XOR	A
-        BIT	7,(HL)
-        JR	NZ,J34F8
+        BIT	7,(HL)			; current directory = root directory ?
+        JR	NZ,J34F8		; yep, quit
         LD	(HL),A
         DEC	HL
-        LD	(HL),A
-J34F8:	POP	HL
+        LD	(HL),A			; current directory = invalid
+J34F8:	POP	HL			; restore pointer to drive table
         RET
 
 ;	  Subroutine execute disk driver function
-;	     Inputs  A = function, HL = drive table, BC=, DE=, IX = disk driver HL
+;	     Inputs  A = function, HL = pointer to drive table, B= disk driver B, C= segment, DE= disk driver DE, IX = disk driver HL
 ;	     Outputs ________________________
 
 CALL_UNIT:
 C34FA:	CP	6
         JR	NC,J3543		; unknown function, quit with "Internal Error"
-        PUSH	IY
-        PUSH	HL
-        PUSH	HL
-        EX	(SP),IX
-        POP	HL
-        PUSH	HL
+        PUSH	IY			; store IY
+        PUSH	HL			; store pointer to drive table
+        PUSH	HL			; store pointer to drive table
+        EX	(SP),IX			; store disk driver HL, restore pointer to drive table
+        POP	HL			; restore disk driver HL
+        PUSH	HL			; store disk driver HL
         EXX
-        PUSH	HL
-        PUSH	DE
-        PUSH	BC
+        PUSH	HL			; store HL'
+        PUSH	DE			; store DE'
+        PUSH	BC			; store BC'
         EX	AF,AF'
-        PUSH	AF
-        LD	A,(IX+8)
+        PUSH	AF			; store AF'
+        LD	A,(IX+8)		; drive id (1 based)
         DEC	A
         LD	(TARGET),A		; setup drive id for prompt routine
         LD	A,(IX+6)		; drive id for disk driver
@@ -10058,17 +10063,17 @@ J351F:	LD	(DBBEA),A		; disk operation
         EX	AF,AF'
         CALL	C3547			; CALL HL
         EX	AF,AF'
-        POP	AF
+        POP	AF			; restore AF'
         EX	AF,AF'
         EXX
-        POP	BC
-        POP	DE
-        POP	HL
+        POP	BC			; restore BC'
+        POP	DE			; restore DE'
+        POP	HL			; restore HL'
         EXX
-        POP	IX
-        POP	HL
-        POP	IY
-        OR	A
+        POP	IX			; restore disk driver HL
+        POP	HL			; restore pointer to drive table
+        POP	IY			; restore IY
+        OR	A			; Zx = error flag
         RET
 
 J3543:	LD	A,.INTER
@@ -10106,19 +10111,19 @@ J3558:	EX	AF,AF'
         EXX
         LD	A,C
         LD	C,(IX+29)		; media descriptor
-        PUSH	BC
+        PUSH	BC			; store number of sectors, media descriptor
         CALL	C35EC			; execute disk driver function
         JR	C,J356A			; error,
-        POP	BC
-        XOR	A
+        POP	BC			; restore number of sectors, media descriptor
+        XOR	A			; no error
         RET
 
 J356A:	EX	AF,AF'
-        POP	AF
+        POP	AF			; restore number of sectors
         SUB	B
-        LD	B,A
+        LD	B,A			; number of succesfull sectors = number of sectors requested - number of sectors left
         EX	AF,AF'
-        JR	J35C3
+        JR	J35C3			; translate driver error code to DOS error code and quit
 
 ;	  Subroutine function DSKCHG
 ;	     Inputs  ________________________
@@ -10127,17 +10132,17 @@ J356A:	EX	AF,AF'
 A3571:	EX	AF,AF'
         LD	HL,04003H		; DSKCHG
         EXX
-        LD	B,00H
+        LD	B,0
         LD	C,(IX+29)		; media descriptor
         LD	L,(IX+2)
         LD	H,(IX+3)		; pointer to DPB
         CALL	C35EC			; execute disk driver function
         JR	C,J3588			; error,
-        XOR	A
+        XOR	A			; no error
         RET
 
 J3588:	LD	B,0
-        JR	J35C3
+        JR	J35C3			; translate driver error code to DOS error code and quit
 
 ;	  Subroutine function GETDPB
 ;	     Inputs  ________________________
@@ -10152,7 +10157,7 @@ A358C:	EX	AF,AF'
         CALL	C35EC			; execute disk driver function
         LD	A,0FFH
         RET	C			; error,
-        XOR	A
+        XOR	A			; no error
         RET				; quit with no error
 
 ;	  Subroutine function CHOICE
@@ -10164,7 +10169,7 @@ A35A2:	EX	AF,AF'
         EXX
         CALL	C35EC			; execute disk driver function
         EX	DE,HL
-        XOR	A
+        XOR	A			; no error
         RET				; quit with no error
 
 ;	  Subroutine function DSKFMT
@@ -10180,8 +10185,8 @@ A35AD:	LD	HL,0400CH		; DSKFMT
         LD	A,C
         POP	BC
         CALL	C35EC			; execute disk driver function
-        JR	C,J35BE			; error,
-        XOR	A
+        JR	C,J35BE			; error, translate DSKFMT error code to DOS error code and quit
+        XOR	A			; no error
         RET
 
 J35BE:	LD	HL,I35E2
@@ -10193,7 +10198,7 @@ J35C6:	RRCA
         JR	NC,J35D1
         INC	HL
         LD	E,A
-        LD	D,00H
+        LD	D,0
         ADD	HL,DE
         LD	A,(HL)
         RET
@@ -10228,20 +10233,20 @@ I35E2:	defb	9+1
         defb	.DISK			; 16, other error
 
 ;	  Subroutine execute disk driver function
-;	     Inputs  ________________________
+;	     Inputs  IX = pointer to drive table
 ;	     Outputs ________________________
 
 C35EC:	CALL	C0AB9			; flush screen output buffer (if any)
         EXX
-        LD	E,(IX+1)		; offset
+        LD	E,(IX+1)		; driver jump table offset
         LD	D,0
         ADD	HL,DE
-        LD	B,(IX+0)		; slot id
+        LD	B,(IX+0)		; disk interface slot id
         CALL	PUT_P2			; PUT_P2
         PUSH	BC
-        POP	IY
+        POP	IY			; IYH = disk interface slot id
         PUSH	HL
-        POP	IX
+        POP	IX			; IX = disk driver entry
         EXX
         EX	AF,AF'
         CALL	GO_DRV			; interslot call with prompt handler
@@ -10266,11 +10271,11 @@ J3613:	LD	A,B
         OR	E			; drive table in use ?
         JR	Z,J3628			; nope, next drive
         LD	HL,9
-        ADD	HL,DE
-        LD	A,(HL)
+        ADD	HL,DE			; +9
+        LD	A,(HL)			; disk change counter
         OR	A
-        JR	Z,J3628			; special value 0 (INIT), leave it alone
-        LD	(HL),1			; special value 1 (ERROR)
+        JR	Z,J3628			; initialize, leave it alone
+        LD	(HL),1			; disk change counter = invalid
 J3628:	DJNZ	J3613
         XOR	A
         RET
@@ -10301,19 +10306,19 @@ J363A:	LD	HL,IBA1A		; drive assignment table
         OR	A
         RET
 
-;	  Subroutine update counter of all drives
+;	  Subroutine update disk change counter of all drives
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
 UD_TICK:
 C364D:	PUSH	AF
         PUSH	HL
-        LD	HL,($SECBUF)		; pointer to disk driver sectorbuffer
+        LD	HL,($SECBUF)		; pointer to disk driver sector buffer
         DEC	HL
         LD	A,(HL)			; FAT buffer status flag
-        INC	A
-        JR	NZ,J3673		; FAT buffer unchanged or FAT buffer changed,
-        LD	(HL),0			; FAT buffer invalid, now FAT unchanged
+        INC	A			; FAT buffer invalid ?
+        JR	NZ,J3673		; nope, skip
+	LD	(HL),0			; FAT buffer clean
         LD	A,(TARGET)
         PUSH	DE
         LD	E,A
@@ -10325,12 +10330,12 @@ C364D:	PUSH	AF
         INC	HL
         LD	D,(HL)			; pointer to drive table
         LD	HL,9
-        ADD	HL,DE
+        ADD	HL,DE			; +9
         POP	DE
-        LD	A,(HL)			; counter of drive
+        LD	A,(HL)			; disk change counter
         OR	A
-        JR	Z,J3673			; special value 0 (INIT), leave this unchanged
-        LD	(HL),1			; special value 1 (ERROR)
+        JR	Z,J3673			; initialize, skip
+        LD	(HL),1			; disk change counter = invalid
 J3673:	LD	HL,TIM_TI
         DI
         LD	A,(HL)			; counter already reset ?
@@ -10353,14 +10358,14 @@ J3688:	LD	E,(HL)
         JR	Z,J36A3			; drive does not exists, next
         PUSH	DE
         POP	IX
-        LD	A,(IX+9)		; counter of drive
+        LD	A,(IX+9)		; disk change counter
         SUB	2
-        JR	C,J36A3			; special values (0 and 1), leave the counter unchanged, next
+        JR	C,J36A3			; initialize or invalid, leave the counter unchanged
         SUB	C			; adjust counter
         JR	NC,J369E
         XOR	A			; bottom value counter of drive
 J369E:	ADD	A,2
-        LD	(IX+9),A
+        LD	(IX+9),A		; update disk change counter
 J36A3:	DJNZ	J3688
         POP	IX
         POP	DE
@@ -10373,14 +10378,14 @@ J36A9:	POP	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C36AC:	OR	A
+C36AC:	OR	A			; reset Cx
         JR	C36B0
 
 ;	  Subroutine handle error (ignore not recommended)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C36AF:	SCF
+C36AF:	SCF				; set Cx
 
 ;	  Subroutine handle error
 ;	     Inputs  HL = pointer to drive table

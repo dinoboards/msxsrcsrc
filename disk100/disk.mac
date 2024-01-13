@@ -771,26 +771,26 @@ A41EF:  ld      b,000H                  ; machinetype 8080, plain CP/M
         ret
 
 ;       Subroutine      get FAT entry content
-;       Inputs          HL = clusternumber, IX = pointer to DPB
-;       Outputs         HL = clusterentry content, Zx set if entry is free, DE = pointer to FAT buffer
+;       Inputs          HL = cluster number, IX = pointer to DPB
+;       Outputs         HL = cluster entry content, Zx set if entry is free, DE = pointer to FAT buffer
 
 A41F4:  ld      e,(ix+19)
         ld      d,(ix+20)               ; pointer to FAT buffer of drive
 A41FA:  call    H.UNPA
-        push    de
+        push    de			; store pointer to FAT buffer of drive
         ld      e,l
-        ld      d,h
+        ld      d,h			; cluster number
         srl     h
-        rr      l
-        rra
-        add     hl,de
-        pop     de
-        add     hl,de
-        rla
+        rr      l			; /2
+        rra				; remainer in b7
+        add     hl,de			; * 1.5
+        pop     de			; restore pointer to FAT buffer of drive
+        add     hl,de			; pointer in FAT buffer
+        rla				; remainer in Cx
         ld      a,(hl)
         inc     hl
-        ld      h,(hl)
-        jr      nc,A421A
+        ld      h,(hl)			; FAT entry content
+        jr      nc,A421A		; even entry, skip shift
         srl     h
         rra
         srl     h
@@ -798,29 +798,29 @@ A41FA:  call    H.UNPA
         srl     h
         rra
         srl     h
-        rra
+        rra				; shift 4 bits right
 A421A:  ld      l,a
         ld      a,h
-        and     00FH
+        and     00FH			; FAT entry content to 12 bit
         ld      h,a
-        or      l
+        or      l			; Zx set if entry is free
         ret
 
 ;       Subroutine      set FAT entry content
 ;       Inputs          HL = clusternumber, DE = pointer to FAT buffer, BC = clusterentry content
 ;       Outputs         -
 
-A4221:  push    de
+A4221:  push    de			; store pointer to FAT buffer
         ld      e,l
-        ld      d,h
+        ld      d,h			; store cluster number
         srl     h
-        rr      l
-        rra
-        add     hl,de
-        pop     de
-        add     hl,de
-        rla
-        jr      nc,A4247
+        rr      l			; /2
+        rra				; store remainer in b7
+        add     hl,de			; * 1.5
+        pop     de			; restore FAT buffer
+        add     hl,de			; pointer in FAT buffer
+        rla				; remainer in Cx
+        jr      nc,A4247		; even entry,
         sla     c
         rl      b
         sla     c
@@ -1298,9 +1298,9 @@ A44DB:  call    H.FATR
         or      a
         call    A6067                   ; DSKCHG
         jr      c,A44CA                 ; error,
-        call    A4536                   ; update DPBTBL entry current drive
+        call    A4536                   ; update pointer to DPB of current drive
         ld      l,(ix+19)
-        ld      h,(ix+20)
+        ld      h,(ix+20)               ; pointer to FAT buffer of drive
         dec     hl
         ld      a,b                     ; DSKCHG status
         or      (hl)                    ; combined with the FAT buffer dirty flag
@@ -1316,11 +1316,6 @@ A450A:  sub     l                       ; current drive same as datasector buffe
         jr      nz,A4516                ; nope, leave the datasector buffer alone
         ld      l,a
         ld      h,a
-
-; VERSION 1.1 CHANGE
-; ld (BUFSEC),hl is removed, because it is not explicit needed
-; room is used later on to fix the FAT reading bug when one of the other FAT copies is used (when first FAT read generates a error)
-
         dec     l
         ld      (BUFDRN),hl             ; invalid datasector buffer
 A4516:  ld      a,0FFH
@@ -1337,15 +1332,20 @@ A4529:  ld      b,(hl)                  ; mediabyte of FAT sector
         ld      a,(THISDR)              ; current driveid
         ld      c,(ix+1)                ; mediadescriptor
         push    ix
-        pop     hl
+        pop     hl			; pointer to DPB
         call    A606F                   ; GETDPB
+
+;       Subroutine      update pointer to DPB of current drive
+;       Inputs          HL = pointer to DPB
+;       Outputs         ________________________
+
 A4536:  push    hl
-        pop     ix
+        pop     ix			; pointer to DPB
         ex      de,hl
         call    A4563                   ; get DPBTBL entry of current drive
         ld      (hl),e
         inc     hl
-        ld      (hl),d
+        ld      (hl),d			; update pointer to DPB
         ret
 
 A4541:  ld      a,e
@@ -1354,14 +1354,7 @@ A4541:  ld      a,e
         jr      nc,A4547
         inc     d
 A4547:  pop     af                      ; adjust first FAT sector to the first FAT sector of the next FAT copy
-
-; VERSION 1.1 BUGFIX
-; Begin of change
-
         ld      b,c                     ; restore sectors per FAT (B is destroyed by the DSKIO)
-
-; End of change
- 
         dec     a
         jr      nz,A4522                ; there is a other FAT copy, try that one
         call    A45FA                   ; get FAT parameters (so the first FAT copy is used)
@@ -1455,7 +1448,7 @@ A456F:  push    de
 ;       Outputs         ________________________
 
 A45C4:  ld      l,(ix+19)
-        ld      h,(ix+20)
+        ld      h,(ix+20)               ; pointer to FAT buffer of drive
         dec     hl
         ld      a,(hl)
         cp      1                       ; FAT buffer dirty ?
@@ -1493,7 +1486,7 @@ A45E9:  pop     af
 ;       Outputs         ________________________
 
 A45EE:  ld      l,(ix+19)
-        ld      h,(ix+20)
+        ld      h,(ix+20)               ; pointer to FAT buffer of drive
         dec     hl
         ld      (hl),0                  ; FAT buffer clean
         ld      a,0FFH                  ; error
@@ -1505,7 +1498,7 @@ A45EE:  ld      l,(ix+19)
 
 A45FA:  ld      a,(ix+10)               ; number of FATs
         ld      l,(ix+19)
-        ld      h,(ix+20)               ; pointer to FAT buffer
+        ld      h,(ix+20)               ; pointer to FAT buffer of drive
         ld      b,(ix+16)               ; number of sectors per FAT
         ld      e,(ix+8)
         ld      d,(ix+9)                ; first FAT sector
@@ -1567,7 +1560,7 @@ A4651:  jr      nz,A4647                ; device or file with special fileattrib
         ld      h,(iy+27)
         ld      a,h
         or      l                       ; has start cluster ?
-        jr      z,A4669                 ; nop,
+        jr      z,A4669                 ; nope,
         call    A4F9B                   ; release cluster chain
         call    A45CF                   ; write FAT buffer
 A4669:  push    iy
@@ -2134,7 +2127,7 @@ A4953:  ld      h,b
         sbc     hl,bc
         ex      de,hl                   ; bytes left in sector
         sbc     hl,de                   ; enough ?
-        jr      nc,A4972                ; nop, get what you can
+        jr      nc,A4972                ; nope, get what you can
         add     hl,de
         ex      de,hl
         ld      hl,0
@@ -2271,7 +2264,7 @@ A4A46:  call    H.BUFW
         ld      hl,(BYTCT1)
         ld      a,h
         or      l                       ; partial start ?
-        ret     z                       ; nop, quit
+        ret     z                       ; nope, quit
         ld      hl,(SECPOS)
         inc     hl
         ld      (SECPOS),hl             ; update relative sector of startbyte
@@ -2385,11 +2378,6 @@ A4AF2:  ld      hl,(CONTPO)
         ld      a,h
         or      l
         jr      nz,A4AA8
-
-; VERSION 1.1 CHANGE
-; CHANGED, BUGFIX
-; ld hl,128
-
 A4AF9:  ld      hl,127
         ld      a,(YCONBF+0)
         cp      l
@@ -2527,7 +2515,7 @@ A4BE2:  call    H.SETF
 A4C00:  call    A492F                   ; how many records ?
         ld      a,h
         or      l                       ; partly records ?
-        jr      z,A4C17                 ; nop,
+        jr      z,A4C17                 ; nope,
         inc     bc                      ; records +1
         ex      de,hl
         sbc     hl,de                   ; 'missed' bytes
@@ -2735,7 +2723,7 @@ A4D73:  call    A4755                   ; write datasectors with DOS error handl
         xor     a
         ld      b,a
         sbc     hl,bc                   ; whole sectors left ?
-        jr      z,A4D8C                 ; nop, go to partial end
+        jr      z,A4D8C                 ; nope, go to partial end
         ld      c,l
         ld      b,h
         ld      hl,(LASTPO)
@@ -2766,7 +2754,7 @@ A4DAB:  ld      (BYTPOS+0),hl
         ld      b,(iy+19)
         ex      de,hl
         sbc     hl,bc                   ; has file expanded ?
-        jr      c,A4DD6                 ; nop,
+        jr      c,A4DD6                 ; nope,
 A4DC6:  push    iy
         pop     hl
         ld      de,00010H
@@ -2816,14 +2804,9 @@ A4E10:  ld      bc,0
         ld      (CLUSNU),hl             ; current cluster = start cluster of file
         jr      A4DC6
 
-A4E26:  ld      bc,00FFFH
+A4E26:  ld      bc,00FFFH		; cluster chain end marker
         call    A4F9E                   ; mark end & release rest chain
 A4E2C:  dec     de
-
-; VERSION 1.1 CHANGE
-; CHANGED, BUGFIX
-; ld a,0FFH
-
         ld      a,1
         ld      (de),a                  ; flag FAT buffer changed
         jr      A4E10
@@ -2832,7 +2815,7 @@ A4E32:  ld      l,(iy+26)
         ld      h,(iy+27)
         ld      a,h
         or      l                       ; file has start cluster ?
-        jr      z,A4E10                 ; nop,
+        jr      z,A4E10                 ; nope,
         xor     a
         ld      (iy+26),a
         ld      (iy+27),a               ; file has no start cluster (empty file)
@@ -2982,96 +2965,103 @@ A4EF8:  push    de
 ;       Outputs         ________________________
 
 A4F12:  call    H.ALLO
+
         ld      e,(ix+19)
-        ld      d,(ix+20)
-        ex      de,hl                   ; pointer to FAT buffer of drive
+        ld      d,(ix+20)               ; pointer to FAT buffer of drive
+        ex      de,hl
         ld      a,(hl)
         inc     hl
         ld      h,(hl)
-        ld      l,a                     ; pointer to FAT
-        push    hl
+        ld      l,a                     ; first FAT entry content (file with no cluster chain)
+        push    hl			; store first FAT entry content
         ex      de,hl
         ld      e,(ix+14)
         ld      d,(ix+15)               ; Max cluster
         ld      (MAXCLS),de             ; store
-        push    hl
-A4F2D:  push    bc                      ; clusters to allocate
-        push    hl                      ; start cluster
+        push    hl                      ; store start cluster
+
+; allocate cluster loop
+
+A4F2D:  push    bc                      ; store number of clusters to allocate
+        push    hl                      ; store current cluster
         ld      d,h
-        ld      e,l
-A4F31:  push    de
-        ex      de,hl
+        ld      e,l			; lowest cluster = current cluster
+
+; search free cluster loop
+
+A4F31:  push    de			; store lowest cluster
+        ex      de,hl			; highest cluster
         ld      hl,(MAXCLS)
         dec     hl
         or      a
         sbc     hl,de
         ex      de,hl                   ; last cluster on disk ?
-        pop     de
-        jr      nc,A4F4E                ; nop, go up
+        pop     de			; restore lowest cluster
+        jr      nc,A4F4E                ; nope, go up
         ld      a,e
         or      d                       ; search below finished ?
-        jr      nz,A4F56                ; nop, go below
-        pop     hl
-        pop     hl
-        pop     hl
-        ld      bc,00FFFH
+        jr      nz,A4F56                ; nope, go below
+        pop     hl			; restore current cluster
+        pop     hl			; restore number of clusters to allocate
+        pop     hl			; restore start cluster
+        ld      bc,00FFFH		; cluster chain end marker
         call    A4F9E                   ; mark end & release rest chain
-        scf
-        jr      A4F94
+        scf				; error
+        jr      A4F94			; finish
 
-A4F4E:  inc     hl
-        call    A4F5E                   ; try to allocate
+A4F4E:  inc     hl			; new highest cluster
+        call    A4F5E                   ; allocate cluster if free
         ld      a,e                     ; nop not free !
         or      d                       ; search below finished ?
         jr      z,A4F31                 ; try again (up)
-A4F56:  dec     de
+A4F56:  dec     de			; new lowest cluster
         ex      de,hl
-        call    A4F5E                   ; try to allocate
+        call    A4F5E                   ; allocate cluster if free
         ex      de,hl                   ; nop not free !
         jr      A4F31                   ; try again
 
 ;       Subroutine      allocate cluster if free
-;       Inputs          
+;       Inputs          HL = cluster number
 ;       Outputs         ________________________
 
-A4F5E:  push    hl
-        push    de
+A4F5E:  push    hl			; store cluster number
+        push    de			; store
         call    A41F4                   ; cluster free ?
-        pop     de
-        pop     hl
-        ret     nz                      ; nop, no alloc
-        pop     bc
+        pop     de			; restore
+        pop     hl			; restore cluster number
+        ret     nz                      ; nope, no alloc
+        pop     bc			; discard return address
         ld      c,l
-        ld      b,h
-        ex      (sp),hl
+        ld      b,h			; store cluster number
+        ex      (sp),hl			; store cluster number, restore previous cluster number
         ld      e,(ix+19)
         ld      d,(ix+20)               ; pointer to FAT buffer of drive
         call    A4221                   ; set FAT entry content
-        pop     hl
-        pop     bc
-        dec     bc
+        pop     hl			; restore cluster number
+        pop     bc			; restore number of clusters to allocate
+        dec     bc			; update number of clusters to allocate
         ld      a,b
-        or      c
-        jr      nz,A4F2D
+        or      c			; finished ?
+        jr      nz,A4F2D		; nope, allocate next cluster
         ld      bc,00FFFH               ; chain endmarker
         call    A4221                   ; set FAT entry content
         dec     de
         ld      a,1
         ld      (de),a                  ; FAT changed
-        pop     hl
-        push    hl
+        pop     hl			; restore start cluster
+        push    hl			; store start cluster
         call    A41F4                   ; get FAT entry content
-        pop     bc
+        pop     bc			; restore start cluster
         ld      a,c
-        or      b
-        jr      nz,A4F94
+        or      b			; add chain to existing chain ?
+        jr      nz,A4F94		; yep,
         ld      (iy+26),l
-        ld      (iy+27),h               ; start cluster of file
-A4F94:  ex      de,hl
-        pop     bc
+        ld      (iy+27),h               ; update start cluster of file
+A4F94:	ex      de,hl			; pointer to FAT buffer
+        pop     bc			; restore first FAT entry content
         ld      (hl),c
         inc     hl
-        ld      (hl),b
+        ld      (hl),b                  ; restore first FAT entry content (file with no cluster chain)
         ex      de,hl
         ret
 
@@ -3079,27 +3069,27 @@ A4F94:  ex      de,hl
 ;       Inputs          
 ;       Outputs         ________________________
 
-A4F9B:  ld      bc,0
+A4F9B:  ld      bc,0			; FAT entry = free
 
 ;       Subroutine      set cluster entry and release rest of cluster chain
 ;       Inputs          
 ;       Outputs         ________________________
 
 A4F9E:  call    H.RELB
-        push    hl
+        push    hl			; store cluster number
         call    A41F4                   ; get FAT entry content
-        ex      (sp),hl
+        ex      (sp),hl			; store next cluster number, restore cluster number
         call    A4221                   ; set FAT entry content
-        pop     hl
+        pop     hl			; restore next cluster number
         ld      a,h
-        or      l
-        ret     z
+        or      l			; free FAT entry ?
+        ret     z			; yep, quit
         ld      a,h
-        cp      00FH
-        jr      c,A4F9B
+        cp      00FH			; cluster chain end marker ?
+        jr      c,A4F9B			; nope, next cluster in chain
         ld      a,l
-        cp      0F8H
-        jr      c,A4F9B                 ; not end of chain, release
+        cp      0F8H			; cluster chain end marker ?
+        jr      c,A4F9B                 ; nope, next cluster in chain
         ret
 
 ;       Subroutine      BDOS 11 (search for first)
@@ -3365,11 +3355,6 @@ A50E0:  push    de
         ld      ix,YCONTP
         ld      a,e
         cp      c                       ; is lengthbyte valid ?
-
-; VERSION 1.1 CHANGE
-; CHANGED, BUGFIX
-; jr nc,A5103
-
         jr      nc,A5101                ; equal, use the line in buffer as basis otherwise use empty line as basis
         push    hl                      ; length smaller than size of buffer
         add     hl,de
@@ -4487,16 +4472,16 @@ A576F:  call    INIHRD                  ; initialize diskhardware
         ld      b,3*5
 A5789:  ld      (hl),0C9H
         inc     hl
-        djnz    A5789                   ; nop, init EXTBIO,DISINT and ENAINT hooks
+        djnz    A5789                   ; nope, init EXTBIO,DISINT and ENAINT hooks
 A578E:  ld      hl,(BOTTOM)
         ld      de,0C001H
         _RST	DCOMPR                  ; at least 16Kb RAM ?
-        jr      nc,A57A3                ; nop, cancel disksystem initiazation
+        jr      nc,A57A3                ; nope, cancel disksystem initiazation
         ld      a,006H
         call    SNSMAT
         di
         rrca                            ; SHIFT key pressed ?
-        jr      c,A57A9                 ; nop, cont
+        jr      c,A57A9                 ; nope, cont
         ld      a,007H
         _RST    OUTDO                   ; beep
 A57A3:  ld      a,0FFH
@@ -4581,7 +4566,7 @@ A5825:  call    A5FCD                   ; get my SLTWRK entry
         ld      de,SECLEN
         _RST	DCOMPR                  ; SECLEN sofar big enough ?
         jr      nc,A5838
-        ld      (MAXSEC),de             ; nop, adjust
+        ld      (MAXSEC),de             ; nope, adjust
 A5838:  ld      de,DRVTBL               ; DRVTBL
         ld      bc,4*256+0              ; 4 disk interfaces, number of drives = 0
 A583E:  ld      a,(de)
@@ -4601,7 +4586,7 @@ A5850:  call    DRIVES                  ; query no. of drives
         add     a,l
         cp      8+1
         ld      a,l                     ; more as 8 drives ?
-        jr      c,A585C                 ; nop, ok
+        jr      c,A585C                 ; nope, ok
         ld      a,8
         sub     c                       ; as much as possible
 A585C:  push    bc
@@ -4793,7 +4778,7 @@ A59C1:  ld      c,040H
 A59CB:  ld      sp,0C200H               ; switch to a temporary stack, just above temp startbuffer
         ld      a,(H.STKE+0)
         cp      0C9H                    ; STKE hook set ?
-        jr      z,A59DB                 ; nop, cont
+        jr      z,A59DB                 ; nope, cont
         ld      ix,M7D17
         jr      A59ED                   ; skip BASIC extension ROMs and transfer control
 
