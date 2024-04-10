@@ -1,6 +1,5 @@
 
 
-
 MSXVER	EQU	2			; MSX version
 
 OPTENT	EQU	07A00H			; optrom entrypoint
@@ -16,6 +15,12 @@ RTCENA	EQU	1
 ;		1 = Use optimized code
 
 OPTM	EQU	0
+
+;	CALLFIX
+;		0 = orginal CALL statement code
+;		1 = Use CALL statement bugfix
+
+CALLFIX	EQU	1
 
 
 ;	CNTRY	Country
@@ -213,7 +218,7 @@ CHRVLN	EQU	"&"
 	ENDIF
 
 	IF	(BASVER EQ 1) AND (CNTRY EQ 3)
-CHRCUR	EQU	0ACH		; pound sign
+CHRCUR	EQU	09CH		; pound sign
 CHRFLN	EQU	"\"
 CHRVLN	EQU	"&"
 	ENDIF

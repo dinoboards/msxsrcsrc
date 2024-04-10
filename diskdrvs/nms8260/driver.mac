@@ -1,17 +1,56 @@
-;  
-;   NMS8260 -> Source re-created by Z80DIS 2.2
-;      Z80DIS was written by Kenneth Gielow
-;                            Palo Alto, CA
-        .Z80
-        ORG     7405H
+; Diskdriver Philips NMS8260 (internal HDD controller)
+; HDC	WD1002
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by JVC and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+; looks like the controller is compatible with ST506 WD1002 controller
+;
+; http://bitsavers.trailing-edge.com/pdf/westernDigital/pc_disk_controller/WD1002/79-000029_WD1002S-WX2_XT_MFM_OEM_Manual_Jul85.pdf
+;
+; 07CH cmd/data
+;   00 test drive ready
+;   01 recalibrate
+;   03 read status of last operation
+;   05 verify sectors
+;   08 read sectors
+;   0A write sectors
+;   0C initialize drive parameters
+;   E4 execute controller diagnostics
+; 07CH status/data
+; 07DH write: controller reset
+; 07DH read: controller status
+;   b5 = IRQ
+;   b4 = DRQ
+;   b3 = BSY
+;   b2 = C/-D
+;   b1 = I/-O
+;   b0 = REQ
+; 07EH write: select controller
+; 07EH read: read drive configuration info
+;   b0 = ?? drive 0 connected ??
+;   b1 = drive 1 connected
+;   b2 = write protect
+;   b3 = ??
+; 07FH write: write dma and interrupt mask
+; 07FH read: not used
+
 
 CALSLT  EQU     001CH
 ENASLT  EQU     0024H
 CHPUT   EQU     00A2H
 BEEP    EQU     00C0H
 SNSMAT  EQU     0141H
-M4022   EQU     4022H
+BASENT  EQU     4022H
 
+SECLEN  EQU     512
+MYSIZE  EQU     49
 ; +00   drive + head
 ; +01   cylinder + sector (H)
 ; +02   sector (L)
@@ -24,10 +63,6 @@ M4022   EQU     4022H
 ; +10,2 start of workspace (format)
 ; +12   drive (format)
 ; +13,2 cylinder (format)
-
-
-MYSIZE  EQU     49
-SECLEN  EQU     512
 
 I$7405: DEFB    0F0H                    ; media descriptor byte
         DEFW    512                     ; sector size
@@ -1233,7 +1268,7 @@ DC058:  CALL    0
         JP      NZ,DC06A
 DC063:  LD      A,(DC0C4)
         AND     A
-        JP      Z,M4022
+        JP      Z,BASENT
 DC06A:  LD      DE,DC079
         CALL    CC077
         LD      C,7
@@ -1279,35 +1314,4 @@ DC0C4:  DEFB    0
         DEFM    "Copyright 1986  by K.Chiba (VSE) MSX BIOS TYPE 2   Ver.  0.3      Oct.11 1986  "
         NOP 
 
-; looks like the controller is compatible with ST506 WD1002 controller
-;
-; http://bitsavers.trailing-edge.com/pdf/westernDigital/pc_disk_controller/WD1002/79-000029_WD1002S-WX2_XT_MFM_OEM_Manual_Jul85.pdf
-;
-; 07CH cmd/data
-;   00 test drive ready
-;   01 recalibrate
-;   03 read status of last operation
-;   05 verify sectors
-;   08 read sectors
-;   0A write sectors
-;   0C initialize drive parameters
-;   E4 execute controller diagnostics
-; 07CH status/data
-; 07DH write: controller reset
-; 07DH read: controller status
-;   b5 = IRQ
-;   b4 = DRQ
-;   b3 = BSY
-;   b2 = C/-D
-;   b1 = I/-O
-;   b0 = REQ
-; 07EH write: select controller
-; 07EH read: read drive configuration info
-;   b0 = ?? drive 0 connected ??
-;   b1 = drive 1 connected
-;   b2 = write protect
-;   b3 = ??
-; 07FH write: write dma and interrupt mask
-; 07FH read: not used
-
-        END
+;        END

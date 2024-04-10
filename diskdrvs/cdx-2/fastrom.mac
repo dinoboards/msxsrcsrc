@@ -1,0 +1,11021 @@
+; FASTROM.MAC
+
+; FAST DiskROM DOS 1.1 kernel, DOS1 compatible
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII,A&L and may be others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
+MYSIZE	EQU	18
+
+                                ; +0    disk motor timer
+                                ; +1    disk change timer drive 0
+                                ; +2    disk change timer drive 1
+                                ; +3    disk change timer drive 2
+                                ; +4    disk change timer drive 3
+                                ; +5    drive id of last operation (phantom)
+                                ; +6    FAT buffer used by drive id
+                                ; +7    always 0, function unknown
+                                ; +8,2  pointer to FAT buffer
+                                ; +10   hours
+                                ; +11   minutes
+                                ; +12   seconds
+                                ; +13   interrupt frequency (b7), interrupt counter (b6-b0)
+                                ; +14	disk drive 0 connected
+                                ; +15	disk drive 1 connected
+                                ; +16	disk drive 2 connected
+                                ; +17	disk drive 3 connected
+
+SECLEN	EQU	512
+
+D.5C93	EQU	5C93H	        ; xxxx xxxx 1001 00xx DDX motor off
+D.6205	EQU	6205H	        ; xxxx xxxx 0000 01xx DDX enable I/O ports
+D.7114	EQU	7114H	        ; xxxx xxxx 0001 01xx DDX disable I/O ports
+D.711C	EQU	711CH	        ; xxxx xxxx 0001 11xx DDX disable I/O ports
+I.8348	EQU	8348H           ; xxxx xxxx 0100 10xx DDX unused
+
+
+WBOOT	EQU	0000H	; JC-LI
+RDSLT	EQU	000CH	; -C--I
+WRSLT	EQU	0014H	; -C---
+OUTDO	EQU	0018H
+CALSLT	EQU	001CH	; JC--I
+DCOMPR	EQU	0020H
+ENASLT	EQU	0024H	; JC--I
+IDBYT0	EQU	002BH	; ---L-
+IDBYT2	EQU	002DH	; ---L-
+CALLF	EQU	0030H
+CHAR_16	EQU	0034H	; ----I
+KEYINT	EQU	0038H	; -CS-I
+LDIRMV	EQU	0059H	; -C---
+LDIRVM	EQU	005CH	; -C---
+DBUF	EQU	0080H	; ----I
+CHSNS	EQU	009CH	; ----I
+CHGET	EQU	009FH	; ----I
+CHPUT	EQU	00A2H	; ----I
+LPTOUT	EQU	00A5H	; ----I
+BREAKX	EQU	00B7H	; ----I
+CKCNTC	EQU	00BDH	; -C---
+CLS	EQU	00C3H	; J----
+ERAFNK	EQU	00CCH	; -C---
+TOTEXT	EQU	00D2H	; -C---
+J.0100	EQU	0100H	; J---I
+SNSMAT	EQU	0141H	; -C---
+KILBUF	EQU	0156H	; ----I
+CALBAS	EQU	0159H	; JC---
+
+DECSUB	EQU	268CH	; -C---
+DECADD	EQU	269AH	; ----I
+DECDIV	EQU	289FH	; -C---
+VMOVE	EQU	2EF3H	; -C---
+VMOVFM	EQU	2F08H	; J----
+VMOVMF	EQU	2F10H	; -C---
+MAKINT	EQU	2F99H	; JC---
+CONDS	EQU	3042H	; J----
+INT	EQU	30D1H			; integer part of float
+SGNMUL	EQU	325CH	; -C---
+NULSTR	EQU	3FD6H	; ----I
+ERROR	EQU	406FH
+READYR	EQU	409BH
+NTSTOP  EQU     4173H
+LINKER	EQU	4253H
+FRMEVL	EQU	4C64H
+NEWSTT	EQU	4601H
+CHRGTR	EQU	4666H
+FLTLIN	EQU	46FFH
+INTID2	EQU	4756H
+FINPRT	EQU	4AFFH
+FRMEQL	EQU	4C5FH
+DOCNVF	EQU	517AH
+GTBYTC	EQU	521BH
+GETBYT	EQU	521CH
+CONINT	EQU	521FH
+GETUIN	EQU	542FH
+GETUI	EQU	5432H
+SCCPTR	EQU	54F7H
+GETYPR	EQU	5597H
+PTRGET	EQU	5EA4H
+STRINI	EQU	6627H
+GETSPA	EQU	668EH
+FRESTR	EQU	67D0H
+FILEVL	EQU	6A0EH
+FILIDX	EQU	6A6DH
+OPNFIL	EQU	6AFAH
+CLSFIL	EQU	6B24H
+CLSALL	EQU	6C1CH
+BSAVE	EQU	6E92H
+BLOAD	EQU	6EC6H
+PARDEV  EQU     6F15H
+CRDONZ	EQU	7323H
+CRDO	EQU	7328H
+I$739A	EQU	739AH
+I$7D17	EQU	7D17H
+I$7D2F	EQU	7D2FH
+I$7D31	EQU	7D31H
+I$7E14	EQU	7E14H
+
+I$8000	EQU	8000H	; ----I
+I$C000	EQU	0C000H	; ----I
+
+CARPOS	EQU	0F237H	; --SLI
+STARTP	EQU	0F238H	; --SL-
+INSERT	EQU	0F239H	; --SL-
+PFLAG	EQU	0F23BH	; --SL-
+DIRTYD	EQU	0F23CH	; --SL-
+DMAADD	EQU	0F23DH	; --SL-
+BUFSEC	EQU	0F23FH	; --SL-
+BUFDRN	EQU	0F241H	; --SL-
+DIRTYB	EQU	0F242H	; --SLI
+BUFDRI	EQU	0F243H	; --SL-
+DIRBFI	EQU	0F245H	; ---L-
+DIRBFD	EQU	0F246H	; --SL-
+CURDRV	EQU	0F247H	; --SLI
+DAY	EQU	0F248H	; --SL-
+MONTH	EQU	0F249H	; --SL-
+YEAR	EQU	0F24AH	; --SL-
+DAYCNT	EQU	0F24CH	; --S--
+WEEKDA	EQU	0F24EH	; --SL-
+HOOKBE	EQU	0F24FH
+H.PROM	EQU	0F24FH	; -C--I
+H.UNPA	EQU	0F252H	; -C-L-
+H.DEVN	EQU	0F255H	; -C---
+H.CONT	EQU	0F258H	; -C---
+H.GETE	EQU	0F25BH	; -C---
+H.NEXT	EQU	0F25EH	; -C---
+H.MOVN	EQU	0F261H	; -C---
+H.DOOP	EQU	0F264H	; -C---
+H.FATR	EQU	0F267H	; -C---
+H.GETI	EQU	0F26AH	; -C---
+H.FATW	EQU	0F26DH	; -C---
+H.DREA	EQU	0F270H	; -C---
+H.FATA	EQU	0F273H	; -C---
+H.DIRW	EQU	0F276H	; -C---
+H.DWRI	EQU	0F279H	; -C---
+H.MUL1	EQU	0F27CH	; -C---
+H.DIV3	EQU	0F27FH	; -C---
+H.FNDC	EQU	0F282H	; -C---
+H.SKPC	EQU	0F285H	; -C---
+H.BUFR	EQU	0F288H	; -C---
+H.BUFW	EQU	0F28BH	; -C---
+H.ENUF	EQU	0F28EH	; -C---
+H.SETF	EQU	0F291H	; -C---
+H.SETC	EQU	0F294H	; -C---
+H.WRTE	EQU	0F297H	; -C---
+H.NORN	EQU	0F29AH	; -C---
+H.WRTL	EQU	0F29DH	; -C---
+H.OPTI	EQU	0F2A0H	; -C---
+H.FIGR	EQU	0F2A3H	; -C---
+H.ALLO	EQU	0F2A6H	; -C---
+H.RELB	EQU	0F2A9H	; -C---
+H.GETC	EQU	0F2ACH	; -C---
+H.OUT	EQU	0F2AFH	; -C---
+H.DATE	EQU	0F2B2H	; -C---
+H.SETY	EQU	0F2B5H	; -C---
+LASTEN	EQU	0F2B8H	; --SL-
+NAME1	EQU	0F2B9H	; ----I
+ATTRIB	EQU	0F2C4H	; --SL-
+NAME2	EQU	0F2C5H	; ----I
+NAME3	EQU	0F2D0H	; ----I
+CREATI	EQU	0F2DCH	; --SL-
+SECCLU	EQU	0F2DDH	; --SL-
+DSKERR	EQU	0F2DEH	; --SL-
+TRANS	EQU	0F2DFH	; --SL-
+PREREA	EQU	0F2E0H	; --SL-
+THISDR	EQU	0F2E1H	; --SL-
+NEXTAD	EQU	0F2E2H	; --SL-
+RECPOS	EQU	0F2E4H	; --SL-
+RECCNT	EQU	0F2E8H	; --SL-
+LASTPO	EQU	0F2EAH	; --SL-
+CLUSNU	EQU	0F2ECH	; --SL-
+SECPOS	EQU	0F2EEH	; --SL-
+VALSEC	EQU	0F2F0H	; ---L-
+BYTSEC	EQU	0F2F2H	; --S--
+BYTPOS	EQU	0F2F4H	; --SLI
+BYTCT1	EQU	0F2F8H	; --SL-
+BYTCT2	EQU	0F2FAH	; --SL-
+SECCNT	EQU	0F2FCH	; --SL-
+ENTFRE	EQU	0F2FEH	; --SL-
+READOP	EQU	0F2FFH	; --SL-
+CONTPO	EQU	0F300H	; --SL-
+MAXCLS	EQU	0F302H	; ---L-
+CPMCAL	EQU	0F306H	; --SL-
+SRCHFC	EQU	0F307H	; --SL-
+SRCHIX	EQU	0F309H	; --SL-
+SRCHLO	EQU	0F30BH	; --SL-
+FCBEXT	EQU	0F30CH	; --SL-
+RAWFLG	EQU	0F30DH	; --SL-
+COUNTR	EQU	0F30EH	; --SL-
+KANJTA	EQU	0F30FH	; ----I
+DOSVER	EQU	0F313H	; --SL-
+DISKVE	EQU	0F323H	; --SLI
+BREAKV	EQU	0F325H	; --SL-
+AUXBOD	EQU	0F327H	; ----I
+BDOSBO	EQU	0F331H	; ----I
+KEYVLD	EQU	0F336H	; --SLI
+KEYCHR	EQU	0F337H	; --SL-
+TIMFLG	EQU	0F338H	; --SL-
+F_SPSA	EQU	0F339H	; --SL-
+CURDAT	EQU	0F33BH	; --SL-
+RECSIZ	EQU	0F33DH	; --SL-
+D.F33E	EQU	0F33EH	; ---LI
+TARGET	EQU	0F33FH	; --SLI
+NOTFIR	EQU	0F340H	; ---LI
+RAMAD0	EQU	0F341H	; --SLI
+RAMAD1	EQU	0F342H	; --SL-
+RAMAD2	EQU	0F343H	; --SL-
+RAMAD3	EQU	0F344H	; --S--
+FILMAX	EQU	0F345H	; --SLI
+DOSFLG	EQU	0F346H	; --SL-
+$NUMDR	EQU	0F347H	; --SLI
+MASTER	EQU	0F348H	; --SLI
+HIMSAV	EQU	0F349H	; --SL-
+DOSHIM	EQU	0F34BH	; --SL-
+$SECBU	EQU	0F34DH	; --SL-
+$BUFFE	EQU	0F34FH	; --SL-
+$DIRBU	EQU	0F351H	; --SL-
+FCBBAS	EQU	0F353H	; --SL-
+$DPBLI	EQU	0F355H	; ----I
+RSLREG	EQU	0F365H	; -CS--
+$DOSON	EQU	0F368H	; -CS-I
+$DOSOF	EQU	0F36BH	; -CS--
+XFER	EQU	0F36EH	; --S--
+$AUXIN	EQU	0F371H	; J----
+$AUXOU	EQU	0F374H	; J----
+BLDCHK	EQU	0F377H	; ----I
+BSVCHK	EQU	0F37AH	; ----I
+BDOS	EQU	0F37DH	; JC---
+
+VARWRK	EQU	0F380H	; -C---
+RDPRIM	EQU	0F380H
+WRPRIM	EQU	0F385H	; J----
+RETRTN	EQU	0F38BH	; ----I
+CLPRIM	EQU	0F38CH	; J----
+CLPRM1	EQU	0F398H	; -C---
+LINLEN	EQU	0F3B0H	; ---L-
+CNSDFG	EQU	0F3DEH	; --S--
+LPTPOS	EQU	0F415H	; ---L-
+PRTFLG	EQU	0F416H	; ---L-
+CURLIN	EQU	0F41CH	; --S--
+KBUF	EQU	0F41FH
+YCONTP  EQU     KBUF+58
+YCONBF  EQU     KBUF+186
+BUF	EQU	0F55EH
+TTYPOS	EQU	0F661H	; ---L-
+VALTYP	EQU	0F663H	; --S--
+MEMSIZ	EQU	0F672H	; --SL-
+STKTOP	EQU	0F674H	; --SL-
+TXTTAB	EQU	0F676H	; --SL-
+TEMPPT	EQU	0F678H	; --SL-
+DSCTMP	EQU	0F698H	; ----I
+FRETOP	EQU	0F69BH	; ---LI
+AUTLIN	EQU	0F6ABH	; ---L-
+SAVSTK	EQU	0F6B1H	; --S--
+VARTAB	EQU	0F6C2H	; --SL-
+STREND	EQU	0F6C6H	; --S--
+DAC	EQU	0F7F6H	; ----I
+ARG	EQU	0F847H	; ----I
+MAXFIL	EQU	0F85FH	; --SL-
+FILTAB	EQU	0F860H	; --SL-
+NULBUF	EQU	0F862H	; --SL-
+PTRFIL	EQU	0F864H	; --SL-
+FILNAM  EQU     0F866H
+NLONLY	EQU	0F87CH	; --S--
+SAVEND	EQU	0F87DH	; --SL-
+HOKVLD	EQU	0FB20H	; ----I
+I.FB21	EQU	0FB21H	; ----I
+I.FB29	EQU	0FB29H	; ----I
+BOTTOM	EQU	0FC48H	; --SL-
+HIMEM	EQU	0FC4AH	; --SL-
+FLBMEM	EQU	0FCAEH	; --S-I
+RUNBNF	EQU	0FCBEH	; --SL-
+SAVENT	EQU	0FCBFH	; --SL-
+EXPTBL	EQU	0FCC1H	; ---LI
+SLTTBL	EQU	0FCC5H	; ----I
+SLTATR	EQU	0FCC9H	; ----I
+SLTWRK	EQU	0FD09H	; ----I
+PROCNM	EQU	0FD89H	; ----I
+DEVICE	EQU	0FD99H	; --SLI
+H.TIMI  EQU     0FD9FH
+H.DSKO  EQU     0FDEFH
+H.NAME  EQU     0FDF9H
+H.KILL  EQU     0FDFEH
+H.COPY  EQU     0FE08H
+H.DSKF  EQU     0FE12H
+H.DSKI  EQU     0FE17H
+H.LSET  EQU     0FE21H
+H.RSET  EQU     0FE26H
+H.FIEL  EQU     0FE2BH
+H.MKI$  EQU     0FE30H
+H.MKS$  EQU     0FE35H
+H.MKD$  EQU     0FE3AH
+H.CVI   EQU     0FE3FH
+H.CVS   EQU     0FE44H
+H.CVD   EQU     0FE49H
+H.GETP  EQU     0FE4EH
+H.NOFO  EQU     0FE58H
+H.NULO  EQU     0FE5DH
+H.NTFL  EQU     0FE62H
+H.BINS  EQU     0FE71H
+H.BINL  EQU     0FE76H
+H.FILE  EQU     0FE7BH
+H.DGET  EQU     0FE80H
+H.FILO  EQU     0FE85H
+H.INDS  EQU     0FE8AH
+H.LOC   EQU     0FE99H
+H.LOF   EQU     0FE9EH
+H.EOF   EQU     0FEA3H
+H.BAKU  EQU     0FEADH
+H.PARD  EQU     0FEB2H
+H.NODE  EQU     0FEB7H
+H.POSD  EQU     0FEBCH
+H.RUNC  EQU     0FECBH
+H.CLEA  EQU     0FED0H
+H.LOPD  EQU     0FED5H
+H.STKE  EQU     0FEDAH
+H.ERRP  EQU     0FEFDH
+H.PHYD  EQU     0FFA7H
+H.FORM  EQU     0FFACH
+EXTBIO	EQU	0FFCAH	; ----I
+DISINT	EQU	0FFCFH	; -C---
+ENAINT	EQU	0FFD4H	; -C---
+D.FFFF	EQU	0FFFFH	; --SLI
+
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+_DOSCP	MACRO	X
+	IF2
+	IF	($ NE X)
+	.PRINTX	"ERROR: MSXDOS incompatible, subroutine not aligned to &X"
+	ENDIF
+	ENDIF
+	ENDM
+
+
+        .Z80
+        ASEG
+        ORG     04000H
+
+        DEFB    "AB"			; ROM extension identifier
+        DEFW    C.576F			; extension initialize handler
+        DEFW    C.64EB			; extension BASIC statement handler
+        DEFW    0			; extension BASIC device handler
+        DEFW    0			; extension BASIC program pointer
+        DEFS    6
+
+;	  Subroutine disk sector operation
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$4010:	JP	DSKIO
+
+;	  Subroutine is disk changed ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$4013:	JP	DSKCHG
+
+;	  Subroutine update DPB
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$4016:	JP	GETDPB
+
+;	  Subroutine get pointer to format choice string
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$4019:	JP	CHOICE
+
+;	  Subroutine format disk
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$401C:	JP	DSKFMT
+
+;	  Subroutine disk drive motor off
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$401F:	JP	MTOFF
+
+;	  Subroutine start DiskBASIC
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J.4022:	JP	C.5B8E
+
+;	  Subroutine format disk
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.4025:	SCF				; work area specified
+	JP	C.6112			; format disk
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.4029:	JP	J$61E4
+?.402C:	NOP
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$402D:	JP	C.5FDD			; get slot id in page 1
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4030H
+
+$INIT:
+?.4030:	LD	HL,(DOSHIM)
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4034H
+
+$$BIOS:
+C.4034:	PUSH	IX
+	LD	IX,BREAKX
+	CALL	C.4097
+	JR	NC,J$4049
+	LD	A,03H	; 3 
+	LD	(KEYVLD),A
+	LD	(KEYCHR),A
+	AND	A
+	RET
+
+J$4049:	LD	A,(KEYVLD)
+	AND	A
+	LD	A,(KEYCHR)
+	RET	NZ
+	PUSH	IX
+	LD	IX,CHSNS
+	CALL	C.4097
+	RET	Z
+	LD	A,0FFH
+	LD	(KEYVLD),A
+	CALL	C$4083
+	LD	(KEYCHR),A
+	OR	A
+	RET
+
+I$4068:	DEFW	C.720E
+	DEFB	0
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.406B:	XOR	A
+	LD	(KEYVLD),A
+	PUSH	IX
+	LD	IX,KILBUF
+	CALL	C.4097
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4078H
+
+$IN:
+C.4078:	PUSH	HL
+	LD	HL,KEYVLD
+	XOR	A
+	CP	(HL)
+	LD	(HL),A
+	INC	HL
+	LD	A,(HL)
+	POP	HL
+	RET	NZ
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4083:	PUSH	IX
+	LD	IX,CHGET
+J.4089:	CALL	C.40AB
+	POP	IX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	408FH
+
+$OUT:
+C.408F:	PUSH	IX
+	LD	IX,CHPUT
+	JR	J.4089
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4097:	CALL	C.40AB
+	POP	IX
+	EX	(SP),IX
+	RET
+
+J.409F:	PUSH	IX
+	LD	IX,LPTOUT
+	JR	J.4089
+
+;	  Subroutine BDOS function 0
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.40A7:	LD	IX,READYR
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.40AB:	PUSH	IY
+	LD	IY,(EXPTBL+0-1)
+	CALL	CALSLT
+	EI
+	POP	IY
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$40B8:	LD	A,0DH	; 13 
+	OUT	(0B4H),A
+	LD	A,0AH	; 10 
+	OUT	(0B5H),A
+	XOR	A
+	OUT	(0B4H),A
+	LD	B,0FH	; 15 
+J$40C5:	IN	A,(0B5H)
+	AND	0FH	; 15 
+	XOR	B
+	OUT	(0B5H),A
+	LD	C,A
+	NOP
+	IN	A,(0B5H)
+	AND	0FH	; 15 
+	CP	C
+	RET	NZ
+	XOR	B
+	OUT	(0B5H),A
+	DJNZ	J$40C5
+	LD	A,0FFH
+	LD	(TIMFLG),A
+	LD	A,0DH	; 13 
+	OUT	(0B4H),A
+	LD	A,09H	; 9 
+	OUT	(0B5H),A
+	LD	A,0AH	; 10 
+	OUT	(0B4H),A
+	LD	A,01H	; 1 
+	OUT	(0B5H),A
+	LD	A,0DH	; 13 
+	OUT	(0B4H),A
+	XOR	A
+	OUT	(0B5H),A
+	LD	BC,13*256+0
+J$40F8:	LD	A,C
+	OUT	(0B4H),A
+	IN	A,(0B5H)
+	PUSH	AF
+	INC	C
+	DJNZ	J$40F8
+	LD	A,0EH	; 14 
+	OUT	(0B4H),A
+	XOR	A
+	OUT	(0B5H),A
+	LD	B,0DH	; 13 
+J$410A:	DEC	C
+	LD	A,C
+	OUT	(0B4H),A
+	POP	AF
+	OUT	(0B5H),A
+	DJNZ	J$410A
+	JR	C.4150
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4115:	LD	(CURDAT),HL
+	LD	A,(TIMFLG)
+	AND	A
+	RET	Z
+	LD	A,(YEAR)
+	LD	B,A
+	LD	A,(MONTH)
+	LD	C,A
+	LD	A,(DAY)
+	LD	D,A
+	LD	E,07H	; 7 
+	CALL	C.415B
+	JR	J$4144
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4130:	LD	A,(TIMFLG)
+	AND	A
+	JP	Z,J$75E9
+	LD	E,00H
+	CALL	C.415B
+	LD	A,0FH	; 15 
+	OUT	(0B4H),A
+	LD	A,02H	; 2 
+	OUT	(0B5H),A
+J$4144:	LD	H,D
+	CALL	C.4162
+	LD	H,C
+	CALL	C.4162
+	LD	H,B
+	CALL	C.4162
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4150:	LD	A,0DH	; 13 
+	OUT	(0B4H),A
+	IN	A,(0B5H)
+	OR	08H	; 8 
+J.4158:	OUT	(0B5H),A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.415B:	CALL	C.4150
+	AND	04H	; 4 
+	JR	J.4158
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4162:	XOR	A
+	LD	L,08H	; 8 
+J$4165:	RLC	H
+	ADC	A,A
+	DAA
+	DEC	L
+	JR	NZ,J$4165
+	CALL	C.4173
+	RRCA
+	RRCA
+	RRCA
+J$4172:	RRCA
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4173:	PUSH	AF
+	LD	A,E
+	INC	E
+	OUT	(0B4H),A
+	POP	AF
+	JR	J.4158
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$417B:	CALL	C$75D2
+	LD	HL,(CURDAT)
+	AND	A
+	RET	Z
+	CALL	C.415B
+	LD	E,0DH	; 13 
+	CALL	C.41AB
+	CALL	C.550A
+	CALL	C.41AB
+	LD	(MONTH),A
+	CALL	C.41AB
+	LD	(DAY),A
+	DEC	E
+	CALL	C.41AB
+	LD	B,A
+	CALL	C.41AB
+	LD	C,A
+	CALL	C.41AB
+	CALL	C.4150
+	SCF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.41AB:	XOR	A
+	CALL	C$41B3
+	ADD	A,A
+	ADD	A,A
+	ADD	A,D
+	ADD	A,A
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$41B3:	LD	D,A
+	DEC	E
+	LD	A,E
+	OUT	(0B4H),A
+	IN	A,(0B5H)
+	AND	0FH	; 15 
+	ADD	A,D
+	LD	D,A
+	RET
+
+?.41BF:	DEFB	0,0
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.41C1:	PUSH	DE
+	CALL	C$4EDD
+	LD	E,A
+	INC	E
+	LD	D,0FFH
+J.41C9:	INC	D
+	LD	A,04H	; 4 
+	CP	D
+	SCF
+	JR	Z,J$41DF
+	LD	A,(IX+0)
+	INC	IX
+	INC	A
+	JR	Z,J.41C9
+	DEC	E
+	JR	NZ,J.41C9
+	DEC	IX
+	XOR	A
+	LD	A,D
+J$41DF:	POP	DE
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.41E1:	LD	BC,7*SECLEN
+	XOR	A
+	JP	C.58E3
+
+;	  Subroutine disable maskable interrupts, enable I/O ports of interface in current slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.41E8:	CALL	DISINT
+	DI
+	JP	C.517F			; enable I/O ports of interface in current slot
+
+;	  Subroutine BDOS function 12
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	41EFH
+
+CPMVER:
+C.41EF:	LD	B,00H
+	LD	A,22H			; CP/M version 2.2
+	RET
+
+J$41F4:	PUSH	DE
+	LD	E,L
+	LD	D,H
+	SRL	H
+	RR	L
+	RRA
+	ADD	HL,DE
+	POP	DE
+	ADD	HL,DE
+	RLA
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	JR	NC,J$4211
+	SRL	H
+	RRA
+	SRL	H
+	RRA
+	SRL	H
+	RRA
+	SRL	H
+	RRA
+J$4211:	LD	L,A
+	LD	A,H
+	AND	0FH	; 15 
+	LD	H,A
+	OR	L
+	RET
+
+J$4218:	PUSH	DE
+	LD	E,L
+	LD	D,H
+	SRL	H
+	RR	L
+	RRA
+	ADD	HL,DE
+	POP	DE
+	ADD	HL,DE
+	RLA
+	JR	NC,J$423E
+	SLA	C
+	RL	B
+	SLA	C
+	RL	B
+	SLA	C
+	RL	B
+	SLA	C
+	RL	B
+	LD	A,(HL)
+	AND	0FH	; 15 
+	OR	C
+	LD	(HL),A
+	INC	HL
+	LD	(HL),B
+	RET
+
+J$423E:	LD	(HL),C
+	INC	HL
+	LD	A,(HL)
+	AND	0F0H
+	OR	B
+	LD	(HL),A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4246:	LD	DE,NAME1
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4249:	LD	A,(DE)
+	CP	(HL)
+	INC	HL
+	INC	DE
+	RET	NZ
+	DJNZ	C.4249
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4251:	CALL	H.DEVN
+	LD	HL,I$F1F7
+	LD	C,05H	; 5 
+J$4259:	LD	B,04H	; 4 
+	CALL	C.4246
+	JR	NZ,J$428F
+	LD	B,04H	; 4 
+J$4262:	LD	A,(DE)
+	INC	DE
+	CP	20H	; " "
+	JR	NZ,J$429A
+	DJNZ	J$4262
+	LD	A,C
+	NEG
+	LD	(I.F20B+11),A
+	LD	HL,NAME1
+	LD	DE,I.F20B
+	LD	BC,4
+	LDIR
+	CALL	C.547D
+	LD	(I.F20B+24),BC
+	LD	(I.F20B+22),DE
+	LD	HL,I.F20B
+	PUSH	HL
+	POP	IY
+	OR	01H
+	RET
+
+J$428F:	DEC	B
+	LD	A,L
+	ADD	A,B
+	LD	L,A
+	LD	A,H
+	ADC	A,00H
+	LD	H,A
+	DEC	C
+	JR	NZ,J$4259
+J$429A:	SCF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.429C:	PUSH	DE
+	LD	HL,14
+	ADD	HL,DE
+	LD	(HL),00H
+	CALL	C$42A8
+	POP	DE
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$42A8:	CALL	C.440E
+	RET	C
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.42AC:	CALL	C.4251
+	RET	NC
+	CALL	C$44D3
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.42B3:	CALL	H.CONT
+	CALL	C$4305
+	RET	C
+J$42BA:	LD	A,(HL)
+	OR	A
+	JR	Z,J.42F3
+	CP	0E5H
+	JR	Z,J.42F3
+	PUSH	HL
+	LD	B,8+3
+	LD	DE,NAME1
+J$42C8:	CALL	C.4249
+	JR	Z,J$42D3
+	CP	3FH	; "?"
+	JR	NZ,J$42EC
+	DJNZ	J$42C8
+J$42D3:	POP	HL
+	PUSH	HL
+	POP	IY
+	LD	A,(ATTRIB)
+	XOR	80H
+	BIT	7,A
+	RET	Z
+	LD	A,(IY+11)
+	AND	1EH
+	RET	Z
+	LD	A,(CREATI)
+	OR	A
+	RET	NZ
+	JR	J.42ED
+
+J$42EC:	POP	HL
+J.42ED:	CALL	C$433F
+	JR	NC,J$42BA
+	RET
+
+J.42F3:	LD	A,(ENTFRE)
+	INC	A
+	JR	NZ,J$42FF
+	LD	A,(LASTEN)
+	LD	(ENTFRE),A
+J$42FF:	LD	A,(HL)
+	OR	A
+	JR	NZ,J.42ED
+	SCF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4305:	LD	A,(LASTEN)
+	INC	A
+	CP	(IX+11)
+	JR	NC,J.435E
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.430E:	CALL	H.GETE
+	LD	(LASTEN),A
+	LD	C,A
+	AND	(IX+4)
+	LD	L,A
+	LD	H,00H
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL
+I$431E:	ADD	HL,HL
+	ADD	HL,HL
+	LD	DE,($DIRBU)
+	ADD	HL,DE
+	LD	B,(IX+5)
+J$4328:	SRL	C
+	DJNZ	J$4328
+	LD	A,(DIRBFI)
+	CP	C
+	JR	NZ,J$4339
+	LD	A,(DIRBFD)
+	CP	(IX+0)
+	RET	Z
+J$4339:	PUSH	HL
+	CALL	C.46A4
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$433F:	CALL	H.NEXT
+	LD	A,(LASTEN)
+	INC	A
+	CP	(IX+11)
+	JR	NC,J.435E
+	LD	(LASTEN),A
+	LD	DE,32
+	ADD	HL,DE
+	AND	(IX+4)
+	RET	NZ
+	INC	C
+	CALL	C.46A4
+	LD	HL,($DIRBU)
+	RET
+
+J.435E:	CALL	C.4743
+	SCF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4363:	LD	BC,3*256+0F5H
+	JP	C.534C
+
+?.4369:	DEFB	0,0,0
+
+;	  Subroutine BDOS function 19
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	436CH
+
+DELETE:
+C.436C:	CALL	C.440E
+	CALL	NC,C.42AC
+	LD	A,0FFH
+	RET	C
+	RET	NZ
+J$4376:	LD	A,0E5H
+	LD	(DIRTYD),A
+	LD	(HL),A
+	LD	L,(IY+26)
+	LD	H,(IY+27)
+	LD	A,H
+	OR	L
+	CALL	NZ,C.4F7A
+	CALL	C.42B3
+	JR	NC,J$4376
+	CALL	C$4403
+	JP	C.45CC
+
+;	  Subroutine BDOS function 23
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4392H
+
+RENAME:
+C.4392:	CALL	C.440E
+	JR	C,J.440B
+	LD	DE,5
+	ADD	HL,DE
+	LD	DE,NAME2
+	CALL	C.F1F4
+	CALL	NC,C.42AC
+	JR	C,J.440B
+	JR	NZ,J.440B
+	LD	HL,NAME1
+	LD	DE,NAME3
+	LD	BC,1+8+3
+	LDIR
+J$43B3:	LD	HL,NAME2
+	LD	DE,NAME1
+	LD	B,8+3
+J$43BB:	LD	A,(HL)
+	CP	3FH	; "?"
+	JR	NZ,J$43C3
+	LD	A,(IY+0)
+J$43C3:	LD	(DE),A
+	INC	HL
+	INC	DE
+	INC	IY
+	DJNZ	J$43BB
+	LD	A,80H
+	LD	(DE),A
+	CALL	C.4251
+	JR	NC,J.4408
+	LD	A,(LASTEN)
+	PUSH	AF
+	LD	A,0FFH
+	LD	(LASTEN),A
+	CALL	C.42B3
+	POP	BC
+	JR	NC,J.4408
+	LD	A,B
+	CALL	C.430E
+	EX	DE,HL
+	LD	HL,NAME1
+	LD	BC,8+3
+	LDIR
+	LD	A,0FFH
+	LD	(DIRTYD),A
+	LD	HL,NAME3
+	LD	DE,NAME1
+	LD	BC,12
+	LDIR
+	CALL	C.42B3
+	JR	NC,J$43B3
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4403:	CALL	C.4743
+	XOR	A
+	RET
+
+J.4408:	CALL	C.4743
+J.440B:	LD	A,0FFH
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.440E:	CALL	H.MOVN
+	XOR	A
+	LD	(CREATI),A
+	EX	DE,HL
+	LD	A,(HL)
+	INC	HL
+	LD	(ATTRIB),A
+	AND	0FH	; 15 
+	CALL	C.4427
+	RET	C
+	LD	DE,NAME1
+	JP	C.F1F4
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4427:	LD	C,A
+	CALL	C.4F97
+	RET	C
+	LD	A,C
+	DEC	A
+	JP	P,J$4434
+	LD	A,(CURDRV)
+J$4434:	LD	(THISDR),A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4438:	LD	A,(IY+31)
+	OR	A
+	JR	NZ,J.445D
+	LD	A,(IY+28)
+	LD	C,(IY+29)
+	LD	B,(IY+30)
+	ADD	A,A
+	RL	C
+	RL	B
+	JR	C,J.445D
+	OR	A
+	JR	Z,J$4456
+	INC	BC
+	LD	A,B
+	OR	C
+	JR	Z,J.445D
+J$4456:	LD	A,C
+	RES	7,C
+	ADD	A,A
+	RL	B
+	RET	NC
+J.445D:	LD	BC,0FF7FH
+	RET
+
+?.4461:	NOP
+
+;	  Subroutine BDOS function 15
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4462H
+
+OPEN:
+C.4462:	CALL	C.429C
+	JR	C,J.440B
+	CALL	C.4438
+	LD	A,(FCBEXT)
+	INC	B
+	CP	B
+	JR	NC,J.440B
+J$4471:	CALL	H.DOOP
+	EX	DE,HL
+	LD	BC,15
+	ADD	HL,BC
+	CALL	C.4438
+	LD	A,(FCBEXT)
+	CP	B
+	JR	Z,J.4488
+	LD	C,80H
+	JR	C,J.4488
+	LD	C,00H
+J.4488:	LD	(HL),C
+	INC	HL
+	EX	DE,HL
+	LD	BC,28
+	ADD	HL,BC
+	LD	C,04H	; 4 
+	LDIR
+	LD	BC,-8
+	ADD	HL,BC
+	LDI
+	LDI
+	LD	C,0FCH
+	ADD	HL,BC
+	LDI
+	LDI
+	LD	A,(IY+11)
+	BIT	7,A
+	JR	NZ,J$44AE
+	LD	A,(IX+0)
+	OR	40H	; "@"
+J$44AE:	LD	(DE),A
+	INC	DE
+	LD	A,(LASTEN)
+	LD	(DE),A
+	INC	DE
+	LD	A,(IY+26)
+	LD	(DE),A
+	INC	DE
+	INC	DE
+	LD	(DE),A
+	DEC	DE
+	LD	A,(IY+27)
+	LD	(DE),A
+	INC	DE
+	INC	DE
+	LD	(DE),A
+	INC	DE
+	XOR	A
+	LD	(DE),A
+	INC	DE
+	LD	(DE),A
+	RET
+
+J$44CA:	LD	C,A
+	LD	A,(THISDR)
+	CALL	C$4702
+	JR	C.44DB
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$44D3:	LD	A,0FFH
+	LD	(LASTEN),A
+	LD	(ENTFRE),A
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.44DB:	CALL	H.FATR
+	CALL	C.454F
+	LD	A,(THISDR)
+	LD	C,(IX+1)
+	LD	B,00H
+	OR	A
+	CALL	C$607B			; is disk changed ?
+	JR	C,J$44CA		; error,
+	CALL	C.45FB
+	DEC	HL
+	LD	A,B
+	OR	(HL)
+	LD	A,(THISDR)
+	LD	HL,(BUFDRN)
+	JP	M,J$4504
+	RET	NZ
+	CP	L
+	JR	NZ,J.450D
+	DEC	H
+	RET	Z
+J$4504:	SUB	L
+	JR	NZ,J.450D
+	LD	L,A
+	LD	H,A
+	DEC	L
+	LD	(BUFDRN),HL
+J.450D:	LD	A,0FFH
+	LD	(DIRBFD),A
+	PUSH	IX
+	CALL	C.74C8
+	LD	A,(IX+0)
+	LD	L,(IX+2)
+	LD	H,(IX+3)
+	POP	IX
+	PUSH	HL
+	CP	(IX+0)
+	CALL	NZ,C.7574
+	LD	A,(THISDR)
+	LD	HL,0
+	CALL	C$7530
+	POP	HL
+	DEC	HL
+	LD	(HL),00H
+	INC	HL
+	LD	B,(HL)
+	LD	A,(THISDR)
+	LD	C,(IX+1)
+	PUSH	IX
+	POP	HL
+	CALL	C$6083			; update DPB
+	PUSH	HL
+	POP	IX
+	EX	DE,HL
+	CALL	C.455D
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.454F:	CALL	H.GETI
+	CALL	C.455D
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	PUSH	HL
+	POP	IX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.455D:	LD	A,(THISDR)
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4560:	LD	HL,$DPBLI
+	ADD	A,A
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4564:	ADD	A,L
+	LD	L,A
+	RET	NC
+	INC	H
+	RET
+
+?.4569:	NOP
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.456A:	LD	HL,1
+	PUSH	BC
+	RET
+
+;	  Subroutine BDOS function 16
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	456FH
+
+CLOSE:
+C.456F:	PUSH	DE
+	POP	IY
+	CALL	C.440E
+	LD	A,0FFH
+	RET	C
+	LD	A,(IY+24)
+	AND	0C0H
+	LD	A,00H
+	RET	NZ
+	LD	A,(THISDR)
+	LD	HL,(BUFDRN)
+	CP	L
+	CALL	Z,C.472D
+	CALL	C.454F
+	LD	A,(IY+25)
+	CALL	C.430E
+	LD	B,0BH	; 11 
+	CALL	C.4246
+	JR	NZ,J$45D2
+	PUSH	IY
+	POP	DE
+	LD	C,0BH	; 11 
+	ADD	HL,BC
+	EX	DE,HL
+	LD	C,16H
+	ADD	HL,BC
+	LDI
+	LDI
+	LD	BC,-4
+	ADD	HL,BC
+	LDI
+	LDI
+	LD	BC,4
+	ADD	HL,BC
+	LDI
+	LDI
+	LD	BC,-12
+	ADD	HL,BC
+	LD	BC,4
+	LDIR
+	CALL	C.4748
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.45C4:	CALL	C.45FB
+	DEC	HL
+	LD	A,(HL)
+	CP	01H	; 1 
+	RET	NZ
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.45CC:	CALL	H.FATW
+	JP	C.7574
+
+J$45D2:	CALL	C.45FB
+	DEC	HL
+	LD	(HL),00H
+	LD	A,0FFH
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.45DB:	LD	A,(IX+10)
+	CALL	C.45FB
+	LD	B,(IX+16)
+	LD	E,(IX+8)
+	LD	D,(IX+9)
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.45EB:	ADD	A,(IX+17)
+	LD	E,A
+	LD	D,(IX+18)
+	JR	NC,J$45F5
+	INC	D
+J$45F5:	LD	HL,($DIRBU)
+	LD	B,1
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.45FB:	PUSH	IX
+	CALL	C.74C8
+	LD	L,(IX+2)
+	LD	H,(IX+3)
+	POP	IX
+	RET
+
+I$4609:	DEFB	0EBH			; 00H, x86 JMP +0100H
+        DEFB	0FEH
+        DEFB	090H			; 02H, x86 NOP
+	DEFB	"MSX_00  "		; 03H, OEM system name
+					;      BPB (BIOS Parameter Block)
+        DEFW	512			; 0BH, bytes per sector
+        DEFB	2			; 0DH, sectors per cluster
+        DEFW	1			; 0EH, reserved sectors (= 1st FAT sector)
+        DEFB	2			; 10H, number of FATs
+        DEFW	112			; 11H, number of (root) directory entries
+
+S.4609	EQU	$-I$4609
+
+	DEFB	0
+
+;	  Subroutine BDOS function 22
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	461DH
+
+CREATE:
+C.461D:	PUSH	DE
+I$461E:	CALL	C.440E
+	JR	C,J.464D
+	INC	HL
+	INC	HL
+	LD	(HL),00H
+	LD	HL,NAME1
+	LD	A,"?"
+	LD	BC,8+3
+	CPIR
+	JR	Z,J.464D
+	CALL	C.42AC
+	JR	NC,J$4651
+	LD	A,(ENTFRE)
+	CP	0FFH
+	JR	Z,J.464D
+	CALL	C.430E
+J$4642:	PUSH	HL
+	POP	IY
+	JR	J.4669
+
+J$4647:	BIT	7,(IY+11)
+	JR	NZ,J.468F
+J.464D:	POP	DE
+	LD	A,0FFH
+	RET
+
+J$4651:	JR	NZ,J$4647
+	LD	A,(FCBEXT)
+	OR	A
+	JR	NZ,J.468F
+	LD	L,(IY+26)
+	LD	H,(IY+27)
+	LD	A,H
+	OR	L
+	JR	Z,J.4669
+	CALL	C.4F7A
+	CALL	C.45CC
+J.4669:	PUSH	IY
+	POP	DE
+	LD	HL,NAME1
+	LD	BC,8+3
+	LDIR
+	LD	A,(HL)
+	RLA
+	LD	A,00H
+	JR	NC,J$467C
+	LD	A,06H	; 6 
+J$467C:	LD	(DE),A
+	INC	DE
+	EX	DE,HL
+	XOR	A
+	LD	C,14H	; 20 
+	CALL	C.58E3
+	LD	C,09H	; 9 
+	SBC	HL,BC
+	CALL	C.4696
+	CALL	C.4748
+J.468F:	PUSH	IY
+	POP	HL
+	POP	DE
+	JP	J$4471
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4696:	PUSH	HL
+	CALL	C.547D
+	POP	HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	LD	(HL),C
+	INC	HL
+	LD	(HL),B
+	INC	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.46A4:	PUSH	BC
+	CALL	C.4743
+	POP	BC
+	LD	B,(IX+0)
+	LD	(DIRBFI),BC
+	PUSH	BC
+	LD	A,C
+	CALL	C.45EB
+	CALL	C.46C5
+	POP	BC
+	RET
+
+;	  Subroutine BDOS function 47
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	46BAH
+
+ABSREA:
+C.46BA:	LD	B,H
+	LD	A,L
+	LD	(THISDR),A
+	CALL	C.454F
+	LD	HL,(DMAADD)
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.46C5:	CALL	H.DREA
+	XOR	A
+	LD	(READOP),A
+	CALL	C.46D7
+	RET	NC
+	CALL	C.46E8
+	DEC	A
+	JR	Z,C.46C5
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.46D7:	LD	A,(IX+0)
+	LD	C,(IX+1)
+	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	CALL	C$6066
+	POP	DE
+	LD	C,D
+	POP	DE
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.46E8:	PUSH	AF
+	LD	A,C
+	SUB	B
+	LD	C,A
+	PUSH	BC
+	LD	B,00H
+	EX	DE,HL
+	ADD	HL,BC
+	LD	B,C
+	LD	C,00H
+	SLA	B
+	ADD	HL,BC
+	POP	BC
+	POP	AF
+	LD	C,A
+	LD	A,(READOP)
+	OR	C
+	LD	C,A
+	LD	A,(IX+0)
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4702:	CALL	H.FATA
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	HL,(DISKVE)
+	CALL	C.F1E8
+	LD	A,C
+	POP	HL
+	POP	DE
+	POP	BC
+	CP	02H	; 2 
+	RET	NZ
+	JP	C.F1E2
+
+I$4718:	LD	B,L
+	LD	H,L
+	LD	D,E
+	LD	H,B
+	DEFB	0,0
+
+I$471E:	DEFB	0,0
+
+;	  Subroutine BDOS function 48
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4720H
+
+ABSWRI:
+C.4720:	LD	B,H
+	LD	A,L
+	LD	(THISDR),A
+	CALL	C.454F
+	LD	HL,(DMAADD)
+	JR	C.4755
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.472D:	LD	HL,DIRTYB
+	XOR	A
+	CP	(HL)
+	LD	(HL),A
+	RET	Z
+	LD	IX,(BUFDRI)
+	LD	HL,($BUFFE)
+	LD	B,01H	; 1 
+	LD	DE,(BUFSEC)
+	JR	C.4755
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4743:	LD	A,(DIRTYD)
+	OR	A
+	RET	Z
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4748:	CALL	H.DIRW
+	XOR	A
+	LD	(DIRTYD),A
+	LD	A,(DIRBFI)
+	CALL	C.45EB
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4755:	CALL	H.DWRI
+	LD	A,01H	; 1 
+	LD	(READOP),A
+	LD	A,(IX+0)
+	LD	C,(IX+1)
+	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	CALL	C$6068
+	POP	DE
+	LD	C,D
+	POP	DE
+	POP	HL
+	RET	NC
+	CALL	C.46E8
+	DEC	A
+	JR	Z,C.4755
+	RET
+
+;	  Subroutine BDOS function 20
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4775H
+
+SEQRD:
+C.4775:	CALL	C.4EFD
+	CALL	C.4B26
+	JR	J$4783
+
+;	  Subroutine BDOS function 21
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	477DH
+
+SEQWRT:
+C.477D:	CALL	C.4EFD
+	CALL	C.4CAF
+J$4783:	CALL	C.486A
+	JR	J$479C
+
+;	  Subroutine BDOS function 33
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4788H
+
+RNDRD:
+C.4788:	CALL	C.4857
+	CALL	C.4B26
+	JR	J$4799
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4790:	PUSH	IY
+	POP	DE
+
+;	  Subroutine BDOS function 34
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4793H
+
+RNDWRT:
+C.4793:	CALL	C.4857
+	CALL	C.4CAF
+J$4799:	CALL	C.4844
+J$479C:	LD	A,L
+	AND	7FH
+	LD	(IY+32),A
+	SLA	L
+	RL	H
+	LD	(IY+12),H
+	RL	E
+	LD	(IY+14),E
+	LD	A,(DSKERR)
+	RET
+
+;	  Subroutine BDOS function 39
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	47B2H
+
+BLKRD:
+C.47B2:	XOR	A
+	LD	(CPMCAL),A
+	CALL	C.485A
+	CALL	C.4B26
+	JR	J$47C8
+
+;	  Subroutine BDOS function 38
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	47BEH
+
+BLKWRT:
+C.47BE:	XOR	A
+	LD	(CPMCAL),A
+	CALL	C.485A
+	CALL	C.4CAF
+J$47C8:	CALL	C.486A
+	CALL	C.4844
+	LD	L,C
+	LD	H,B
+	RET
+
+;	  Subroutine BDOS function 40
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	47D1H
+
+ZWRITE:
+C.47D1:	PUSH	DE
+	POP	IY
+	LD	A,(IY+16)
+	LD	C,(IY+17)
+	LD	B,(IY+18)
+	LD	E,(IY+19)
+	ADD	A,A
+	RL	C
+	RL	B
+	RL	E
+	OR	A
+	JR	Z,J.47F0
+	INC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J.47F0
+	INC	E
+J.47F0:	LD	L,(IY+33)
+	LD	H,(IY+34)
+	SBC	HL,BC
+	JR	Z,C.4790
+	LD	A,(IY+35)
+	SBC	A,E
+	JR	C,C.4790
+	PUSH	HL
+	CALL	C.4790
+	POP	DE
+	OR	A
+	RET	NZ
+	LD	HL,(DMAADD)
+	PUSH	HL
+	LD	HL,($DIRBU)
+	LD	(DMAADD),HL
+	LD	B,80H
+J$4813:	LD	(HL),A
+	INC	HL
+	DJNZ	J$4813
+	DEC	A
+	LD	(DIRBFD),A
+	LD	L,(IY+33)
+	LD	H,(IY+34)
+	SBC	HL,DE
+	LD	C,L
+	LD	B,H
+	EX	DE,HL
+	LD	D,00H
+	LD	A,(IY+35)
+	SBC	A,D
+	LD	E,A
+J$482D:	PUSH	HL
+	LD	HL,1
+	CALL	C.4CAF
+	CALL	C.486A
+	LD	C,L
+	LD	B,H
+	POP	HL
+	DEC	HL
+	LD	A,H
+	OR	L
+	JR	NZ,J$482D
+	POP	HL
+	LD	(DMAADD),HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4844:	LD	A,(DSKERR)
+	LD	(IY+33),L
+	LD	(IY+34),H
+	LD	(IY+35),E
+	INC	D
+	DEC	D
+	RET	Z
+	LD	(IY+36),D
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4857:	LD	HL,1
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.485A:	PUSH	DE
+	POP	IY
+	LD	C,(IY+33)
+	LD	B,(IY+34)
+	LD	E,(IY+35)
+	LD	D,(IY+36)
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.486A:	RET	Z
+	INC	HL
+	LD	A,H
+	OR	L
+	RET	NZ
+	INC	DE
+	RET
+
+J$4871:	POP	HL
+	LD	L,C
+	LD	H,B
+	LD	A,01H	; 1 
+	LD	(DSKERR),A
+	XOR	A
+	LD	C,A
+	LD	B,A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.487D:	LD	(RECCNT),HL
+	LD	(RECPOS+0),BC
+	LD	(RECPOS+2),DE
+	LD	A,(IY+0)
+	CALL	C.4427
+	JR	C,J$4871
+	LD	DE,128
+	LD	A,(CPMCAL)
+	OR	A
+	JR	NZ,J.48A8
+	LD	A,(IY+14)
+	LD	D,(IY+15)
+	LD	E,A
+	OR	D
+	JR	NZ,J.48A8
+	LD	E,80H
+	LD	(IY+14),E
+J.48A8:	INC	D
+	DEC	D
+	JR	NZ,J$48B1
+	LD	A,E
+	CP	40H	; "@"
+	JR	C,J$48B5
+J$48B1:	XOR	A
+	LD	(RECPOS+3),A
+J$48B5:	LD	HL,(DMAADD)
+	LD	(NEXTAD),HL
+	XOR	A
+	LD	(DSKERR),A
+	LD	(TRANS),A
+	LD	BC,(RECCNT)
+	CALL	C.491C
+	LD	A,(IY+24)
+	OR	A
+	RET	M
+	PUSH	BC
+	CALL	C.454F
+	LD	BC,(RECPOS+0)
+	CALL	C.491C
+	LD	(BYTPOS+0),BC
+	PUSH	BC
+	LD	BC,(RECPOS+2)
+	CALL	C.4922
+	LD	(BYTPOS+2),BC
+	LD	H,B
+	LD	L,C
+	POP	BC
+	LD	D,B
+	LD	E,C
+	SRL	H
+	RR	L
+	RR	B
+	LD	C,B
+	LD	B,L
+	LD	A,D
+	AND	01H	; 1 
+	LD	H,A
+	LD	L,E
+	LD	(BYTSEC),HL
+	LD	(SECPOS),BC
+	LD	A,(IX+6)
+	AND	C
+	LD	(SECCLU),A
+	LD	A,(IX+7)
+J$490C:	DEC	A
+	JR	Z,J$4915
+	SRL	B
+	RR	C
+	JR	J$490C
+
+J$4915:	LD	(CLUSNU),BC
+	POP	BC
+	XOR	A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.491C:	CALL	H.MUL1
+	LD	HL,0
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4922:	LD	A,B
+	LD	B,16+1
+	JR	J$492E
+
+J$4927:	JR	NC,J$492A
+	ADD	HL,DE
+J$492A:	RR	H
+	RR	L
+J$492E:	RRA
+	RR	C
+	DJNZ	J$4927
+	LD	B,A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4935:	LD	HL,0
+	CALL	H.DIV3
+	LD	A,B
+	LD	B,10H	; 16 
+	RL	C
+	RLA
+J$4941:	RL	L
+	RL	H
+	JR	C,J$4954
+	SBC	HL,DE
+	JR	NC,J$494C
+	ADD	HL,DE
+J$494C:	CCF
+J$494D:	RL	C
+	RLA
+	DJNZ	J$4941
+	LD	B,A
+	RET
+
+J$4954:	OR	A
+	SBC	HL,DE
+	JR	J$494D
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4959:	LD	H,B
+	LD	L,C
+	LD	BC,(BYTSEC)
+	LD	A,B
+	OR	C
+	LD	E,A
+	LD	D,A
+	JR	Z,J.4975
+	LD	DE,512
+	EX	DE,HL
+	SBC	HL,BC
+	EX	DE,HL
+	SBC	HL,DE
+	JR	NC,J.4975
+	ADD	HL,DE
+	EX	DE,HL
+	LD	HL,0
+J.4975:	LD	(BYTCT1),DE
+	LD	C,L
+	LD	B,H
+	LD	A,H
+	AND	01H	; 1 
+	LD	H,A
+	LD	C,B
+	LD	B,00H
+	SRL	C
+	LD	(BYTCT2),HL
+	LD	(SECCNT),BC
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.498C:	CALL	H.FNDC
+	LD	L,(IY+28)
+	LD	H,(IY+29)
+	LD	E,(IY+30)
+	LD	D,(IY+31)
+	LD	A,L
+	OR	H
+	JR	Z,J$49D2
+	PUSH	BC
+	LD	A,C
+	SUB	E
+	LD	C,A
+	LD	A,B
+	SBC	A,D
+	LD	B,A
+	JR	NC,J$49B3
+	POP	BC
+	LD	DE,0
+	LD	L,(IY+26)
+	LD	H,(IY+27)
+	PUSH	AF
+J$49B3:	POP	AF
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.49B4:	CALL	H.SKPC
+	LD	A,B
+	OR	C
+	RET	Z
+	PUSH	DE
+	PUSH	HL
+	CALL	C.74EB
+	POP	DE
+	LD	A,H
+	CP	0FH	; 15 
+	JR	C,J$49CA
+	LD	A,L
+	CP	0F8H
+	JR	NC,J$49CF
+J$49CA:	POP	DE
+	INC	DE
+	DEC	BC
+	JR	C.49B4
+
+J$49CF:	EX	DE,HL
+	POP	DE
+	RET
+
+J$49D2:	INC	BC
+	DEC	DE
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.49D5:	LD	(PREREA),A
+	LD	HL,(CLUSNU)
+	LD	A,(SECCLU)
+	CALL	C.4EE3
+	EX	DE,HL
+	LD	HL,(BUFSEC)
+	SBC	HL,DE
+	JR	NZ,J$49F3
+	LD	A,(THISDR)
+	LD	L,A
+	LD	A,(BUFDRN)
+	CP	L
+	JR	Z,J$4A1E
+J$49F3:	PUSH	DE
+	PUSH	IX
+	CALL	C.472D
+	POP	IX
+	POP	DE
+	LD	A,(PREREA)
+	OR	A
+	JR	NZ,J$4A10
+	DEC	A
+	LD	(BUFDRN),A
+	LD	HL,($BUFFE)
+	LD	B,01H	; 1 
+	PUSH	DE
+	CALL	C.46C5
+	POP	DE
+J$4A10:	LD	(BUFSEC),DE
+	LD	A,(THISDR)
+	LD	(BUFDRN),A
+	LD	(BUFDRI),IX
+J$4A1E:	LD	A,01H	; 1 
+	LD	(TRANS),A
+	LD	HL,(NEXTAD)
+	PUSH	HL
+	LD	BC,(BYTCT1)
+	ADD	HL,BC
+	LD	(NEXTAD),HL
+	LD	HL,($BUFFE)
+	LD	DE,(BYTSEC)
+	ADD	HL,DE
+	POP	DE
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4A39:	CALL	H.BUFR
+	LD	HL,(BYTCT1)
+	LD	A,H
+	OR	L
+	RET	Z
+	XOR	A
+	CALL	C.49D5
+	JP	C.F1D9
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4A49:	CALL	H.BUFW
+	LD	HL,(BYTCT1)
+	LD	A,H
+	OR	L
+	RET	Z
+	LD	HL,(SECPOS)
+	INC	HL
+	LD	(SECPOS),HL
+	XOR	A
+	EX	DE,HL
+	LD	HL,(VALSEC)
+	SBC	HL,DE
+	RRA
+	CALL	C.49D5
+	EX	DE,HL
+	CALL	C.F1D9
+	LD	A,01H	; 1 
+	LD	(DIRTYB),A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4A6E:	LD	HL,0
+	LD	(BYTSEC),HL
+	LD	HL,(BYTCT2)
+	LD	(BYTCT1),HL
+	LD	A,H
+	OR	L
+	SCF
+	RET	Z
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4A7E:	LD	A,(TRANS)
+	OR	A
+	RET	Z
+	LD	A,(SECCLU)
+	CP	(IX+6)
+	JR	C,J$4AA5
+	LD	DE,(CLUSNU)
+	LD	HL,0FF7H
+	SBC	HL,DE
+	RET	C
+	EX	DE,HL
+	CALL	C.74EB
+	LD	(CLUSNU),HL
+	LD	HL,(LASTPO)
+	INC	HL
+	LD	(LASTPO),HL
+	LD	A,0FFH
+J$4AA5:	INC	A
+	LD	(SECCLU),A
+	OR	A
+	RET
+
+J.4AAB:	LD	A,(HL)
+	LDI
+	CP	0DH	; 13 
+	JR	NZ,J$4AB4
+	LD	(HL),0AH	; 10 
+J$4AB4:	CP	0AH	; 10 
+	JR	Z,J$4ACD
+	LD	A,B
+	OR	C
+	JR	NZ,J.4AAB
+J.4ABC:	LD	(CONTPO),HL
+J.4ABF:	LD	(NEXTAD),DE
+	JP	NZ,J.4BE0
+	RES	6,(IY+24)
+	JP	J.4BE0
+
+J$4ACD:	CALL	C.53A8
+	LD	HL,0
+	LD	A,C
+	OR	B
+	JR	NZ,J$4AFC
+	INC	A
+	JR	J.4ABC
+
+J$4ADA:	LD	DE,(NEXTAD)
+	INC	A
+	JR	Z,J$4AF5
+	INC	A
+	JR	NZ,J.4ABF
+J$4AE4:	CALL	C.546E
+	LD	(DE),A
+	INC	DE
+	CP	1AH
+	JR	Z,J.4ABF
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J$4AE4
+	INC	A
+	JR	J.4ABF
+
+J$4AF5:	LD	HL,(CONTPO)
+	LD	A,H
+	OR	L
+	JR	NZ,J.4AAB
+J$4AFC:	LD	HL,128
+	LD	A,(YCONBF+0)
+	CP	L
+	JR	Z,J$4B08
+	LD	(YCONBF+0),HL
+J$4B08:	PUSH	BC
+	PUSH	DE
+	LD	DE,YCONBF
+	CALL	C.50E0
+	POP	DE
+	POP	BC
+	LD	HL,YCONBF+2
+	LD	A,(HL)
+	CP	1AH
+	JR	NZ,J.4AAB
+	LD	(DE),A
+	INC	DE
+	LD	A,0AH	; 10 
+	CALL	C.53A8
+	XOR	A
+	LD	H,A
+	LD	L,A
+	JR	J.4ABC
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4B26:	CALL	C.487D
+	JP	M,J$4ADA
+	LD	L,(IY+16)
+	LD	H,(IY+17)
+	LD	DE,(BYTPOS+0)
+	OR	A
+	SBC	HL,DE
+	PUSH	HL
+	LD	L,(IY+18)
+	LD	H,(IY+19)
+	LD	DE,(BYTPOS+2)
+	SBC	HL,DE
+	POP	HL
+	JP	C,J.4C95
+	JR	NZ,J.4B59
+	LD	A,H
+	OR	L
+	JP	Z,J.4C95
+	PUSH	HL
+	SBC	HL,BC
+	POP	HL
+	JR	NC,J.4B59
+	LD	B,H
+	LD	C,L
+J.4B59:	CALL	H.ENUF
+	CALL	C.4959
+	LD	BC,(CLUSNU)
+	CALL	C.498C
+	LD	A,B
+	OR	C
+	JP	NZ,J.4C95
+	LD	(CLUSNU),HL
+	LD	(LASTPO),DE
+	CALL	C.4A39
+	LD	HL,(SECCNT)
+	LD	A,H
+	OR	L
+	JP	Z,J.4BDA
+	CALL	C.4A7E
+	JR	C,J.4BE0
+	LD	A,01H	; 1 
+	LD	(TRANS),A
+	LD	A,(SECCLU)
+	LD	BC,(SECCNT)
+	LD	HL,(CLUSNU)
+J$4B91:	PUSH	BC
+	CALL	C.4E56
+	PUSH	BC
+	PUSH	AF
+	LD	B,A
+	CALL	C.46C5
+	POP	AF
+	LD	C,A
+	LD	B,00H
+	JR	C,J.4BBF
+	LD	A,(DIRTYB)
+	OR	A
+	JR	Z,J.4BBF
+	PUSH	BC
+	PUSH	HL
+	LD	HL,(BUFSEC)
+	SBC	HL,DE
+	LD	B,L
+	LD	C,00H
+	SLA	B
+	POP	HL
+	ADD	HL,BC
+	LD	B,02H	; 2 
+	EX	DE,HL
+	LD	HL,($BUFFE)
+	CALL	C.F1D9
+	POP	BC
+J.4BBF:	POP	DE
+	POP	HL
+	OR	A
+	SBC	HL,BC
+	JR	Z,J.4BDA
+	LD	C,L
+	LD	B,H
+	LD	HL,0FF7H
+	SBC	HL,DE
+	JR	C,J.4BE0
+	LD	HL,(LASTPO)
+	INC	HL
+	LD	(LASTPO),HL
+	XOR	A
+	EX	DE,HL
+	JR	J$4B91
+
+J.4BDA:	CALL	C.4A6E
+	CALL	NC,C.4A39
+J.4BE0:	CALL	H.SETF
+	LD	HL,(NEXTAD)
+	LD	DE,(DMAADD)
+	OR	A
+	SBC	HL,DE
+	LD	C,L
+	LD	B,H
+	LD	DE,128
+	LD	A,(CPMCAL)
+	OR	A
+	JR	NZ,J$4BFE
+	LD	E,(IY+14)
+	LD	D,(IY+15)
+J$4BFE:	CALL	C.4935
+	LD	A,H
+	OR	L
+	JR	Z,J$4C15
+	INC	BC
+	EX	DE,HL
+	SBC	HL,DE
+	LD	DE,(NEXTAD)
+J$4C0D:	XOR	A
+	LD	(DE),A
+	INC	DE
+	DEC	HL
+	LD	A,H
+	OR	L
+	JR	NZ,J$4C0D
+J$4C15:	LD	HL,(RECCNT)
+	SBC	HL,BC
+	JR	Z,J.4C20
+	INC	A
+	LD	(DSKERR),A
+J.4C20:	CALL	H.SETC
+	LD	HL,(CLUSNU)
+	LD	(IY+28),L
+	LD	(IY+29),H
+	LD	HL,(LASTPO)
+	LD	(IY+30),L
+	LD	(IY+31),H
+J.4C35:	LD	HL,(RECPOS+0)
+	LD	DE,(RECPOS+2)
+	LD	A,B
+	OR	C
+	RET	Z
+	DEC	BC
+	ADD	HL,BC
+	INC	BC
+	RET	NC
+	INC	DE
+	RET
+
+J$4C45:	LD	HL,(DMAADD)
+	OR	40H	; "@"
+	INC	A
+	JR	Z,J.4C71
+	INC	A
+	JR	Z,J.4C61
+	INC	A
+J$4C51:	JR	Z,J.4C7F
+	LD	A,(HL)
+	INC	HL
+	CP	1AH
+	JR	Z,J.4C7F
+	CALL	C$5466
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	J$4C51
+
+J.4C61:	LD	A,(HL)
+	INC	HL
+	CALL	C$5475
+	CP	1AH
+	JR	Z,J.4C7F
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J.4C61
+	JR	J.4C7F
+
+J.4C71:	LD	A,(HL)
+	INC	HL
+	CP	1AH
+	JR	Z,J.4C7F
+	CALL	C.53A8
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J.4C71
+J.4C7F:	LD	BC,(RECCNT)
+	JR	J.4C35
+
+J$4C85:	LD	C,E
+	LD	B,D
+	CALL	C.49B4
+	LD	A,B
+	OR	C
+	JP	Z,J.4D52
+	CALL	C.4F17
+	JP	NC,J.4D52
+J.4C95:	CALL	H.WRTE
+	XOR	A
+	LD	C,A
+	LD	B,A
+	INC	A
+	LD	(DSKERR),A
+	JR	J.4C35
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4CA1:	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	PUSH	IX
+	CALL	C.472D
+	CALL	C.45C4
+	JP	J.75CB
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4CAF:	CALL	C.4CA1
+	CALL	C.487D
+	PUSH	AF
+	PUSH	BC
+	CALL	C.547D
+	LD	(IY+20),C
+	LD	(IY+21),B
+	LD	(IY+22),E
+	LD	(IY+23),D
+	POP	BC
+	POP	AF
+	JP	M,J$4C45
+	RES	6,(IY+24)
+	PUSH	BC
+	CALL	C.4959
+	POP	BC
+	LD	HL,(BYTPOS+0)
+	LD	DE,(BYTPOS+2)
+	LD	A,B
+	OR	C
+	JP	Z,J$4DEE
+	DEC	BC
+	ADD	HL,BC
+	JR	NC,J$4CE5
+	INC	DE
+J$4CE5:	SRL	D
+	RR	E
+	RR	H
+	LD	L,H
+	LD	H,E
+	LD	B,(IX+7)
+	DEC	B
+	JR	Z,J$4CF9
+J$4CF3:	SRL	H
+	RR	L
+	DJNZ	J$4CF3
+J$4CF9:	PUSH	HL
+	LD	L,(IY+18)
+	LD	H,(IY+19)
+D$4D00:	LD	D,(IY+17)
+	LD	C,D
+	SRL	H
+	RR	L
+	RR	C
+	LD	B,L
+	LD	A,D
+	AND	01H	; 1 
+	LD	H,A
+	LD	L,(IY+16)
+	OR	L
+	JR	Z,J$4D16
+	INC	BC
+J$4D16:	CALL	H.NORN
+	LD	(VALSEC),BC
+	LD	BC,(CLUSNU)
+	CALL	C.498C
+	LD	(CLUSNU),HL
+	LD	(LASTPO),DE
+	EX	(SP),HL
+	OR	A
+	SBC	HL,DE
+	EX	DE,HL
+	POP	HL
+	JR	Z,J.4D52
+	LD	A,B
+	OR	C
+	JP	Z,J$4C85
+	PUSH	BC
+	LD	C,E
+	LD	B,D
+	CALL	C.4F17
+	POP	BC
+	JP	C,J.4C95
+	LD	DE,(LASTPO)
+	INC	DE
+	DEC	BC
+	CALL	C.49B4
+	LD	(CLUSNU),HL
+	LD	(LASTPO),DE
+J.4D52:	CALL	C.4A49
+	LD	HL,(SECCNT)
+	LD	A,H
+	OR	L
+	JR	Z,J.4D9D
+	LD	DE,(SECPOS)
+	ADD	HL,DE
+	LD	(SECPOS),HL
+	CALL	C.4A7E
+	LD	A,01H	; 1 
+	LD	(TRANS),A
+	LD	A,(SECCLU)
+	LD	HL,(CLUSNU)
+	LD	BC,(SECCNT)
+J$4D76:	PUSH	BC
+	CALL	C.4E56
+	PUSH	BC
+	PUSH	AF
+	LD	B,A
+	JR	C,J$4D84
+	LD	A,0FFH
+	LD	(BUFDRN),A
+J$4D84:	CALL	C.4755
+	POP	AF
+	POP	DE
+	POP	HL
+	LD	C,A
+	XOR	A
+	LD	B,A
+	SBC	HL,BC
+	JR	Z,J.4D9D
+	LD	C,L
+	LD	B,H
+	LD	HL,(LASTPO)
+	INC	HL
+	LD	(LASTPO),HL
+	EX	DE,HL
+	JR	J$4D76
+
+J.4D9D:	CALL	H.WRTL
+	CALL	C.4A6E
+	CALL	NC,C.4A49
+	LD	HL,(NEXTAD)
+	LD	DE,(DMAADD)
+	OR	A
+	SBC	HL,DE
+	LD	DE,(BYTPOS+0)
+	ADD	HL,DE
+	LD	DE,(BYTPOS+2)
+	JR	NC,J$4DBC
+	INC	DE
+J$4DBC:	LD	(BYTPOS+0),HL
+	LD	(BYTPOS+2),DE
+	LD	C,(IY+16)
+	LD	B,(IY+17)
+	OR	A
+	SBC	HL,BC
+	LD	C,(IY+18)
+	LD	B,(IY+19)
+	EX	DE,HL
+	SBC	HL,BC
+	JR	C,J$4DE7
+J$4DD7:	PUSH	IY
+	POP	HL
+	LD	DE,16
+	ADD	HL,DE
+	EX	DE,HL
+	LD	HL,BYTPOS
+	LD	BC,4
+	LDIR
+J$4DE7:	LD	BC,(RECCNT)
+	JP	J.4C20
+
+J$4DEE:	LD	A,H
+	OR	L
+	OR	D
+	OR	E
+	JR	Z,J$4E40
+	LD	BC,1
+	SBC	HL,BC
+	EX	DE,HL
+	DEC	BC
+	SBC	HL,BC
+	SRL	H
+	RR	L
+	RR	D
+	LD	C,D
+	LD	B,L
+	LD	A,(IX+7)
+J$4E08:	DEC	A
+	JR	Z,J$4E11
+	SRL	B
+	RR	C
+	JR	J$4E08
+
+J$4E11:	CALL	C.498C
+	LD	A,B
+	OR	C
+	JR	Z,J$4E34
+	CALL	C.4F17
+	JP	C,J.4C95
+J.4E1E:	LD	BC,0
+	LD	(RECCNT),BC
+	LD	(LASTPO),BC
+	LD	L,(IY+26)
+	LD	H,(IY+27)
+	LD	(CLUSNU),HL
+	JR	J$4DD7
+
+J$4E34:	LD	BC,0FFFH
+	CALL	C.4F7D
+J$4E3A:	DEC	DE
+	LD	A,01H	; 1 
+	LD	(DE),A
+	JR	J.4E1E
+
+J$4E40:	LD	L,(IY+26)
+	LD	H,(IY+27)
+	LD	A,H
+	OR	L
+	JR	Z,J.4E1E
+	XOR	A
+	LD	(IY+26),A
+	LD	(IY+27),A
+	CALL	C.4F7A
+	JR	J$4E3A
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4E56:	CALL	H.OPTI
+	LD	D,A
+	PUSH	HL
+	INC	B
+	DEC	B
+	JR	Z,J$4E61
+	LD	C,0FFH
+J$4E61:	LD	E,C
+	PUSH	DE
+	LD	A,(IX+6)
+	LD	(SECCLU),A
+	INC	A
+	SUB	D
+	LD	B,A
+J$4E6C:	LD	(CLUSNU),HL
+	PUSH	HL
+	CALL	C.74EB
+	POP	DE
+	LD	A,C
+	SUB	B
+	LD	C,A
+	JR	Z,J.4E86
+	LD	B,(IX+6)
+	JR	C,J$4ED2
+	INC	B
+	INC	DE
+	EX	DE,HL
+	SBC	HL,DE
+	EX	DE,HL
+	JR	Z,J$4E6C
+J.4E86:	POP	DE
+	EX	(SP),HL
+	PUSH	HL
+	PUSH	DE
+	LD	A,E
+	SUB	C
+	LD	E,A
+	LD	D,00H
+	ADD	A,A
+	LD	B,A
+	LD	C,D
+	POP	AF
+	LD	HL,(NEXTAD)
+	PUSH	HL
+	ADD	HL,BC
+	LD	(NEXTAD),HL
+	POP	BC
+	POP	HL
+	PUSH	BC
+	PUSH	DE
+	EX	DE,HL
+	LD	HL,(CLUSNU)
+	SBC	HL,DE
+	LD	BC,(LASTPO)
+	ADD	HL,BC
+	LD	(LASTPO),HL
+	EX	DE,HL
+	CALL	C.4EE3
+	EX	DE,HL
+	POP	BC
+	LD	A,(BUFDRN)
+	CP	(IX+0)
+	LD	A,C
+	SCF
+	JR	NZ,J.4ECF
+	LD	HL,(BUFSEC)
+	OR	A
+	SBC	HL,DE
+	JR	C,J.4ECF
+	LD	H,B
+	LD	L,C
+	DEC	HL
+	ADD	HL,DE
+	LD	BC,(BUFSEC)
+	SBC	HL,BC
+J.4ECF:	POP	HL
+	POP	BC
+	RET
+
+J$4ED2:	ADD	A,B
+	LD	(SECCLU),A
+	LD	C,00H
+	JR	J.4E86
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4EDA:	CALL	C.5FEC
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4EDD:	LD	DE,14
+	ADD	IX,DE
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4EE2:	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4EE3:	CALL	H.FIGR
+	PUSH	BC
+	LD	B,(IX+7)
+	DEC	HL
+	DEC	HL
+J$4EEC:	DEC	B
+	JR	Z,J$4EF2
+	ADD	HL,HL
+	JR	J$4EEC
+
+J$4EF2:	OR	L
+	LD	L,A
+	LD	C,(IX+12)
+	LD	B,(IX+13)
+	ADD	HL,BC
+	POP	BC
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4EFD:	PUSH	DE
+	POP	IY
+	LD	C,(IY+32)
+	LD	B,(IY+12)
+	LD	E,(IY+14)
+	LD	D,00H
+	SLA	C
+	SRL	E
+	RR	B
+	RR	C
+	LD	HL,1
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4F17:	CALL	H.ALLO
+	PUSH	HL
+J$4F1B:	PUSH	BC
+	PUSH	HL
+	LD	D,H
+	LD	E,L
+J.4F1F:	PUSH	DE
+	EX	DE,HL
+	LD	L,(IX+14)
+	LD	H,(IX+15)
+	DEC	HL
+	OR	A
+	SBC	HL,DE
+	EX	DE,HL
+	POP	DE
+	JR	NC,J$4F3E
+	LD	A,E
+	OR	D
+	JR	NZ,J$4F46
+	POP	HL
+	POP	HL
+	POP	HL
+	LD	BC,0FFFH
+	CALL	C.4F7D
+	SCF
+	RET
+
+J$4F3E:	INC	HL
+	CALL	C.4F4E
+	LD	A,E
+	OR	D
+	JR	Z,J.4F1F
+J$4F46:	DEC	DE
+	EX	DE,HL
+	CALL	C.4F4E
+	EX	DE,HL
+	JR	J.4F1F
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4F4E:	PUSH	HL
+	PUSH	DE
+	CALL	C.74EB
+	POP	DE
+	POP	HL
+	RET	NZ
+	POP	BC
+	LD	C,L
+	LD	B,H
+	EX	(SP),HL
+	CALL	C.74D7
+	POP	HL
+	POP	BC
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J$4F1B
+	LD	BC,0FFFH
+	CALL	C.74D7
+	POP	HL
+	PUSH	HL
+	CALL	C.74EB
+	POP	BC
+	LD	A,C
+	OR	B
+	RET	NZ
+	LD	(IY+26),L
+	LD	(IY+27),H
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4F7A:	LD	BC,0
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4F7D:	CALL	H.RELB
+	PUSH	HL
+	CALL	C.74EB
+	EX	(SP),HL
+	CALL	C.74D7
+	POP	HL
+	LD	A,H
+	OR	L
+	RET	Z
+	LD	A,H
+	CP	0FH	; 15 
+	JR	C,C.4F7A
+	LD	A,L
+	CP	0F8H
+	JR	C,C.4F7A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4F97:	LD	A,($NUMDR)
+	OR	A
+	SCF
+	RET	Z
+	CP	C
+	RET
+
+I$4F9F:	DEFB	1,2,3,4,5,6,7,8,9
+
+I$4FA8:	DEFB	1,6,2,7,3,8,4,9,5
+
+;	  Subroutine CALL CHKDSK
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4FB1:	PUSH	HL
+	CALL	C$7E74
+	POP	HL
+	XOR	A
+	RET
+
+;	  Subroutine BDOS function 17
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	4FB8H
+
+SRCHFR:
+C.4FB8:	CALL	C.429C
+J$4FBB:	JR	C,J.5000
+	LD	A,(LASTEN)
+	JR	Z,J$4FC4
+	LD	A,0FFH
+J$4FC4:	LD	(SRCHLO),A
+	LD	(SRCHIX),IX
+	LD	DE,(DMAADD)
+	LD	A,(THISDR)
+	INC	A
+	LD	(DE),A
+	INC	DE
+	LD	A,(HL)
+	CP	05H	; 5 
+	JR	NZ,J$4FDC
+	LD	(HL),0E5H
+J$4FDC:	LD	BC,32
+	CALL	C.F1D9
+	CALL	C.4438
+	LD	A,(FCBEXT)
+	CP	B
+	JR	Z,J$4FEF
+	JR	NC,J.5000
+	LD	C,80H
+J$4FEF:	LD	HL,(DMAADD)
+	LD	DE,12
+	ADD	HL,DE
+	LD	B,(HL)
+	LD	(HL),A
+	INC	HL
+	LD	(HL),B
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	LD	(HL),C
+	XOR	A
+	RET
+
+J.5000:	LD	A,0FFH
+	LD	(SRCHLO),A
+	RET
+
+;	  Subroutine BDOS function 18
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	5006H
+
+SRCHNX:
+C.5006:	CALL	C.440E
+	JR	C,J.5000
+	LD	A,(SRCHLO)
+	CP	0FFH
+	JR	Z,J.5000
+	LD	(LASTEN),A
+	LD	IX,(SRCHIX)
+	CALL	C.42B3
+	JR	J$4FBB
+
+;	  Subroutine BDOS function 35
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	501EH
+
+FILESI:
+C.501E:	CALL	C.429C
+	LD	A,0FFH
+	RET	C
+	PUSH	DE
+	POP	IX
+	LD	A,(IY+28)
+	LD	C,(IY+29)
+	LD	B,(IY+30)
+	LD	E,(IY+31)
+	ADD	A,A
+	RL	C
+	RL	B
+	RL	E
+	OR	A
+	JR	Z,J.5043
+	INC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J.5043
+	INC	E
+J.5043:	LD	(IX+33),C
+	LD	(IX+34),B
+	LD	(IX+35),E
+	XOR	A
+	RET
+
+;	  Subroutine BDOS function 24
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	504EH
+
+LOGIN:
+C.504E:	CALL	C.6EBE
+	LD	B,A
+	XOR	A
+J$5053:	SCF
+	RLA
+	DJNZ	J$5053
+	RET
+
+;	  Subroutine BDOS function 26
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	5058H
+
+SETDMA:
+C.5058:	LD	(DMAADD),DE
+	RET
+
+;	  Subroutine BDOS function 27
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	505DH
+
+GETEFA:
+C.505D:	XOR	A
+	LD	(CPMCAL),A
+	LD	A,E
+	CALL	C.4427
+	LD	A,0FFH
+	RET	C
+	CALL	C.44DB
+	LD	HL,2
+	LD	B,H
+	LD	C,H
+	LD	E,(IX+14)
+	LD	D,(IX+15)
+	LD	A,(IX+6)
+	INC	A
+	DEC	DE
+	PUSH	AF
+	PUSH	DE
+	CALL	C$75FC
+	LD	H,B
+	LD	L,C
+	POP	DE
+	POP	AF
+	LD	BC,512
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5088:	LD	B,5
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$508A:	EI
+J$508B:	HALT
+?.508C:	DJNZ	J$508B
+	DI
+	RET
+
+; relocation table 7F8F
+
+I$5090:	DEFB	R.7FB4-I$7F8F
+	DEFB	R.7FB9-R.7FB4
+	DEFB	J$7FC1-R.7FB9
+	DEFB	R.7FC6-J$7FC1
+	DEFB	0FFH
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+MTOFF:
+C.5095:	PUSH	AF
+	CALL	C.517F			; enable I/O ports of interface in current slot
+	XOR	A
+	OUT	(0D4H),A		; motor off, side 0, deselect drive
+	JP	J$79E5			; disable I/O ports of interface in current slot when two or more DDX or FAST disk interfaces
+
+;	  Subroutine BDOS function 13
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	509FH
+
+DSKRES:
+C.509F:	LD	HL,DBUF
+	LD	(DMAADD),HL
+	XOR	A
+	LD	(CURDRV),A
+
+	_DOSCP	50A9H
+
+WRTFAT:	CALL	C.472D
+	CALL	C.45C4
+	XOR	A
+	RET
+
+; relocation table 7A0A
+
+I$50B1:	DEFB	R.7A1A-I$7A0A
+	DEFB	11H
+	DEFB	1CH
+	DEFB	26H
+	DEFB	24H
+	DEFB	07H
+	DEFB	06H
+	DEFB	06H
+	DEFB	03H
+	DEFB	16H
+	DEFB	03H
+	DEFB	24H
+	DEFB	05H
+	DEFB	13H
+	DEFB	0BH
+	DEFB	04H
+	DEFB	03H
+	DEFB	51H
+	DEFB	0FFH
+
+;	  Subroutine BDOS function 25
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	50C4H
+
+GETDRV:
+C.50C4:	LD	A,(CURDRV)
+	RET
+
+;	  Subroutine BDOS function 36
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	50C8H
+
+SETRND:
+C.50C8:	CALL	C.4EFD
+	LD	(IY+33),L
+	LD	(IY+34),H
+	LD	(IY+35),E
+	RET
+
+;	  Subroutine BDOS function 14
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	50D5H
+
+SELDSK:
+C.50D5:	LD	C,E
+	CALL	C.4F97
+	RET	C
+	LD	HL,CURDRV
+	LD	(HL),E
+	RET
+
+?.50DF:	NOP
+
+;	  Subroutine BDOS function 10
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	50E0H
+
+BUFIN:
+C.50E0:	PUSH	DE
+	LD	A,(CARPOS)
+	LD	(STARTP),A
+	XOR	A
+	LD	(INSERT),A
+	LD	H,D
+	LD	L,E
+	LD	B,A
+	LD	C,(HL)
+	INC	HL
+	LD	D,A
+	LD	E,(HL)
+	INC	HL
+	LD	IX,YCONTP
+	LD	A,E
+	CP	C
+	JR	NC,J$5103
+	PUSH	HL
+	ADD	HL,DE
+	LD	A,(HL)
+	POP	HL
+	CP	0DH	; 13 
+	JR	Z,C.5104
+J$5103:	LD	E,D
+
+C.5104:	CALL	H.GETC
+	CALL	C.544E
+J.510A:	PUSH	HL
+	PUSH	BC
+	LD	HL,I$5374
+	LD	BC,NKEYNT
+	CPIR
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	C,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,C
+	POP	BC
+	EX	(SP),HL
+	RET
+
+C.511E:	CALL	C.544E
+	CP	40H	; "@"
+	JR	C,J.510A
+	CP	60H	; "`"
+	JR	NC,J.510A
+	PUSH	AF
+	LD	A,B
+	INC	A
+	CP	C
+	JR	NC,J.515E
+	LD	A,01H	; 1 
+	LD	(IX+0),A
+	INC	IX
+	INC	B
+	CALL	C.535D
+	POP	AF
+
+C.513B:	PUSH	AF
+	LD	A,B
+	CP	C
+	JR	NC,J.515E
+	POP	AF
+	LD	(IX+0),A
+	INC	IX
+	INC	B
+	CALL	C.535D
+	LD	A,(INSERT)
+	OR	A
+	JR	NZ,C.5104
+	INC	D
+	LD	A,E
+	CP	D
+	JR	C,C.5104
+	LD	A,(HL)
+	DEC	A
+	INC	HL
+	JR	NZ,C.5104
+	INC	D
+	INC	HL
+	JR	C.5104
+
+J.515E:	POP	AF
+	LD	A,07H	; 7 
+	CALL	C.53A8
+	JR	C.5104
+
+C.5166:	POP	DE
+	LD	A,(STARTP)
+	LD	B,A
+	LD	A,(CARPOS)
+	SUB	B
+	JR	Z,J$5177
+	LD	B,A
+J$5172:	CALL	C.531E
+	DJNZ	J$5172
+J$5177:	JP	C.50E0
+
+C.517A:	CALL	C.5183
+J.517D:	JR	C.5104
+
+;	  Subroutine enable I/O ports of interface in current slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.517F:	LD	(D.6205),A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	5183H
+
+CRLF:
+C.5183:	LD	A,0DH	; 13 
+	CALL	C.53A8
+	LD	A,0AH	; 10 
+	JP	C.53A8
+
+C.518D:	POP	DE
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$518E:	CALL	C.53A8
+	PUSH	DE
+	INC	DE
+	LD	A,B
+	LD	(DE),A
+	CP	C
+	PUSH	AF
+	INC	DE
+	LD	C,B
+	XOR	A
+	LD	B,A
+	OR	C
+	JR	Z,J$51A3
+	LD	HL,YCONTP
+	LDIR
+J$51A3:	POP	AF
+	JR	Z,J$51A9
+	LD	A,0DH	; 13 
+	LD	(DE),A
+J$51A9:	POP	DE
+	RET
+
+C.51AB:	INC	B
+	DEC	B
+	JR	Z,J.51D3
+	DEC	B
+	DEC	IX
+	CALL	C.531E
+	INC	B
+	DEC	B
+	JR	Z,J$51C5
+	DEC	B
+	DEC	IX
+	LD	A,(IX+0)
+	DEC	A
+	JR	Z,J.51D3
+	INC	B
+	INC	IX
+J$51C5:	LD	A,(IX+0)
+	CP	20H	; " "
+	JR	NC,J.51D3
+	CP	09H	; 9 
+	JR	Z,J$51F2
+	CALL	C.531E
+J.51D3:	LD	A,(INSERT)
+	OR	A
+	JR	NZ,J.517D
+	INC	D
+	DEC	D
+	JR	Z,J.517D
+	DEC	D
+	LD	A,D
+	CP	E
+	JR	NC,J.517D
+	DEC	HL
+	LD	A,D
+	CP	01H	; 1 
+	JR	C,J.517D
+	DEC	HL
+	LD	A,(HL)
+	DEC	A
+	INC	HL
+	JR	NZ,J.517D
+	DEC	D
+	DEC	HL
+	JR	J.517D
+
+J$51F2:	PUSH	HL
+	PUSH	BC
+	LD	A,(STARTP)
+	LD	C,A
+	INC	B
+	DEC	B
+	JR	Z,J$5211
+	LD	HL,YCONTP
+J$51FF:	LD	A,(HL)
+	INC	HL
+	CP	01H	; 1 
+	JR	Z,J.520F
+	INC	C
+	CP	20H	; " "
+	JR	NC,J.520F
+	CP	09H	; 9 
+	JR	Z,J$5221
+	INC	C
+J.520F:	DJNZ	J$51FF
+J$5211:	LD	A,(CARPOS)
+	SUB	C
+	JR	Z,J$521D
+	LD	B,A
+J$5218:	CALL	C.531E
+	DJNZ	J$5218
+J$521D:	POP	BC
+	POP	HL
+	JR	J.51D3
+
+J$5221:	LD	A,C
+	ADD	A,07H	; 7 
+	AND	0F8H
+	LD	C,A
+	JR	J.520F
+
+C.5229:	LD	A,(INSERT)
+	XOR	01H	; 1 
+	LD	(INSERT),A
+	JP	C.5104
+
+C.5234:	LD	A,40H	; "@"
+	POP	DE
+	CALL	C$518E
+	CALL	C.5183
+	LD	A,(STARTP)
+	OR	A
+	JP	Z,C.50E0
+	LD	B,A
+	LD	A,20H	; " "
+J$5247:	CALL	C.53A8
+	DJNZ	J$5247
+	JP	C.50E0
+
+C.524F:	LD	A,0FFH
+	JR	J.5284
+
+C.5253:	CALL	C.52B2
+	JP	C,C.5104
+	PUSH	BC
+	LD	C,A
+	LD	B,00H
+	ADD	HL,BC
+	POP	BC
+	ADD	A,D
+	LD	D,A
+	JP	C.5104
+
+C.5264:	CALL	C.52B2
+	JP	C,C.5104
+	JR	J.5284
+
+C.526C:	LD	A,D
+	CP	E
+	JP	NC,C.5104
+	INC	D
+	LD	A,(HL)
+	DEC	A
+	INC	HL
+	JP	NZ,C.5104
+	INC	D
+	INC	HL
+	JP	C.5104
+
+C.527D:	LD	A,(HL)
+	DEC	A
+	LD	A,01H	; 1 
+	JR	NZ,J.5284
+	INC	A
+J.5284:	PUSH	AF
+	XOR	A
+	LD	(INSERT),A
+	LD	A,B
+	CP	C
+	JR	NC,J.52AE
+	LD	A,D
+	CP	E
+	JR	NC,J.52AE
+	LD	A,(HL)
+	CP	01H	; 1 
+	JR	NZ,J$529C
+	LD	A,B
+	INC	A
+	CP	C
+	JR	NC,J.52AE
+	LD	A,(HL)
+J$529C:	INC	HL
+	LD	(IX+0),A
+	INC	IX
+	CALL	C.535D
+	INC	B
+	INC	D
+	POP	AF
+	DEC	A
+	JR	NZ,J.5284
+	JP	C.5104
+
+J.52AE:	POP	AF
+	JP	C.5104
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.52B2:	CALL	C.544E
+	CP	01H	; 1 
+	JR	NZ,C.52EE
+	CALL	C.544E
+	CP	40H	; "@"
+	JR	C,C.52EE
+	CP	60H	; "`"
+	JR	NC,C.52EE
+	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	LD	IY,0
+J$52CB:	SCF
+	PUSH	AF
+	LD	A,01H	; 1 
+	CALL	C.52EE
+	JR	C,J$52E9
+	LD	C,A
+	LD	B,00H
+	ADD	HL,BC
+	ADD	A,D
+	LD	D,A
+	PUSH	IY
+	POP	AF
+	ADD	A,C
+	PUSH	AF
+	POP	IY
+	INC	HL
+	POP	AF
+	CP	(HL)
+	DEC	HL
+	JR	NZ,J$52CB
+	PUSH	IY
+J$52E9:	POP	AF
+	POP	BC
+	POP	DE
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.52EE:	PUSH	BC
+	PUSH	AF
+	LD	A,E
+	SUB	D
+	JR	C,J.531A
+	JR	Z,J.531A
+	DEC	A
+	JR	Z,J.531A
+	LD	C,A
+	LD	B,00H
+	POP	AF
+	PUSH	HL
+	PUSH	AF
+	LD	A,(HL)
+	DEC	A
+	JR	NZ,J$5305
+	INC	HL
+	DEC	C
+J$5305:	POP	AF
+	INC	C
+	DEC	C
+	JR	NZ,J$530E
+	POP	HL
+	POP	BC
+	SCF
+	RET
+
+J$530E:	INC	HL
+	CPIR
+	POP	HL
+	JR	NZ,J$531B
+	LD	A,E
+	SUB	D
+	DEC	A
+	SUB	C
+	POP	BC
+	RET
+
+J.531A:	POP	AF
+J$531B:	POP	BC
+	SCF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.531E:	LD	A,08H	; 8 
+	CALL	C.53A8
+	LD	A,20H	; " "
+	CALL	C.53A8
+	LD	A,08H	; 8 
+	JR	C.53A8
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.532C:	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	PUSH	IX
+	CALL	C.4EDA
+	LD	BC,4*256+0
+J$5337:	LD	A,(IX+0)
+	INC	A
+	JR	Z,J$533E
+	INC	C
+J$533E:	INC	IX
+	DJNZ	J$5337
+	LD	A,C
+	POP	IX
+	POP	HL
+	POP	DE
+	POP	BC
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5349:	LD	BC,12*256+0
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.534C:	LD	(HL),C
+	INC	HL
+	DJNZ	C.534C
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5351:	LD	C,4EH
+	JR	C.534C
+
+?.5355:	NOP
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5356:	LD	A,D
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5357:	DEC	A
+	RET	P
+	LD	A,(CURDRV)
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	535DH
+
+BUFOUT:
+C.535D:	CP	20H	; " "
+	JR	NC,C.53A8
+	CP	09H	; 9 
+	JR	Z,C.53A8
+	CP	01H	; 1 
+	JR	Z,C.53A8
+	PUSH	AF
+	LD	A,5EH	; "^"
+	CALL	C.53A8
+	POP	AF
+	OR	40H	; "@"
+	JR	C.53A8
+
+I$5374:	DEFB    006H,07FH,008H,00DH,00AH,015H,00BH,00CH
+        DEFB    01BH,012H,018H,01CH,01DH,01EH,01FH,001H
+        DEFB    008H
+
+        DEFW    C.513B
+        DEFW    C.511E,C.524F,C.5166,C.51AB,C.527D,C.5264,C.5229,C.5166
+        DEFW    C.5253,C.5234,C.5166,C.517A,C.518D,C.51AB,C.526C,C.5104
+
+NKEYNT  EQU     ($-I$5374)/3
+
+;	  Subroutine BDOS function 2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	53A7H
+
+CONOUT:
+C.53A7:	LD	A,E
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.53A8:	CALL	H.OUT
+	CP	0BH	; 11 
+	JR	Z,J.53E8
+	CP	0CH	; 12 
+	JR	Z,J.53E8
+	CP	1CH
+	JR	Z,J.53D5
+	CP	1DH
+	JR	Z,J.53F0
+	CP	0DH	; 13 
+	JR	Z,J.53E8
+	CP	08H	; 8 
+	JR	Z,J.53F0
+	CP	09H	; 9 
+	JR	Z,J.53F8
+	CP	7FH
+	JR	Z,J.53F0
+	CP	20H	; " "
+	JR	C,J.53D5
+	PUSH	HL
+	LD	HL,CARPOS
+	INC	(HL)
+	POP	HL
+J.53D5:	PUSH	BC
+	LD	B,A
+	CALL	C.5412
+	LD	A,B
+	CALL	C.408F
+	LD	A,(PFLAG)
+	OR	A
+	LD	A,B
+	POP	BC
+	RET	Z
+	JP	J.409F
+
+J.53E8:	PUSH	AF
+	XOR	A
+	LD	(CARPOS),A
+	POP	AF
+	JR	J.53D5
+
+J.53F0:	PUSH	HL
+	LD	HL,CARPOS
+	DEC	(HL)
+	POP	HL
+	JR	J.53D5
+
+J.53F8:	LD	A,20H	; " "
+	CALL	C.53A8
+	LD	A,(CARPOS)
+	AND	07H	; 7 
+	JR	NZ,J.53F8
+	RET
+
+J$5405:	CP	10H	; 16 
+	JR	Z,C.541D
+	CP	0EH	; 14 
+	JR	Z,C.541D
+	CP	03H	; 3 
+	JR	Z,C.541D
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5412:	CALL	C.4034
+	RET	Z
+	CP	13H	; 19 
+	JR	NZ,J$5405
+	CALL	C.4078
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.541D:	CALL	C.4078
+	CP	10H	; 16 
+	JR	Z,J$5431
+	CP	0EH	; 14 
+	JR	Z,J$5437
+	CP	03H	; 3 
+	RET	NZ
+	LD	HL,(BREAKV)
+	JP	C.F1E8
+
+J$5431:	LD	A,01H	; 1 
+	LD	(PFLAG),A
+	RET
+
+J$5437:	XOR	A
+	LD	(PFLAG),A
+	RET
+
+;	  Subroutine BDOS function 11
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	543CH
+
+CONSTA:
+C.543C:	CALL	C.5412
+	LD	A,00H
+	RET	Z
+	OR	0FFH
+	RET
+
+;	  Subroutine BDOS function 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	5445H
+
+CONIN:
+C.5445:	CALL	C.544E
+	PUSH	AF
+	CALL	C.53A8
+	POP	AF
+	RET
+
+;	  Subroutine BDOS function 8
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	544EH
+
+IN:
+C.544E:	CALL	C.541D
+	JR	Z,C.544E
+	RET
+
+;	  Subroutine BDOS function 6
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	5454H
+
+RAWIO:
+C.5454:	LD	A,E
+	CP	0FFH
+	JP	NZ,C.408F
+	CALL	C.4034
+	JP	NZ,C.4078
+	XOR	A
+	RET
+
+;	  Subroutine BDOS function 7
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	5462H
+
+RAWINP:
+C.5462:	JP	C.4078
+
+;	  Subroutine BDOS function 5
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	5465H
+
+LIST:
+C.5465:	LD	A,E
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5466:	PUSH	AF
+	CALL	C.5412
+	POP	AF
+	JP	J.409F
+
+;	  Subroutine BDOS function 3
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	546EH
+
+READER:
+C.546E:	CALL	C.5412
+	JP	$AUXIN
+
+;	  Subroutine BDOS function 4
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	5474H
+
+PUNCH:
+C.5474:	LD	A,E
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5475:	PUSH	AF
+	CALL	C.5412
+	POP	AF
+	JP	$AUXOU
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.547D:	CALL	H.DATE
+	CALL	C.54A7
+	LD	A,C
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	RL	B
+	ADD	A,A
+	RL	B
+	ADD	A,A
+	RL	B
+	SRL	D
+	OR	D
+	LD	E,A
+	LD	D,B
+	LD	BC,(MONTH)
+	LD	A,C
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	RL	B
+	LD	C,A
+	LD	A,(DAY)
+	OR	C
+	LD	C,A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.54A7:	CALL	C$417B
+	JR	C,J$54F2
+	PUSH	DE
+	PUSH	HL
+	LD	DE,(DAYCNT)
+	OR	A
+	SBC	HL,DE
+	POP	HL
+	POP	DE
+	RET	Z
+	LD	(DAYCNT),HL
+	PUSH	BC
+	PUSH	DE
+	LD	C,L
+	LD	B,H
+	LD	DE,365+365+365+366
+	CALL	C.4935
+	LD	A,C
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	LD	B,00H
+	LD	DE,I.551B
+	CALL	C.54FC
+	SRL	A
+	JR	NC,J$54D9
+	LD	DE,200
+	ADD	HL,DE
+J$54D9:	CALL	C.550A
+	LD	A,1
+	LD	DE,I.F22B
+	CALL	C.54FC
+	LD	(MONTH),A
+	INC	L
+	LD	A,L
+	LD	(DAY),A
+J$54EC:	CALL	C$5588
+	POP	DE
+	POP	BC
+	RET
+
+J$54F2:	PUSH	BC
+	PUSH	DE
+	LD	HL,(YEAR)
+I$54F7:	CALL	C.559D
+	JR	J$54EC
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.54FC:	EX	DE,HL
+	LD	C,(HL)
+	INC	HL
+	EX	DE,HL
+	OR	A
+	SBC	HL,BC
+	JR	C,J$5508
+	INC	A
+	JR	C.54FC
+
+J$5508:	ADD	HL,BC
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.550A:	CALL	H.SETY
+	LD	(YEAR),A
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5510:	AND	03H
+	LD	A,28
+	JR	NZ,J$5517
+	INC	A
+J$5517:	LD	(I.F22B+1),A
+	RET
+
+I.551B:	DEFB	200
+	DEFB	166
+	DEFB	200
+	DEFB	165
+	DEFB	200
+	DEFB	165
+	DEFB	200
+	DEFB	165
+
+I$5523:	DEFW	512			; sector size
+	DEFB	00FH			; directory mask
+	DEFB	004H			; directory shift
+	DEFB	000H			; cluster mask
+	DEFB	000H			; cluster shift
+	DEFW	1			; first FAT sector
+	DEFB	2			; number of FATs
+
+I$552C:	DEFW	0163H			; media 0F8H
+	DEFW	02CAH			; media 0F9H
+	DEFW	013CH			; media 0FAH
+	DEFW	027BH			; media 0FBH
+	DEFW	0160H			; media 0FCH
+	DEFW	0163H			; media 0FDH
+	DEFW	013AH			; media 0FEH
+	DEFW	013CH			; media 0FFH
+
+;	  Subroutine BDOS function 42
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	553CH
+
+GETDAT:
+C.553C:	XOR	A
+	LD	(CPMCAL),A
+	CALL	C.54A7
+	LD	HL,(YEAR)
+	LD	DE,1980
+	ADD	HL,DE
+	LD	DE,(DAY)
+	LD	A,(WEEKDA)
+	RET
+
+;	  Subroutine BDOS function 43
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	5552H
+
+SETDAT:
+C.5552:	LD	BC,-1980
+	ADD	HL,BC
+	JR	NC,J.559A
+	LD	A,H
+	OR	A
+	JR	NZ,J.559A
+	LD	A,L
+	CP	78H	; "x"
+	JR	NC,J.559A
+	CALL	C$5510
+	INC	E
+	DEC	E
+	JR	Z,J.559A
+	LD	A,D
+	OR	A
+	JR	Z,J.559A
+	CP	0DH	; 13 
+	JR	NC,J.559A
+	PUSH	HL
+	LD	HL,I.F22B-1
+	ADD	A,L
+	LD	L,A
+	JR	NC,J$5579
+	INC	H
+J$5579:	LD	A,(HL)
+	POP	HL
+	CP	E
+	JR	C,J.559A
+	LD	(DAY),DE
+	CALL	C.559D
+	CALL	C$4115
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5588:	LD	BC,(DAYCNT)
+	LD	DE,7
+	INC	BC
+	INC	BC
+	CALL	C.4935
+	LD	A,L
+	LD	(WEEKDA),A
+	XOR	A
+	RET
+
+J.559A:	LD	A,0FFH
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.559D:	LD	A,L
+	CALL	C.550A
+	LD	C,L
+	SRL	C
+	SRL	C
+	LD	B,00H
+	LD	DE,365+365+365+366
+	CALL	C.491C
+	LD	L,C
+	LD	H,B
+	LD	A,(YEAR)
+	AND	03H	; 3 
+	ADD	A,A
+	LD	DE,I.551B
+	LD	B,00H
+	INC	A
+	CALL	C.55D2
+	LD	DE,I.F22B
+	LD	A,(MONTH)
+	CALL	C.55D2
+	LD	A,(DAY)
+	DEC	A
+	LD	C,A
+	ADD	HL,BC
+	LD	(DAYCNT),HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.55D2:	DEC	A
+	RET	Z
+	EX	DE,HL
+	LD	C,(HL)
+	INC	HL
+	EX	DE,HL
+	ADD	HL,BC
+	JR	C.55D2
+
+;	  Subroutine BDOS function 44
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	55DBH
+
+GETTIM:
+C.55DB:	XOR	A
+	LD	(CPMCAL),A
+	CALL	C.54A7
+	LD	H,B
+	LD	L,C
+	XOR	A
+	RET
+
+;	  Subroutine BDOS function 45
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	55E6H
+
+SETTIM:
+C.55E6:	LD	B,H
+	LD	C,L
+	LD	A,B
+	CP	18H
+	JR	NC,J.559A
+	LD	A,3BH	; ";"
+	CP	C
+	JR	C,J.559A
+	CP	D
+	JR	C,J.559A
+	LD	A,E
+	CP	64H	; "d"
+	JR	NC,J.559A
+	CALL	C$4130
+	XOR	A
+	RET
+
+;	  Subroutine BDOS function 46
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+	_DOSCP	55FFH
+
+SETRAW:
+C.55FF:	LD	A,E
+	LD	(RAWFLG),A
+	RET
+
+J$5604:	LD	A,(HL)
+	CP	" "
+	SCF
+	RET	Z
+	LD	BC,8*256+2
+	CP	0E5H
+	JR	NZ,J.5622
+	LD	A,05H	; 5 
+	LD	(DE),A
+	INC	HL
+	INC	DE
+	DEC	B
+I$5616:	LD	A,0E5H
+	CALL	C.5681
+	JR	NC,J.5622
+	LD	A,(HL)
+	LD	(DE),A
+	INC	HL
+	INC	DE
+	DEC	B
+J.5622:	LD	A,(HL)
+	CALL	C.5681
+	JR	NC,J$5631
+	LD	(DE),A
+	INC	HL
+	INC	DE
+	DEC	B
+	SCF
+	RET	Z
+	LD	A,(HL)
+	JR	J$5667
+
+J$5631:	LD	A,(COUNTR)
+	AND	A
+	LD	A,(HL)
+	JR	Z,J.564C
+	CP	80H
+	JR	C,J.564C
+	CP	0BAH
+	JR	NC,J.564C
+	PUSH	HL
+	PUSH	BC
+	LD	C,A
+	LD	B,00H
+	LD	HL,I$5616
+	ADD	HL,BC
+	LD	A,(HL)
+	POP	BC
+	POP	HL
+J.564C:	CP	61H	; "a"
+	JR	C,J.5656
+	CP	7BH	; "{"
+	JR	NC,J.5656
+	SUB	20H	; " "
+J.5656:	CP	20H	; " "
+	RET	C
+	PUSH	HL
+	PUSH	BC
+	LD	HL,I$5677
+	LD	BC,S.5677
+	CPIR
+	POP	BC
+	POP	HL
+	SCF
+	RET	Z
+J$5667:	LD	(DE),A
+	INC	HL
+	INC	DE
+	DJNZ	J.5622
+	LD	B,03H	; 3 
+	DEC	C
+	JR	NZ,J.5622
+	OR	A
+	LD	A,(HL)
+	LD	(FCBEXT),A
+	RET
+
+I$5677:	DEFB	".",34,"/[]:+=;,"
+S.5677	EQU	$-I$5677
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5681:	PUSH	HL
+	LD	HL,KANJTA
+	CP	(HL)
+	CCF
+	JR	NC,J.5694
+	INC	HL
+	CP	(HL)
+	JR	C,J.5694
+	INC	HL
+	CP	(HL)
+	CCF
+	JR	NC,J.5694
+	INC	HL
+	CP	(HL)
+J.5694:	POP	HL
+	RET
+
+?.5696:	DEFB    080H,09AH,"E" ,"A" ,08EH,"A" ,08FH,080H
+        DEFB    "E" ,"E" ,"E" ,"I" ,"I" ,"I" ,08EH,08FH
+        DEFB    090H,092H,092H,"O" ,099H,"O" ,"U" ,"U"
+        DEFB    "Y" ,099H,09AH,09BH,09CH,09DH,09EH,09FH
+        DEFB    "A" ,"I" ,"O" ,"U" ,0A5H,0A5H,0A6H,0A7H
+        DEFB    0A8H,0A9H,0AAH,0ABH,0ACH,0ADH,0AEH,0AFH
+        DEFB    0B0H,0B0H,0B2H,0B2H,0B4H,0B4H,0B6H,0B6H
+        DEFB    0B8H,0B8H
+
+;	  Subroutine BDOS function unsupported
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.56D0:	XOR	A
+	LD	B,A
+	RET
+
+C.56D3:	EI
+	LD	A,01H	; 1 
+	LD	(CPMCAL),A
+	LD	A,C
+	CP	31H	; "1"
+	JR	NC,C.56D0
+	SUB	11H	; 17 
+	JR	NZ,J$56E6
+	LD	(SRCHFC),DE
+J$56E6:	DEC	A
+	JR	NZ,J$56ED
+	LD	DE,(SRCHFC)
+J$56ED:	PUSH	HL
+	LD	HL,I$5700
+	EX	(SP),HL
+	PUSH	HL
+	LD	HL,I.570D
+	LD	B,00H
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	B,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,B
+	EX	(SP),HL
+	RET
+
+I$5700:	PUSH	AF
+	LD	A,(CPMCAL)
+	OR	A
+	JR	Z,J$570B
+	POP	AF
+	LD	L,A
+	LD	H,B
+	RET
+
+J$570B:	POP	AF
+	RET
+
+I.570D:	DEFW	C.40A7			; BDOS 0
+	DEFW	C.5445			; BDOS 1
+	DEFW	C.53A7			; BDOS 2
+	DEFW	C.546E			; BDOS 3
+	DEFW	C.5474			; BDOS 4
+	DEFW	C.5465			; BDOS 5
+	DEFW	C.5454			; BDOS 6
+	DEFW	C.5462			; BDOS 7
+	DEFW	C.544E			; BDOS 8
+	DEFW	C.F1C9			; BDOS 9
+	DEFW	C.50E0			; BDOS 10
+	DEFW	C.543C			; BDOS 11
+	DEFW	C.41EF			; BDOS 12
+	DEFW	C.509F			; BDOS 13
+	DEFW	C.50D5			; BDOS 14
+	DEFW	C.4462			; BDOS 15
+	DEFW	C.456F			; BDOS 16
+	DEFW	C.4FB8			; BDOS 17
+	DEFW	C.5006			; BDOS 18
+	DEFW	C.436C			; BDOS 19
+	DEFW	C.4775			; BDOS 20
+	DEFW	C.477D			; BDOS 21
+	DEFW	C.461D			; BDOS 22
+	DEFW	C.4392			; BDOS 23
+	DEFW	C.504E			; BDOS 24
+	DEFW	C.50C4			; BDOS 25
+	DEFW	C.5058			; BDOS 26
+	DEFW	C.505D			; BDOS 27
+	DEFW	C.56D0			; BDOS 28
+	DEFW	C.56D0			; BDOS 29
+	DEFW	C.56D0			; BDOS 30
+	DEFW	C.56D0			; BDOS 31
+	DEFW	C.56D0			; BDOS 32
+	DEFW	C.4788			; BDOS 33
+	DEFW	C.4793			; BDOS 34
+	DEFW	C.501E			; BDOS 35
+	DEFW	C.50C8			; BDOS 36
+	DEFW	C.56D0			; BDOS 37
+	DEFW	C.47BE			; BDOS 38
+	DEFW	C.47B2			; BDOS 39
+	DEFW	C.47D1			; BDOS 40
+	DEFW	C.56D0			; BDOS 41
+	DEFW	C.553C			; BDOS 42
+	DEFW	C.5552			; BDOS 43
+	DEFW	C.55DB			; BDOS 44
+	DEFW	C.55E6			; BDOS 45
+	DEFW	C.55FF			; BDOS 46
+	DEFW	C.46BA			; BDOS 47
+	DEFW	C.4720			; BDOS 48
+
+;	  Subroutine extension initialize handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.576F:	CALL	C$7B8D
+	DI
+	LD	A,(DEVICE)
+	AND	A
+	RET	M
+	JP	NZ,J$5823
+	LD	HL,HOKVLD
+	BIT	0,(HL)
+	JR	NZ,J$578E
+	SET	0,(HL)
+	LD	HL,EXTBIO
+	LD	B,0FH	; 15 
+J$5789:	LD	(HL),0C9H
+	INC	HL
+	DJNZ	J$5789
+J$578E:	LD	HL,(BOTTOM)
+	LD	DE,I$C000+1
+	_RST	DCOMPR
+	JR	NC,J$57A3
+	LD	A,06H	; 6 
+	CALL	SNSMAT
+	DI
+	RRCA
+	JR	C,J$57A9
+	LD	A,07H	; 7 
+	_RST	OUTDO
+J$57A3:	LD	A,0FFH
+	LD	(DEVICE),A
+	RET
+
+J$57A9:	LD	HL,VARWRK+MYSIZE
+	LD	DE,C.F1C9
+	AND	A
+	SBC	HL,DE
+	CALL	NC,C.5F08
+	RET	C
+J$57B6:	PUSH	HL
+	XOR	A
+	LD	HL,C.F1C9
+	LD	BC,VARWRK-C.F1C9
+	CALL	C.58E3
+	LD	(AUTLIN),BC
+	LD	HL,I.FB21
+	LD	C,4*2+4*3
+	CALL	C.58E3
+	LD	HL,HOOKBE
+	LD	C,69H
+	LD	A,0C9H
+	CALL	C.58E3
+	LD	A,0DBH
+	LD	HL,0C9H*256+0A8H
+	LD	(RSLREG+0),A
+	LD	(RSLREG+1),HL
+	LD	A,06H	; 6 
+	CALL	SNSMAT
+	AND	02H	; 2 
+	LD	(TARGET),A
+	LD	A,07H	; 7 
+	_RST	OUTDO
+J$57EF:	LD	A,(DOSVER)
+	CP	13H	; 19 
+	JR	NC,J$580C
+	LD	HL,I$58DE
+	LD	DE,H.RUNC
+	LD	BC,5
+	LDIR
+	CALL	C.5FDD			; get slot id in page 1
+	LD	(H.RUNC+1),A
+	LD	A,13H	; 19 
+	LD	(DOSVER),A
+J$580C:	POP	DE
+	LD	A,(IDBYT2)
+	CP	03H	; 3 
+	JR	NZ,J.583F
+	XOR	A
+	CALL	SNSMAT
+	BIT	1,A
+	JR	NZ,J.583F
+	LD	A,23H	; "#"
+	LD	(DOSVER),A
+	JR	J.583F
+
+J$5823:	LD	HL,I.FB21
+	LD	B,04H	; 4 
+	XOR	A
+J$5829:	ADD	A,(HL)
+	JP	C,J.5EF0
+	INC	HL
+	INC	HL
+	DJNZ	J$5829
+	CP	09H	; 9 
+	RET	NC
+	LD	HL,18
+	CALL	C.5F08
+	RET	C
+	EX	DE,HL
+	PUSH	DE
+	JR	J$57EF
+
+J.583F:	CALL	C.5FF7
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	LD	HL,(AUTLIN)
+	LD	DE,SECLEN
+	_RST	DCOMPR
+	JR	NC,J$5852
+	LD	(AUTLIN),DE
+J$5852:	CALL	C$7BDA
+	LD	DE,I.FB21
+	LD	BC,4*256+0
+J$585B:	LD	A,(DE)
+	AND	A
+	JR	Z,J$5868
+	ADD	A,C
+	LD	C,A
+	INC	DE
+	INC	DE
+	DJNZ	J$585B
+	JP	J.5EF0
+
+J$5868:	PUSH	BC
+	PUSH	DE
+	CALL	C.5FDD			; get slot id in page 1
+	INC	DE
+	LD	(DE),A
+	POP	DE
+	POP	BC
+	LD	A,(TARGET)
+	AND	A
+	LD	A,C
+	CALL	C.7B6D
+	ADD	A,L
+	CP	07H	; 7 
+	LD	A,L
+	JR	C,J$5882
+	LD	A,09H	; 9 
+	SUB	C
+J$5882:	LD	(DE),A
+	PUSH	BC
+	PUSH	AF
+	CALL	C.5FEC
+	POP	AF
+	LD	(IX+5),A
+	POP	BC
+	LD	B,00H
+	LD	HL,$DPBLI
+	ADD	HL,BC
+	ADD	HL,BC
+	PUSH	HL
+	LD	A,(DE)
+	OR	A
+	JR	Z,J$58D3
+	PUSH	AF
+	LD	C,A
+	LD	DE,21
+	CALL	C.491C
+	LD	L,C
+	LD	H,B
+	CALL	C.5EEC
+	EX	DE,HL
+	POP	BC
+	XOR	A
+	POP	HL
+J$58AA:	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	PUSH	HL
+	PUSH	BC
+	PUSH	DE
+	PUSH	AF
+	LD	HL,($SECBU)
+	PUSH	HL
+	LD	HL,-(SECLEN+256)
+	ADD	HL,SP
+	LD	($SECBU),HL
+	EX	DE,HL
+	LD	B,0F9H
+	CALL	GETDPB
+	POP	HL
+	LD	($SECBU),HL
+	POP	AF
+	POP	HL
+	LD	DE,21
+	ADD	HL,DE
+	EX	DE,HL
+	POP	BC
+	POP	HL
+	INC	A
+	DJNZ	J$58AA
+J$58D3:	CALL	C$734B
+	CALL	C$7BF2
+	LD	HL,DEVICE
+	INC	(HL)
+	RET
+
+I$58DE:	_RST	CALLF
+	DEFB	0
+	DEFW	C.58EB
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.58E3:	LD	D,H
+	LD	E,L
+	INC	DE
+	LD	(HL),A
+	DEC	BC
+	LDIR
+	RET
+
+C.58EB:	LD	HL,H.RUNC
+	LD	B,5
+J$58F0:	LD	(HL),0C9H
+	INC	HL
+	DJNZ	J$58F0
+	LD	HL,DEVICE
+	XOR	A
+	CP	(HL)
+	LD	(HL),A
+	RET	P
+	CALL	C$6204
+	LD	(MASTER),A
+	LD	HL,J.72DD
+	LD	DE,C.F1C9
+	LD	BC,S.72DD
+	LDIR
+	LD	HL,CHAR_16
+	LD	DE,KANJTA
+	LD	BC,4
+	LDIR
+	LD	A,(IDBYT0)
+	RRCA
+	RRCA
+	RRCA
+	RRCA
+	AND	07H	; 7 
+	LD	(COUNTR),A
+	LD	A,0FFH
+	LD	(BUFDRN),A
+	LD	(DIRBFD),A
+	LD	(DAYCNT+1),A
+	LD	A,0DH
+	LD	(KBUF+316),A
+	LD	A,7
+	LD	(FILMAX),A
+	LD	HL,9132
+	LD	(CURDAT),HL
+	LD	B,8
+	LD	HL,$DOSON
+J$5944:	LD	(HL),0C3H
+	INC	HL
+	INC	HL
+	INC	HL
+	DJNZ	J$5944
+	LD	HL,(AUTLIN)
+	PUSH	HL
+	CALL	C.5EEC
+	LD	($SECBU),HL
+	LD	($BUFFE),HL
+	POP	HL
+	CALL	C.5EEC
+	LD	($DIRBU),HL
+	LD	(HIMSAV),HL
+	LD	HL,3*SECLEN+1
+	CALL	C.5EEC
+	LD	(HIMSAV),HL
+	LD	(HL),0FFH
+	INC	HL
+	CALL	C.74C8
+	LD	(IX+2),L
+	LD	(IX+3),H
+	LD	(IX+0),0FFH
+	LD	(IX+1),0FFH
+	LD	HL,I.FB21
+	LD	B,04H	; 4 
+	XOR	A
+J$5985:	ADD	A,(HL)
+	JP	C,J.5EF0
+	INC	HL
+	INC	HL
+	DJNZ	J$5985
+	CP	09H	; 9 
+	JP	NC,J.5EF0
+	LD	($NUMDR),A
+	OR	A
+	JP	Z,J$59B8
+	LD	B,A
+	LD	C,00H
+	LD	HL,$DPBLI
+J$599F:	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	INC	HL
+	PUSH	HL
+	PUSH	DE
+	POP	IX
+	LD	(IX+0),C
+	INC	C
+	PUSH	BC
+	LD	(IX+19),00H
+	LD	(IX+20),00H
+	POP	BC
+	POP	HL
+	DJNZ	J$599F
+J$59B8:	LD	HL,AUXBOD
+	LD	(HL),3EH	; ">"
+	INC	HL
+	LD	(HL),1AH
+	LD	B,08H	; 8 
+J$59C2:	INC	HL
+	LD	(HL),0C9H
+	DJNZ	J$59C2
+	LD	HL,AUXBOD
+	LD	($AUXIN+1),HL
+	LD	L,LOW (AUXBOD+5)
+	LD	($AUXOU+1),HL
+	LD	L,LOW BDOSBO
+	LD	(BDOS+1),HL
+	LD	HL,I$7D2F
+	LD	A,(EXPTBL+0)
+	CALL	RDSLT
+	DEFB	0DDH
+	LD	L,A
+	INC	HL
+	LD	A,(EXPTBL+0)
+	CALL	RDSLT
+	DEFB	0DDH
+	LD	H,A
+	LD	IY,(EXPTBL+0-1)
+	CALL	CALSLT
+	CALL	C$7C45
+	CALL	C$40B8
+	CALL	C$5CBF
+	LD	A,(EXPTBL+0)
+	LD	(RAMAD0),A
+	LD	(RAMAD1),A
+	CALL	C$5FC2			; get slot id in page 2
+	LD	(RAMAD2),A
+	CALL	C$5FBF			; get slot id in page 3
+	LD	(RAMAD3),A
+	LD	C,00H
+	CALL	C.5E76
+	JR	C,J$5A1A
+	LD	(RAMAD0),A
+J$5A1A:	LD	C,40H	; "@"
+	CALL	C.5E76
+	JR	C,J$5A24
+	LD	(RAMAD1),A
+J$5A24:	LD	SP,I$C000+256+256
+	LD	A,(H.STKE+0)
+	CP	0C9H
+	JR	Z,J$5A34
+	LD	IX,I$7D17
+	JR	J$5A46
+
+J$5A34:	LD	HL,SLTATR
+	LD	B,40H	; "@"
+J$5A39:	LD	A,(HL)
+	ADD	A,A
+	JR	C,J$5A42
+	INC	HL
+	DJNZ	J$5A39
+	JR	J$5A4C
+
+J$5A42:	LD	IX,I$7E14
+J$5A46:	CALL	C.5C69
+	JP	CALBAS
+
+J$5A4C:	LD	HL,C.5B8E
+	PUSH	HL
+	CALL	C$4EE2
+	RET	C
+	CALL	C.5B47
+	RET	C
+	CALL	C$5B38
+	LD	HL,(BOTTOM)
+	LD	DE,I$8000
+	_RST	DCOMPR
+	RET	NZ
+	LD	HL,RAMAD0
+	LD	A,(EXPTBL+0)
+	CP	(HL)
+	RET	Z
+	INC	HL
+	CP	(HL)
+	RET	Z
+	LD	A,01H	; 1 
+J$5A70:	PUSH	AF
+	XOR	A
+	CALL	C.60C8
+	LD	HL,(HIMSAV)
+	LD	(DOSHIM),HL
+	POP	AF
+	OR	A
+	CALL	Z,C.5B47
+	JP	C,C.5B8E
+	LD	A,0FFH
+	LD	(DOSFLG),A
+	LD	A,(RAMAD0)
+	LD	H,00H
+	CALL	C.6411
+	XOR	A
+	LD	L,A
+	LD	H,A
+J$5A93:	LD	(HL),A
+	INC	L
+	JR	NZ,J$5A93
+	LD	BC,S.6310
+	CALL	C.5ED1			; allocate DOS memory
+	LD	(XFER+1),HL
+	EX	DE,HL
+	LD	HL,I$6310
+	LDIR
+	LD	BC,S.6333
+	CALL	C.5ED1			; allocate DOS memory
+	LD	E,L
+	LD	D,H
+	LD	($DOSON+1),HL
+	INC	HL
+	INC	HL
+	LD	($DOSOF+1),HL
+	LD	HL,I$6333
+	LDIR
+	LD	BC,S.6369
+	CALL	C.5ED1			; allocate DOS memory
+	PUSH	HL
+	EX	DE,HL
+	LD	HL,C.6369
+	PUSH	HL
+	LDIR
+	POP	BC
+	POP	DE
+	PUSH	DE
+	LD	HL,R.647F+1-C.6369
+	ADD	HL,DE
+	LD	(HL),LOW C.003B
+	INC	HL
+	LD	(HL),HIGH C.003B
+	LD	HL,I$634C		; relocation table
+	CALL	C.629E			; relocate subroutine
+	LD	HL,I$5B71
+	XOR	A
+	LD	B,A
+	LD	D,A
+J$5AE1:	LD	E,(HL)
+	CP	E
+	JR	Z,J$5AF5
+	INC	HL
+	LD	C,(HL)
+	INC	HL
+	EX	(SP),HL
+	ADD	HL,BC
+	EX	DE,HL
+	LD	(HL),0C3H
+	INC	HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	EX	DE,HL
+	EX	(SP),HL
+	JR	J$5AE1
+
+J$5AF5:	POP	HL
+	LD	HL,C.64D1
+	LD	DE,C.003B
+	LD	BC,S.64D1
+	LDIR
+	LD	BC,S.62CB
+	CALL	C.5ED1			; allocate DOS memory
+	PUSH	HL
+	EX	DE,HL
+	LD	HL,I$62CB
+	PUSH	HL
+	LDIR
+	POP	BC
+	POP	DE
+	PUSH	DE
+	LD	HL,I$62C7		; relocation table
+	CALL	C.629E			; relocate subroutine
+	POP	HL
+	LD	A,0C3H
+	LD	(KEYINT+0),A
+	LD	(KEYINT+1),HL
+	LD	DE,34
+	ADD	HL,DE
+	LD	DE,(DOSHIM)
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	LD	BC,160
+	CALL	C.5ED1			; allocate DOS memory
+	LD	A,0C3H
+	CALL	C$5CB5
+	SCF
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5B38:	LD	HL,DISKVE
+	LD	DE,$DOSON
+	LD	A,(NOTFIR)
+	CALL	C.517F			; enable I/O ports of interface in current slot
+	JP	C.C01E
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5B47:	CALL	C.6EBE
+	LD	A,0F9H
+	LD	C,A
+	LD	B,1
+	LD	HL,($DIRBU)
+	PUSH	HL
+	XOR	A
+	LD	E,A
+	LD	D,A
+	CALL	C.6069			; do physical disk sector operation
+	POP	HL
+	LD	A,0FFH
+	LD	(DIRBFD),A
+	RET	C
+	LD	A,(HL)
+	LD	DE,I$C000
+	LD	BC,J.0100
+	LDIR
+	CP	0EBH
+	RET	Z
+	CP	0E9H
+	RET	Z
+	SCF
+	RET
+
+I$5B71:	DEFB	RDSLT,00H
+	DEFB	WRSLT,21H
+	DEFB	CALLF,2EH
+	DEFB	CALSLT,12H
+	DEFB	ENASLT,47H
+	DEFB	0
+
+I$5B7C:	DEFB	'RUN"'
+
+I$5B80:	DEFB	"AUTOEXECBAS",0
+S.5B80	EQU	$-I$5B80
+S.5B7C	EQU	$-I$5B7C
+
+I$5B8C:	DEFW	C.5BE7
+
+;	  Subroutine start DiskBASIC
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5B8E:	CALL	C$5CB3
+	LD	HL,I$5B7C
+	LD	DE,BUF+10
+	LD	BC,S.5B7C
+	LDIR
+	LD	HL,NOTFIR
+	LD	A,(HL)
+	AND	A
+	LD	(HL),H
+	JR	NZ,J$5BC3
+	LD	(DOSFLG),A
+	LD	HL,I$5B8C
+	LD	(DISKVE),HL
+	LD	DE,BUF+10+S.5B7C+1
+	PUSH	DE
+	LD	HL,I$5B80
+	LD	(DE),A
+	INC	DE
+	LD	C,S.5B80
+	LDIR
+	POP	DE
+	CALL	C.4462
+	INC	A
+	JR	Z,C.5BE7
+	JR	J.5BF5
+
+J$5BC3:	LD	A,(WBOOT)
+	CP	0C3H
+	JR	NZ,J.5BF1
+	LD	HL,DBUF
+	LD	B,(HL)
+	INC	B
+	DEC	B
+	JR	Z,J.5BF1
+J$5BD2:	INC	HL
+	LD	A,(HL)
+	CP	20H	; " "
+	JR	NZ,J$5BDC
+	DJNZ	J$5BD2
+	JR	J.5BF1
+
+J$5BDC:	XOR	A
+	LD	C,B
+	LD	B,A
+	LD	DE,BUF+14
+	LDIR
+	LD	(DE),A
+	JR	J.5BF5
+
+C.5BE7:	LD	SP,I$C000+256+256
+	LD	A,(TIMFLG)
+	AND	A
+	CALL	Z,C$5D6F
+J.5BF1:	XOR	A
+	LD	(BUF+13),A
+J.5BF5:	LD	SP,I$C000+256+256
+	LD	A,(RAMAD2)
+	LD	H,HIGH 8000H
+	CALL	ENASLT
+	LD	A,(EXPTBL+0)
+	LD	H,HIGH 0000H
+	CALL	ENASLT
+	LD	HL,(BOTTOM)
+	XOR	A
+	LD	(HL),A
+	INC	HL
+	LD	(TXTTAB),HL
+	LD	(HL),A
+	INC	HL
+	LD	(HL),A
+	INC	HL
+	LD	(VARTAB),HL
+	LD	HL,-1
+	LD	(CURLIN),HL
+	CALL	C.5C69
+	LD	SP,(STKTOP)
+	LD	A,0FFH
+	LD	(CNSDFG),A
+	LD	A,0CH	; 12 
+	_RST	OUTDO
+	LD	IX,I$7D31
+	CALL	CALBAS
+	CALL	C.5FA6
+	DEFB	10,"Disk BASIC version 1.0",10
+	DEFB	0
+	LD	HL,NTSTOP
+	PUSH	HL
+	LD	HL,BUF+10-1
+	PUSH	HL
+	LD	HL,BUF+64
+	PUSH	HL
+	LD	(HL),0E1H
+	INC	HL
+	LD	(HL),0C9H
+	LD	A,(EXPTBL+0)
+	LD	H,HIGH 4000H
+	JP	ENASLT
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5C69:	LD	HL,I$4068
+	LD	(DISKVE),HL
+	LD	HL,I.570D
+	LD	(BREAKV),HL
+	LD	HL,(HIMSAV)
+	LD	(HIMEM),HL
+	LD	A,(FILMAX)
+	LD	C,A
+	LD	B,00H
+	LD	DE,37
+	CALL	C.491C
+	CALL	C.5EDC
+	LD	(FCBBAS),HL
+	LD	BC,25
+	CALL	C.5EDC
+	LD	(BLDCHK+1),HL
+	EX	DE,HL
+	LD	HL,I$6285
+	LDIR
+	LD	HL,-11
+	ADD	HL,DE
+	LD	(BSVCHK+1),HL
+	LD	A,(MASTER)
+	LD	DE,-7
+	ADD	HL,DE
+	LD	(HL),A
+	LD	DE,14
+	ADD	HL,DE
+	LD	(HL),A
+	CALL	C$5F7F
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5CB3:	LD	A,0C9H
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5CB5:	LD	($DOSON+0),A
+	LD	($DOSOF+0),A
+	LD	(XFER+0),A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5CBF:	LD	HL,I$5CF1
+	LD	DE,H.POSD
+	LD	BC,5
+	LDIR
+	LD	BC,I$5CF6
+	LD	HL,BDOSBO
+J.5CD0:	LD	A,(BC)
+	INC	BC
+	LD	E,A
+	LD	A,(BC)
+	INC	BC
+	LD	D,A
+	CP	0FFH
+	RET	Z
+	CP	40H	; "@"
+	JR	NC,J$5CE0
+	ADD	HL,DE
+	JR	J.5CD0
+
+J$5CE0:	LD	(HL),0F7H
+	INC	HL
+	LD	A,(MASTER)
+	LD	(HL),A
+	INC	HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	LD	(HL),0C9H
+	INC	HL
+	JR	J.5CD0
+
+I$5CF1:	INC	SP
+	INC	SP
+	JP	PARDEV+8
+
+I$5CF6:	DEFW	C.56D3
+	DEFW	H.DSKO-BDOSBO-5
+	DEFW	C.6AF2
+	DEFW	H.NAME-H.DSKO-5
+	DEFW	C.6E59
+	DEFW	C.6E39
+	DEFW	H.COPY-H.KILL-5
+	DEFW	C.6FC5
+	DEFW	H.DSKF-H.COPY-5
+	DEFW	C.6FAD
+	DEFW	C.6AD1
+	DEFW	H.LSET-H.DSKI-5
+	DEFW	C.6C41
+	DEFW	C.6C40
+	DEFW	C.6BA5
+	DEFW	C.6D03
+	DEFW	C.6D06
+	DEFW	C.6D09
+	DEFW	C.6D27
+	DEFW	C.6D2A
+	DEFW	C.6D2D
+	DEFW	C.660D
+	DEFW	H.NOFO-H.GETP-5
+	DEFW	C.661C
+	DEFW	C.6665
+	DEFW	C.6839
+	DEFW	H.BINS-H.NTFL-5
+	DEFW	C.6877
+	DEFW	C.68A2
+	DEFW	C.6DC1
+	DEFW	C.6B36
+	DEFW	C.67F7
+	DEFW	C.6782
+	DEFW	H.LOC-H.INDS-5
+	DEFW	C.6F58			; H.LOC
+	DEFW	C.6F54			; H.LOF
+	DEFW	C.6DA9			; H.EOF
+	DEFW	H.BAKU-H.EOF-5
+	DEFW	C.67DE			; H.BAKU
+	DEFW	C.7271
+	DEFW	C.72C2
+	DEFW	H.ERRP-H.NODE-5
+	DEFW	C.7115
+	DEFW	H.PHYD-H.ERRP-5
+	DEFW	C.6069			; H.PHYD do physical disk sector operation
+	DEFW	C.6111
+	DEFW	0FFFFH
+
+I$5D54:	DEFB	1,48H,'-',1,41H,'-',1,47H,'):',0
+
+I$5D5F:	DEFB	"M-D-Y):",0
+
+I$5D67:	DEFB	"D-M-Y):",0
+
+C$5D6F:	LD	(BUF+98),SP
+	LD	A,14H	; 20 
+	LD	(BUF+100),A
+J$5D78:	CALL	C.5FA6
+	DEFB	10,"Enter date ("
+	DEFB	0
+	LD	A,(COUNTR)
+	CP	01H	; 1 
+	LD	HL,I$5D54
+	JR	C,J.5D9B
+	LD	HL,I$5D5F
+	JR	Z,J.5D9B
+	LD	HL,I$5D67
+J.5D9B:	CALL	C.5FAC
+	LD	HL,I$5E6F
+	LD	(BREAKV),HL
+	LD	DE,BUF+100
+	CALL	C.50E0
+	LD	HL,BUF+102
+	LD	A,(HL)
+	CP	0DH	; 13 
+J$5DB0:	RET	Z
+	LD	A,(COUNTR)
+	AND	A
+	JR	NZ,J$5DC9
+	CALL	C.5E31
+	CALL	C.5E0D
+	LD	D,C
+	LD	A,(HL)
+	INC	HL
+	CP	B
+	JR	NZ,J.5DF5
+	CALL	C.5E1C
+	LD	E,C
+	JR	J.5DE3
+
+J$5DC9:	CALL	C.5E1C
+	LD	D,C
+	CALL	C.5E0D
+	LD	E,C
+	LD	A,(HL)
+	INC	HL
+	CP	B
+	JR	NZ,J$5DDB
+	CALL	C.5E31
+	JR	J.5DE3
+
+J$5DDB:	PUSH	DE
+	CALL	C.553C
+	PUSH	HL
+	POP	IX
+	POP	DE
+J.5DE3:	LD	A,(COUNTR)
+	CP	02H	; 2 
+	JR	C,J$5DED
+	LD	A,E
+	LD	E,D
+	LD	D,A
+J$5DED:	PUSH	IX
+	POP	HL
+	CALL	C.5552
+	OR	A
+	RET	Z
+J.5DF5:	LD	SP,(BUF+98)
+	CALL	C.5FA6
+	DEFB	10,"Invalid date"
+	DEFB	0
+	JP	J$5D78
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5E0D:	LD	A,(HL)
+	INC	HL
+	LD	B,A
+	CP	2FH	; "/"
+	JR	Z,C.5E1C
+	CP	2EH	; "."
+	JR	Z,C.5E1C
+	CP	2DH	; "-"
+	JR	NZ,J.5DF5
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5E1C:	CALL	C.5E65
+	JR	C,J.5DF5
+	LD	C,A
+	CALL	C.5E65
+	RET	C
+	PUSH	AF
+	LD	A,C
+	ADD	A,A
+	ADD	A,A
+	ADD	A,C
+	ADD	A,A
+	LD	C,A
+	POP	AF
+	ADD	A,C
+	LD	C,A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5E31:	CALL	C.5E1C
+	LD	B,C
+	CALL	C.5E65
+	JR	C,J$5E50
+	DEC	HL
+	CALL	C.5E1C
+	PUSH	HL
+	PUSH	BC
+	LD	C,B
+	LD	B,00H
+	PUSH	DE
+	LD	DE,100
+	CALL	C.491C
+	POP	DE
+	POP	HL
+	LD	H,00H
+	JR	J.5E5F
+
+J$5E50:	PUSH	HL
+	LD	C,B
+	LD	B,00H
+	LD	HL,1900
+	LD	A,C
+	CP	50H	; "P"
+	JR	NC,J.5E5F
+	LD	HL,2000
+J.5E5F:	ADD	HL,BC
+	PUSH	HL
+	POP	IX
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5E65:	LD	A,(HL)
+	SUB	30H	; "0"
+	RET	C
+	CP	0AH	; 10 
+	CCF
+	RET	C
+	INC	HL
+	RET
+
+I$5E6F:	DEFW	C.5E71
+
+C.5E71:	LD	SP,(BUF+98)
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5E76:	LD	HL,EXPTBL
+	LD	B,04H	; 4 
+	XOR	A
+J$5E7C:	AND	03H	; 3 
+	OR	(HL)
+J$5E7F:	PUSH	BC
+	PUSH	HL
+	LD	H,C
+J$5E82:	LD	L,10H	; 16 
+J$5E84:	PUSH	AF
+	CALL	RDSLT
+	CPL
+	LD	E,A
+	POP	AF
+	PUSH	DE
+	PUSH	AF
+	CALL	WRSLT
+	POP	AF
+	POP	DE
+	PUSH	AF
+	PUSH	DE
+	CALL	RDSLT
+	POP	BC
+	LD	B,A
+	LD	A,C
+	CPL
+	LD	E,A
+	POP	AF
+	PUSH	AF
+	PUSH	BC
+	CALL	WRSLT
+	POP	BC
+	LD	A,C
+	CP	B
+	JR	NZ,J$5EBE
+	POP	AF
+	DEC	L
+	JR	NZ,J$5E84
+	INC	H
+	INC	H
+	INC	H
+	INC	H
+	LD	C,A
+	LD	A,H
+	CP	40H	; "@"
+	JR	Z,J$5EBA
+	CP	80H
+	LD	A,C
+	JR	NZ,J$5E82
+J$5EBA:	LD	A,C
+	POP	HL
+	POP	HL
+	RET
+
+J$5EBE:	POP	AF
+	POP	HL
+	POP	BC
+	AND	A
+	JP	P,J$5ECB
+	ADD	A,04H	; 4 
+	CP	90H
+	JR	C,J$5E7F
+J$5ECB:	INC	HL
+	INC	A
+	DJNZ	J$5E7C
+	SCF
+	RET
+
+;	  Subroutine allocate DOS memory
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5ED1:	LD	HL,(DOSHIM)
+	AND	A
+	SBC	HL,BC
+	LD	(DOSHIM),HL
+	JR	J$5EE5
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5EDC:	LD	HL,(HIMEM)
+	AND	A
+	SBC	HL,BC
+	LD	(HIMEM),HL
+J$5EE5:	JR	C,J.5EF0
+	LD	A,H
+	CP	0C2H
+	JR	J$5EEF
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5EEC:	CALL	C.5F08
+J$5EEF:	RET	NC
+J.5EF0:	CALL	C.5FA6
+	DEFB	12
+I.5EF4:	DEFB	"Not enough memory"
+	DEFB	0
+	DI
+	HALT
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5F08:	LD	A,L
+	OR	H
+	RET	Z
+	XOR	A
+	SUB	L
+	LD	L,A
+	LD	A,00H
+	SBC	A,H
+	LD	H,A
+	LD	C,L
+	LD	B,H
+	ADD	HL,SP
+	CCF
+	RET	C
+	LD	DE,(BOTTOM)
+	SBC	HL,DE
+	RET	C
+	LD	A,H
+	CP	02H	; 2 
+	RET	C
+	PUSH	BC
+	LD	HL,0
+	ADD	HL,SP
+	LD	E,L
+	LD	D,H
+	ADD	HL,BC
+	PUSH	HL
+	LD	HL,(STKTOP)
+	AND	A
+	SBC	HL,DE
+	LD	C,L
+	LD	B,H
+	INC	BC
+	POP	HL
+	LD	SP,HL
+	EX	DE,HL
+	LDIR
+	POP	BC
+	LD	HL,(HIMEM)
+	ADD	HL,BC
+	LD	(HIMEM),HL
+	LD	DE,-(2*256+2*9+2*2)
+	ADD	HL,DE
+	LD	(FILTAB),HL
+	EX	DE,HL
+	LD	HL,(MEMSIZ)
+	ADD	HL,BC
+	LD	(MEMSIZ),HL
+	LD	HL,(NULBUF)
+	ADD	HL,BC
+	LD	(NULBUF),HL
+	LD	HL,(STKTOP)
+	ADD	HL,BC
+J$5F5B:	LD	(STKTOP),HL
+J$5F5E:	DEC	HL
+	DEC	HL
+	LD	(SAVSTK),HL
+	LD	L,E
+	LD	H,D
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,02H	; 2 
+J$5F6B:	EX	DE,HL
+	LD	(HL),E
+J$5F6D:	INC	HL
+	LD	(HL),D
+	INC	HL
+	EX	DE,HL
+	LD	BC,7
+	LD	(HL),B
+	ADD	HL,BC
+	LD	(HL),B
+	LD	BC,256+9-7
+	ADD	HL,BC
+	DEC	A
+	JR	NZ,J$5F6B
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5F7F:	LD	A,01H	; 1 
+	LD	(MAXFIL),A
+	LD	HL,(HIMEM)
+	LD	DE,-(2*256+2*9+2*2)
+	ADD	HL,DE
+	LD	(FILTAB),HL
+	LD	E,L
+	LD	D,H
+	DEC	HL
+	DEC	HL
+	LD	(MEMSIZ),HL
+	LD	BC,200
+	AND	A
+	SBC	HL,BC
+	PUSH	HL
+	LD	HL,13
+	ADD	HL,DE
+	LD	(NULBUF),HL
+	POP	HL
+	JR	J$5F5B
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5FA6:	EX	(SP),HL
+	CALL	C.5FAC
+	EX	(SP),HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5FAC:	LD	A,(HL)
+	INC	HL
+	AND	A
+	RET	Z
+	CP	0AH	; 10 
+	LD	A,0DH	; 13 
+	CALL	Z,C.408F
+	DEC	HL
+	LD	A,(HL)
+	INC	HL
+	CALL	C.408F
+	JR	C.5FAC
+
+;	  Subroutine get slot id in page 3
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5FBF:	LD	B,6
+	DEFB	21H
+
+;	  Subroutine get slot id in page 2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5FC2:	LD	B,4
+	CALL	RSLREG			; read primairy slot register
+	PUSH	BC
+J$5FC8:	RRCA
+	DJNZ	J$5FC8
+	CALL	C$6016			; get pointer to EXPTBL of slot
+	POP	BC
+	OR	(HL)
+	LD	C,A
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,(HL)
+	DEC	B
+	DEC	B
+J$5FD8:	RRCA
+	DJNZ	J$5FD8
+	JR	J$5FE8
+
+;	  Subroutine get slot id in page 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5FDD:	CALL	C.6011			; get pointer to EXPTBL of slot in page 1
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5FE0:	OR	(HL)
+	RET	P
+	LD	C,A
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,(HL)
+J$5FE8:	AND	0CH
+	OR	C
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5FEC:	CALL	C.5FF7
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	PUSH	HL
+	POP	IX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5FF7:	CALL	C.6011			; get pointer to EXPTBL of slot in page 1
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	SCF
+	ADC	A,A
+	LD	C,A
+	LD	A,(HL)
+	ADD	A,A
+	SBC	A,A
+	AND	0CH	; 12 
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	AND	(HL)
+	OR	C
+	ADD	A,A
+	LD	HL,SLTWRK
+	JR	J$601B
+
+;	  Subroutine get pointer to EXPTBL of slot in page 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6011:	CALL	RSLREG			; read primairy slot register
+
+;	  Subroutine get pointer to EXPTBL of slot in page 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6014:	RRCA
+	RRCA
+
+;	  Subroutine get pointer to EXPTBL of slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6016:	AND	03H
+	LD	HL,EXPTBL
+J$601B:	LD	B,0
+	LD	C,A
+	ADD	HL,BC
+	RET
+
+J$6020:	LD	A,(H.TIMI+0)
+	CP	0C9H
+	JR	Z,J$6051
+	PUSH	HL
+	CALL	C.5FDD			; get slot id in page 1
+	LD	C,A
+	LD	HL,I.FB21+1
+	LD	B,4
+J$6031:	LD	A,(HL)
+	CP	C
+	JR	Z,J$603B
+	INC	HL
+	INC	HL
+	DJNZ	J$6031
+	POP	HL
+	RET
+
+J$603B:	LD	A,04H	; 4 
+	SUB	B
+	LD	B,A
+	ADD	A,A
+	ADD	A,B
+	LD	HL,I.FB29
+	CALL	C.4564
+	EX	DE,HL
+	LD	HL,H.TIMI+1
+	LD	BC,3
+	LDIR
+	POP	HL
+J$6051:	DI
+	LD	A,0F7H
+	LD	(H.TIMI+0),A
+	LD	(H.TIMI+2),HL
+	LD	A,0C9H
+	LD	(H.TIMI+4),A
+	CALL	C.5FDD			; get slot id in page 1
+	LD	(H.TIMI+1),A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6066:	AND	A
+	DEFB	38H
+
+C$6068:	SCF
+
+
+;	  Subroutine do physical disk sector operation
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6069:	PUSH	IX
+	PUSH	IY
+	PUSH	HL
+	PUSH	AF
+	CALL	C.60B4
+	LD	L,A
+	POP	AF
+	LD	A,L
+	LD	IX,I$4010
+	JR	J$608F
+
+;	  Subroutine is disk changed ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$607B:	PUSH	IX
+	LD	IX,I$4013
+	JR	J$6089
+
+;	  Subroutine update DPB
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6083:	PUSH	IX
+	LD	IX,I$4016
+J$6089:	PUSH	IY
+	PUSH	HL
+	CALL	C.60B4
+J$608F:	POP	HL
+	PUSH	HL
+	PUSH	HL
+	LD	HL,I$60AE
+	EX	(SP),HL
+	PUSH	HL
+	PUSH	BC
+	PUSH	AF
+	CALL	C.7BEC			; disable I/O ports of interface in current slot
+	CALL	C.5FDD			; get slot id in page 1
+	DEFB	0FDH
+J$60A0:	CP	H
+	JR	NZ,J$60A8
+	POP	AF
+	POP	BC
+	POP	HL
+	JP	(IX)
+
+J$60A8:	POP	AF
+	POP	BC
+	POP	HL
+	JP	CALSLT
+
+I$60AE:	CALL	C.517F			; enable I/O ports of interface in current slot
+	JP	J$6303			; restore registers and quit
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.60B4:	LD	(TARGET),A
+	LD	HL,I.FB21
+J$60BA:	SUB	(HL)
+	JR	C,J$60C1
+	INC	HL
+	INC	HL
+	JR	J$60BA
+
+J$60C1:	ADD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	PUSH	HL
+	POP	IY
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.60C8:	CALL	C.45FB
+	DEC	HL
+	LD	(HL),0FFH
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.60CF:	CALL	C.6EBE
+	DEC	A
+	RET	Z
+J$60D4:	CALL	C.5FA6
+	DEFB	"Drive name? ("
+	DEFB	0
+	LD	A,($NUMDR)
+	LD	B,A
+	LD	A,41H	; "A"
+	JR	J$60F4
+
+J$60ED:	PUSH	AF
+	LD	A,2CH	; ","
+	CALL	C.408F
+	POP	AF
+J$60F4:	CALL	C.408F
+	INC	A
+	DJNZ	J$60ED
+	CALL	C.5FA6
+	DEFB	") "
+	DEFB	0
+J$6100:	CALL	C.61B1
+	CALL	C.6263
+	AND	0DFH
+	SUB	"A"
+	LD	HL,$NUMDR
+	CP	(HL)
+	JR	NC,J$60D4
+	RET
+
+;	  Subroutine format disk (with temporary work area)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6111:	AND	A
+
+;	  Subroutine format disk
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6112:	LD	(F_SPSA),SP
+	CALL	NC,C.6273
+	PUSH	HL
+	PUSH	BC
+	CALL	C.60CF
+	CALL	C.60C8
+	CALL	C.60B4
+	PUSH	IY
+	PUSH	AF
+	PUSH	IY
+	LD	IX,I$4019
+	CALL	CALSLT
+	LD	A,L
+	OR	H
+	JR	Z,J$615B
+	POP	AF
+J$6135:	PUSH	AF
+	CALL	RDSLT
+	AND	A
+	JR	Z,J$6143
+	CALL	C.408F
+	INC	HL
+	POP	AF
+	JR	J$6135
+
+J$6143:	POP	AF
+	CALL	C.5FA6
+	DEFB	"? "
+	DEFB	0
+J.614A:	CALL	C.61B1
+	SUB	31H	; "1"
+	CP	09H	; 9 
+	JR	NC,J.614A
+	ADD	A,31H	; "1"
+	CALL	C.6263
+	SUB	30H	; "0"
+	PUSH	AF
+J$615B:	CALL	C.6195
+	POP	AF
+	POP	DE
+	POP	IY
+	POP	BC
+	POP	HL
+	LD	IX,I$401C
+	CALL	CALSLT
+	LD	HL,I.71FE
+	JR	NC,J.618C
+	LD	HL,I.71C1
+	CP	0FH	; 15 
+	JR	NC,J.618C
+	CP	0CH	; 12 
+	JR	NC,J$6180
+	CP	03H	; 3 
+	JR	NC,J.618C
+	DEFB	21H
+J$6180:	SUB	8
+	LD	HL,I$621F
+	CALL	C.4564
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+J.618C:	CALL	C.6266
+J$618F:	CALL	C.5FAC
+	JP	C.6266
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6195:	CALL	C.5FA6
+I$6198:	DEFB	"Press a key to continue "
+	DEFB	0
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.61B1:	CALL	C.406B
+	CP	03H	; 3 
+	RET	NZ
+	LD	SP,(F_SPSA)
+	CALL	C.5FA6
+	DEFB	10,"Aborted"
+	DEFB	0
+	RET
+
+J$61C8:	LD	DE,DSCTMP
+	LD	HL,(TEMPPT)
+	LD	(DAC+2),HL
+	LD	A,03H	; 3 
+	LD	(VALTYP),A
+	CALL	VMOVE
+	LD	DE,FRETOP
+	_RST	DCOMPR
+	LD	(TEMPPT),HL
+	RET	NZ
+	JP	J.7245
+
+J$61E4:	LD	HL,I.FB21
+	LD	B,04H	; 4 
+J$61E9:	INC	HL
+	LD	A,(HL)
+	PUSH	AF
+	POP	IY
+	INC	HL
+	PUSH	HL
+	PUSH	BC
+	LD	HL,I$401F
+	PUSH	HL
+	POP	IX
+	AND	A
+	CALL	NZ,RDSLT
+	AND	A
+	CALL	NZ,CALSLT
+	POP	BC
+J$6200:	POP	HL
+	DJNZ	J$61E9
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6204:	LD	A,(H.CLEA+0)
+	CP	0C9H
+	JR	Z,J$621C
+J$620B:	LD	HL,I$7240
+	LD	DE,H.LOPD
+	LD	BC,5
+	LDIR
+	CALL	C.5FDD			; get slot id in page 1
+J$6219:	LD	(H.LOPD+1),A
+J$621C:	JP	C.5FDD			; get slot id in page 1
+
+I$621F:	DEFW	I.71AC			; disk write protected
+	DEFW	I.71D0			; disk offline
+	DEFW	I.71F0			; bad parameter
+	DEFW	I.5EF4			; out of memory
+
+C$6227:	PUSH	AF
+	CALL	C.455D
+	CALL	C.4CA1
+	POP	AF
+	ADD	A,"A"
+	CALL	H.PROM
+	PUSH	AF
+	CALL	C.5FA6
+	DEFB	10,"Insert disk for drive "
+	DEFB	0
+J$6250:	POP	AF
+	CALL	C.6263
+	LD	HL,I$6198
+	CALL	C.5FAC
+J$625A:	CALL	C.406B
+	CP	03H	; 3 
+	JR	Z,J$625A
+	JR	C.6266
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6263:	CALL	C.408F
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6266:	PUSH	AF
+	LD	A,0DH	; 13 
+	CALL	C.408F
+	LD	A,0AH	; 10 
+	CALL	C.408F
+	POP	AF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6273:	LD	HL,-256
+	ADD	HL,SP
+	LD	DE,(STREND)
+	XOR	A
+	SBC	HL,DE
+	LD	C,L
+	LD	B,H
+	EX	DE,HL
+	RET	NC
+	LD	C,A
+	LD	B,A
+	RET
+
+I$6285:	LD	A,D
+	CP	09H	; 9 
+	JP	NC,BLOAD+3
+	_RST	CALLF
+	DEFB	0
+	DEFW	C.6A07
+	PUSH	HL
+	JP	J$6EF4
+
+?.6293:	LD	A,D
+	CP	09H	; 9 
+	JP	NC,BSAVE+3
+	_RST	CALLF
+	DEFB	0
+	DEFW	C.694B
+	RET
+
+;	  Subroutine relocate subroutine
+;	     Inputs  HL = pointer to relocation table, DE = target address, BC = source address
+;	     Outputs ________________________
+
+C.629E:	PUSH	DE			; store target address
+	EX	DE,HL
+	AND	A
+	SBC	HL,BC
+	PUSH	HL
+	POP	IX			; offset between source and target
+	EX	DE,HL
+	POP	DE			; restore target addres
+J$62A8:	LD	A,(HL)
+	CP	0FFH			; end of relocation table ?
+	RET	Z			; yep, quit
+J$62AC:	INC	HL			; update pointer in relocation table
+	EX	DE,HL
+J$62AE:	ADD	A,L
+	LD	L,A
+	JR	NC,J$62B3
+	INC	H			; target
+J$62B3:	PUSH	HL			; store current target
+	INC	HL
+	LD	C,(HL)
+	INC	HL
+	LD	B,(HL)			; current address
+	PUSH	HL			; store pointer
+	PUSH	IX
+	POP	HL			; offset between source and target
+	ADD	HL,BC
+	LD	C,L
+	LD	B,H
+	POP	HL			; restore pointer
+	LD	(HL),B
+	DEC	HL
+	LD	(HL),C			; update current addres
+	EX	DE,HL
+	POP	DE			; restore current target
+	JR	J$62A8
+
+; relocation table 62CB
+
+I$62C7:	DEFB	R.62D3-I$62CB
+	DEFB	R.62E5+1-R.62D3
+	DEFB	R.62F6-(R.62E5+1)
+	DEFB	0FFH
+
+I$62CB:	PUSH	IX
+	PUSH	IY
+	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	PUSH	AF
+	EXX
+	EX	AF,AF'
+	PUSH	AF
+	PUSH	HL
+R.62D3:	LD	HL,(D.62F3+1)
+	LD	A,L
+	OR	H
+	POP	HL
+	LD	IX,KEYINT
+	LD	IY,(EXPTBL+0-1)
+	JR	NZ,J$630A
+	POP	AF
+R.62E5:	LD	(D.62F3+1),SP
+	LD	SP,0
+	CALL	CALSLT
+	DI
+D.62F3:	LD	SP,0
+	PUSH	HL
+	LD	HL,0
+R.62F6:	LD	(D.62F3+1),HL
+	POP	HL
+J$62FE:	EX	AF,AF'
+	EXX
+	POP	AF
+	POP	BC
+	POP	DE
+J$6303:	POP	HL
+	POP	IY
+	POP	IX
+	EI
+	RET
+
+J$630A:	POP	AF
+	CALL	CALSLT
+	JR	J$62FE
+
+S.62CB	EQU	$-I$62CB
+
+I$6310:	PUSH	AF
+	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	CALL	C$402D
+	PUSH	AF
+	LD	H,HIGH 4000H
+	LD	A,(RAMAD1)
+	CALL	ENASLT
+	POP	AF
+	POP	BC
+	POP	DE
+	POP	HL
+	LDIR
+	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	LD	H,HIGH 4000H
+	CALL	ENASLT
+	POP	BC
+	POP	DE
+	POP	HL
+	POP	AF
+	RET
+
+S.6310	EQU	$-I$6310
+
+I$6333:	JR	J$633B
+
+?.6335:	PUSH	AF
+	LD	A,(RAMAD1)
+	JR	J$633F
+
+J$633B:	PUSH	AF
+	LD	A,(MASTER)
+J$633F:	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	LD	H,HIGH 4000H
+	CALL	ENASLT
+	POP	BC
+	POP	DE
+	POP	HL
+	POP	AF
+	RET
+
+S.6333	EQU	$-I$6333
+
+; relocation table 6369
+
+I$634C:	DEFB	C.6369-C.6369
+	DEFB	R.636C-C.6369
+	DEFB	0DH
+	DEFB	03H
+	DEFB	04H
+	DEFB	05H
+	DEFB	06H
+	DEFB	03H
+	DEFB	0CH
+	DEFB	03H
+	DEFB	05H
+	DEFB	06H
+	DEFB	2AH
+	DEFB	03H
+	DEFB	0CH
+	DEFB	03H
+	DEFB	03H
+	DEFB	16H
+	DEFB	14H
+	DEFB	03H
+	DEFB	0AH
+	DEFB	03H
+	DEFB	04H
+	DEFB	6EH
+	DEFB	07H
+	DEFB	07H
+	DEFB	0DH
+	DEFB	08H
+	DEFB	0FFH
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6369:	CALL	C.6437
+R.636C:	JP	M,J$6379
+	IN	A,(0A8H)
+	LD	D,A
+	AND	C
+	OR	B
+	CALL	RDPRIM
+	LD	A,E
+	RET
+
+J$6379:	CALL	C.6486
+R.637C:	JP	Z,J$6493
+	PUSH	HL
+R.6380:	CALL	C.645C
+	EX	(SP),HL
+	PUSH	BC
+R.6385:	CALL	C.6369
+	JR	J$63AB
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$638A:	PUSH	DE
+R.638B:	CALL	C.6437
+R.638E:	JP	M,J$639A
+	POP	DE
+	IN	A,(0A8H)
+	LD	D,A
+	AND	C
+	OR	B
+	JP	WRPRIM
+
+J$639A:	CALL	C.6486
+R.639D:	JP	Z,J$6499
+	EX	(SP),HL
+	PUSH	HL
+R.63A2:	CALL	C.645C
+	POP	DE
+	EX	(SP),HL
+	PUSH	BC
+R.63A8:	CALL	C$638A
+J$63AB:	POP	BC
+	EX	(SP),HL
+	PUSH	AF
+	LD	A,B
+	AND	3FH
+	OR	C
+	CALL	C.0046
+	POP	AF
+	POP	HL
+	RET
+
+?.63B8:	EX	(SP),HL
+	PUSH	AF
+	PUSH	DE
+	LD	A,(HL)
+	PUSH	AF
+	POP	IY
+	INC	HL
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	INC	HL
+	PUSH	DE
+	POP	IX
+	POP	DE
+	POP	AF
+	EX	(SP),HL
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$63CA:	EXX
+	EX	AF,AF'
+	PUSH	IY
+	POP	AF
+	PUSH	IX
+	POP	HL
+R.63D2:	CALL	C.6437
+R.63D5:	JP	M,J$63E1
+	IN	A,(0A8H)
+	PUSH	AF
+	AND	C
+	OR	B
+	EXX
+	JP	CLPRIM
+
+J$63E1:	CALL	C.6486
+R.63E4:	JP	Z,J$64A1
+R.63E7:	CALL	C.645C
+	PUSH	AF
+	POP	IY
+	PUSH	HL
+	PUSH	BC
+	LD	C,A
+	LD	B,0
+	LD	A,L
+	AND	H
+	OR	D
+	LD	HL,SLTTBL
+	ADD	HL,BC
+	LD	(HL),A
+	PUSH	HL
+	EX	AF,AF'
+	EXX
+R.63FD:	CALL	C$63CA
+	EXX
+	EX	AF,AF'
+	POP	HL
+	POP	BC
+	POP	DE
+	LD	A,B
+	AND	3FH
+	OR	C
+	DI
+	CALL	C.004B
+	LD	(HL),E
+	EX	AF,AF'
+	EXX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6411:	CALL	C.6437
+R.6414:	JP	M,J$641E
+	IN	A,(0A8H)
+	AND	C
+	OR	B
+	OUT	(0A8H),A
+	RET
+
+J$641E:	CALL	C.6486
+R.6411:	JP	Z,C.64B6
+	PUSH	HL
+R.6415:	CALL	C.645C
+	LD	C,A
+	LD	B,0
+	LD	A,L
+	AND	H
+	OR	D
+	LD	HL,SLTTBL
+	ADD	HL,BC
+	LD	(HL),A
+	POP	HL
+	LD	A,C
+	JR	C.6411
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6437:	DI
+	PUSH	AF
+	LD	A,H
+	RLCA
+	RLCA
+	AND	03H
+	LD	E,A
+	INC	E
+	LD	A,0C0H
+J$6442:	RLCA
+	RLCA
+	DEC	E
+	JR	NZ,J$6442
+	LD	E,A
+	CPL
+	LD	C,A
+	POP	AF
+	PUSH	AF
+	AND	03H
+	LD	B,A
+	INC	B
+	LD	A,0ABH
+J$6452:	ADD	A,55H
+	DJNZ	J$6452
+	LD	D,A
+	AND	E
+	LD	B,A
+	POP	AF
+	AND	A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.645C:	PUSH	AF
+	LD	A,D
+	AND	0C0H
+	LD	C,A
+	POP	AF
+	PUSH	AF
+	LD	D,A
+	IN	A,(0A8H)
+	LD	B,A
+	AND	3FH
+	OR	C
+	PUSH	AF
+	LD	A,D
+	RRCA
+	RRCA
+	AND	03H
+	LD	D,A
+	INC	D
+	LD	A,0ABH
+J$6474:	ADD	A,55H
+	DEC	D
+	JR	NZ,J$6474
+	AND	E
+	LD	D,A
+	LD	A,E
+	CPL
+	LD	H,A
+	POP	AF
+R.647F:	CALL	C.64D1
+	POP	AF
+	AND	03H
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6486:	INC	D
+	DEC	D
+	RET	NZ
+	PUSH	BC
+	LD	C,A
+	LD	A,(RAMAD0)
+	AND	E
+	CP	B
+	LD	A,C
+	POP	BC
+	RET
+
+J$6493:	CALL	C.64BE
+	LD	E,(HL)
+	JR	C.649E
+
+J$6499:	POP	DE
+	CALL	C.64BE
+	LD	(HL),E
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.649E:	LD	A,B
+	JR	J$64CC
+
+J$64A1:	CALL	C.64B6
+	PUSH	HL
+	PUSH	BC
+	EX	AF,AF'
+	EXX
+	CALL	CLPRM1
+	EXX
+	EX	AF,AF'
+	POP	BC
+	CALL	C.649E
+	POP	HL
+	LD	(HL),B
+	EX	AF,AF'
+	EXX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.64B6:	CALL	C.64BE
+	LD	HL,SLTTBL
+	LD	(HL),D
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.64BE:	RRCA
+	RRCA
+	AND	03H	; 3 
+	LD	D,A
+	LD	A,(D.FFFF)
+	CPL
+	LD	B,A
+	AND	0FCH
+	OR	D
+	LD	D,A
+J$64CC:	LD	(D.FFFF),A
+	LD	A,E
+	RET
+
+S.6369	EQU	$-C.6369
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.64D1:
+	.PHASE	003BH
+
+C.003B:	OUT	(0A8H),A
+	LD	A,(D.FFFF)
+	CPL
+	LD	L,A
+	AND	H
+	OR	D
+	JR	J.004E
+
+C.0046:	OUT	(0A8H),A
+	LD	A,L
+	JR	J.004E
+
+C.004B:	OUT	(0A8H),A
+	LD	A,E
+J.004E:	LD	(D.FFFF),A
+	LD	A,B
+	OUT	(0A8H),A
+	RET
+
+	.DEPHASE
+
+S.64D1	EQU	$-C.64D1
+
+;	  Subroutine extension BASIC statement handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.64EB:	LD	A,(H.GETP+0)
+	CP	0C9H
+	SCF
+	RET	Z
+	LD	DE,I$7D6B
+J$64F5:	LD	A,(DE)
+	OR	A
+	SCF
+	RET	Z
+	PUSH	HL
+	CALL	C$7465
+	JR	NZ,J.6520
+	EX	DE,HL
+	LD	B,(HL)
+	INC	HL
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	LD	A,B
+	BIT	0,A
+	JR	Z,J.6519
+	PUSH	HL
+	CALL	C.5FDD			; get slot id in page 1
+	LD	HL,MASTER
+	CP	(HL)
+	POP	HL
+	JR	Z,J.6519
+	POP	HL
+	SCF
+	RET
+
+J.6519:	EX	(SP),HL
+	CALL	C.722B
+	SCF
+	CCF
+	RET
+
+J.6520:	LD	A,(DE)
+	INC	DE
+	CP	20H	; " "
+	JR	NC,J.6520
+	INC	DE
+	INC	DE
+	POP	HL
+	JR	J$64F5
+
+;	  Subroutine CALL SYSTEM
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.652B:	RET	NZ
+	LD	A,(DOSFLG)
+	AND	A
+	JP	Z,J.7263
+	LD	IX,CLSALL
+	CALL	C.726C
+	CALL	TOTEXT
+	CALL	ERAFNK
+	XOR	A
+	JP	J$5A70
+
+;	  Subroutine CALL FORMAT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6544:	PUSH	HL
+I.6545:	PUSH	AF
+	CALL	C$6EBA
+	JP	C,J.7263
+	POP	AF
+	CALL	Z,C.6112		; format disk
+	POP	HL
+	AND	A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6553:	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	CALL	C.5356
+	LD	C,A
+	LD	HL,(FILTAB)
+	LD	A,(MAXFIL)
+J$6560:	PUSH	AF
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	INC	HL
+	PUSH	HL
+	EX	DE,HL
+	LD	A,(HL)
+	AND	A
+	JR	Z,J.6597
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,(HL)
+	CP	09H	; 9 
+	JR	NC,J.6597
+	DEC	HL
+	DEC	HL
+	LD	D,(HL)
+	DEC	HL
+	LD	E,(HL)
+	LD	A,(DE)
+	CALL	C$5357
+	CP	C
+	JR	NZ,J.6597
+	INC	DE
+	EX	DE,HL
+	LD	DE,FILNAM
+	LD	B,8+3
+J$6587:	LD	A,(DE)
+	CP	3FH	; "?"
+	JR	Z,J$658F
+	CP	(HL)
+	JR	NZ,J.6597
+J$658F:	INC	DE
+	INC	HL
+	DJNZ	J$6587
+	POP	HL
+	POP	HL
+	JR	J.6609
+
+J.6597:	POP	HL
+	POP	AF
+	DEC	A
+	JP	P,J$6560
+	JR	J.6609
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$659F:	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	LD	A,D
+	LD	(BUF+10),A
+	CALL	C.65C0
+	CALL	C.65AE
+	JR	J.6609
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.65AE:	LD	HL,BUF+84
+	LD	(DMAADD),HL
+	LD	DE,BUF+10
+	XOR	A
+	LD	(BUF+22),A
+	CALL	C.4FB8
+	INC	A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.65C0:	LD	DE,BUF+10+1
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.65C3:	LD	HL,FILNAM
+	LD	BC,8+3
+	LDIR
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.65CC:	EI
+	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	PUSH	AF
+	LD	A,(MASTER)
+	ADD	A,A
+	LD	HL,16
+	JR	NC,J$65DC
+	LD	L,16+8
+J$65DC:	ADD	HL,SP
+	PUSH	IX
+	POP	BC
+	LD	(HL),C
+	INC	HL
+	LD	(HL),B
+	LD	HL,10
+	ADD	HL,SP
+	EX	DE,HL
+	JR	J$65F6
+
+J$65EA:	PUSH	IY
+	POP	BC
+J$65ED:	LD	C,(HL)
+	LD	A,(DE)
+	LD	(HL),A
+	LD	A,C
+	LD	(DE),A
+	INC	HL
+	INC	DE
+	DJNZ	J$65ED
+J$65F6:	LD	A,(MASTER)
+	ADD	A,A
+	LD	HL,18
+	JR	NC,J$6601
+	LD	L,18+8
+J$6601:	ADD	HL,SP
+	LD	A,E
+	SUB	L
+	LD	A,D
+	SBC	A,H
+	JR	C,J$65EA
+J$6608:	POP	AF
+J.6609:	POP	BC
+	POP	DE
+	POP	HL
+	RET
+
+C.660D:	LD	IX,RETRTN
+	LD	IY,2*256
+	CALL	C.65CC
+	POP	HL
+	LD	A,(HL)
+	AND	A
+	RET
+
+C.661C:	EI
+	LD	BC,256
+	LD	(RECSIZ),BC
+	CALL	C.722B
+	LD	A,E
+	RET	Z
+	PUSH	AF
+	PUSH	HL
+	LD	A,(MASTER)
+	ADD	A,A
+	LD	HL,12
+	JR	NC,J$6636
+	LD	L,12+8
+J$6636:	ADD	HL,SP
+	LD	A,(HL)
+	CP	04H	; 4 
+	JP	NZ,J.7266
+	INC	HL
+	LD	A,(HL)
+	CP	09H	; 9 
+	JP	NC,J.7266
+	POP	HL
+	CALL	C.7221
+	DEFB	0FFH
+	CALL	C.7221
+	DEFB	92H
+	CALL	C.7221
+	DEFB	0EFH
+	LD	IX,INTID2
+	CALL	C.726C
+	DEC	DE
+	INC	D
+	DEC	D
+	JP	NZ,J.7263
+	INC	DE
+	LD	(RECSIZ),DE
+	POP	AF
+	RET
+
+C.6665:	EI
+	RET	NC
+	LD	IX,RETRTN
+	LD	IY,4*256
+	CALL	C.65CC
+	CALL	C$6EF1
+	CALL	C.6553
+	JP	Z,J$7257
+	LD	(PTRFIL),HL
+	LD	A,E
+	CP	04H	; 4 
+	JR	Z,J$668A
+	LD	BC,1
+	LD	(RECSIZ),BC
+J$668A:	POP	AF
+	PUSH	AF
+	PUSH	HL
+	PUSH	DE
+	LD	HL,FILMAX
+	CP	(HL)
+	JP	NC,J$725A
+	LD	BC,37
+	LD	E,A
+	LD	D,B
+	LD	HL,(FCBBAS)
+	CALL	C.4922
+	XOR	A
+	LD	HL,12
+	ADD	HL,BC
+	LD	(HL),A
+	POP	DE
+	POP	HL
+	INC	HL
+	LD	(HL),C
+	INC	HL
+	LD	(HL),B
+	INC	HL
+	LD	(HL),A
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	INC	HL
+	LD	(HL),A
+	CALL	C$659F
+	PUSH	BC
+	PUSH	DE
+	LD	A,D
+	LD	(BC),A
+	LD	E,C
+	LD	D,B
+	INC	DE
+	CALL	C.65C3
+	POP	DE
+	POP	BC
+	LD	A,E
+	JR	NZ,J$66E1
+	AND	86H
+	JP	Z,J.7260
+J.66CA:	PUSH	DE
+	PUSH	BC
+	LD	E,C
+	LD	D,B
+	CALL	C.461D
+	AND	A
+	JP	NZ,J.70F5
+	POP	HL
+	CALL	C.6767
+	POP	DE
+	LD	HL,(PTRFIL)
+	LD	(HL),E
+J.66DE:	POP	AF
+	POP	HL
+	RET
+
+J$66E1:	CP	08H	; 8 
+	JR	Z,J$672A
+	CP	02H	; 2 
+	JR	Z,J.66CA
+	CP	80H
+	JR	Z,J.66CA
+	PUSH	DE
+	PUSH	BC
+	LD	E,C
+	LD	D,B
+	CALL	C.4462
+	POP	HL
+	CALL	C.6767
+	POP	DE
+	LD	HL,(PTRFIL)
+	LD	(HL),E
+	LD	A,E
+	CP	04H	; 4 
+	JR	Z,J.66DE
+	PUSH	HL
+	LD	HL,FLBMEM
+	XOR	A
+	CP	(HL)
+	LD	(HL),A
+	POP	HL
+	JR	NZ,J.66DE
+	LD	BC,6
+	ADD	HL,BC
+	PUSH	HL
+	LD	(HL),0FFH
+	LD	HL,(PTRFIL)
+	CALL	C.6793
+	POP	HL
+	DEC	HL
+	DEC	HL
+	DEC	HL
+	LD	(HL),A
+	CP	0FFH
+	JR	NZ,J.66DE
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	(HL),80H
+J$6728:	JR	J.66DE
+
+J$672A:	PUSH	BC
+	LD	E,C
+	LD	D,B
+	CALL	C.4462
+	POP	HL
+	PUSH	HL
+	CALL	C.6767
+	LD	HL,(PTRFIL)
+	LD	(HL),01H	; 1 
+	LD	BC,6
+	ADD	HL,BC
+	LD	(HL),0FFH
+	LD	HL,(PTRFIL)
+J$6743:	PUSH	HL
+	CALL	C.6793
+	POP	HL
+	JR	NC,J$6743
+	LD	(HL),02H	; 2 
+	POP	HL
+	LD	BC,33
+	ADD	HL,BC
+	LD	C,04H	; 4 
+	PUSH	HL
+	SCF
+J$6755:	LD	A,(HL)
+	SBC	A,B
+	LD	(HL),A
+	INC	HL
+	DEC	C
+	JR	NZ,J$6755
+	POP	HL
+	INC	C
+	JR	NC,J$6762
+	LD	C,04H	; 4 
+J$6762:	CALL	C.677C
+	JR	J$6728
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6767:	LD	BC,12
+	ADD	HL,BC
+	LD	(HL),B
+	INC	HL
+	LD	(HL),B
+	INC	HL
+	LD	BC,(RECSIZ)
+	LD	(HL),C
+	INC	HL
+	LD	(HL),B
+	LD	BC,17
+	ADD	HL,BC
+	LD	C,05H	; 5 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.677C:	LD	(HL),B
+	INC	HL
+	DEC	C
+	JR	NZ,C.677C
+	RET
+
+C.6782:	LD	IX,RETRTN
+	LD	IY,6*256
+	CALL	C.65CC
+	CALL	C.6793
+	JP	J.6609
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6793:	PUSH	HL
+	LD	A,(HL)
+	CP	01H	; 1 
+	JP	NZ,J.70E3
+	LD	E,L
+	LD	D,H
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,(HL)
+	AND	A
+	JR	NZ,J$67CF
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	(HL)
+	LD	A,(HL)
+	INC	HL
+	INC	HL
+	INC	HL
+	JR	NZ,J.67CA
+	PUSH	HL
+	LD	(DMAADD),HL
+	EX	DE,HL
+	INC	HL
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	LD	HL,J.0100
+	CALL	C.47B2
+	LD	E,L
+	LD	D,H
+	DEC	H
+	LD	A,L
+	OR	H
+	POP	HL
+	JR	Z,J.67CA
+	PUSH	HL
+	ADD	HL,DE
+	LD	(HL),1AH
+	POP	HL
+	XOR	A
+J.67CA:	LD	C,A
+	LD	B,00H
+	ADD	HL,BC
+	LD	A,(HL)
+J$67CF:	LD	B,A
+	SUB	1AH
+	SUB	01H	; 1 
+	LD	A,B
+	POP	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	(HL),00H
+	RET	NC
+	LD	(HL),A
+	RET
+
+;	  Subroutine BACKUP
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.67DE:	EI
+	PUSH	HL
+	LD	A,(MASTER)
+	ADD	A,A
+	LD	HL,8
+	JR	NC,J$67EB
+	LD	L,8+8
+J$67EB:	ADD	HL,SP
+	LD	(HL),41H	; "A"
+	INC	HL
+	LD	(HL),6EH	; "n"
+	POP	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	(HL),C
+	RET
+
+C.67F7:	LD	IX,RETRTN
+	LD	IY,8*256
+	CALL	C.65CC
+	LD	A,(HL)
+	CP	02H	; 2 
+	JP	NZ,J.70E3
+	POP	AF
+	PUSH	AF
+	CALL	C.6810
+	JP	J$6608
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6810:	PUSH	HL
+	LD	BC,6
+	ADD	HL,BC
+	LD	C,(HL)
+	INC	(HL)
+	INC	HL
+	INC	HL
+	INC	HL
+	ADD	HL,BC
+	LD	(HL),A
+	POP	HL
+	RET	NZ
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$681E:	PUSH	HL
+	INC	HL
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	LD	BC,4
+	ADD	HL,BC
+	LD	A,(HL)
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	(DMAADD),HL
+	AND	A
+	LD	L,A
+	LD	H,B
+	JR	NZ,J$6834
+	INC	H
+J$6834:	CALL	C.70D9
+	POP	HL
+	RET
+
+C.6839:	LD	IX,RETRTN
+	LD	IY,4*256
+	CALL	C.65CC
+	POP	HL
+	LD	A,(HL)
+	SUB	02H	; 2 
+	JR	NZ,J.685D
+	PUSH	HL
+	LD	HL,FLBMEM
+	CP	(HL)
+	LD	(HL),A
+	POP	HL
+	JR	NZ,J.685D
+	LD	(HL),04H	; 4 
+	LD	A,1AH
+	CALL	C.6810
+	CALL	NZ,C$681E
+J.685D:	PUSH	HL
+	INC	HL
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	CALL	C.456F
+	POP	HL
+	PUSH	HL
+	LD	DE,7
+	ADD	HL,DE
+	LD	(HL),D
+	LD	L,D
+	LD	H,D
+	LD	(PTRFIL),HL
+	POP	HL
+	INC	(HL)
+	DEC	(HL)
+	LD	(HL),D
+	POP	HL
+	RET
+
+C.6877:	CALL	C.72C6
+	PUSH	HL
+	LD	IX,SCCPTR
+	CALL	C.726C
+	LD	A,0FFH
+	CALL	C.6930
+	LD	HL,(TXTTAB)
+	LD	(DMAADD),HL
+	EX	DE,HL
+	LD	HL,(VARTAB)
+	AND	A
+	SBC	HL,DE
+	CALL	C.70D5
+	LD	(NLONLY),A
+	POP	HL
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.689B:	LD	IX,CLSFIL
+	JP	C.726C
+
+C.68A2:	LD	IX,I$739A
+	LD	IY,2*256
+	CALL	C.65CC
+	POP	AF
+	JP	Z,J.70E3
+	LD	IX,CLSALL
+	CALL	C.726C
+	LD	HL,(FCBBAS)
+	PUSH	HL
+	CALL	C.6767
+	POP	HL
+	PUSH	HL
+	LD	BC,19
+	ADD	HL,BC
+	LD	A,(HL)
+	AND	A
+	JP	NZ,J.724B
+	DEC	HL
+	OR	(HL)
+	JP	NZ,J.724B
+	DEC	HL
+	LD	D,(HL)
+	DEC	HL
+	LD	E,(HL)
+	LD	HL,(TXTTAB)
+	ADD	HL,DE
+	JP	C,J.724B
+	LD	BC,0093H
+	ADD	HL,BC
+	JP	C,J.724B
+	SBC	HL,SP
+	JP	NC,J.724B
+	EX	DE,HL
+	EX	(SP),HL
+	EX	DE,HL
+	CALL	C.6939
+	LD	HL,(TXTTAB)
+	LD	(DMAADD),HL
+	POP	HL
+	DEC	HL
+	CALL	C.47B2
+	LD	DE,(TXTTAB)
+	ADD	HL,DE
+	LD	(VARTAB),HL
+	LD	IX,LINKER
+	CALL	C.726C
+	LD	A,(FILNAM+0)
+	AND	A
+	RET	NZ
+	LD	(NLONLY),A
+	LD	HL,I$6922
+	LD	DE,BUF+10
+	LD	BC,5
+	PUSH	DE
+	LDIR
+	POP	HL
+	LD	IX,NEWSTT
+	JP	C.726C
+
+I$6922:	DEFB	':',92H,0
+	DEFW	0
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6927:	PUSH	HL
+	LD	A,L
+	CALL	C.6934
+	POP	HL
+	LD	A,H
+	JR	C.6934
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6930:	LD	DE,(FCBBAS)
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6934:	LD	BC,C.47BE
+	JR	J$693C
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6939:	LD	BC,C.47B2
+J$693C:	PUSH	AF
+	LD	HL,1
+	ADD	HL,SP
+	LD	(DMAADD),HL
+	PUSH	DE
+	CALL	C.456A
+	POP	DE
+	POP	AF
+	RET
+
+C.694B:	PUSH	DE
+	CALL	C.6AC6
+	LD	(SAVENT),DE
+	PUSH	DE
+	CALL	C.6AC6
+	LD	(SAVEND),DE
+	EX	(SP),HL
+	EX	DE,HL
+	_RST	DCOMPR
+	JP	C,J.7263
+	EX	DE,HL
+	EX	(SP),HL
+	CALL	C.722B
+	SCF
+	JR	Z,J.697F
+	CALL	C.7221
+	DEFB	","
+	CP	53H	; "S"
+	JR	NZ,J$6977
+	CALL	C.722C
+	AND	A
+	JR	J.697F
+
+J$6977:	CALL	C.6ACA
+	LD	(SAVENT),DE
+	SCF
+J.697F:	POP	BC
+	JR	NC,J$6987
+	INC	B
+	DEC	B
+	JP	P,J.7263
+J$6987:	POP	DE
+	PUSH	HL
+	PUSH	BC
+	PUSH	AF
+	XOR	A
+	LD	E,02H	; 2 
+	LD	IX,OPNFIL
+	CALL	C.726C
+	LD	A,0FEH
+	CALL	C.6930
+	POP	AF
+	POP	HL
+	PUSH	HL
+	PUSH	AF
+	CALL	C.6927
+	LD	HL,(SAVEND)
+	CALL	C.6927
+	LD	HL,(SAVENT)
+	CALL	C.6927
+	POP	AF
+	POP	BC
+	PUSH	AF
+	LD	(DMAADD),BC
+	LD	HL,(SAVEND)
+	AND	A
+	SBC	HL,BC
+	INC	HL
+	POP	AF
+	JR	NC,J$69CD
+	CALL	C.70D5
+J$69C1:	LD	A,0FFH
+	LD	(FLBMEM),A
+	XOR	A
+	CALL	C.689B
+	JP	J.6E31
+
+J$69CD:	CALL	C.70AF
+J$69D0:	PUSH	HL
+	LD	DE,(SAVENT)
+	_RST	DCOMPR
+	PUSH	AF
+	LD	C,L
+	LD	B,H
+	LD	HL,(SAVEND)
+	PUSH	HL
+	ADD	HL,BC
+	LD	(SAVEND),HL
+	POP	HL
+	LD	DE,(DMAADD)
+	CALL	LDIRMV
+	POP	AF
+	JR	NC,J$69FE
+	POP	HL
+	PUSH	HL
+	CALL	C.70D5
+	LD	HL,(SAVENT)
+	POP	DE
+	AND	A
+	SBC	HL,DE
+	LD	(SAVENT),HL
+	EX	DE,HL
+	JR	J$69D0
+
+J$69FE:	POP	HL
+	LD	HL,(SAVENT)
+	CALL	C.70D5
+	JR	J$69C1
+
+C.6A07:	PUSH	DE
+	XOR	A
+	LD	(RUNBNF),A
+	LD	C,A
+	LD	B,A
+	CALL	C.722B
+	JR	Z,J.6A30
+	CALL	C.7221
+	DEFB	","
+	CP	52H	; "R"
+	JR	Z,J$6A1F
+	CP	53H	; "S"
+	JR	NZ,J$6A2B
+J$6A1F:	LD	(RUNBNF),A
+	CALL	C.722C
+	JR	Z,J.6A30
+	CALL	C.7221
+	DEFB	","
+J$6A2B:	CALL	C.6ACA
+	LD	B,D
+	LD	C,E
+J.6A30:	POP	DE
+	PUSH	HL
+	PUSH	BC
+	LD	A,0FFH
+	LD	(FLBMEM),A
+	XOR	A
+	LD	E,01H	; 1 
+	LD	IX,OPNFIL
+	CALL	C.726C
+	LD	DE,(FCBBAS)
+	CALL	C.6939
+	CP	0FEH
+	JP	NZ,J.70E3
+	POP	BC
+	CALL	C.6AB8
+	PUSH	HL
+	CALL	C.6AB8
+	PUSH	HL
+	CALL	C.6AB8
+	LD	(SAVENT),HL
+	POP	HL
+	POP	BC
+	AND	A
+	SBC	HL,BC
+	INC	HL
+	LD	(DMAADD),BC
+	LD	A,(RUNBNF)
+	CP	53H	; "S"
+	JR	Z,J$6A76
+	CALL	C.47B2
+J$6A71:	CALL	C$6E32
+	POP	HL
+	RET
+
+J$6A76:	CALL	C.70AF
+J$6A79:	PUSH	HL
+	LD	DE,(SAVENT)
+	_RST	DCOMPR
+	PUSH	AF
+	LD	DE,(FCBBAS)
+	CALL	C.47B2
+	POP	AF
+	POP	BC
+	PUSH	BC
+	PUSH	AF
+	LD	HL,(SAVEND)
+	PUSH	HL
+	ADD	HL,BC
+	LD	(SAVEND),HL
+	POP	DE
+	LD	HL,(DMAADD)
+	POP	AF
+	JR	NC,J$6AAA
+	CALL	LDIRVM
+	LD	HL,(SAVENT)
+	POP	DE
+	AND	A
+	SBC	HL,DE
+	LD	(SAVENT),HL
+	EX	DE,HL
+	JR	J$6A79
+
+J$6AAA:	POP	BC
+	LD	BC,(SAVENT)
+	CALL	LDIRVM
+	XOR	A
+	LD	(RUNBNF),A
+	JR	J$6A71
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6AB8:	PUSH	BC
+	CALL	C.6939
+	PUSH	AF
+	CALL	C.6939
+	LD	H,A
+	POP	AF
+	LD	L,A
+	POP	BC
+	ADD	HL,BC
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6AC6:	CALL	C.7221
+	DEFB	","
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6ACA:	LD	IX,I$6F0B
+	JP	C.726C
+
+C.6AD1:	CALL	C.72C6
+	CALL	C.722C
+	CALL	C.7221
+	DEFB	"("
+	CALL	C.6B21
+	CALL	C.7221
+	DEFB	")"
+	PUSH	HL
+	LD	HL,NULSTR
+	LD	(DAC+2),HL
+	POP	HL
+	LD	A,03H	; 3 
+	LD	(VALTYP),A
+	AND	A
+	JR	J$6AFD
+
+C.6AF2:	CALL	C.72C6
+	CALL	C.6B21
+	CALL	C.722B
+	RET	NZ
+	SCF
+J$6AFD:	PUSH	AF
+	PUSH	HL
+	PUSH	DE
+	LD	E,C
+	CALL	C.505D
+	INC	A
+	JP	Z,J.70E6
+	POP	DE
+	POP	HL
+	POP	AF
+	PUSH	HL
+	LD	A,0FFH
+	LD	(DIRBFD),A
+	LD	A,(IX+0)
+	LD	B,01H	; 1 
+	LD	C,(IX+1)
+	LD	HL,($DIRBU)
+	CALL	C.6069			; do physical disk sector operation
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6B21:	LD	IX,GETBYT
+	CALL	C.726C
+	PUSH	DE
+	CALL	C.7221
+	DEFB	","
+	LD	IX,GETUIN
+	CALL	C.726C
+	POP	BC
+	RET
+
+C.6B36:	LD	IX,RETRTN
+	LD	IY,4*256
+	CALL	C.65CC
+	LD	A,(HL)
+	CP	04H	; 4 
+	JP	NZ,J.70E3
+	INC	HL
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	LD	BC,7
+	ADD	HL,BC
+	EX	(SP),HL
+	CALL	C.722B
+	JR	Z,J$6B85
+	PUSH	DE
+	CALL	C.7221
+	DEFB	","
+	LD	IX,FRMEVL
+	CALL	C.726C
+	PUSH	HL
+	CALL	C$6D47
+	LD	A,C
+	OR	B
+	OR	L
+	OR	H
+	JP	Z,J.7263
+	LD	A,C
+	OR	B
+	DEC	BC
+	JR	NZ,J$6B72
+	DEC	HL
+J$6B72:	EX	DE,HL
+	POP	HL
+	EX	(SP),HL
+	PUSH	HL
+	PUSH	DE
+	LD	DE,33
+	ADD	HL,DE
+	POP	DE
+	LD	(HL),C
+	INC	HL
+	LD	(HL),B
+	INC	HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	POP	DE
+	POP	HL
+J$6B85:	EX	(SP),HL
+	LD	(DMAADD),HL
+	POP	HL
+	POP	AF
+	PUSH	HL
+	AND	A
+	LD	HL,I$7251
+	LD	BC,C.47B2
+	JR	Z,J$6B9B
+	LD	HL,J.70F2
+	LD	BC,C.47BE
+J$6B9B:	PUSH	HL
+	CALL	C.456A
+	AND	A
+	RET	NZ
+	POP	HL
+	JP	J.6E31
+
+C.6BA5:	CALL	C.72C6
+	CP	23H	; "#"
+	CALL	Z,C.722C
+	LD	IX,GETBYT
+	CALL	C.726C
+	JP	Z,J.7266
+	PUSH	HL
+	LD	IX,FILIDX
+	CALL	C.726C
+	LD	E,L
+	LD	D,H
+	JP	Z,J.724E
+	JP	C,J.7263
+	LD	A,(HL)
+	CP	04H	; 4 
+	JP	NZ,J.70E3
+	INC	HL
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	LD	BC,14
+	ADD	HL,BC
+	LD	C,(HL)
+	INC	HL
+	LD	B,(HL)
+	LD	(BUF+10),BC
+	LD	HL,0
+	LD	(BUF+12),HL
+	LD	BC,9
+	POP	HL
+J$6BE7:	EX	DE,HL
+	ADD	HL,BC
+	EX	DE,HL
+	LD	A,(HL)
+	CP	2CH	; ","
+	RET	NZ
+	PUSH	DE
+	LD	IX,GTBYTC
+	CALL	C.726C
+	PUSH	AF
+	CALL	C.7221
+	DEFB	"A"
+	CALL	C.7221
+	DEFB	"S"
+	CALL	C.6C24
+	POP	AF
+	EX	(SP),HL
+	PUSH	DE
+	PUSH	HL
+	LD	HL,(BUF+12)
+	LD	C,A
+	LD	B,00H
+	ADD	HL,BC
+	LD	(BUF+12),HL
+	EX	DE,HL
+	LD	HL,(BUF+10)
+	_RST	DCOMPR
+	JP	C,J$7254
+	POP	DE
+	POP	HL
+	LD	(HL),C
+	INC	HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	LD	B,00H
+	POP	HL
+	JR	J$6BE7
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6C24:	LD	IX,PTRGET
+	CALL	C$6C2F
+	JP	NZ,J.7248
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6C2F:	CALL	C.726C
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6C32:	LD	IX,GETYPR
+	JP	C.726C
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6C39:	LD	IX,FRESTR
+	JP	C.726C
+
+C.6C40:	DEFB	0F6H			; OR xx
+
+C.6C41:	SCF
+	CALL	C.72C6
+	PUSH	AF
+	CALL	C.6C24
+	PUSH	DE
+	LD	IX,FRMEQL
+	CALL	C.726C
+	POP	BC
+	EX	(SP),HL
+	PUSH	HL
+	PUSH	BC
+	CALL	C.6C39
+	LD	B,(HL)
+	EX	(SP),HL
+	LD	A,(HL)
+	LD	C,A
+	PUSH	BC
+	PUSH	HL
+	PUSH	AF
+	INC	HL
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	OR	A
+	JR	Z,J$6CBE
+	LD	HL,(NULBUF)
+	DEC	HL
+	_RST	DCOMPR
+	JR	C,J.6C9C
+	LD	HL,(VARTAB)
+	_RST	DCOMPR
+	JR	C,J.6C9C
+	LD	E,C
+	LD	D,00H
+	LD	HL,(STKTOP)
+	ADD	HL,DE
+	EX	DE,HL
+	LD	HL,(FRETOP)
+	_RST	DCOMPR
+	JR	C,J$6CD1
+	POP	AF
+J$6C82:	LD	A,C
+	LD	IX,GETSPA
+	CALL	C.726C
+	POP	HL
+	POP	BC
+	EX	(SP),HL
+	PUSH	DE
+	PUSH	BC
+	CALL	C.6C39
+	POP	BC
+	POP	DE
+	EX	(SP),HL
+	PUSH	BC
+	PUSH	HL
+	INC	HL
+	PUSH	AF
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+J.6C9C:	POP	AF
+	POP	HL
+	INC	HL
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	POP	BC
+	POP	HL
+	INC	HL
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	LD	A,C
+	CP	B
+	JR	NC,J$6CAE
+	LD	B,A
+J$6CAE:	SUB	B
+	LD	C,A
+	POP	AF
+	CALL	NC,C.6CC8
+	INC	B
+J$6CB5:	DEC	B
+	JR	Z,J$6CC3
+	LD	A,(HL)
+	LD	(DE),A
+	INC	HL
+	INC	DE
+	JR	J$6CB5
+
+J$6CBE:	POP	BC
+	POP	BC
+	POP	BC
+	POP	BC
+	POP	BC
+J$6CC3:	CALL	C,C.6CC8
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6CC8:	LD	A,20H	; " "
+	INC	C
+J$6CCB:	DEC	C
+	RET	Z
+	LD	(DE),A
+	INC	DE
+	JR	J$6CCB
+
+J$6CD1:	POP	AF
+	POP	HL
+	POP	BC
+	EX	(SP),HL
+	EX	DE,HL
+	JR	NZ,J$6CFD
+	PUSH	BC
+	LD	A,B
+	LD	IX,STRINI
+	CALL	C.726C
+	LD	DE,DSCTMP
+	LD	HL,(TEMPPT)
+	LD	(DAC+2),HL
+	LD	A,03H	; 3 
+	LD	(VALTYP),A
+	CALL	VMOVE
+	LD	DE,FRETOP
+	_RST	DCOMPR
+	LD	(TEMPPT),HL
+	JP	Z,J.7245
+	POP	BC
+J$6CFD:	EX	(SP),HL
+	PUSH	BC
+	PUSH	HL
+	JP	J$6C82
+
+C.6D03:	LD	A,2
+	DEFB	1
+
+C.6D06:	LD	A,4
+	DEFB	1
+
+C.6D09:	LD	A,8
+	CALL	C.72C6
+	PUSH	AF
+	LD	IX,DOCNVF
+	CALL	C.726C
+	POP	AF
+	LD	IX,STRINI
+	CALL	C.726C
+	LD	HL,(DSCTMP+1)
+	CALL	VMOVMF
+	JP	J$61C8
+
+C.6D27:	LD	A,1
+	DEFB	1
+
+C.6D2A:	LD	A,3
+	DEFB	1
+
+C.6D2D:	LD	A,7
+	CALL	C.72C6
+	PUSH	AF
+	CALL	C.6C39
+	POP	AF
+	CP	(HL)
+	JP	NC,J.7263
+	INC	A
+	INC	HL
+	LD	C,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,C
+	LD	(VALTYP),A
+	JP	VMOVFM
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6D47:	CALL	C$6C32
+	LD	BC,(DAC+2)
+	LD	HL,0
+	RET	M
+	JP	Z,J.7248
+	LD	HL,DAC
+	LD	DE,BUF+158
+	LD	BC,8
+	LDIR
+	LD	HL,I$4718
+	LD	DE,ARG
+	LD	C,08H	; 8 
+	LDIR
+	CALL	DECDIV
+	AND	A			; DAC type = double float
+	CALL	INT			; integer part of float
+	LD	IX,GETUI
+	CALL	C.726C
+	PUSH	DE
+	EX	DE,HL
+	CALL	C$6FA3
+	LD	BC,6545H
+	LD	DE,6053H
+	CALL	SGNMUL
+	LD	HL,DAC
+	LD	DE,ARG
+	LD	BC,8
+	LDIR
+	LD	HL,BUF+158
+	LD	DE,DAC
+	LD	C,8
+	LDIR
+	CALL	DECSUB
+	LD	IX,GETUI
+	CALL	C.726C
+	LD	C,E
+	LD	B,D
+	POP	HL
+	RET
+
+;	  Subroutine EOF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6DA9:	CALL	C.72C6
+	PUSH	HL
+	CALL	C.6793
+	LD	HL,0
+	JR	NC,J$6DB6
+	DEC	HL
+J$6DB6:	PUSH	AF
+	CALL	MAKINT
+	POP	AF
+	POP	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	(HL),A
+	RET
+
+C.6DC1:	CALL	C.72C6
+	LD	D,00H
+	JR	Z,J$6DCE
+	CALL	C.6EC8
+	PUSH	HL
+	JR	J$6DD2
+
+J$6DCE:	PUSH	HL
+	CALL	C$6F46
+J$6DD2:	CALL	C.6E9C
+	LD	A,(PRTFLG)
+	AND	A
+	PUSH	AF
+	CALL	C.65AE
+	JP	Z,J.7260
+	LD	IX,CRDONZ
+	CALL	C.726C
+J$6DE7:	LD	HL,BUF+84+1
+	LD	B,11
+J$6DEC:	LD	A,(HL)
+	INC	HL
+	_RST	OUTDO
+	LD	A,B
+	CP	04H	; 4 
+	JR	NZ,J$6DFC
+	LD	A,(HL)
+	CP	20H	; " "
+	JR	Z,J$6DFB
+	LD	A,2EH	; "."
+J$6DFB:	_RST	OUTDO
+J$6DFC:	DJNZ	J$6DEC
+	CALL	CKCNTC
+	POP	AF
+	PUSH	AF
+	LD	A,(LINLEN)
+	LD	B,A
+	LD	A,(TTYPOS)
+	JR	Z,J$6E11
+	LD	B,50H	; "P"
+	LD	A,(LPTPOS)
+J$6E11:	AND	A
+	JR	Z,J$6E23
+	ADD	A,0CH	; 12 
+	CP	B
+	JR	NC,J$6E1C
+	LD	A,20H	; " "
+	_RST	OUTDO
+J$6E1C:	LD	IX,CRDO
+	CALL	NC,C.726C
+J$6E23:	LD	DE,BUF+10
+	XOR	A
+	LD	(BUF+22),A
+	CALL	C.5006
+	INC	A
+	JR	NZ,J$6DE7
+	POP	AF
+J.6E31:	POP	HL
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6E32:	LD	IX,FINPRT
+	JP	C.726C
+
+C.6E39:	CALL	C.72C6
+	CALL	C.6EDE
+	CALL	C.722B
+	RET	NZ
+	CALL	C.6553
+	JP	Z,J.70EC
+	CALL	C.6E9C
+	PUSH	HL
+	LD	DE,BUF+10
+	CALL	C.436C
+	AND	A
+	JP	NZ,J.7260
+	POP	HL
+	RET
+
+C.6E59:	CALL	C.72C6
+	CALL	C.6EDE
+	CALL	C.6553
+	JP	Z,J.70EC
+	CALL	C.6E9C
+	PUSH	HL
+	CALL	C.65AE
+	JP	Z,J.7260
+	POP	HL
+	CALL	C.7221
+	DEFB	"A"
+	CALL	C.7221
+	DEFB	"S"
+	CALL	C.6EDE
+	LD	A,D
+	LD	(BUF+26),A
+	PUSH	HL
+	LD	HL,(BUF+10)
+	AND	A
+	JR	Z,J$6E8A
+	CP	L
+	JP	NZ,J$7101
+J$6E8A:	LD	DE,BUF+26+1
+	CALL	C.65C3
+	LD	DE,BUF+10
+	CALL	C.4392
+	AND	A
+	JP	NZ,J$70EF
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6E9C:	CALL	C.5356
+	INC	A
+	LD	(BUF+10),A
+	PUSH	HL
+	PUSH	DE
+	CALL	C.65C0
+	POP	DE
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6EAB:	LD	IX,FILEVL
+	CALL	C.726C
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6EB2:	LD	C,D
+	CALL	C.4F97
+	RET	NC
+	JP	J.70E6
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6EBA:	CALL	C.6EBE
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6EBE:	LD	C,00H
+	CALL	C.4F97
+	RET	NC
+	POP	AF
+	XOR	A
+	SCF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6EC8:	CALL	C.6EAB
+	PUSH	HL
+	LD	HL,FILNAM
+	LD	B,8+3
+J$6ED1:	LD	A,(HL)
+	INC	HL
+	CP	20H	; " "
+	JR	NZ,J.6EE2
+	DJNZ	J$6ED1
+	CALL	C$6F49
+	JR	J.6EE2
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6EDE:	CALL	C.6EAB
+	PUSH	HL
+J.6EE2:	LD	HL,FILNAM
+	LD	B,8
+	CALL	C.6F3D
+	LD	B,3
+	CALL	C.6F3D
+	POP	HL
+	DEFB	0F6H
+
+C$6EF1:	SCF
+	PUSH	DE
+	PUSH	HL
+J$6EF4:	LD	DE,FILNAM
+	PUSH	DE
+	LD	B,8+3
+J$6EFA:	PUSH	BC
+	LD	A,(DE)
+	LD	HL,I$6F14
+	LD	BC,S.6F14
+	JR	C,J$6F05
+	DEC	BC
+J$6F05:	CPIR
+	JR	Z,J.6F3A
+	POP	BC
+	INC	DE
+I$6F0B:	DJNZ	J$6EFA
+	POP	HL
+	CALL	C$6F21
+	POP	HL
+	POP	DE
+	RET
+
+I$6F14:	DEFB	'."/\[]:+=;,*?'
+S.6F14	EQU	$-I$6F14
+
+C$6F21:	LD	A,' '
+	CP	(HL)
+	JR	Z,J.6F3A
+	LD	B,07H	; 7 
+	CALL	C.6F2D
+	LD	B,03H	; 3 
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6F2D:	INC	HL
+	CP	(HL)
+	JR	Z,J.6F34
+	DJNZ	C.6F2D
+	RET
+
+J.6F34:	DEC	B
+	RET	Z
+	INC	HL
+	CP	(HL)
+	JR	Z,J.6F34
+J.6F3A:	JP	J.725D
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6F3D:	LD	A,(HL)
+	CP	2AH	; "*"
+	JR	Z,J.6F4E
+	INC	HL
+	DJNZ	C.6F3D
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6F46:	CALL	C$6EB2
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6F49:	LD	HL,FILNAM
+	LD	B,8+3
+J.6F4E:	LD	(HL),"?"
+	INC	HL
+	DJNZ	J.6F4E
+	RET
+
+;	  Subroutine LOF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6F54:	LD	BC,16
+	DEFB	11H
+
+;	  Subroutine LOC
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6F58:	LD	BC,33
+	CALL	C.72C6
+	PUSH	BC
+	LD	IX,CONINT
+	CALL	C.726C
+	LD	IX,FILIDX
+	CALL	C.726C
+	JP	C,J.7263
+	JP	Z,J.724E
+	POP	BC
+	INC	HL
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	EX	DE,HL
+	ADD	HL,BC
+	LD	C,(HL)
+	INC	HL
+	LD	B,(HL)
+	INC	HL
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	EX	DE,HL
+	PUSH	BC
+	LD	IX,FLTLIN
+	CALL	C.726C
+	LD	BC,6545H
+	LD	DE,6053H
+	CALL	SGNMUL
+	LD	HL,DAC
+	LD	DE,ARG
+	LD	BC,8
+	LDIR
+	POP	HL
+	LD	DE,DECADD
+	PUSH	DE
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$6FA3:	LD	IX,FLTLIN
+	CALL	C.726C
+	JP	CONDS
+
+C.6FAD:	CALL	C.72C6
+	LD	IX,CONINT
+	CALL	C.726C
+	LD	C,A
+	CALL	C.4F97
+	JP	C,J.70E6
+	LD	E,C
+	CALL	C.505D
+	JP	MAKINT
+
+C.6FC5:	CALL	C.72C6
+	CALL	C.6EC8
+	CALL	C.6553
+	JP	Z,J.70EC
+	CALL	C.6E9C
+	PUSH	HL
+	LD	A,(CURDRV)
+	INC	A
+	LD	(BUF+47),A
+	LD	HL,BUF+10+1
+	LD	DE,BUF+47+1
+	LD	BC,36
+	LDIR
+	POP	HL
+	CALL	C.722B
+	JR	Z,J$700D
+	CALL	C.7221
+	DEFB	0D9H
+	CALL	C.6EC8
+	CALL	C.6553
+	JP	Z,J.70EC
+	CALL	C.5356
+	INC	A
+	LD	(BUF+47),A
+	PUSH	HL
+	LD	DE,BUF+47+1
+	CALL	C.65C3
+	POP	HL
+	CALL	C.722B
+	RET	NZ
+J$700D:	PUSH	HL
+	CALL	C.65AE
+	JP	Z,J.7260
+J$7014:	CALL	CKCNTC
+	LD	BC,BUF+47
+	LD	DE,BUF+121
+	LD	HL,BUF+84
+	LD	A,0CH	; 12 
+J$7022:	PUSH	AF
+	LD	A,(BC)
+	CP	3FH	; "?"
+	JR	NZ,J$7029
+	LD	A,(HL)
+J$7029:	LD	(DE),A
+	INC	BC
+	INC	DE
+	INC	HL
+	POP	AF
+	DEC	A
+	JR	NZ,J$7022
+	LD	HL,BUF+84
+	LD	DE,BUF+121
+	LD	B,0CH	; 12 
+J$7039:	LD	A,(DE)
+	CP	(HL)
+	JR	NZ,J$7044
+	INC	HL
+	INC	DE
+	DJNZ	J$7039
+	JP	J.7263
+
+J$7044:	CALL	C$70B6
+	PUSH	HL
+	XOR	A
+	LD	(BUF+96),A
+	LD	DE,BUF+84
+	CALL	C.4462
+	LD	DE,BUF+121
+	CALL	C.461D
+	AND	A
+	JP	NZ,J.70F5
+	LD	L,A
+	LD	H,A
+	LD	(BUF+117),HL
+	LD	(BUF+119),HL
+	LD	(BUF+154),HL
+	LD	(BUF+156),HL
+	INC	HL
+	LD	(BUF+98),HL
+	LD	(BUF+135),HL
+	POP	HL
+J$7072:	PUSH	HL
+	LD	DE,BUF+84
+	CALL	C.47B2
+	LD	A,L
+	OR	H
+	JR	Z,J$7086
+	LD	DE,BUF+121
+	CALL	C.70D9
+	POP	HL
+	JR	J$7072
+
+J$7086:	POP	HL
+	LD	HL,(BUF+104)
+	LD	(BUF+141),HL
+	LD	HL,(BUF+106)
+	LD	(BUF+143),HL
+	LD	DE,BUF+121
+	CALL	C.456F
+	LD	HL,BUF+84
+	LD	(DMAADD),HL
+	LD	DE,BUF+10
+	XOR	A
+	LD	(BUF+22),A
+	CALL	C.5006
+	INC	A
+	JP	NZ,J$7014
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.70AF:	LD	(SAVENT),HL
+	LD	(SAVEND),BC
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$70B6:	LD	HL,-512
+	ADD	HL,SP
+	JR	NC,J.70C9
+	LD	DE,(STREND)
+	AND	A
+	SBC	HL,DE
+	JR	C,J.70C9
+	LD	A,H
+	AND	A
+	JR	NZ,J$70D0
+J.70C9:	LD	DE,(NULBUF)
+	LD	HL,256
+J$70D0:	LD	(DMAADD),DE
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.70D5:	LD	DE,(FCBBAS)
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.70D9:	CALL	C.47BE
+	AND	A
+	RET	Z
+	JR	J.70F2
+
+J$70E0:	LD	E,3CH
+	DEFB	1
+
+J.70E3:	LD	E,3DH
+	DEFB	1
+
+J.70E6:	LD	E,3EH
+	DEFB	1
+
+	LD	E,3FH
+	DEFB	1
+
+J.70EC:	LD	E,40H
+	DEFB	1
+
+J$70EF:	LD	E,41H
+	DEFB	1
+
+J.70F2:	LD	E,42H
+	DEFB	1
+
+J.70F5:	LD	E,43H
+	DEFB	1
+
+J$70F8:	LD	E,44H
+	DEFB	1
+
+J$70FB:	LD	E,45H
+	DEFB	1
+
+J$70FE:	LD	E,46H
+	DEFB	1
+
+J$7101:	LD	E,47H
+	LD	BC,0
+	XOR	A
+	LD	(NLONLY),A
+	LD	(FLBMEM),A
+	PUSH	DE
+	CALL	C.689B
+	POP	DE
+	JP	J$7268
+
+C.7115:	LD	A,E
+	CP	3CH	; "<"
+	RET	C
+	CP	48H	; "H"
+	RET	NC
+	SUB	3BH	; ";"
+	LD	B,A
+	LD	HL,I$7137
+J.7122:	LD	A,(HL)
+	AND	A
+	INC	HL
+	JR	NZ,J.7122
+	DJNZ	J.7122
+	DEC	HL
+	LD	DE,BUF+166
+	PUSH	DE
+	LD	BC,22
+	LDIR
+	LD	E,01H	; 1 
+	POP	HL
+	RET
+
+I$7137:	DEFB	0
+	DEFB	"Bad FAT",0
+	DEFB	"Bad file mode",0
+	DEFB	"Bad drive name",0
+	DEFB	"Bad sector number",0
+	DEFB	"File still open",0
+	DEFB	"File already exists",0
+	DEFB	"Disk full",0
+	DEFB	"Too many files",0
+I.71AC:	DEFB	"Disk write protected",0
+I.71C1:	DEFB	"Disk I/O error",0
+I.71D0:	DEFB	"Disk offline",0
+	DEFB	"Rename across disk",0
+I.71F0:	DEFB	"Bad parameter",0
+I.71FE:	DEFB	"Format complete",0
+
+C.720E:	BIT	7,C
+J$7210:	JP	NZ,J$70E0
+	LD	A,C
+	AND	0FEH
+	JP	Z,J$70F8
+	CP	02H	; 2 
+	JP	Z,J$70FE
+	JP	J$70FB
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7221:	CALL	C.722B
+	EX	(SP),HL
+	CP	(HL)
+	JR	NZ,J.7266
+J$7228:	INC	HL
+J$7229:	EX	(SP),HL
+	INC	HL
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.722B:	DEC	HL
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.722C:	LD	IX,CHRGTR
+J$7230:	JR	C.726C
+
+C.7232:	LD	A,0C9H
+	LD	(H.LOPD+0),A
+	LD	DE,(HIMEM)
+	LD	(HIMSAV),DE
+	RET
+
+I$7240:	_RST	CALLF
+	DEFB	0
+	DEFW	C.7232
+	RET
+
+J.7245:	LD	E,10H
+	DEFB	1
+
+J.7248:	LD	E,0DH
+	DEFB	1
+
+J.724B:	LD	E,07H
+	DEFB	1
+
+J.724E:	LD	E,3BH
+	DEFB	1
+
+I$7251:	LD	E,37H
+	DEFB	1
+
+J$7254:	LD	E,32H
+	DEFB	1
+
+J$7257:	LD	E,36H
+	DEFB	1
+
+J$725A:	LD	E,34H
+	DEFB	1
+
+J.725D:	LD	E,38H
+	DEFB	1
+
+J.7260:	LD	E,35H
+	DEFB	1
+
+J.7263:	LD	E,05H
+	DEFB	1
+
+J.7266:	LD	E,02H
+
+J$7268:	LD	IX,ERROR
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.726C:	CALL	CALBAS
+	EI
+	RET
+
+C.7271:	EI
+	PUSH	HL
+	PUSH	DE
+	LD	A,(MASTER)
+	ADD	A,A
+	LD	HL,16
+	JR	NC,J$727F
+	LD	L,16+8
+J$727F:	ADD	HL,SP
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	PUSH	HL
+	LD	HL,BSAVE+3
+	_RST	DCOMPR
+	POP	HL
+	JR	Z,J$7298
+	PUSH	HL
+	LD	HL,BLOAD+3
+	_RST	DCOMPR
+	POP	HL
+	JR	NZ,J$729E
+	LD	DE,BLDCHK
+	JR	J$729B
+
+J$7298:	LD	DE,BSVCHK
+J$729B:	LD	(HL),D
+	DEC	HL
+	LD	(HL),E
+J$729E:	POP	DE
+	POP	HL
+	LD	A,E
+	CP	02H	; 2 
+	RET	C
+	LD	A,(HL)
+	CP	":"
+	JR	Z,J.725D
+	INC	HL
+	LD	A,(HL)
+	CP	":"
+	DEC	HL
+	RET	NZ
+	CALL	C.72C6
+	LD	A,(HL)
+	AND	9FH
+	LD	C,A
+	CALL	C.4F97
+	JP	C,J.70E6
+	INC	A
+	LD	A,C
+	INC	HL
+	INC	HL
+	DEC	E
+	RET
+
+C.72C2:	EI
+	LD	A,0
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.72C6:	EI
+	PUSH	HL
+	PUSH	AF
+	LD	A,(MASTER)
+	ADD	A,A
+	LD	HL,12
+	JR	NC,J$72D4
+	LD	L,12+8
+J$72D4:	ADD	HL,SP
+	LD	(HL),8BH
+	INC	HL
+	LD	(HL),0F3H
+	POP	AF
+	POP	HL
+	RET
+
+J.72DD:
+	.PHASE	0F1C9H
+
+;	  Subroutine BDOS function 9
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.F1C9:	CALL	$DOSOF
+	LD	A,(DE)
+	CALL	$DOSON
+	INC	DE
+	CP	"$"
+	RET	Z
+	CALL	C.53A8
+	JR	C.F1C9
+
+C.F1D9:	CALL	$DOSOF
+	LDIR
+
+C.F1DE:	CALL	$DOSON
+	RET
+
+C.F1E2:	CALL	$DOSOF
+	JP	0
+
+C.F1E8:	LD	DE,C.F1DE
+	PUSH	DE
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	EX	DE,HL
+	CALL	$DOSOF
+	JP	(HL)
+
+C.F1F4:	JP	J$5604
+
+I$F1F7:	DEFB    "PRN "
+        DEFB    "LST "
+        DEFB    "NUL "
+        DEFB    "AUX "
+        DEFB    "CON "
+
+I.F20B:	DEFB    "           "
+	DEFB    10000000b
+        DEFS    10
+        DEFW    0
+        DEFW    0
+        DEFW    0
+        DEFW    0,0
+
+I.F22B: DEFB    31,28,31,30,31,30,31,31,30,31,30,31
+
+	.DEPHASE
+S.72DD	EQU	$-J.72DD
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$734B:	LD	A,01H	; 1 
+	LD	(RAWFLG),A
+	LD	A,(IX+5)
+	PUSH	AF
+	CALL	C.5FEC
+	XOR	A
+	LD	BC,14
+	CALL	C.58E3
+	LD	A,(TARGET)
+	AND	A
+J$7362:	CALL	C.532C
+	POP	BC
+	CP	B
+	LD	A,0FEH
+	JR	NZ,J$736C
+	INC	A
+J$736C:	LD	(IX+5),A
+	LD	A,(IDBYT0)
+	AND	80H
+	LD	(IX+13),A
+	LD	HL,I$737D
+	JP	J$6020
+
+I$737D:	PUSH	AF
+	CALL	C.5FEC
+	LD	A,(HL)
+	AND	A
+	JR	Z,J.7392
+	DEC	A
+	LD	(HL),A
+	JR	NZ,J.7392
+	PUSH	HL
+	PUSH	IX
+	CALL	MTOFF
+	POP	IX
+	POP	HL
+J.7392:	INC	HL
+	LD	B,04H	; 4 
+J$7395:	LD	A,(HL)
+	AND	A
+	JR	Z,J.739A
+	DEC	(HL)
+J.739A:	INC	HL
+	DJNZ	J$7395
+	LD	A,(TIMFLG)
+	OR	A
+	JR	NZ,J$73EC
+	LD	A,(IX+13)
+	LD	C,0B2H
+	LD	B,80H
+	BIT	7,A
+	JR	NZ,J$73B2
+	LD	C,3CH	; "<"
+	LD	B,00H
+J$73B2:	INC	A
+	CP	C
+	JR	NZ,J$73E9
+	PUSH	BC
+	LD	C,(IX+12)
+	LD	B,(IX+11)
+	LD	E,(IX+10)
+	INC	C
+	LD	A,C
+	CP	3CH	; "<"
+	JR	NZ,J.73DF
+	LD	C,00H
+	INC	B
+	LD	A,B
+	CP	3CH	; "<"
+	JR	NZ,J.73DF
+	LD	B,00H
+	INC	E
+	LD	A,E
+	CP	18H
+	JR	NZ,J.73DF
+	LD	E,00H
+	LD	HL,(CURDAT)
+	INC	HL
+	LD	(CURDAT),HL
+J.73DF:	LD	(IX+12),C
+	LD	(IX+11),B
+	LD	(IX+10),E
+	POP	AF
+J$73E9:	LD	(IX+13),A
+J$73EC:	CALL	C.5FDD			; get slot id in page 1
+	LD	B,04H	; 4 
+	LD	DE,I.FB29
+	LD	HL,I.FB21+1
+J$73F7:	CP	(HL)
+	JR	Z,J$7403
+	INC	DE
+	INC	DE
+	INC	DE
+	INC	HL
+	INC	HL
+	DJNZ	J$73F7
+J$7401:	POP	AF
+	RET
+
+J$7403:	EX	DE,HL
+	LD	A,(HL)
+	AND	A
+	JR	Z,J$7401
+	PUSH	AF
+	POP	IY
+	INC	HL
+	LD	C,(HL)
+	INC	HL
+	LD	B,(HL)
+	PUSH	BC
+	POP	IX
+	POP	AF
+	JP	CALSLT
+
+DSKCHG:
+J$7416:	EI
+	PUSH	HL
+	PUSH	BC
+	PUSH	AF
+	CALL	C.5FEC
+	POP	AF
+	POP	BC
+	PUSH	AF
+	INC	A
+	LD	E,A
+	LD	D,00H
+	POP	AF
+	ADD	HL,DE
+	LD	B,(HL)
+	POP	HL
+	INC	B
+	DEC	B
+	LD	B,01H	; 1 
+	RET	NZ
+	PUSH	BC
+	PUSH	HL
+	LD	DE,1
+	LD	HL,($SECBU)
+	AND	A
+	CALL	C.74A6
+	JR	C,J.7452
+	LD	HL,($SECBU)
+	LD	B,(HL)
+	POP	HL
+	PUSH	BC
+	CALL	GETDPB
+	LD	A,0CH	; 12 
+	JR	C,J.7452
+	POP	AF
+	POP	BC
+	CP	C
+	SCF
+	CCF
+	LD	B,0FFH
+	RET	NZ
+	INC	B
+	RET
+
+J.7452:	POP	DE
+	POP	DE
+	RET
+
+;	  Subroutine CALL VERIFY ON
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7455:	LD	E,1
+	JR	J$745B
+
+;	  Subroutine CALL VERIFY OFF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7459:	LD	E,0
+J$745B:	RET	NZ
+	LD	C,2EH
+	PUSH	HL
+	CALL	BDOS
+	POP	HL
+	XOR	A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7465:	LD	HL,PROCNM
+J$7468:	LD	A,(DE)
+	CP	20H	; " "
+	JR	NC,J$7470
+	XOR	A
+	CP	(HL)
+	RET
+
+J$7470:	CP	(HL)
+	RET	NZ
+	INC	HL
+	INC	DE
+	JR	J$7468
+
+;	  Subroutine DSKFMT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+DSKFMT:
+J$7476:	PUSH	AF
+	LD	A,D
+	CALL	C.7480
+	LD	D,A
+	POP	AF
+	JP	J$7718
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7480:	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	PUSH	AF
+	CALL	C.5FEC
+	LD	HL,TARGET
+	LD	A,(IX+5)
+	CP	0FFH
+	JR	Z,J$74A1
+	CP	0FEH
+	JR	Z,J$749A
+	CP	(HL)
+	POP	BC
+	LD	B,00H
+	PUSH	BC
+J$749A:	LD	A,(HL)
+	LD	(IX+5),A
+	CALL	NZ,C$6227
+J$74A1:	POP	AF
+	POP	HL
+	POP	DE
+	POP	BC
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+DSKIO:
+C.74A6:	CALL	C.7480
+	PUSH	AF
+	CALL	C$7963
+	POP	DE
+	PUSH	AF
+	PUSH	BC
+	CALL	C.5FEC
+	POP	BC
+	LD	(HL),78H	; "x"
+	INC	HL
+	POP	AF
+	PUSH	AF
+	PUSH	BC
+	LD	C,3CH	; "<"
+	JR	NC,J$74C0
+	LD	C,00H
+J$74C0:	LD	E,D
+	LD	D,00H
+	ADD	HL,DE
+	LD	(HL),C
+	POP	BC
+	POP	AF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.74C8:	PUSH	AF
+	PUSH	BC
+	PUSH	HL
+	CALL	C.5FEC
+	LD	BC,6
+	ADD	IX,BC
+	POP	HL
+	POP	BC
+	POP	AF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.74D7:	LD	A,H
+	OR	L
+	JR	NZ,J$74E0
+	LD	(MAXCLS),BC
+	RET
+
+J$74E0:	CALL	C.74FE
+	DEC	DE
+	LD	A,01H	; 1 
+	LD	(DE),A
+	INC	DE
+	JP	J$4218
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.74EB:	CALL	H.UNPA
+	LD	A,H
+	OR	L
+	JR	NZ,J$74F8
+	LD	HL,(MAXCLS)
+	LD	A,H
+	OR	L
+	RET
+
+J$74F8:	CALL	C.74FE
+	JP	J$41F4
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.74FE:	PUSH	IX
+	CALL	C.74C8
+	LD	A,(IX+0)
+	LD	D,(IX+1)
+	EX	(SP),IX
+	CP	(IX+0)
+	JR	Z,J$7515
+	CALL	C.752D
+	JR	J$751E
+
+J$7515:	LD	A,H
+	RRA
+	RRA
+	AND	03H	; 3 
+	CP	D
+	CALL	NZ,C.752D
+J$751E:	LD	A,H
+	AND	03H	; 3 
+	LD	H,A
+	EX	(SP),IX
+	LD	E,(IX+2)
+	LD	D,(IX+3)
+	POP	IX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.752D:	CALL	C.7574
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7530:	LD	A,(IX+0)
+	PUSH	IX
+	CALL	C.74C8
+	LD	(IX+0),A
+	LD	A,H
+	RRA
+	RRA
+	AND	03H	; 3 
+	LD	(IX+1),A
+	POP	IX
+	PUSH	HL
+	PUSH	DE
+	PUSH	BC
+	LD	C,A
+	CALL	C.45DB
+	LD	B,A
+	LD	A,C
+	ADD	A,A
+	ADD	A,C
+	ADD	A,E
+	LD	E,A
+	JR	NC,J.7555
+	INC	D
+J.7555:	PUSH	BC
+	LD	B,03H	; 3 
+	CALL	C.46D7
+	POP	BC
+	JR	NC,J$7570
+	LD	A,(IX+16)
+	ADD	A,E
+	LD	E,A
+	JR	NC,J$7566
+	INC	D
+J$7566:	DJNZ	J.7555
+	CALL	C.45DB
+	LD	B,03H	; 3 
+	CALL	C.46C5
+J$7570:	POP	BC
+	POP	DE
+	POP	HL
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7574:	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	PUSH	IX
+	CALL	C.74C8
+	LD	A,(IX+0)
+	CP	0FFH
+	JR	Z,J.75CB
+	CALL	C$4560
+	LD	C,(HL)
+	INC	HL
+	LD	B,(HL)
+	LD	A,(IX+1)
+	PUSH	BC
+	POP	IX
+	LD	C,A
+	CALL	C.45DB
+	LD	B,A
+	DEC	HL
+	LD	A,(HL)
+	LD	(HL),00H
+	INC	HL
+	CP	01H	; 1 
+	JP	NZ,J.75CB
+	LD	A,C
+	ADD	A,A
+	ADD	A,C
+	ADD	A,E
+	LD	E,A
+	JR	NC,J.75A6
+	INC	D
+J.75A6:	PUSH	DE
+	PUSH	BC
+	PUSH	HL
+	LD	A,C
+	ADD	A,A
+	ADD	A,C
+	LD	B,A
+	LD	A,(IX+16)
+	SUB	B
+	CP	03H	; 3 
+	LD	B,A
+	JR	C,J$75B8
+	LD	B,03H	; 3 
+J$75B8:	LD	A,(IX+0)
+	CALL	C.4755
+	POP	HL
+	POP	BC
+	POP	DE
+	LD	A,E
+	ADD	A,(IX+16)
+	LD	E,A
+	JR	NC,J$75C9
+	INC	D
+J$75C9:	DJNZ	J.75A6
+J.75CB:	POP	IX
+	POP	HL
+	POP	DE
+	POP	BC
+	XOR	A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$75D2:	LD	A,(TIMFLG)
+	OR	A
+	RET	NZ
+	PUSH	IX
+	CALL	C.5FEC
+	LD	B,(IX+10)
+	LD	C,(IX+11)
+	LD	D,(IX+12)
+	POP	IX
+	XOR	A
+	RET
+
+J$75E9:	PUSH	IX
+	PUSH	BC
+	CALL	C.5FEC
+	POP	BC
+	LD	(IX+10),B
+	LD	(IX+11),C
+	LD	(IX+12),D
+	POP	IX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$75FC:	LD	A,(H.UNPA+0)
+	CP	0C9H
+	JR	Z,J$7614
+J$7603:	PUSH	DE
+	PUSH	HL
+	CALL	C.74EB
+	POP	HL
+	POP	DE
+	JR	NZ,J$760D
+	INC	BC
+J$760D:	INC	HL
+	DEC	DE
+	LD	A,E
+	OR	D
+	JR	NZ,J$7603
+	RET
+
+J$7614:	PUSH	IX
+	LD	HL,3
+J$7619:	PUSH	DE
+	LD	A,D
+	CP	04H	; 4 
+	JR	C,J.7628
+	JR	NZ,J$7625
+	LD	A,E
+	OR	A
+	JR	Z,J.7628
+J$7625:	LD	DE,4*256+0
+J.7628:	PUSH	DE
+	PUSH	HL
+	PUSH	DE
+	CALL	C.74FE
+	EX	DE,HL
+	POP	DE
+	CALL	C$764D
+	POP	HL
+	LD	A,04H	; 4 
+	ADD	A,H
+	POP	DE
+	POP	HL
+	OR	A
+	SBC	HL,DE
+	EX	DE,HL
+	LD	H,A
+	LD	L,00H
+	LD	A,D
+	OR	E
+	JR	NZ,J$7619
+	CALL	C.45FB
+	PUSH	HL
+	POP	IY
+	POP	IX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$764D:	CALL	C.4564
+J$7650:	LD	A,(HL)
+	INC	HL
+	OR	A
+	JR	NZ,J.765B
+	LD	A,(HL)
+	AND	0FH	; 15 
+	JR	NZ,J.765B
+	INC	BC
+J.765B:	DEC	DE
+	LD	A,D
+	OR	E
+	RET	Z
+	INC	HL
+	LD	A,(HL)
+	OR	A
+	JR	NZ,J.766C
+	DEC	HL
+	LD	A,(HL)
+	INC	HL
+	AND	0F0H
+	JR	NZ,J.766C
+	INC	BC
+J.766C:	DEC	DE
+	INC	HL
+	LD	A,D
+	OR	E
+	JR	NZ,J$7650
+	RET
+
+CHOICE:
+J$7673:	LD	HL,I$7677
+	RET
+
+I$7677:
+DEFB	13,10
+	DEFB	"[Interleave 1]",13,10
+	DEFB	"1. 180KB 5.25",34,13,10
+	DEFB	"2. 360KB 5.25",34,13,10
+	DEFB	"3. 360KB 3.5",34,13,10
+	DEFB	"4. 720KB 3.5",34,13,10
+	DEFB	10
+	DEFB	"[Interleave 2]",13,10
+	DEFB	"5. 180KB 5.25",34,13,10
+	DEFB	"6. 360KB 5.25",34,13,10
+	DEFB	"7. 360KB 3.5",34,13,10
+	DEFB	"8. 720KB 3.5",34,13,10
+	DEFB	10
+	DEFB	0
+
+J$7718:	DEC	A
+	LD	E,A
+	LD	A,07H	; 7 
+	CP	E
+	LD	A,0CH	; 12 
+J$771F:	RET	C
+	LD	A,B
+	CP	18H
+	LD	A,0EH	; 14 
+	RET	C
+	LD	A,D
+J$7727:	CALL	C.41C1
+	JR	NC,J$772F
+	LD	A,02H	; 2 
+	RET
+
+J$772F:	LD	C,0FEH
+	LD	(IX+0),C
+	LD	D,A
+J$7735:	PUSH	HL
+	PUSH	DE
+J$7737:	LD	HL,I.FB21
+	LD	B,04H	; 4 
+J$773C:	LD	C,(HL)
+	INC	HL
+	LD	A,(HL)
+	INC	HL
+	OR	C
+	JR	Z,J$7758
+	LD	C,A
+J$7744:	PUSH	HL
+	PUSH	BC
+	LD	HL,D.7114
+	CALL	WRSLT			; disable I/O ports of interface in slot
+	POP	BC
+	PUSH	BC
+	LD	A,C
+	LD	L,LOW D.711C
+	CALL	WRSLT			; disable I/O ports of interface in slot
+	POP	BC
+	POP	HL
+	DJNZ	J$773C
+J$7758:	POP	DE
+	POP	HL
+	LD	IY,I$4F9F
+	BIT	2,E
+	JR	Z,J$7766
+	LD	IY,I$4FA8
+J$7766:	LD	A,E
+	LD	C,28H	; "("
+	CP	02H	; 2 
+	JR	C,J$776F
+	LD	C,50H	; "P"
+J$776F:	LD	A,E
+	AND	01H	; 1 
+	INC	A
+	DEFB	0DDH
+	LD	H,A
+	LD	A,E
+	AND	03H	; 3 
+	DEFB	0DDH
+	LD	L,A
+	CALL	C.41E8			; disable maskable interrupts, enable I/O ports of interface in current slot
+	LD	B,D
+	LD	D,00H
+J$7780:	LD	E,00H
+J$7782:	CALL	C$78F0
+	CALL	C$786D
+	JR	NC,J$7790
+	CALL	MTOFF
+	JP	J.79E0
+
+J$7790:	INC	E
+	LD	A,E
+	DEFB	0DDH
+	CP	H
+	JR	NZ,J$7782
+	INC	D
+	LD	A,C
+	CP	D
+	JR	NZ,J$7780
+	PUSH	HL
+	POP	IY
+	PUSH	HL
+	PUSH	BC
+	PUSH	HL
+	CALL	C.41E1
+	POP	DE
+	LD	HL,I$4609		; x86 JMP + BPB
+	LD	C,S.4609
+	LDIR
+	DEFB	0DDH
+	LD	A,L
+	OR	A
+	JR	NZ,J$77BA
+	INC	A
+	LD	(IY+13),A
+	LD	A,40H	; "@"
+	LD	(IY+23),A
+J$77BA:	DEFB	0DDH
+	LD	A,L
+	ADD	A,31H	; "1"
+	LD	(IY+8),A
+	DEFB	0DDH
+	LD	A,H
+	LD	(IY+26),A
+	LD	B,A
+	LD	A,00H
+J$77C9:	ADD	A,09H	; 9 
+	DJNZ	J$77C9
+	POP	BC
+	PUSH	BC
+	LD	B,A
+	LD	HL,0
+	LD	D,00H
+	LD	E,C
+J$77D6:	ADD	HL,DE
+	DJNZ	J$77D6
+	LD	(IY+19),L
+	LD	(IY+20),H
+	LD	A,09H	; 9 
+	LD	(IY+24),A
+	LD	D,02H	; 2 
+	LD	E,0FCH
+	DEFB	0DDH
+	LD	A,L
+	CP	02H	; 2 
+	JR	C,J.77F7
+	SUB	02H	; 2 
+	LD	E,0F8H
+	CP	01H	; 1 
+	JR	NZ,J.77F7
+	INC	D
+J.77F7:	ADD	A,E
+	LD	E,A
+	LD	(IY+21),E
+	LD	(IY+22),D
+	PUSH	DE
+	PUSH	IY
+	POP	HL
+	LD	DE,30
+	ADD	HL,DE
+	EX	DE,HL
+	LD	HL,I$7DA0
+	LD	BC,S.VLID
+	LDIR
+	EX	DE,HL
+	PUSH	DE
+	CALL	C.4696
+	POP	DE
+	LD	BC,5
+	ADD	HL,BC
+	EX	DE,HL
+	LD	C,S.BTLD
+	LDIR
+	POP	DE
+	DEFB	0FDH
+	INC	H
+	DEFB	0FDH
+	INC	H
+	LD	B,02H	; 2 
+J$7826:	LD	(IY+0),E
+	LD	A,0FFH
+	LD	(IY+1),A
+	LD	(IY+2),A
+	LD	A,D
+	ADD	A,A
+	DEFB	0FDH
+	ADD	A,H
+	DEFB	0FDH
+	LD	H,A
+	DJNZ	J$7826
+	POP	BC
+	POP	HL
+	LD	D,B
+	LD	C,E
+	LD	B,05H	; 5 
+	LD	A,C
+	CP	0F9H
+	JR	NZ,J$7846
+	LD	B,07H	; 7 
+J$7846:	SCF
+	LD	A,D
+	LD	DE,0
+	PUSH	AF
+	PUSH	BC
+	PUSH	HL
+	CALL	DSKIO
+	POP	HL
+	JR	NC,J$7857
+	POP	BC
+	POP	BC
+	RET
+
+J$7857:	PUSH	HL
+	CALL	C.41E1
+	POP	HL
+	POP	BC
+	LD	E,B
+	LD	D,00H
+	LD	B,07H	; 7 
+	LD	A,C
+	CP	0FCH
+	JR	NZ,J$7869
+	LD	B,04H	; 4 
+J$7869:	POP	AF
+	JP	DSKIO
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$786D:	PUSH	BC
+	PUSH	DE
+	CALL	C.7B42
+	CALL	C.7B50
+	SLA	E
+	SLA	E
+	SLA	E
+	SLA	E
+	OR	E
+	OUT	(0D4H),A
+	CALL	C.7B46
+	LD	A,01H	; 1 
+	OUT	(0D2H),A
+	LD	A,D
+	CALL	C.7B59
+	LD	E,03H	; 3 
+J$788D:	PUSH	HL
+	PUSH	DE
+	LD	C,0D3H
+	LD	A,0F4H
+	OUT	(0D0H),A
+	CALL	C.7B62
+	LD	DE,I$78A2
+	PUSH	DE
+	LD	DE,I$78AA
+	JP	J.7B27
+
+I$78A2:	JR	Z,J$78D2
+	POP	DE
+	POP	HL
+	LD	A,80H
+	JR	J.78E3
+
+I$78AA:	OUTI
+	LD	DE,3*256+1
+	JR	J.78B4
+
+J$78B1:	AND	E
+	JR	Z,J.78D1
+J.78B4:	IN	A,(0D0H)
+	CP	D
+	JR	NZ,J$78B1
+	OUTI
+	LD	A,(HL)
+	INC	A
+	JP	NZ,J.78B4
+	LD	H,4EH	; "N"
+	JR	J.78C7
+
+J$78C4:	AND	E
+	JR	Z,J.78D1
+J.78C7:	IN	A,(0D0H)
+	CP	D
+	JR	NZ,J$78C4
+	OUT	(C),H
+	JP	J.78C7
+
+J.78D1:	POP	DE
+J$78D2:	POP	DE
+	POP	HL
+	IN	A,(0D0H)
+	AND	7CH	; "|"
+	JP	Z,J$78E8
+	BIT	6,A
+	JR	NZ,J.78E3
+	DEC	E
+	JP	NZ,J$788D
+J.78E3:	SCF
+	CALL	C.79EE
+	LD	A,C
+J$78E8:	PUSH	AF
+	CALL	C.7B42
+	POP	AF
+	POP	DE
+	POP	BC
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$78F0:	PUSH	BC
+	PUSH	HL
+	PUSH	IY
+	LD	B,3EH	; ">"
+	CALL	C.5351
+	CALL	C.5349
+	LD	BC,3*256+0F6H
+	CALL	C.534C
+	LD	(HL),0FCH
+	INC	HL
+	LD	B,32H	; "2"
+	CALL	C.5351
+	LD	B,09H	; 9 
+J$790C:	PUSH	BC
+	CALL	C.5349
+	CALL	C.4363
+	LD	(HL),0FEH
+	INC	HL
+	LD	(HL),D
+	INC	HL
+	LD	(HL),E
+	INC	HL
+	LD	A,(IY+0)
+	LD	(HL),A
+	INC	HL
+	INC	IY
+	LD	(HL),02H	; 2 
+	INC	HL
+	LD	(HL),0F7H
+	INC	HL
+	LD	B,16H
+	CALL	C.5351
+	CALL	C.5349
+	CALL	C.4363
+	LD	(HL),0FBH
+	INC	HL
+	PUSH	DE
+	LD	A,40H	; "@"
+	LD	BC,512
+	CALL	C.58E3
+	POP	DE
+	INC	HL
+	LD	(HL),0F7H
+	INC	HL
+	LD	B,54H	; "T"
+	CALL	C.5351
+	POP	BC
+	DJNZ	J$790C
+	LD	(HL),0FFH
+	POP	IY
+	POP	HL
+	POP	BC
+	RET
+
+;	  Subroutine direct sector transfer ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7952:	BIT	7,H			; transfer from or to page 2 or 3 ?
+	SCF
+	RET	NZ			; yep, quit
+	DEC	B
+	LD	A,0FFH
+	ADD	A,L
+	LD	A,H
+	ADC	A,01H	; 1 
+	ADC	A,B
+	ADC	A,B
+	INC	B
+	CP	40H
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7963:	PUSH	AF
+	LD	A,D
+	CP	06H	; 6 
+	LD	A,04H	; 4 
+	JR	NC,J$7976
+	LD	A,C
+	CP	0F8H
+	JR	C,J.7974
+	CP	0FEH
+	JR	C,J$797B
+J.7974:	LD	A,02H	; 2 
+J$7976:	POP	BC
+	LD	B,00H
+	SCF
+	RET
+
+J$797B:	POP	AF
+	PUSH	AF
+	CALL	C.41C1
+	JR	C,J.7974
+	EX	(SP),HL
+	LD	H,A
+	EX	(SP),HL
+	PUSH	BC
+	PUSH	HL
+	CALL	C.7952			; direct sector transfer ?
+	JR	C,J$79A2		; yep,
+	PUSH	DE
+	LD	HL,I$7A0A		; subroutine = sector disk operation
+	LD	DE,I$50B1		; relocation table
+	LD	BC,S.7A0A		; size of subroutine
+	LD	A,I$7A1F+1-I$7A0A	; offset slot id
+	CALL	C$7BB5			; copy subroutine to $SECBUF and relocate subroutine
+	LD	HL,0*256+0FFH		; ??
+	LD	(BUFDRN),A
+	POP	DE
+J$79A2:	CALL	C.41E8			; disable maskable interrupts, enable I/O ports of interface in current slot
+	POP	HL
+	POP	BC
+	POP	AF
+	PUSH	BC
+	PUSH	AF
+J$79AA:	POP	AF
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	AF
+	CALL	C.7952			; direct sector transfer ?
+	JR	C,J$79C1		; yep,
+	POP	AF
+	LD	IY,I$79C5
+	PUSH	IY			; return here
+	LD	IY,($SECBU)
+	JP	(IY)			; execute sector disk operation subroutine in $SECBUF
+
+J$79C1:	POP	AF
+	CALL	C.7A29
+I$79C5:	POP	DE
+	POP	BC
+	JR	C,J$79D4
+	INC	H
+	INC	H
+	INC	DE
+	DEC	B
+	JR	NZ,J$79AA
+	POP	AF
+	POP	BC
+	XOR	A
+	JR	J.79E0
+
+J$79D4:	LD	C,A
+	POP	AF
+	LD	A,C
+	CALL	C.79EE
+	POP	HL
+	LD	A,H
+	SUB	B
+	LD	B,A
+	LD	A,C
+	SCF
+J.79E0:	PUSH	AF
+	EI
+	CALL	ENAINT
+
+;	  Subroutine disable I/O ports of interface in current slot when two or more DDX or FAST disk interfaces
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$79E5:	LD	A,(D.F33E)
+	OR	A			; two or more DDX or FAST disk interfaces ?
+	CALL	NZ,C.7BEC		; yep, disable I/O ports of interface in current slot
+	POP	AF
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.79EE:	JR	NC,J$79F5
+	LD	C,00H
+	BIT	6,A
+	RET	NZ
+J$79F5:	LD	C,02H	; 2 
+	BIT	7,A
+	RET	NZ
+	LD	C,04H	; 4 
+	BIT	3,A
+	RET	NZ
+	LD	C,06H	; 6 
+	BIT	4,A
+	RET	NZ
+	LD	C,0AH	; 10 
+	RET	C
+	LD	C,0CH	; 12 
+	RET
+
+I$7A0A:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	A,(RAMAD1)
+	LD	H,HIGH 4000H
+	CALL	ENASLT			; select DOS RAM in page 1
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+R.7A1A:	CALL	C.7A29			; sector operation
+	PUSH	AF
+	PUSH	HL
+I$7A1F:	LD	A,0
+	LD	H,HIGH 4000H
+	CALL	ENASLT			; select interface disk ROM in page 1
+	POP	HL
+	POP	AF
+	RET
+
+;	  Subroutine sector operation
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7A29:	PUSH	AF
+	PUSH	BC
+	CALL	C.7B46
+	BIT	1,C
+	LD	C,09H	; 9 
+	JR	Z,J$7A35
+	DEC	C
+J$7A35:	LD	B,08H	; 8 
+	EX	DE,HL
+J$7A38:	ADD	HL,HL
+	LD	A,H
+	SUB	C
+	JR	C,J$7A3F
+	LD	H,A
+	INC	L
+J$7A3F:	DJNZ	J$7A38
+	INC	H
+	EX	DE,HL
+	POP	BC
+	POP	AF
+	PUSH	AF
+	LD	B,A
+	CALL	C.7B50
+	BIT	0,C
+	JR	Z,J.7A54
+	SRL	E
+	JR	NC,J.7A54
+	OR	10H	; 16 
+J.7A54:	LD	B,A
+	LD	A,C
+	RRCA
+	RRCA
+	AND	0C0H
+	OR	B
+	LD	B,A
+	OUT	(0D4H),A
+	LD	A,D
+	OUT	(0D2H),A
+	LD	A,(IX+0)
+	OUT	(0D1H),A
+	CP	E
+	JR	Z,J$7A70
+	LD	A,E
+	LD	(IX+0),A
+	CALL	C.7B59
+J$7A70:	POP	AF
+	JR	C,J$7A79
+	LD	D,9CH
+	LD	A,80H
+	JR	J$7A7D
+
+J$7A79:	LD	D,0FCH
+	LD	A,0A0H
+J$7A7D:	BIT	6,B
+	JR	Z,J.7A89
+	OR	02H	; 2 
+	BIT	4,B
+	JR	Z,J.7A89
+	OR	08H	; 8 
+J.7A89:	LD	E,A
+	LD	B,05H	; 5 
+	LD	C,0D3H
+J$7A8E:	PUSH	HL
+	PUSH	BC
+	PUSH	DE
+	CALL	C.7B46
+	LD	A,E
+	OUT	(0D0H),A
+	PUSH	AF
+	CALL	C.7B62
+	POP	AF
+	BIT	5,A
+	LD	DE,I.7AAA
+	PUSH	DE
+	JR	NZ,J$7ABD
+	LD	DE,I$7AB9
+	JP	J.7B27
+
+I.7AAA:	JR	Z,J$7AD7
+	POP	DE
+	POP	BC
+	POP	HL
+	JR	J.7AE7
+
+J.7AB1:	IN	A,(0D0H)
+	RRCA
+	JR	NC,J.7AD6
+	RRCA
+	JR	NC,J.7AB1
+I$7AB9:	INI
+	JR	J.7AB1
+
+J$7ABD:	LD	DE,I$7AC3
+	JP	J.7B27
+
+I$7AC3:	OUTI
+	LD	DE,3*256+1
+	JR	J.7ACD
+
+J$7ACA:	AND	E
+	JR	Z,J.7AD6
+J.7ACD:	IN	A,(0D0H)
+	CP	D
+	JR	NZ,J$7ACA
+	OUTI
+	JR	J.7ACD
+
+J.7AD6:	POP	DE
+J$7AD7:	POP	DE
+	POP	BC
+	POP	HL
+	IN	A,(0D0H)
+	AND	D
+	JR	Z,J$7AEE
+	BIT	6,A
+	JR	NZ,J.7AE7
+	DEC	B
+	JP	NZ,J$7A8E
+J.7AE7:	SCF
+J.7AE8:	PUSH	AF
+	CALL	C.7B42
+	POP	AF
+	RET
+
+J$7AEE:	BIT	5,E
+	JR	Z,J.7AE8
+	LD	A,(RAWFLG)
+	OR	A
+	JR	Z,J.7AE8
+	PUSH	HL
+	LD	B,01H	; 1 
+	PUSH	BC
+	CALL	C.7B46
+	RES	5,E
+	LD	D,9CH
+	PUSH	DE
+	LD	A,E
+	OUT	(0D0H),A
+	LD	DE,I.7AAA
+	PUSH	DE
+	LD	DE,I$7B19
+	JP	J.7B27
+
+J.7B11:	IN	A,(0D0H)
+	RRCA
+	JR	NC,J.7AD6
+	RRCA
+	JR	NC,J.7B11
+I$7B19:	IN	A,(0D3H)
+	CPI
+	JR	Z,J.7B11
+	POP	DE
+	POP	DE
+	POP	BC
+	POP	HL
+	LD	A,24H	; "$"
+	JR	J.7AE7
+
+J.7B27:	PUSH	DE
+	LD	B,00H
+	LD	DE,01F2H
+J.7B2D:	IN	A,(0D0H)
+	RRCA
+	JR	NC,J$7B3F
+	RRCA
+	RET	C
+	DJNZ	J.7B2D
+	DEC	DE
+	LD	A,D
+	OR	E
+	JR	NZ,J.7B2D
+	POP	DE
+	OR	80H
+	RET
+
+J$7B3F:	XOR	A
+	POP	DE
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7B42:	LD	A,0D0H
+	OUT	(0D0H),A
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7B46:	EX	(SP),HL
+	EX	(SP),HL
+	EX	(SP),HL
+	EX	(SP),HL
+J$7B4A:	IN	A,(0D0H)
+	RRCA
+	JR	C,J$7B4A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7B50:	INC	B
+	LD	A,80H
+J$7B53:	RLCA
+	DJNZ	J$7B53
+	ADD	A,20H	; " "
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7B59:	OUT	(0D3H),A
+	LD	A,10H	; 16 
+	OUT	(0D0H),A
+	CALL	C.7B46
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7B62:	LD	A,0E0H
+J.7B64:	EX	(SP),HL
+	DEC	A
+	JR	NZ,J.7B64
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7B69:	LD	A,2AH
+	JR	J.7B64
+
+S.7A0A	EQU	$-I$7A0A
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7B6D:	PUSH	AF
+	CALL	C.532C
+	LD	L,A
+	CP	1
+	JR	NZ,J$7B7A
+	POP	AF
+	RET	Z
+	PUSH	AF
+	INC	L
+J$7B7A:	POP	AF
+	RET
+
+;	  Subroutine ensure I/O ports are enabled only in current slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7B7C:	LD	HL,D.F33E
+	XOR	A
+	LD	(HL),A			; number of DDX or FAST disk interfaces = 0
+	PUSH	HL
+	CALL	C$7BA3			; copy disable I/O ports subroutine to temporary buffer and relocate subroutine
+	CALL	BUF+10			; execute disable I/O ports subroutine
+	POP	HL
+	DEC	(HL)			; number of DDX or FAST disk interfaces excluding this disk interface
+	JP	C.517F			; enable I/O ports of interface in current slot
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7B8D:	CALL	C.7B7C			; ensure I/O ports are enabled only in current slot
+	LD	A,0ACH
+	OUT	(0D1H),A
+	CALL	C$7B69
+	IN	A,(0D1H)
+	IN	A,(0D1H)
+	CP	0ACH
+	POP	HL
+	RET	NZ
+	PUSH	HL
+	JP	C.7BEC			; disable I/O ports of interface in current slot
+
+;	  Subroutine copy disable I/O ports subroutine to temporary buffer and relocate subroutine
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7BA3:	LD	HL,I$7F8F		; source = disable I/O ports on DDX or FAST disk interfaces subroutine
+	LD	DE,I$5090		; relocation table
+	LD	BC,S.7F8F		; size of subroutine
+	LD	A,I.7F94+1-I$7F8F	; offset slot id in subroutine
+	PUSH	DE
+	PUSH	HL
+	LD	DE,BUF+10		; temporary area
+	JR	J$7BBB			; copy subroutine and relocate subroutine
+
+;	  Subroutine copy subroutine to $SECBUF and relocate subroutine
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7BB5:	PUSH	DE
+	PUSH	HL
+	LD	DE,($SECBU)
+J$7BBB:	PUSH	DE			; store target address
+	PUSH	DE			; store target address
+	LDIR				; copy subroutine to target
+	LD	D,0
+	LD	E,A			; offset slot id
+	PUSH	DE			; store offset slot id
+	IN	A,(0A8H)
+	CALL	C$6014			; get pointer to EXPTBL of slot in page 1
+	CALL	C$5FE0			; convert pointer to EXPTBL to slot id
+	POP	DE			; restore offset slot id
+	POP	HL			; restore target address
+	ADD	HL,DE
+	LD	(HL),A			; update slot id at offset
+	POP	DE			; restore target address
+	POP	BC			; restore source address
+	POP	HL			; restore relocation table
+	PUSH	IX
+	CALL	C.629E			; relocate subroutine
+	POP	IX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7BDA:	CALL	C.7B7C			; ensure I/O ports are enabled only in current slot
+	CALL	C.4EDA
+	CALL	C$7BF3
+J$7BE3:	CALL	C$7BFA
+	DEC	IX
+	SRL	C
+	JR	NZ,J$7BE3
+
+;	  Subroutine disable I/O ports of interface in current slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7BEC:	LD	(D.7114),A		; disable I/O ports of interface in current slot
+	LD	(D.711C),A		; disable I/O ports of interface in current slot
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7BF2:	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7BF3:	LD	BC,3
+	ADD	IX,BC
+	LD	C,08H	; 8 
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7BFA:	DI
+	XOR	A
+	OUT	(0D4H),A
+	LD	A,0D0H
+	OUT	(0D0H),A
+	LD	A,20H	; " "
+	ADD	A,C
+	OUT	(0D4H),A
+	CALL	C.5088
+	IN	A,(0D0H)
+	BIT	7,A
+	JR	NZ,J.7C2D
+	AND	44H	; "D"
+	JR	NZ,J.7C34
+	XOR	A
+	OUT	(0D3H),A
+	LD	A,10H	; 16 
+	OUT	(0D0H),A
+	CALL	C.5088
+	IN	A,(0D0H)
+	BIT	0,A
+	JR	NZ,J$7C28
+	BIT	2,A
+	JR	Z,J.7C2D
+J$7C28:	CALL	C.7B46
+	JR	J.7C34
+
+J.7C2D:	CALL	C.7B42
+	LD	A,0FFH
+	JR	J$7C3E
+
+J.7C34:	CALL	C.7B42
+	XOR	A
+	OUT	(0D0H),A
+	CALL	C.7B46
+	XOR	A
+J$7C3E:	LD	(IX+0),A
+	XOR	A
+	OUT	(0D4H),A
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7C45:	CALL	C.5FA6
+	DEFB	12,"FAST!FDD DiskROM v1.1",10
+	DEFB	34,"CDX-2 standard",34," release",10
+	DEFB	"(c)2005-2006 A&L Software",10,10
+	DEFB	"System:"
+	DEFB	0
+	LD	A,($NUMDR)
+	CALL	C.7CBE
+	CALL	C.532C
+	LD	HL,I$7CDC
+	CALL	C$7CC1
+	LD	A,(TARGET)
+	AND	A
+	CALL	C.7B6D
+	LD	A,L
+	CALL	C.7CBE
+	LD	B,0B4H
+	CALL	C$508A
+	XOR	A
+	JP	CLS
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7CBE:	LD	HL,I$7CF5
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7CC1:	PUSH	AF
+	CALL	C.5FAC
+	CALL	C.5FA6
+	DEFB	"ical drives: ",0
+	POP	AF
+	ADD	A,"0"
+	JP	C.408F
+
+I$7CDC:	DEFB	10,10,"This interface:",10
+	DEFB	" -phys"
+	DEFB	0
+
+I$7CF5:	DEFB	10," -log"
+	DEFB	0
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+GETDPB:
+C.7CFC:	EI
+	LD	A,B
+	CP	0F8H
+	RET	C
+	PUSH	IX
+	PUSH	HL
+	POP	IX
+	INC	HL
+	LD	(HL),A
+	INC	HL
+	EX	DE,HL
+	LD	HL,I$5523
+	LD	BC,9
+	LDIR
+	LD	BC,2*256+112
+	LD	DE,1*256+7
+	CP	0FCH
+	JR	C,J.7D26
+	BIT	0,A
+	JR	NZ,J.7D26
+	LD	BC,1*256+64
+	LD	DE,0*256+4
+J.7D26:	LD	(IX+7),B
+	LD	(IX+11),C
+	LD	(IX+6),D
+	LD	B,01H	; 1 
+	CP	0FEH
+	JR	NC,J.7D3F
+	CP	0FAH
+	JR	Z,J.7D3F
+	INC	B
+	CP	0F9H
+	JR	NZ,J.7D3F
+	INC	B
+J.7D3F:	LD	(IX+16),B
+	SUB	0F8H
+	LD	C,A
+	LD	A,B
+	ADD	A,A
+	INC	A
+	LD	(IX+17),A
+	LD	(IX+18),00H
+	ADD	A,E
+	LD	(IX+12),A
+	LD	(IX+13),00H
+	LD	HL,I$552C
+	LD	B,00H
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	C,(HL)
+	INC	HL
+	LD	B,(HL)
+	LD	(IX+14),C
+	LD	(IX+15),B
+	POP	IX
+	XOR	A
+	RET
+
+I$7D6B:	DEFB	"SYSTEM",1
+	DEFW	C.652B
+	DEFB	"FORMAT",1
+	DEFW	C.6544
+	DEFB	"VERIFY ON",0
+	DEFW	C.7455
+	DEFB	"VERIFY OFF",0
+	DEFW	C.7459
+	DEFB	"CHKDSK",0
+	DEFW	C.4FB1
+	DEFB	0
+
+I$7DA0:
+	.PHASE	0C01EH
+
+C.C01E:	JR	C.C030
+
+	DEFB	"VOL_ID",0
+S.VLID	EQU	$-C.C01E
+
+	.DEPHASE
+
+	.PHASE	0C030H
+
+C.C030:	RET	NC
+	LD	(C.C07B+1),DE
+	LD	(D.C091+1),A
+	LD	(HL),LOW I.C079
+	INC	HL
+	LD	(HL),HIGH I.C079
+J.7DB6:	LD	SP,KBUF+256
+	LD	HL,I$C0E4
+	CALL	C.C0CB
+	OR	A
+	JR	Z,J$7DCB
+	LD	HL,I$C0EF
+	CALL	C.C0CB
+	INC	A
+	JR	Z,J$7DFE
+J$7DCB:	LD	DE,J.0100
+	LD	C,1AH
+	CALL	BDOS
+	LD	A,(D.C0FA)
+	LD	E,0
+	LD	C,0EH
+	OR	A
+	CALL	NZ,BDOS
+	LD	HL,1
+	LD	(D.C0FA+14),HL
+	LD	DE,D.C0FA
+	LD	HL,4000H-J.0100
+	LD	C,27H
+	CALL	BDOS
+	JP	J.0100
+
+I.C079:	DEFW	0C058H			; BUG, should be C.C07B
+
+C.C07B:	CALL	0
+	LD	A,C
+	AND	0FEH
+	CP	2
+	JR	NZ,J$7E10
+J$7DFE:	LD	A,(D.C0FA)
+	CP	1
+	LD	A,1
+	LD	(D.C0FA),A
+	JR	NZ,J.7DB6
+D.C091:	LD	A,0
+	AND	A
+	JP	Z,J.4022
+J$7E10:	LD	DE,I$C0AB
+	LD	C,09H
+	CALL	BDOS
+	LD	C,07H
+	CALL	BDOS
+	CP	1BH
+	JP	Z,J.4022
+	JR	J.7DB6
+
+I$C0AB:	DEFB	"No DOS!",13,10
+	DEFB	"Hit key (ESC=BASIC).",13,10
+	DEFB	"$"
+
+C.C0CB:	LD	DE,D.C0FA+1
+	LD	BC,8+3
+	LDIR
+	PUSH	DE
+	POP	HL
+	INC	DE
+	LD	(HL),00H
+	LD	C,19H
+	LDIR
+	LD	DE,D.C0FA
+	LD	C,0FH
+	JP	BDOS
+
+I$C0E4:	DEFB	"SOLXDOS SIS"
+I$C0EF:	DEFB	"MSXDOS  SYS"
+D.C0FA:	DEFB	0			; 1st try, use default drive
+
+S.BTLD	EQU	$-C.C030
+
+	.DEPHASE
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$7E74:	LD	(F_SPSA),SP
+	CALL	C.6273
+	LD	A,B
+	CP	20H	; " "
+	JP	C,J.724B
+	PUSH	HL
+	CALL	C.60CF
+	PUSH	AF
+	CALL	C.6195
+	POP	AF
+	INC	A
+	LD	E,A
+	LD	C,1BH
+	CALL	BDOS
+	LD	A,(IX+6)
+	INC	A
+	CP	11H	; 17 
+	JP	NC,J.724B
+	CCF
+	SBC	HL,DE
+J$7E9D:	JR	Z,J$7EDD
+	CALL	C.5FA6
+	DEFB	10,10,"Disk has data",10
+	DEFB	"Marking bad clusters may corrupt files",10
+	DEFB	0
+	CALL	C.6195
+J$7EDD:	POP	HL
+	LD	B,(IX+12)
+	LD	DE,0
+	CALL	C.46D7
+	JR	NC,J$7EEF
+	LD	HL,I$7F55
+	JP	J.618C
+
+J$7EEF:	LD	C,(IX+14)
+	LD	B,(IX+15)
+	DEC	BC
+	LD	DE,2
+	LD	IY,0
+J$7EFD:	PUSH	BC
+	PUSH	DE
+	EX	DE,HL
+I$7F00:	XOR	A
+	CALL	C.4EE3
+	EX	DE,HL
+	LD	B,(IX+6)
+	INC	B
+	CALL	C.46D7
+	POP	DE
+	JR	NC,J$7F1C
+	PUSH	DE
+	PUSH	HL
+	EX	DE,HL
+J.7F12:	LD	BC,0FF7H
+	CALL	C.74D7
+	INC	IY
+	POP	HL
+	POP	DE
+J$7F1C:	POP	BC
+J$7F1D:	INC	DE
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J$7EFD
+	PUSH	IY
+	POP	BC
+	LD	A,B
+	OR	C
+	JR	Z,J$7F4F
+	PUSH	HL
+	CALL	C.45CC
+	POP	HL
+J$7F2F:	LD	DE,10
+	INC	H
+	LD	(HL),00H
+J.7F35:	PUSH	HL
+	CALL	C.4935
+	LD	A,L
+J$7F3A:	ADD	A,30H	; "0"
+	POP	HL
+	DEC	HL
+	LD	(HL),A
+	LD	A,B
+	OR	C
+	JR	NZ,J.7F35
+	CALL	C.6266
+	CALL	C.5FAC
+	LD	HL,I$7F78
+	JP	J$618F
+
+J$7F4F:	LD	HL,I$7F70
+	JP	J.618C
+
+I$7F55:	DEFB	"Track 0 bad, disk unusable",0
+
+I$7F70:	DEFB	"Disk OK",0
+
+I$7F78:	DEFB	" bad cluster(s) marked",0
+
+;	  Subroutine disable I/O ports on DDX or FAST disk interfaces
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$7F8F:	LD	C,8FH+1
+J.7F91:	DEC	C
+	LD	H,HIGH 4000H
+I.7F94:	LD	A,0
+	BIT	7,C
+	JP	Z,ENASLT
+	LD	A,C
+	CP	84H
+	JR	C,J$7FAC
+	AND	03H
+	INC	A
+	OR	0C0H
+	LD	E,A
+	LD	D,0FCH
+	LD	A,(DE)
+	RLCA
+	JR	NC,J.7F91
+J$7FAC:	PUSH	BC
+	LD	A,C
+	CALL	ENASLT
+	LD	HL,I.7FF4		; target address
+R.7FB4:	LD	DE,I.7FF4		; FAST string
+	LD	B,S.7FF4
+R.7FB9:	CALL	C.7FD3			; test for string, disable I/O ports of interface when found
+	JR	Z,J.7FD0
+	LD	HL,I$7F00		; target address
+J$7FC1:	LD	DE,I$7FE6		; DDX string
+	LD	B,S.7FE6
+R.7FC6:	CALL	C.7FD3			; test for string, disable I/O ports of interface when found
+	JR	Z,J.7FD0
+	LD	A,H
+	CP	80H
+	JR	NZ,J$7FC1
+J.7FD0:	POP	BC
+	JR	J.7F91
+
+;	  Subroutine test for string, disable I/O ports of interface when found
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.7FD3:	LD	A,(DE)
+	CP	(HL)
+	INC	HL
+	RET	NZ
+	INC	DE
+	DJNZ	C.7FD3
+	LD	(D.7114),A		; disable I/O ports of interface in current slot
+	LD	(D.711C),A		; disable I/O ports of interface in current slot
+	LD	HL,D.F33E
+	INC	(HL)			; update number of DDX or FAST disk interfaces
+	XOR	A
+	RET
+
+I$7FE6:	DEFB	"DDX-DRIVE Inte"
+S.7FE6	EQU	$-I$7FE6
+
+I.7FF4:	DEFB	"FAST!byA&L05"		; FAST disk rom string
+S.7FF4	EQU	$-I.7FF4
+
+S.7F8F	EQU	$-I$7F8F
+
+	END

@@ -1,7 +1,7 @@
 ; SERIAL.MAC
 ;
-; MSX-SERIAL first generation (as used in the NAI-2001 serial interface)
-;   looks like the newest version known
+; MSX-SERIAL first generation (as used in the Mitsubshi ML-G3/HC-90/HC-95 serial interface)
+;
 ;
 ; Source re-created by Z80DIS 2.2
 ; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
@@ -13,6 +13,7 @@
 ; Recreation NOT permitted without authorisation of the copyrightholders
 ;
 
+
         .Z80
         ASEG
 
@@ -22,73 +23,85 @@
 
 RDSLT   EQU     000CH
 WRSLT   EQU     0014H
+CALSLT  EQU     001CH
 CHSNS   EQU     009CH
 CHGET   EQU     009FH
 CHPUT   EQU     00A2H
 LPTOUT  EQU     00A5H
 BREAKX  EQU     00B7H
 
-M521C   EQU     521CH
-M542F   EQU     542FH
-M5EA4   EQU     5EA4H
-M631B   EQU     631BH
-M632B   EQU     632BH
-M6331   EQU     6331H
-M67D0   EQU     67D0H
-M6E6B   EQU     6E6BH
-M6E6E   EQU     6E6EH
-M6E77   EQU     6E77H
-M6E80   EQU     6E80H
-M6E86   EQU     6E86H
-M73B2   EQU     73B2H
+SNERR   EQU     4055H
+TMERR   EQU     406DH
+FNDLIN  EQU     4295H
+CHRGTR  EQU     4666H
+FCERR   EQU     475AH
+LINGET  EQU     4769H
+USERR   EQU     481CH
+FRMEVL  EQU     4C64H
+DOCNVF  EQU     517AH
+GETBYT  EQU     521CH
+GETUIN  EQU     542FH
+PTRGET  EQU     5EA4H
+ONTRP   EQU     631BH
+OFFTRP  EQU     632BH
+STPTRP  EQU     6331H
+FRESTR  EQU     67D0H
+DERNMF  EQU     6E6BH
+DERFAO  EQU     6E6EH
+DERFNO  EQU     6E77H
+DERIER  EQU     6E80H
+DERSOO  EQU     6E86H
+DIOERR  EQU     73B2H
 
 BUF     EQU     0F55EH
-
-SERTMP  EQU     BUF                     ; temporary storage area
-
 VALTYP  EQU     0F663H
 DAC     EQU     0F7F6H
 NULBUF  EQU     0F862H
 PTRFIL  EQU     0F864H
 FNKSTR  EQU     0F87FH
 
-TOCNT   EQU     0FB03H                  ; timeout value
-RSFCB   EQU     0FB04H                  ; saved channel
-RSIQLN  EQU     0FB06H                  ; buffersize
-MEXBIH  EQU     0FB07H                  ; Save for EXTBIO
-OLDSTT  EQU     0FB0CH                  ; Save for H.NEWS
-OLDINT  EQU     0FB11H                  ; Save for H.KEYI
-DEVNUM  EQU     0FB16H                  ; msx serial devicenumber/trap number
-DATCNT  EUQ     0FB17H                  ;
+TOCNT   EQU     0FB03H
+RSFCB   EQU     0FB04H
+RSIQLN  EQU     0FB06H
+MEXBIH  EQU     0FB07H
+OLDSTT  EQU     0FB0CH
+OLDINT  EQU     0FB11H
+DEVNUM  EQU     0FB16H
+DATCNT  EQU     0FB17H
 ERRORS  EQU     0FB1AH
 FLAGS   EQU     0FB1BH
 ESTBLS  EQU     0FB1CH
-COMMSK  EQU     0FB1DH                  ; mask byte (for unused bits)
-LSTCOM  EQU     0FB1EH                  ; command byte
-LSTMOD  EQU     0FB1FH                  ; mode byte
+COMMSK  EQU     0FB1DH
+LSTCOM  EQU     0FB1EH
+LSTMOD  EQU     0FB1FH
 
 HOKVLD  EQU     0FB20H
 ONGSBF  EQU     0FBD8H
+KBUF    EQU     0F41FH
+AVCSAV  EQU     0FAF7H
+NEWKEY  EQU     0FBE5H
 TRPTBL  EQU     0FC4CH
 INTFLG  EQU     0FC9BH
-ESCCNT  EQU     0FCA7H
 CSRSR   EQU     0FCA9H
 EXPTBL  EQU     0FCC1H
 PROCNM  EQU     0FD89H
 H.KEYI  EQU     0FD9AH
+H.KEYC  EQU     0FDCCH
 H.NEWS  EQU     0FF3EH
-EXTBIO  EQU     0FFCAH
+FCALL   EQU     0FFCAH
 DISINT  EQU     0FFCFH
 
+
         DEFB    "AB"
-        DEFW    C4075
-        DEFW    C4150
-        DEFW    C41EC
+        DEFW    J4075                   ; ROM init
+        DEFW    J4150                   ; ROM call statement handler
+        DEFW    J41FC                   ; ROM device handler
         DEFW    0                       ; ROM basic program
         DEFS    6,0
 
-
+;
 ; BIOS table for RS232
+;
 
 ;     Device information byte indicates following options are installed or not:
 ;       bits #  76543210
@@ -110,28 +123,28 @@ DISINT  EQU     0FFCFH
 ;               +------------ reserved
 
 
-I4010:  DEFB    010H                    ; RS232 has CD detect
+?4010:  DEFB    010H                    ; RS232 has CD detect
         DEFB    0                       ; RS232 version 1
         DEFB    0                       ; RS232 reserved byte
-        JP      J4040
-        JP      C4260
-        JP      C51BE
-        JP      C42D0
-        JP      C5003
-        JP      C429B
-        JP      J406A
-        JP      C4322
-        JP      C434D
-        JP      C438A
-        JP      C5143
-        JP      C51A6
+        JP      J4040                   ; RS232 init
+?4016:  JP      C4270                   ; RS232 open
+?4019:  JP      C515F                   ; RS232 stat
+?401C:  JP      C42E0                   ; RS232 getchr
+?401F:  JP      C4FE5                   ; RS232 sndchr
+?4022:  JP      C42AB                   ; RS232 close
+?4025:  JP      J406A                   ; RS232 eof
+?4028:  JP      C4332                   ; RS232 loc
+?402B:  JP      C435D                   ; RS232 lof
+?402E:  JP      C439A                   ; RS232 backup
+?4031:  JP      C50EE                   ; RS232 sndbrk
+?4034:  JP      C5147                   ; RS232 dtr
+?4037:  RET                             ; RS232 setchn (not implemented)
         RET
         RET
+?403A:  RET                             ; RS232 reserved entry
         RET
         RET
-        RET
-        RET
-        RET
+?403D:  RET                             ; RS232 reserved entry
         RET
         RET
 
@@ -145,21 +158,21 @@ J4040:  EI
         PUSH    HL
         LD      IY,-13
         ADD     IY,SP
-        LD      SP,IY
+        LD      SP,IY                   ; allocate space on stack
         PUSH    IY
         POP     DE
         LD      C,13
-J4051:  CALL    C44CC
+J4051:  CALL    C44DC                   ; read byte from slot
         LD      (DE),A
-I4055:  INC     DE
+        INC     DE
         DEC     C
         JR      NZ,J4051
-        CALL    C4D0B
+        CALL    C4CF6                   ; initialize RS232
         PUSH    AF
         LD      IY,13+2
         ADD     IY,SP
         POP     AF
-        LD      SP,IY
+        LD      SP,IY                   ; deallocate space on stack
         POP     HL
         POP     DE
         POP     BC
@@ -170,19 +183,19 @@ I4055:  INC     DE
 ;            Outputs ________________________
 
 J406A:  LD      HL,0
-I406D:  CALL    C4E92
+        CALL    C4E7A
         RET     Z
-        CALL    C436A
+        CALL    C437A
         RET
 
 ;         Subroutine MSX-Serial extension INIT
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4075:  CALL    C4E7E
+J4075:  CALL    C4E66                   ; disable RS232 interrupts
         LD      IY,I4143
-        CALL    C4D0B
-        CALL    C4131
+        CALL    C4CF6                   ; initialize RS232
+        CALL    C4131                   ; empty receive buffer and clear flags and errors
         DI
         LD      DE,OLDINT
         LD      HL,H.KEYI
@@ -192,15 +205,15 @@ C4075:  CALL    C4E7E
         LD      HL,H.NEWS
         LD      BC,5
         LDIR
-        CALL    C4E5F
+        CALL    C4E4A                   ; get my slotid
         LD      (H.KEYI+1),A
         LD      (H.NEWS+1),A
         LD      A,0F7H
         LD      (H.KEYI+0),A
         LD      (H.NEWS+0),A
-        LD      HL,I4E8C
+        LD      HL,I4E74
         LD      (H.KEYI+2),HL
-        LD      HL,I4C0F
+        LD      HL,I4BFA
         LD      (H.NEWS+2),HL
         LD      A,0C9H
         LD      (H.KEYI+4),A
@@ -210,19 +223,19 @@ C4075:  CALL    C4E7E
         BIT     0,(HL)
         JR      NZ,J40D2
         SET     0,(HL)
-        LD      HL,EXTBIO
-        LD      B,5
+        LD      HL,FCALL
+        LD      B,5 
 J40CD:  LD      (HL),0C9H
         INC     HL
         DJNZ    J40CD
 J40D2:  XOR     A
         LD      DE,0801H
-        CALL    EXTBIO
+        CALL    FCALL
         LD      HL,DEVNUM
-        LD      (HL),A
+        LD      (HL),A                  ; device number of this interface
         XOR     A
         LD      DE,0001H
-        CALL    EXTBIO
+        CALL    FCALL
         ADD     A,A
         ADD     A,A
         ADD     A,A
@@ -231,17 +244,17 @@ J40D2:  XOR     A
         LD      (HL),A
         LD      DE,MEXBIH
         DI
-        LD      HL,EXTBIO
+        LD      HL,FCALL
         LD      BC,5
         LDIR
-        CALL    C4E5F
-        LD      (EXTBIO+1),A
+        CALL    C4E4A                   ; get my slotid
+        LD      (FCALL+1),A
         LD      A,0F7H
-        LD      (EXTBIO+0),A
-        LD      HL,I43DF
-        LD      (EXTBIO+2),HL
+        LD      (FCALL+0),A
+        LD      HL,I43EF
+        LD      (FCALL+2),HL
         LD      A,0C9H
-        LD      (EXTBIO+4),A
+        LD      (FCALL+4),A
         LD      BC,L4119
         LD      HL,I4119
         LD      DE,DISINT
@@ -250,22 +263,22 @@ J40D2:  XOR     A
         RET
 
 I4119:  PUSH    DE
-        LD      E,02H   ; 2 
+        LD      E,02H
         JR      J4121
 
 ?411E:  PUSH    DE
-        LD      E,03H   ; 3 
+        LD      E,03H
 J4121:  LD      D,00H
         PUSH    IX
         PUSH    IY
-        CALL    EXTBIO
+        CALL    FCALL
         EI
         POP     IY
         POP     IX
         POP     DE
         RET
 
-L4119   equ     $-I4119
+L4119   EQU     $-I4119
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
@@ -281,13 +294,13 @@ C4131:  XOR     A
 C4135:  PUSH    HL
         LD      HL,DATCNT
         XOR     A
-        LD      (HL),A
+        LD      (HL),A                  ; no characters in receive buffer
         INC     HL
-        LD      (HL),A
+        LD      (HL),A                  ; relative get = 0
         INC     HL
-        LD      (HL),A
+        LD      (HL),A                  ; relative put = 0
         INC     HL
-        LD      (HL),A
+        LD      (HL),A                  ; errors = 0
         POP     HL
         RET
 
@@ -300,10 +313,10 @@ I4143:  DEFB    "8N1XHNNN"
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4150:  EI
+J4150:  EI
         PUSH    HL
         POP     IX
-        LD      DE,I41AD
+        LD      DE,I419F
         CALL    C415D
         RET     C
         PUSH    DE
@@ -315,39 +328,27 @@ C4150:  EI
 
 C415D:  PUSH    BC
         PUSH    HL
-        LD      HL,PROCNM
-        LD      A,(HL)
-        CP      "C"
-        JR      NZ,J418C
-        INC     HL
-        LD      A,(HL)
-        CP      "O"
-        JR      NZ,J418C
-        INC     HL
-        LD      A,(HL)
-        CP      "M"
-        JR      NZ,J418C
-J4173:  LD      HL,PROCNM+3
+J415F:  LD      HL,PROCNM
         LD      A,(DE)
         INC     A
-        JR      Z,J418C
-        CALL    C4190
-        JR      Z,J4184
+        JR      Z,J4178
+        CALL    C417C
+        JR      Z,J4170
         INC     DE
         INC     DE
         INC     DE
-        JR      J4173
+        JR      J415F
 
-J4184:  EX      DE,HL
+J4170:  EX      DE,HL
         INC     HL
         LD      E,(HL)
         INC     HL
         LD      D,(HL)
         AND     A
-        JR      J418D
+        JR      J4179
 
-J418C:  SCF
-J418D:  POP     HL
+J4178:  SCF
+J4179:  POP     HL
         POP     BC
         RET
 
@@ -355,112 +356,114 @@ J418D:  POP     HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4190:  LD      A,(DE)
+C417C:  LD      A,(DE)
+        CALL    C4CED                   ; to uppercase
         LD      C,A
         LD      A,(HL)
-J4193:  CP      C
-        JR      NZ,J419C
+        CALL    C4CED                   ; to uppercase
+        CP      C
+        JR      NZ,J418E
         AND     A
         RET     Z
         INC     DE
         INC     HL
-        JR      C4190
+        JR      C417C
 
-J419C:  LD      A,(DE)
+J418E:  LD      A,(DE)
         AND     A
-        JR      Z,J41A3
+        JR      Z,J4195
         INC     DE
-        JR      J419C
+J4193:  JR      J418E
 
-J41A3:  LD      A,(HL)
+J4195:  LD      A,(HL)
         AND     A
-        JR      Z,J41AA
+        JR      Z,J419C
         INC     HL
-        JR      J41A3
+        JR      J4195
 
-J41AA:  LD      A,L
+J419C:  LD      A,L
         OR      H
         RET
 
-I41AD:  DEFB    "INI",0
-        DEFW    C4599
-        DEFB    "DTR",0
-        DEFW    C465C
-        DEFB    "STAT",0
-        DEFW    C467A
-        DEFB    "BREAK",0
-        DEFW    C469E
-        DEFB    "TERM",0
-        DEFW    C46E3
-        DEFB    "",0
-        DEFW    C4B66
-        DEFB    "ON",0
-        DEFW    C4BBE
-        DEFB    "OFF",0
-        DEFW    C4BA0
-        DEFB    "STOP",0
-        DEFW    C4BDC
+I419F:  DEFB    "COMINI",0
+        DEFW    J45A9
+        DEFB    "COMDTR",0
+        DEFW    J466C
+        DEFB    "COMSTAT",0
+        DEFW    J468A
+        DEFB    "COMBREAK",0
+        DEFW    J46AE
+        DEFB    "COMTERM",0
+        DEFW    J46F3
+        DEFB    "COM",0
+        DEFW    J4B51
+        DEFB    "COMON",0
+        DEFW    J4BA9
+        DEFB    "COMOFF",0
+        DEFW    J4B8B
+        DEFB    "COMSTOP",0
+        DEFW    J4BC7
 
         IF      COMHELP EQ 1
-        DEFB    "HELP",0
-        DEFW    C496F
+        DEFB    "COMHELP",0
+        DEFW    J495A
         ENDIF
 
-        db      -1
+        DEFB    0FFH
 
 ;         Subroutine MSX-Serial extension DEVICE handler
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C41EC:  EI
-        CP      0FFH
-        JP      NZ,J4229
+J41FC:  EI
+        CP      0FFH                    ; device inquire ?
+        JP      NZ,J4239                ; nope, execute device function
         LD      HL,PROCNM
         LD      A,(HL)
         CP      "C"
-        JR      NZ,J4227
+        JR      NZ,J4237
         INC     HL
         LD      A,(HL)
         CP      "O"
-        JR      NZ,J4227
+        JR      NZ,J4237
         INC     HL
         LD      A,(HL)
         CP      "M"
-        JR      NZ,J4227
+        JR      NZ,J4237
         INC     HL
         LD      A,(HL)
-        AND     A
-        JR      NZ,J420E
+        AND     A                       ; "COM" device ?
+        JR      NZ,J421E                ; nope, must be "COMx" device
         DEC     HL
-        LD      A,30H   ; "0"
-J420E:  SUB     30H     ; "0"
-        JR      C,J4227
-        CP      0AH     ; 10 
-        JR      NC,J4227
+        LD      A,"0"                   ; first COM device
+J421E:  SUB     "0"
+        JR      C,J4237
+        CP      9+1
+        JR      NC,J4237
         PUSH    BC
         PUSH    AF
         LD      A,(DEVNUM)
-        AND     0FH     ; 15 
+        AND     0FH
         LD      B,A
         POP     AF
-        CP      B
+        CP      B                       ; is this my COM device ?
         POP     BC
-        JR      NZ,J4227
+        JR      NZ,J4237                ; nope, other RS232 ROM should handle it
         INC     HL
         LD      A,(HL)
         AND     A
         RET     Z
-J4227:  SCF
+J4237:  SCF
         RET
 
-J4229:  PUSH    HL
+J4239:  PUSH    HL
         PUSH    AF
-        LD      HL,I423A
+        LD      HL,I424A
         ADD     A,L
         LD      L,A
-        JR      NC,J4233
+        JR      NC,J4243
         INC     H
-J4233:  LD      A,(HL)
+J4243:  LD      A,(HL)
         INC     HL
         LD      H,(HL)
         LD      L,A
@@ -472,48 +475,46 @@ J4233:  LD      A,(HL)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-I423A:  DEFW    C424E
-        DEFW    C429B
-        DEFW    C4485
-        DEFW    C42BD
-        DEFW    C42C9
-        DEFW    C4314
-        DEFW    C4347
-        DEFW    C4361
-        DEFW    J44A3
-        DEFW    C438A
+I424A:  DEFW    J425E                   ; OPEN
+        DEFW    C42AB                   ; CLOSE, RS232 close
+        DEFW    J4495                   ; RANDOM I/O, sequential i/o only error
+        DEFW    J42CD                   ; OUTPUT
+        DEFW    J42D9                   ; INPUT
+        DEFW    J4324                   ; LOC
+        DEFW    J4357                   ; LOF
+        DEFW    J4371                   ; EOF
+        DEFW    J44B3                   ; FPOS, illegal function call
+        DEFW    C439A                   ; BACKUP, RS232 backup
 
 ;         Subroutine open (BASIC)
 ;            Inputs  ________________________
 ;            Outputs ________________________
+;            Remark  BUG FIXED: Handle errorcodes from RS232 open
 
-C424E:  LD      C,7FH
-        CALL    C4260
-        JR      C,J4259
+J425E:  LD      C,7FH                   ; buffersize = 127
+        CALL    C4270                   ; RS232 open
+        JR      C,J4269                 ; error,
         LD      (PTRFIL),HL
         RET
 
-;         Subroutine RS232 open
-;            Inputs  ________________________
-;            Outputs ________________________
-
-J4259:  DEC     A
-        JP      Z,J4479
-        JP      J448B
+J4269:  DEC     A                       ; open in append mode ?
+        JP      Z,J4489                 ; yep, bad filename error
+        JP      J449B                   ; file already open
 
 ;         Subroutine RS232 open
 ;            Inputs  ________________________
 ;            Outputs ________________________
+;            Remark  BUG FIXED: Handle already open, handle append mode better
 
-C4260:  OR      A
+C4270:  OR      A
         LD      A,(FLAGS)
-        BIT     3,A
-        LD      A,02H   ; 2 
+        BIT     3,A                     ; RS232 already open ?
+        LD      A,2
         SCF
-        RET     NZ
+        RET     NZ                      ; yep, quit with error
         LD      A,E
-        CP      08H     ; 8 
-        LD      A,01H   ; 1 
+        CP      08H
+        LD      A,1
         SCF
         RET     Z
         PUSH    BC
@@ -533,13 +534,13 @@ C4260:  OR      A
         INC     HL
         INC     HL
         LD      (HL),A
-        CALL    C4131
+        CALL    C4131                   ; empty receive buffer and clear flags and errors
         LD      HL,FLAGS
-        SET     3,(HL)
+        SET     3,(HL)                  ; flag RS232 open
         DI
-        CALL    C4E85
-        CALL    C5189
-I4295:  EI
+        CALL    C4E6D                   ; enable RS232 interrupts
+        CALL    C5134                   ; RTS=1
+        EI
         OR      A
         POP     HL
         POP     DE
@@ -550,43 +551,43 @@ I4295:  EI
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C429B:  PUSH    HL
+C42AB:  PUSH    HL
         LD      HL,(RSFCB)
         LD      A,(HL)
-        CP      02H     ; 2 
+        CP      02H
         SCF
         CCF
-        JR      NZ,J42AB
+        JR      NZ,J42BB
         LD      A,1AH
-        CALL    C5003
-J42AB:  DI
-        CALL    C51E4
-        CALL    C5191
-        CALL    C4E7E
+        CALL    C4FE5                   ; RS232 sndchr
+J42BB:  DI
+        CALL    C5185                   ; wait for empty transmitter
+        CALL    C513C                   ; RTS=0
+        CALL    C4E66                   ; disable RS232 interrupts
         EI
         LD      HL,FLAGS
-        RES     3,(HL)
+        RES     3,(HL)                  ; flag RS232 not open
         POP     HL
         RET
 
-C42BD:  LD      A,C
-        CALL    C5003
+J42CD:  LD      A,C
+        CALL    C4FE5                   ; RS232 sndchr
         EI
-        JP      C,J44AF
-        JP      Z,J44AF
+        JP      C,J44BF
+        JP      Z,J44BF
         RET
 
-C42C9:  CALL    C42D0
-        JP      M,J44AF
+J42D9:  CALL    C42E0                   ; RS232 getchr
+        JP      M,J44BF
         RET
 
 ;         Subroutine RS232 getchr
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C42D0:  PUSH    HL
+C42E0:  PUSH    HL
         PUSH    BC
-        CALL    C43A2
+        CALL    C43B2
         LD      C,(HL)
         LD      (HL),00H
         DEC     HL
@@ -595,44 +596,44 @@ C42D0:  PUSH    HL
         LD      (HL),00H
         INC     HL
         AND     A
-        JR      NZ,J430A
+        JR      NZ,J431A
         LD      A,C
         AND     A
-        JR      NZ,J42F6
-        CALL    C4EA6
+        JR      NZ,J4306
+        CALL    C4E8E
         EI
         LD      C,A
-        JP      M,J430A
-        CALL    C50D1
-        JR      C,J430A
-        JR      Z,J430A
-J42F6:  PUSH    HL
+        JP      M,J431A
+        CALL    C50B3
+        JR      C,J431A
+        JR      Z,J431A
+J4306:  PUSH    HL
         LD      HL,(RSFCB)
         LD      A,(HL)
         POP     HL
         CP      04H     ; 4 
-        JR      Z,J430E
+        JR      Z,J431E
         LD      A,C
         CP      1AH
-        JR      NZ,J430E
+        JR      NZ,J431E
         LD      (HL),A
         AND     A
         SCF
-        JR      J4311
+        JR      J4321
 
-J430A:  OR      80H
-        JR      J4310
+J431A:  OR      80H
+        JR      J4320
 
-J430E:  XOR     A
+J431E:  XOR     A
         INC     A
-J4310:  LD      A,C
-J4311:  POP     BC
+J4320:  LD      A,C
+J4321:  POP     BC
         POP     HL
         RET
 
-C4314:  PUSH    HL
-        CALL    C4322
-J4318:  LD      (DAC+2),HL
+J4324:  PUSH    HL
+        CALL    C4332                   ; RS232 loc
+J4328:  LD      (DAC+2),HL
         LD      HL,VALTYP
         LD      (HL),2
         POP     HL
@@ -642,40 +643,40 @@ J4318:  LD      (DAC+2),HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4322:  PUSH    AF
+C4332:  PUSH    AF
         EI
         LD      HL,(RSFCB)
         LD      A,(HL)
         CP      01H     ; 1 
-        JR      NZ,J433F
-        CALL    C439A
-        JR      Z,J4337
+        JR      NZ,J434F
+        CALL    C43AA
+        JR      Z,J4347
         SUB     1AH
-        JR      Z,J4342
+        JR      Z,J4352
         LD      A,01H   ; 1 
-J4337:  PUSH    BC
-        CALL    C43A9
+J4347:  PUSH    BC
+        CALL    C43B9
         ADD     A,B
         POP     BC
-        JR      J4342
+        JR      J4352
 
-J433F:  CALL    C4E92
-J4342:  LD      L,A
+J434F:  CALL    C4E7A
+J4352:  LD      L,A
         LD      H,00H
         POP     AF
         RET
 
-C4347:  PUSH    HL
-        CALL    C434D
-J434B:  JR      J4318
+J4357:  PUSH    HL
+        CALL    C435D                   ; RS232 lof
+J435B:  JR      J4328
 
 ;         Subroutine RS232 lof
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C434D:  PUSH    AF
+C435D:  PUSH    AF
         EI
-        CALL    C4322
+        CALL    C4332                   ; RS232 loc
         PUSH    DE
         EX      DE,HL
         LD      A,(RSIQLN)
@@ -688,35 +689,35 @@ C434D:  PUSH    AF
         POP     AF
         RET
 
-C4361:  PUSH    HL
-        CALL    C436A
-        JP      M,J44AF
-        JR      J434B
+J4371:  PUSH    HL
+        CALL    C437A
+        JP      M,J44BF
+        JR      J435B
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C436A:  PUSH    BC
+C437A:  PUSH    BC
         LD      B,A
         EI
-        CALL    C42D0
-        JP      M,J4387
+        CALL    C42E0                   ; RS232 getchr
+        JP      M,J4397
         PUSH    BC
         LD      C,A
-        CALL    C438A
+        CALL    C439A                   ; RS232 backup
         POP     BC
         CP      1AH
-        JR      Z,J4383
+        JR      Z,J4393
         XOR     A
         LD      L,A
         LD      H,A
         INC     A
-        JR      J4387
+        JR      J4397
 
-J4383:  LD      HL,-1
+J4393:  LD      HL,0FFFFH
         SCF
-J4387:  LD      A,B
+J4397:  LD      A,B
         POP     BC
         RET
 
@@ -724,8 +725,8 @@ J4387:  LD      A,B
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C438A:  PUSH    HL
-        CALL    C43A2
+C439A:  PUSH    HL
+        CALL    C43B2
         LD      (HL),C
         PUSH    AF
         DEC     HL
@@ -740,8 +741,8 @@ C438A:  PUSH    HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C439A:  PUSH    HL
-        CALL    C43A2
+C43AA:  PUSH    HL
+        CALL    C43B2
         LD      A,(HL)
         POP     HL
         AND     A
@@ -751,7 +752,7 @@ C439A:  PUSH    HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C43A2:  LD      HL,(RSFCB)
+C43B2:  LD      HL,(RSFCB)
         INC     HL
         INC     HL
         INC     HL
@@ -761,20 +762,20 @@ C43A2:  LD      HL,(RSFCB)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C43A9:  PUSH    AF
+C43B9:  PUSH    AF
         PUSH    HL
         LD      B,00H
-        CALL    C4EA1
-        JR      Z,J43BF
+        CALL    C4E89                   ; check if characters in receive buffer
+        JR      Z,J43CF                 ; nope,
         LD      C,A
-J43B3:  CALL    C43C2
+J43C3:  CALL    C43D2
         LD      A,(HL)
         CP      1AH
-        JR      Z,J43BF
+        JR      Z,J43CF
         INC     B
         DEC     C
-        JR      NZ,J43B3
-J43BF:  POP     HL
+        JR      NZ,J43C3
+J43CF:  POP     HL
         POP     AF
         RET
 
@@ -782,20 +783,20 @@ J43BF:  POP     HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C43C2:  PUSH    DE
+C43D2:  PUSH    DE
         LD      A,(DATCNT+1)
         LD      HL,RSIQLN
         ADD     A,B
-        JR      C,J43CF
+        JR      C,J43DF
         CP      (HL)
-        JR      C,J43D0
-J43CF:  SUB     (HL)
-J43D0:  LD      HL,(RSFCB)
+        JR      C,J43E0
+J43DF:  SUB     (HL)
+J43E0:  LD      HL,(RSFCB)
         LD      E,LOW 9
         LD      D,HIGH 9
         ADD     HL,DE
         LD      E,A
-        LD      D,00H
+        LD      D,0
         ADD     HL,DE
         ADD     HL,DE
         POP     DE
@@ -804,148 +805,149 @@ J43D0:  LD      HL,(RSFCB)
 ;         Subroutine EXTBIO handler
 ;            Inputs  ________________________
 ;            Outputs ________________________
+;            Remark  BUGFIX: BC saved with enable interrupt function
 
-I43DF:  EI
+I43EF:  EI
         PUSH    AF
         LD      A,D
-        INC     A
-        JP      Z,J4436
-        DEC     A
-        JP      NZ,J4449
+        INC     A                       ; system exclusive ?
+        JP      Z,J4446
+        DEC     A                       ; broadcast ?
+        JP      NZ,J4459
 
 ; EXTBIO broadcast
 
         LD      A,E
-        AND     A
-        JR      Z,J43FA
-        DEC     A
-        JR      Z,J4407
-        DEC     A
-        JR      Z,J440D
-        DEC     A
-        JR      Z,J4421
-        JP      J4464
+        AND     A                       ; build device name table ?
+        JR      Z,J440A                 ; yep,
+        DEC     A                       ; return numer of trap entries ?
+        JR      Z,J4417
+        DEC     A                       ; disable interrupt ?
+        JR      Z,J441D
+        DEC     A                       ; enable interrupt ?
+        JR      Z,J4431
+        JP      J4474
 
-J43FA:  LD      A,08H   ; 8 
-        CALL    C44B6
-        LD      A,00H
-        CALL    C44B6
-        JP      J4464
+J440A:  LD      A,08H                   ; RS232 device
+        CALL    C44C6
+        LD      A,00H                   ; reserved byte
+        CALL    C44C6
+        JP      J4474
 
-J4407:  POP     AF
-        INC     A
+J4417:  POP     AF
+        INC     A                       ; RS232 uses 1 trap
         PUSH    AF
-        JP      J4464
+        JP      J4474
 
-J440D:  CALL    C4C50
-        JR      Z,J441E
+J441D:  CALL    C4C3B                   ; RS232 port open ?
+        JR      Z,J442E                 ; nope,
         PUSH    BC
-        CALL    C4FCF
+        CALL    C4FB1                   ; signal sender to stop sending
         EI
         NOP
         POP     BC
         DI
-        CALL    C4E7E
+        CALL    C4E66                   ; disable RS232 interrupts
         EI
-J441E:  JP      J4464
+J442E:  JP      J4474
 
-J4421:  CALL    C4C50
-        JR      Z,J4433
+J4431:  CALL    C4C3B                   ; RS232 port open ?
+        JR      Z,J4443                 ; nope,
         DI
-        CALL    C4E85
-        CALL    C5189
+        CALL    C4E6D                   ; enable RS232 interrupts
+        CALL    C5134                   ; RTS=1
         PUSH    BC
-        CALL    C4FB5
+        CALL    C4F97                   ; signal sender to resume sending
         POP     BC
         EI
-J4433:  JP      J4464
+J4443:  JP      J4474
 
 ; EXTBIO system exclusive
 
-J4436:  LD      A,E
+J4446:  LD      A,E
         AND     A
-        JR      NZ,J4447
-        CALL    C4468
-        LD      A,00H
-        CALL    C44B6
-        LD      A,00H
-        CALL    C44B6
-J4447:  JR      J4464
+        JR      NZ,J4457
+        CALL    C4478                   ; slotid and jumptable
+        LD      A,00H                   ; makerid = ASCII
+        CALL    C44C6
+        LD      A,00H                   ; reserved byte
+        CALL    C44C6
+J4457:  JR      J4474
 
-J4449:  CP      08H     ; 8 
-        JR      NZ,J4464
+J4459:  CP      08H                     ; RS232 ?
+        JR      NZ,J4474                ; nope, other extended bios should handle this
         LD      A,E
-        AND     A
-        JR      Z,J4457
-        CP      01H     ; 1 
-        JR      Z,J4461
-        JR      J4464
+        AND     A                       ; Build slot address table ?
+        JR      Z,J4467                 ; yep,
+        CP      1                       ; Return number of channels ?
+        JR      Z,J4471
+        JR      J4474
 
-J4457:  CALL    C4468
-        LD      A,00H
-        CALL    C44B6
-        JR      J4464
+J4467:  CALL    C4478                   ; slotid and jumptable
+        LD      A,00H                   ; reserved byte
+        CALL    C44C6
+        JR      J4474
 
-J4461:  POP     AF
-        INC     A
+J4471:  POP     AF
+        INC     A                       ; RS232 has 1 channel
         PUSH    AF
-J4464:  POP     AF
+J4474:  POP     AF
         JP      MEXBIH
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4468:  CALL    C4E5F
-        CALL    C44B6
-        LD      A,10H   ; 16 
-        CALL    C44B6
-        LD      A,40H   ; "@"
-        CALL    C44B6
+C4478:  CALL    C4E4A                   ; get my slotid
+        CALL    C44C6
+        LD      A,10H
+        CALL    C44C6
+        LD      A,40H
+        CALL    C44C6
         RET
 
-J4479:  LD      IX,M6E6B
-        JR      J44B3
+J4489:  LD      IX,DERNMF
+        JR      J44C3
 
-?447F:  LD      IX,M6E80
-        JR      J44B3
+?448F:  LD      IX,DERIER
+        JR      J44C3
 
-C4485:  LD      IX,M6E86
-        JR      J44B3
+J4495:  LD      IX,DERSOO
+        JR      J44C3
 
-J448B:  LD      IX,M6E6E
-        JR      J44B3
+J449B:  LD      IX,DERFAO
+        JR      J44C3
 
-J4491:  LD      IX,M6E77
-        JR      J44B3
+J44A1:  LD      IX,DERFNO
+        JR      J44C3
 
-J4497:  LD      IX,M481C
-        JR      J44B3
+J44A7:  LD      IX,USERR
+        JR      J44C3
 
-J449D:  LD      IX,M4055
-        JR      J44B3
+J44AD:  LD      IX,SNERR
+        JR      J44C3
 
-J44A3:  LD      IX,M475A
-        JR      J44B3
+J44B3:  LD      IX,FCERR
+        JR      J44C3
 
-J44A9:  LD      IX,M406D
-        JR      J44B3
+J44B9:  LD      IX,TMERR
+        JR      J44C3
 
-J44AF:  LD      IX,M73B2
-J44B3:  JP      C4588
+J44BF:  LD      IX,DIOERR
+J44C3:  JP      C4598                   ; call mainrom and enable interrupts
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C44B6:  PUSH    AF
+C44C6:  PUSH    AF
         PUSH    BC
         PUSH    DE
         PUSH    IX
         LD      E,A
         LD      A,B
         LD      IX,WRSLT
-        CALL    C458D
+        CALL    C459D                   ; call mainrom
         EI
         INC     HL
         POP     IX
@@ -958,12 +960,12 @@ C44B6:  PUSH    AF
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C44CC:  PUSH    BC
+C44DC:  PUSH    BC
         PUSH    DE
         PUSH    IX
         LD      A,B
         LD      IX,RDSLT
-        CALL    C458D
+        CALL    C459D                   ; call mainrom
         EI
         INC     HL
         POP     IX
@@ -975,9 +977,9 @@ C44CC:  PUSH    BC
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C44DF:  PUSH    IX
+C44EF:  PUSH    IX
         LD      IX,BREAKX
-        CALL    C458D
+        CALL    C459D                   ; call mainrom
         POP     IX
         RET
 
@@ -985,56 +987,56 @@ C44DF:  PUSH    IX
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C44EB:  PUSH    BC
+C44FB:  PUSH    BC
         LD      B,A
-        LD      A,(SERTMP+3)
+        LD      A,(BUF+3)
         AND     A
-        JR      Z,J4511
+        JR      Z,J4521
         LD      A,B
-        CP      20H     ; " "
-        JR      NC,J4511
+        CP      20H
+        JR      NC,J4521
         LD      A,5EH   ; "^"
-        CALL    C4513
+        CALL    C4523
         LD      A,B
-        ADD     A,40H   ; "@"
-        CALL    C4513
+        ADD     A,40H
+        CALL    C4523
         LD      A,B
-        CP      0AH     ; 10 
+        CP      0AH
         POP     BC
         RET     NZ
-        LD      A,0DH   ; 13 
-        CALL    C4513
-        LD      A,0AH   ; 10 
-        JR      C4513
+        LD      A,0DH
+        CALL    C4523
+        LD      A,0AH
+        JR      C4523
 
-J4511:  LD      A,B
+J4521:  LD      A,B
         POP     BC
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4513:  PUSH    AF
+C4523:  PUSH    AF
         CALL    CHPUT
         EI
-        LD      A,(SERTMP+5)
+        LD      A,(BUF+5)
         AND     A
-        JR      Z,J4524
+        JR      Z,J4534
         POP     AF
         PUSH    AF
         CALL    LPTOUT
         EI
-J4524:  POP     AF
+J4534:  POP     AF
         RET
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4526:  LD      A,(HL)
+C4536:  LD      A,(HL)
         EX      (SP),HL
         CP      (HL)
-        JP      NZ,J449D
+        JP      NZ,J44AD
         INC     HL
         EX      (SP),HL
 
@@ -1042,12 +1044,12 @@ C4526:  LD      A,(HL)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C452E:  PUSH    IX
-        LD      IX,M4666
+C453E:  PUSH    IX
+        LD      IX,CHRGTR
         EXX
         PUSH    HL
         EXX
-        CALL    C4588
+        CALL    C4598                   ; call mainrom and enable interrupts
         EXX
         POP     HL
         EXX
@@ -1058,9 +1060,9 @@ C452E:  PUSH    IX
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4540:  PUSH    IX
-        LD      IX,M4C64
-        CALL    C4588
+C4550:  PUSH    IX
+        LD      IX,FRMEVL
+        CALL    C4598                   ; call mainrom and enable interrupts
         POP     IX
         RET
 
@@ -1068,9 +1070,9 @@ C4540:  PUSH    IX
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C454C:  PUSH    IX
-        LD      IX,M542F
-        CALL    C4588
+C455C:  PUSH    IX
+        LD      IX,GETUIN
+        CALL    C4598                   ; call mainrom and enable interrupts
         POP     IX
         RET
 
@@ -1078,9 +1080,9 @@ C454C:  PUSH    IX
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4558:  PUSH    IX
-        LD      IX,M521C
-        CALL    C4588
+C4568:  PUSH    IX
+        LD      IX,GETBYT
+        CALL    C4598                   ; call mainrom and enable interrupts
         POP     IX
         RET
 
@@ -1088,9 +1090,9 @@ C4558:  PUSH    IX
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4564:  PUSH    IX
-        LD      IX,M5EA4
-        CALL    C4588
+C4574:  PUSH    IX
+        LD      IX,PTRGET
+        CALL    C4598                   ; call mainrom and enable interrupts
         POP     IX
         RET
 
@@ -1098,9 +1100,9 @@ C4564:  PUSH    IX
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4570:  PUSH    IX
-        LD      IX,M67D0
-        CALL    C4588
+C4580:  PUSH    IX
+        LD      IX,FRESTR
+        CALL    C4598                   ; call mainrom and enable interrupts
         POP     IX
         RET
 
@@ -1108,9 +1110,9 @@ C4570:  PUSH    IX
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C457C:  PUSH    IX
-        LD      IX,M517A
-        CALL    C4588
+C458C:  PUSH    IX
+        LD      IX,DOCNVF
+        CALL    C4598                   ; call mainrom and enable interrupts
         POP     IX
         RET
 
@@ -1118,7 +1120,7 @@ C457C:  PUSH    IX
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4588:  CALL    C458D
+C4598:  CALL    C459D                   ; call mainrom
         EI
         RET
 
@@ -1126,7 +1128,7 @@ C4588:  CALL    C458D
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C458D:  PUSH    IY
+C459D:  PUSH    IY
         LD      IY,(EXPTBL+0-1)
         CALL    CALSLT
         POP     IY
@@ -1136,14 +1138,14 @@ C458D:  PUSH    IY
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4599:  CALL    C4C56
-        CALL    C4C50
+J45A9:  CALL    C4C41
+        CALL    C4C3B                   ; RS232 port open ?
         DI
-        CALL    C4E7E
+        CALL    C4E66                   ; disable RS232 interrupts
         EI
         LD      A,(LSTCOM)
-        LD      (SERTMP+2),A
-        LD      IY,SERTMP+9
+        LD      (BUF+2),A
+        LD      IY,BUF+9
         PUSH    BC
         PUSH    DE
         PUSH    HL
@@ -1158,83 +1160,83 @@ C4599:  CALL    C4C56
         LD      A,B
         AND     C
         INC     A
-        JR      NZ,J45D9
+        JR      NZ,J45E9
         LD      A,D
         AND     A
-        JP      Z,J4645
+        JP      Z,J4655
         CP      3AH     ; ":"
-        JP      Z,J4645
+        JP      Z,J4655
         CP      29H     ; ")"
-        JP      Z,J4642
-        CALL    C4526
-        INC     L
-        JR      J45FF
+        JP      Z,J4652
+        CALL    C4536
+        DEFB    ","
+        JR      J460F
 
-J45D9:  PUSH    HL
+J45E9:  PUSH    HL
         EXX
         PUSH    HL
         EXX
         POP     HL
         LD      A,B
         AND     A
-        JR      Z,J45F2
+        JR      Z,J4602
         PUSH    IY
         POP     DE
-J45E5:  LD      A,(HL)
+J45F5:  LD      A,(HL)
         CP      20H     ; " "
-        JR      Z,J45EE
-        CALL    C4D02
+        JR      Z,J45FE
+        CALL    C4CED                   ; to uppercase
         LD      (DE),A
-J45EE:  INC     DE
+J45FE:  INC     DE
         INC     HL
-        DJNZ    J45E5
-J45F2:  POP     HL
+        DJNZ    J45F5
+J4602:  POP     HL
         DEC     HL
-        CALL    C452E
-        CP      29H     ; ")"
-        JR      Z,J4642
-        CALL    C4526
-        INC     L
-J45FF:  CP      2CH     ; ","
-        JR      Z,J4619
-        CALL    C454C
+        CALL    C453E                   ; get next BASIC character
+        CP      ")"
+        JR      Z,J4652
+        CALL    C4536
+        DEFB    ","
+J460F:  CP      ","
+        JR      Z,J4629
+        CALL    C455C
         LD      (IY+8),E
         LD      (IY+9),D
         LD      A,(HL)
         CP      29H     ; ")"
-        JR      NZ,J4619
+        JR      NZ,J4629
         LD      (IY+10),E
         LD      (IY+11),D
-        JR      J4642
+        JR      J4652
 
-J4619:  CALL    C4526
-        INC     L
-        CP      2CH     ; ","
-        JR      Z,J462F
-        CALL    C454C
+J4629:  CALL    C4536
+        DEFB    ","
+        CP      ","
+        JR      Z,J463F
+        CALL    C455C
         LD      (IY+10),E
         LD      (IY+11),D
         LD      A,(HL)
         CP      29H     ; ")"
-        JR      Z,J4642
-J462F:  CALL    C4526
-        INC     L
-        CP      29H     ; ")"
-        JR      Z,J4642
-        CALL    C4558
+        JR      Z,J4652
+J463F:  CALL    C4536
+        DEFB    ","
+        CP      ")"
+        JR      Z,J4652
+        CALL    C4568
         LD      (IY+12),A
-        CALL    C4526
-        ADD     HL,HL
+        CALL    C4536
+        DEFB    ")"
         DEC     HL
-J4642:  CALL    C452E
-J4645:  EI
-        CALL    C4D0B
-        JP      C,J44A3
-        CALL    C4C50
-        CALL    NZ,C4E85
-        LD      A,(SERTMP+2)
+J4652:  CALL    C453E                   ; get next BASIC character
+J4655:  EI
+        CALL    C4CF6                   ; initialize RS232
+        JP      C,J44B3                 ; illegal function call
+        CALL    C4C3B                   ; RS232 port open ?
+        CALL    NZ,C4E6D                ; yep, enable RS232 interrupts
+        LD      A,(BUF+2)
         BIT     5,A
-        CALL    NZ,C5189
+        CALL    NZ,C5134                ; RTS=1
         AND     A
         RET
 
@@ -1242,18 +1244,18 @@ J4645:  EI
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C465C:  CALL    C4C56
-        CALL    C4CBF
-        CALL    C4526
-        INC     L
-I4666:  CALL    C4C50
-        JP      Z,J4491
-        CALL    C454C
-        CALL    C4526
-        ADD     HL,HL
+J466C:  CALL    C4C41
+        CALL    C4CAA
+        CALL    C4536
+        DEFB    ","
+        CALL    C4C3B                   ; RS232 port open ?
+        JP      Z,J44A1                 ; nope,
+        CALL    C455C
+        CALL    C4536
+        DEFB    ")"
         LD      A,D
         OR      E
-        CALL    C51A6
+        CALL    C5147                   ; RS232 dtr
         EI
         RET
 
@@ -1261,20 +1263,20 @@ I4666:  CALL    C4C50
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C467A:  CALL    C4C56
-        CALL    C4CBF
-        CALL    C4526
-        INC     L
-        CALL    C4C50
-        JP      Z,J4491
-        CALL    C4564
+J468A:  CALL    C4C41
+        CALL    C4CAA
+        CALL    C4536
+        DEFB    ","
+        CALL    C4C3B                   ; RS232 port open ?
+        JP      Z,J44A1                 ; nope,
+        CALL    C4574
         PUSH    HL
-        CALL    C51BE
+        CALL    C515F                   ; RS232 stat
         LD      (DAC+2),HL
         POP     HL
-        CALL    C4CC9
-        CALL    C4526
-        ADD     HL,HL
+        CALL    C4CB4
+        CALL    C4536
+        DEFB    ")"
         AND     A
         RET
 
@@ -1282,66 +1284,66 @@ C467A:  CALL    C4C56
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C469E:  CALL    C4C56
-        CALL    C4CBF
-        CALL    C4C50
-        JP      Z,J4491
+J46AE:  CALL    C4C41
+        CALL    C4CAA
+        CALL    C4C3B                   ; RS232 port open ?
+        JP      Z,J44A1                 ; nope,
         LD      A,D
         CP      2CH     ; ","
-        JR      Z,J46BF
+        JR      Z,J46CF
         AND     A
-        JR      Z,J46BA
+        JR      Z,J46CA
         CP      3AH     ; ":"
-        JR      Z,J46BA
-        CALL    C4526
-        ADD     HL,HL
-J46BA:  LD      DE,10
-        JR      J46C9
+        JR      Z,J46CA
+        CALL    C4536
+        DEFB    ")"
+J46CA:  LD      DE,10
+        JR      J46D9
 
-J46BF:  CALL    C452E
-        CALL    C454C
-        CALL    C4526
-        ADD     HL,HL
-J46C9:  PUSH    HL
+J46CF:  CALL    C453E                   ; get next BASIC character
+        CALL    C455C
+        CALL    C4536
+        DEFB    ")"
+J46D9:  PUSH    HL
         LD      HL,2
         AND     A
         SBC     HL,DE
-        JP      NC,J44A3
+        JP      NC,J44B3                ; illegal function call
         POP     HL
-        CALL    C5143
+        CALL    C50EE                   ; RS232 sndbrk
         EI
         LD      A,00H
         INC     A
-        CALL    C50D1
-        JP      C,J44AF
+        CALL    C50B3
+        JP      C,J44BF
         AND     A
         RET
 
 ;         Subroutine CALL COMTERM statement
 ;            Inputs  ________________________
 ;            Outputs ________________________
-;            Remark  BUGFIX: _COMTERM in basic program, something with cursor
+;            Remark  BUGFIX: _COMTERM in basic program, run away BASIC pointer part 2
 
-C46E3:  CALL    C4C56
-        CALL    C4CBF
+J46F3:  CALL    C4C41
+        CALL    C4CAA
         LD      A,D
         AND     A
-        JR      Z,J46F5
-        CP      3AH     ; ":"
-        JR      Z,J46F5
-        CALL    C4526
-        ADD     HL,HL
-J46F5:  LD      (SERTMP+7),HL
-        CALL    C4C50
-        JP      NZ,J448B
+        JR      Z,J4705
+        CP      ":"
+        JR      Z,J4705
+        CALL    C4536
+        DEFB    ")"
+J4705:  LD      (BUF+7),HL		; save BASIC pointer
+        CALL    C4C3B                   ; RS232 port open ?
+        JP      NZ,J449B                ; yep, file already open
         XOR     A
-        LD      (SERTMP+0),A
-        LD      (SERTMP+5),A
-        LD      (SERTMP+3),A
-        LD      (SERTMP+4),A
+        LD      (BUF+0),A
+        LD      (BUF+5),A
+        LD      (BUF+3),A
+        LD      (BUF+4),A
         LD      HL,FNKSTR+5*16
-        LD      DE,I.F56E
-        LD      BC,48
+        LD      DE,BUF+16
+        LD      BC,3*16
         PUSH    BC
         PUSH    HL
         LDIR
@@ -1349,11 +1351,11 @@ J46F5:  LD      (SERTMP+7),HL
         POP     BC
         LD      B,C
         PUSH    HL
-J471C:  LD      (HL),00H
+J472C:  LD      (HL),00H
         INC     HL
-        DJNZ    J471C
+        DJNZ    J472C
         POP     DE
-        LD      HL,I4906
+        LD      HL,I490C
         LD      BC,5
         PUSH    BC
         LDIR
@@ -1366,193 +1368,189 @@ J471C:  LD      (HL),00H
         PUSH    BC
         LDIR
         POP     BC
-        XOR     A
-        LD      (SERTMP+9),A            ; cursor currently off
         LD      A,(CSRSR)
-        LD      (SERTMP+6),A            ; save current cursor status
-        CALL    C4927                   ; cursor on
-        LD      HL,(NULBUF)
+        LD      (BUF+6),A
+        CALL    C492D
+        LD      HL,(NULBUF)		; use NULBUF as FCB
         LD      E,4
         LD      C,120
-        CALL    C4260                   ; RS232 open
-J4751:  EI
-        CALL    C4322                   ; RS232 loc
+        CALL    C4270                   ; RS232 open
+J475D:  EI
+        CALL    C4332                   ; RS232 loc
         LD      A,L
         OR      H
-        JR      Z,J4786
-        CALL    C4915
-        JR      C,J47B5
+        JR      Z,J478F
+        CALL    C491B
+        JR      C,J47BB
         LD      C,A
-        CALL    C4944                   ; cursor off
-        LD      A,(SERTMP+0)
+        LD      A,(BUF+0)
         AND     A
-        JR      NZ,J4778
-        LD      A,C
-I4769:  CP      1BH
-        JR      NZ,J4773
-        LD      A,01H   ; 1 
-        LD      (SERTMP+0),A
-        LD      A,C
-J4773:  CALL    C44EB
-        JR      J4789
-
-J4778:  XOR     A
-        LD      (SERTMP+0),A
+        JR      NZ,J4781
         LD      A,C
         CP      1BH
-        JR      NZ,J4773
-        CALL    C44EB
-        JR      J47D8
+        JR      NZ,J477C
+        LD      A,01H   ; 1 
+        LD      (BUF+0),A
+        LD      A,C
+J477C:  CALL    C44FB
+        JR      J478F
 
-J4786:  CALL    C4927                   ; cursor on
-J4789:  CALL    C4964
-        CALL    NZ,C491F
-        CALL    C44DF
-        JR      C,J47B5
+J4781:  XOR     A
+        LD      (BUF+0),A
+        LD      A,C
+        CP      1BH
+        JR      NZ,J477C
+        CALL    C44FB
+        JR      J47DE
+
+J478F:  CALL    C494F
+        CALL    NZ,C4925
+        CALL    C44EF
+        JR      C,J47BB
         CALL    CHSNS
         EI
-        JR      Z,J4751
+        JR      Z,J475D
         CALL    CHGET
         EI
         CP      0A0H
-        JP      Z,J48E5
-        CALL    C491A
+        JP      Z,J48EB
+        CALL    C4920
         LD      C,A
-        LD      A,(SERTMP+4)
+        LD      A,(BUF+4)
         AND     A
-        JP      Z,J4751
+        JP      Z,J475D
         LD      A,C
-        CALL    C44EB
-        JP      J4751
+        CALL    C44FB
+        JP      J475D
 
-J47B5:  CALL    C429B
-        LD      HL,I.F56E
+J47BB:  CALL    C42AB                   ; RS232 close
+        LD      HL,BUF+16
         LD      DE,FNKSTR+5*16
-        LD      BC,48
+        LD      BC,3*16
         LDIR
-        LD      HL,(SERTMP+7)
-        LD      A,(SERTMP+6)
-        AND     A                       ; saved cursor status
+        LD      HL,(BUF+7)		; restore BASIC pointer
+        LD      A,(BUF+6)
+        AND     A
         PUSH    AF
-        CALL    Z,C4944                 ; was off, cursor off
+        CALL    Z,C493D
         POP     AF
-        CALL    NZ,C4927                ; was on, cursor on
+        CALL    NZ,C492D
         XOR     A
         DI
         LD      (INTFLG),A
         RET
 
-J47D8:  LD      A,(SERTMP+3)
+J47DE:  LD      A,(BUF+3)
         AND     A
-        JP      NZ,J4751
-        CALL    C4944                   ; cursor off
+        JP      NZ,J475D
+        CALL    C493D
         LD      A,0FFH
-        LD      (SERTMP+1),A
-J47E7:  CALL    C4915
-        JP      C,J47B5
+        LD      (BUF+1),A
+J47ED:  CALL    C491B
+        JP      C,J47BB
         CP      3AH     ; ":"
-        JR      NZ,J47E7
-        CALL    C48B3
-        JP      C,J486A
+        JR      NZ,J47ED
+        CALL    C48B9
+        JP      C,J4870
         AND     A
-        JR      Z,J4841
-        LD      B,A
+        JR      Z,J4847
+I4800:  LD      B,A
         LD      E,A
-        CALL    C48A8
-        JP      C,J486A
-        CALL    C48B3
-        JP      C,J486A
+        CALL    C48AE
+        JP      C,J4870
+        CALL    C48B9
+        JP      C,J4870
         ADD     A,L
         ADD     A,H
         ADD     A,E
         LD      E,A
-J480C:  CALL    C48B3
-        JR      C,J486A
+J4812:  CALL    C48B9
+        JR      C,J4870
         LD      (HL),A
         ADD     A,E
         LD      E,A
         INC     HL
-        DJNZ    J480C
-        CALL    C48B3
-        JR      C,J486A
-I481C:  ADD     A,E
-        JR      NZ,J486A
+        DJNZ    J4812
+        CALL    C48B9
+        JR      C,J4870
+        ADD     A,E
+        JR      NZ,J4870
         LD      A,47H   ; "G"
-        CALL    C491A
-        LD      A,(SERTMP+1)
+        CALL    C4920
+        LD      A,(BUF+1)
         AND     A
-        JR      Z,J4835
+        JR      Z,J483B
         INC     A
-        LD      (SERTMP+1),A
+        LD      (BUF+1),A
         LD      A,2AH   ; "*"
-        CALL    C44EB
-        JR      J483E
+        CALL    C44FB
+        JR      J4844
 
-J4835:  DEC     A
-        LD      (SERTMP+1),A
+J483B:  DEC     A
+        LD      (BUF+1),A
         LD      A,7FH
-        CALL    C44EB
-J483E:  JP      J47E7
+        CALL    C44FB
+J4844:  JP      J47ED
 
-J4841:  CALL    C48A8
-        JR      C,J486A
+J4847:  CALL    C48AE
+        JR      C,J4870
         LD      A,H
         OR      L
-        JR      NZ,J4872
-        CALL    C48B3
-C484B   EQU     $-2
-        JR      C,J486A
+        JR      NZ,J4878
+        CALL    C48B9
+        JR      C,J4870
         CP      01H     ; 1 
-        JR      NZ,J486A
-        CALL    C48B3
-        JR      C,J486A
-I4858:  CP      0FFH
-        JR      NZ,J486A
-J485C:  LD      A,47H   ; "G"
-        CALL    C491A
-        CALL    C495B
-        CALL    C4927                   ; cursor on
-        JP      J4751
+        JR      NZ,J4870
+        CALL    C48B9
+        JR      C,J4870
+        CP      0FFH
+        JR      NZ,J4870
+J4862:  LD      A,47H   ; "G"
+        CALL    C4920
+        CALL    C4946
+        CALL    C492D
+        JP      J475D
 
-J486A:  LD      A,42H   ; "B"
-        CALL    C491A
-        JP      J47E7
-J4872:  CALL    C48B3
-        JR      C,J486A
+J4870:  LD      A,42H   ; "B"
+        CALL    C4920
+        JP      J47ED
+
+J4878:  CALL    C48B9
+        JR      C,J4870
         CP      01H     ; 1 
-        JR      NZ,J486A
+        JR      NZ,J4870
         ADD     A,L
         ADD     A,H
         LD      E,A
-        CALL    C48B3
-        JR      C,J486A
+        CALL    C48B9
+        JR      C,J4870
         ADD     A,E
-        JR      NZ,J486A
-        CALL    C4915
-        JP      C,J47B5
+        JR      NZ,J4870
+        CALL    C491B
+        JP      C,J47BB
         CP      0AH     ; 10 
-        JR      NZ,J485C
+        JR      NZ,J4862
         LD      A,47H   ; "G"
-        CALL    C491A
-        CALL    C495B
+        CALL    C4920
+        CALL    C4946
         PUSH    IX
         PUSH    HL
-        LD      HL,I48A0
+        LD      HL,I48A6
         EX      (SP),HL
         JP      (HL)
 
-I48A0:  POP     IX
-        CALL    C4927                   ; cursor on
-        JP      J4751
+I48A6:  POP     IX
+        CALL    C492D
+        JP      J475D
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C48A8:  CALL    C48B3
+C48AE:  CALL    C48B9
         RET     C
         LD      H,A
-        CALL    C48B3
+        CALL    C48B9
         RET     C
         LD      L,A
         RET
@@ -1561,65 +1559,65 @@ C48A8:  CALL    C48B3
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C48B3:  PUSH    BC
-        CALL    C4915
-        JR      C,J48CE
-        CALL    C48D0
-        JR      C,J48CE
+C48B9:  PUSH    BC
+        CALL    C491B
+        JR      C,J48D4
+        CALL    C48D6
+        JR      C,J48D4
         ADD     A,A
         ADD     A,A
         ADD     A,A
         ADD     A,A
         LD      B,A
-        CALL    C4915
-        JR      C,J48CE
-        CALL    C48D0
-        JR      C,J48CE
+        CALL    C491B
+        JR      C,J48D4
+        CALL    C48D6
+        JR      C,J48D4
         ADD     A,B
-J48CE:  POP     BC
+J48D4:  POP     BC
         RET
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C48D0:  CALL    C4D02
-        SUB     30H     ; "0"
+C48D6:  CALL    C4CED                   ; to uppercase
+        SUB     "0"
         RET     C
-        CP      0AH     ; 10 
-        JR      C,J48E3
-        SUB     11H     ; 17 
+        CP      0AH
+        JR      C,J48E9
+        SUB     11H
         RET     C
-        CP      06H     ; 6 
+        CP      06H
         CCF
         RET     C
         ADD     A,0AH   ; 10 
-J48E3:  AND     A
+J48E9:  AND     A
         RET
 
-J48E5:  CALL    CHGET
+J48EB:  CALL    CHGET
         EI
-        SUB     06H     ; 6 
-        JR      Z,J48F8
+        SUB     06H
+        JR      Z,J48FE
         DEC     A
-        JR      Z,J48FD
+        JR      Z,J4903
         DEC     A
-        JR      NZ,J4903
-        LD      HL,SERTMP+5
-        JR      J4900
+        JR      NZ,J4909
+        LD      HL,BUF+5
+        JR      J4906
 
-J48F8:  LD      HL,SERTMP+3
-        JR      J4900
+J48FE:  LD      HL,BUF+3
+        JR      J4906
 
-J48FD:  LD      HL,SERTMP+4
-J4900:  LD      A,(HL)
+J4903:  LD      HL,BUF+4
+J4906:  LD      A,(HL)
         CPL
         LD      (HL),A
-J4903:  JP      J4751
+J4909:  JP      J475D
 
 ; functionkey definitions F5-F7
 
-I4906:  DEFB    0A0H,006H,000H,06CH,069H
+I490C:  DEFB    0A0H,006H,000H,06CH,069H
         DEFB    0A0H,007H,000H,068H,066H
         DEFB    0A0H,008H,000H,070H,065H
 
@@ -1627,7 +1625,7 @@ I4906:  DEFB    0A0H,006H,000H,06CH,069H
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4915:  CALL    C4EA6
+C491B:  CALL    C4E8E
         EI
         RET
 
@@ -1635,7 +1633,7 @@ C4915:  CALL    C4EA6
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C491A:  CALL    C5003
+C4920:  CALL    C4FE5                   ; RS232 sndchr
         EI
         RET
 
@@ -1643,61 +1641,46 @@ C491A:  CALL    C5003
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C491F:  LD      DE,100
-        CALL    C5143
+C4925:  LD      DE,100
+        CALL    C50EE                   ; RS232 sndbrk
         EI
         RET
 
-;         Subroutine cursor on
+;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4927:  LD      A,(ESCCNT)
-        OR      A
-        RET     NZ
-        LD      A,(SERTMP+9)
-        OR      A
-        RET     NZ
-        CPL
-        LD      (SERTMP+9),A
-        LD      A,1BH
-        CALL    CHPUT
+C492D:  LD      A,1BH
+        CALL    C44FB
         LD      A,"y"
-J493C:  CALL    CHPUT
+J4934:  CALL    C44FB
         LD      A,"5"
-J4941:  JP      CHPUT
+J4939:  CALL    C44FB
+        RET
 
-;         Subroutine cursor off
+;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4944:  LD      A,(ESCCNT)
-        OR      A
-        RET     NZ
-        LD      A,(SERTMP+9)
-        OR      A
-        RET     Z
-        CPL
-        LD      (SERTMP+9),A
-        LD      A,1BH
-        CALL    CHPUT
+C493D:  LD      A,1BH
+        CALL    C44FB
         LD      A,"x"
-        JR      J493C
+        JR      J4934
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C495B:  LD      A,0DH   ; 13 
-        CALL    C44EB
-        LD      A,0AH   ; 10 
-        JR      J4941
-;
+C4946:  LD      A,0DH
+        CALL    C44FB
+        LD      A,0AH
+        JR      J4939
+
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4964:  LD      A,(INTFLG)
+C494F:  LD      A,(INTFLG)
         AND     A
         RET     Z
         XOR     A
@@ -1711,57 +1694,57 @@ C4964:  LD      A,(INTFLG)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C496F:  CALL    C4C56
-        CALL    C4CBF
+J495A:  CALL    C4C41
+        CALL    C4CAA
         LD      A,D
         AND     A
-        JR      Z,J4981
+        JR      Z,J496C
         CP      3AH     ; ":"
-        JR      Z,J4981
-        CALL    C4526
-        ADD     HL,HL
-J4981:  XOR     A
-        LD      (SERTMP+3),A
-        LD      (SERTMP+5),A
-        LD      (SERTMP+4),A
+        JR      Z,J496C
+        CALL    C4536
+        DEFB    ")"
+J496C:  XOR     A
+        LD      (BUF+3),A
+        LD      (BUF+5),A
+        LD      (BUF+4),A
         PUSH    HL
-        CALL    C495B
-        LD      HL,I49C8
-J4992:  LD      A,(HL)
+        CALL    C4946
+        LD      HL,I49B3
+J497D:  LD      A,(HL)
         INC     HL
         INC     A
-        JR      Z,J49C5
+        JR      Z,J49B0
         DEC     A
-        JR      Z,J49A7
-        CALL    C44EB
+        JR      Z,J4992
+        CALL    C44FB
         LD      A,(INTFLG)
         AND     A
-        JR      Z,J4992
+        JR      Z,J497D
         CP      03H     ; 3 
-        JR      Z,J49C5
-J49A7:  PUSH    HL
+        JR      Z,J49B0
+J4992:  PUSH    HL
         LD      HL,INTFLG
         LD      (HL),00H
-        CALL    C4927
-J49B0:  EI
+        CALL    C492D
+J499B:  EI
         LD      A,(HL)
         AND     A
-        JR      Z,J49B0
+        JR      Z,J499B
         PUSH    AF
-        CALL    C4944                   ; cursor off
+        CALL    C493D
         POP     AF
         POP     HL
         CP      03H     ; 3 
-        JR      Z,J49C5
+        JR      Z,J49B0
         XOR     A
         LD      (INTFLG),A
-        JR      J4992
+        JR      J497D
 
-J49C5:  POP     HL
+J49B0:  POP     HL
         AND     A
         RET
 
-I49C8:  DEFB    "Initialize statement options",13,10
+I49B3:  DEFB    "Initialize statement options",13,10
         DEFB    13,10
         DEFB    'CALL COMINI ("',13,10
         DEFB    "<device# {0,1,2...9}>:",13,10
@@ -1788,33 +1771,33 @@ I49C8:  DEFB    "Initialize statement options",13,10
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4B66:  CALL    C4C56
-        CALL    C4CBF
-        CALL    C4C43
-        JP      C,J44A3
-J4B72:  CALL    C4526
-        INC     L
-J4B76:  CALL    C4526
-        ADC     A,L
-J4B7A:  LD      IX,M4769
-        CALL    C4588
+J4B51:  CALL    C4C41
+        CALL    C4CAA
+        CALL    C4C2E                   ; get trap number
+        JP      C,J44B3                 ; illegal function call
+J4B5D:  CALL    C4536
+        DEFB    ","
+J4B61:  CALL    C4536
+        DEFB    08DH
+J4B65:  LD      IX,LINGET               ; collect linenumber
+        CALL    C4598                   ; call mainrom and enable interrupts
         PUSH    HL
         LD      A,E
-        OR      D
-        JR      Z,J4B92
-        LD      IX,M4295
-        CALL    C4588
-J4B8D:  JP      NC,J4497
+        OR      D                       ; linenumber = 0 ?
+        JR      Z,J4B7D                 ; yep,
+        LD      IX,FNDLIN               ; search linenumber
+        CALL    C4598                   ; call mainrom and enable interrupts
+        JP      NC,J44A7                ; not found,
         LD      E,C
         LD      D,B
-J4B92:  CALL    C4C30
-J4B95:  INC     HL
+J4B7D:  CALL    C4C1B                   ; get trap entry
+J4B80:  INC     HL
         LD      (HL),E
         INC     HL
         LD      (HL),D
         POP     HL
-        CALL    C4526
-        ADD     HL,HL
+        CALL    C4536
+        DEFB    ")"
         AND     A
         RET
 
@@ -1822,65 +1805,65 @@ J4B95:  INC     HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4BA0:  CALL    C4C56
-        CALL    C4CBF
+J4B8B:  CALL    C4C41
+        CALL    C4CAA
         LD      A,D
         AND     A
-        JR      Z,J4BB2
-        CP      3AH     ; ":"
-        JR      Z,J4BB2
-        CALL    C4526
-        ADD     HL,HL
-J4BB2:  CALL    C4C43
-        JP      C,J44A3
-        LD      IX,M632B
-        JR      J4C05
+        JR      Z,J4B9D
+        CP      ":"
+        JR      Z,J4B9D
+        CALL    C4536
+        DEFB    ")"
+J4B9D:  CALL    C4C2E                   ; get trap number
+        JP      C,J44B3                 ; illegal function call
+        LD      IX,OFFTRP               ; disable trap
+        JR      J4BF0
 
 ;         Subroutine CALL COMON statement
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4BBE:  CALL    C4C56
-        CALL    C4CBF
+J4BA9:  CALL    C4C41
+        CALL    C4CAA
         LD      A,D
         AND     A
-        JR      Z,J4BD0
-        CP      3AH     ; ":"
-        JR      Z,J4BD0
-        CALL    C4526
-        ADD     HL,HL
-J4BD0:  CALL    C4C43
-        JP      C,J44A3
-        LD      IX,M631B
-        JR      J4BF8
+        JR      Z,J4BBB
+        CP      ":"
+        JR      Z,J4BBB
+        CALL    C4536
+        DEFB    ")"
+J4BBB:  CALL    C4C2E                   ; get trap number
+        JP      C,J44B3                 ; illegal function call
+        LD      IX,ONTRP                ; enable trap
+        JR      J4BE3
 
 ;         Subroutine CALL COMSTOP statement
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4BDC:  CALL    C4C56
-        CALL    C4CBF
+J4BC7:  CALL    C4C41
+        CALL    C4CAA
         LD      A,D
         AND     A
-        JR      Z,J4BEE
-        CP      3AH     ; ":"
-        JR      Z,J4BEE
-        CALL    C4526
-        ADD     HL,HL
-J4BEE:  CALL    C4C43
-        JP      C,J44A3
-        LD      IX,M6331
-J4BF8:  PUSH    HL
+        JR      Z,J4BD9
+        CP      ":"
+        JR      Z,J4BD9
+        CALL    C4536
+        DEFB    ")"
+J4BD9:  CALL    C4C2E                   ; get trap number
+        JP      C,J44B3                 ; illegal function call
+        LD      IX,STPTRP               ; pause trap
+J4BE3:  PUSH    HL
         PUSH    AF
-        CALL    C4C30
+        CALL    C4C1B                   ; get trap entry
         LD      A,(HL)
-        AND     01H     ; 1 
-        CALL    Z,C4135
+        AND     01H                     ; trap enabled ?
+        CALL    Z,C4135                 ; nope, empty receive buffer and clear error flags
         POP     AF
         POP     HL
-J4C05:  PUSH    HL
-        CALL    C4C30
-        CALL    C4588
+J4BF0:  PUSH    HL
+        CALL    C4C1B                   ; get trap entry
+        CALL    C4598                   ; call mainrom and enable interrupts
         POP     HL
         AND     A
         RET
@@ -1889,10 +1872,10 @@ J4C05:  PUSH    HL
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-I4C0F:  EI
-        CALL    C4E92
+I4BFA:  EI
+        CALL    C4E7A
         PUSH    HL
-        CALL    NZ,C4C1B
+        CALL    NZ,C4C06
         POP     HL
         JP      OLDSTT
 
@@ -1900,33 +1883,33 @@ I4C0F:  EI
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4C1B:  CALL    C4C30
+C4C06:  CALL    C4C1B                   ; get trap entry
         LD      A,(HL)
-        AND     01H     ; 1 
-        RET     Z
+        AND     01H                     ; trap enabled ?
+        RET     Z                       ; nope, quit
         LD      A,(HL)
-        OR      04H     ; 4 
-        CP      (HL)
-        RET     Z
-        CP      05H     ; 5 
-        RET     NZ
-        LD      (HL),A
+        OR      04H
+        CP      (HL)                    ; trap occured already set ?
+        RET     Z                       ; yep, quit
+        CP      05H                     ; trap enabled and trap occured and trap not paused ?
+        RET     NZ                      ; trap paused, quit
+        LD      (HL),A                  ; flag trap occured
         LD      HL,ONGSBF
-        INC     (HL)
+        INC     (HL)                    ; increase trap counter
         RET
 
 ;         Subroutine get trap entry
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4C30:  CALL    C4C43
-        JP      C,J44A3
+C4C1B:  CALL    C4C2E                   ; get trap number
+        JP      C,J44B3                 ; illegal function call
         PUSH    BC
         LD      C,A
         ADD     A,A
         ADD     A,C
         LD      C,A
-        LD      B,00H
+        LD      B,0
         LD      HL,TRPTBL+18*3
         ADD     HL,BC
         POP     BC
@@ -1936,13 +1919,13 @@ C4C30:  CALL    C4C43
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4C43:  LD      A,(DEVNUM)
+C4C2E:  LD      A,(DEVNUM)
         AND     0F0H
         RRCA
         RRCA
         RRCA
         RRCA
-        CP      06H     ; 6 
+        CP      06H
         CCF
         RET
 
@@ -1950,7 +1933,7 @@ C4C43:  LD      A,(DEVNUM)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4C50:  LD      A,(FLAGS)
+C4C3B:  LD      A,(FLAGS)
         BIT     3,A
         RET
 
@@ -1958,28 +1941,28 @@ C4C50:  LD      A,(FLAGS)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4C56:  DEC     HL
-        CALL    C452E
+C4C41:  DEC     HL
+        CALL    C453E                   ; get next BASIC character
         LD      D,A
-        JR      NZ,J4C64
-J4C5D:  XOR     A
-        LD      BC,-1
+        JR      NZ,J4C4F
+J4C48:  XOR     A
+        LD      BC,0FFFFH
         PUSH    HL
-        JR      J4CA2
+        JR      J4C8D
 
-J4C64:  CP      28H     ; "("
-        JP      Z,J4C6F
+J4C4F:  CP      "("
+        JP      Z,J4C5A
         CP      2CH     ; ","
-        JR      Z,J4C5D
-        JR      J4C77
+        JR      Z,J4C48
+        JR      J4C62
 
-J4C6F:  CALL    C452E
+J4C5A:  CALL    C453E                   ; get next BASIC character
         LD      D,A
         CP      2CH     ; ","
-        JR      Z,J4C5D
-J4C77:  CALL    C4540
+        JR      Z,J4C48
+J4C62:  CALL    C4550
         PUSH    HL
-        CALL    C4570
+        CALL    C4580
         LD      C,00H
         LD      B,(HL)
         INC     HL
@@ -1989,28 +1972,28 @@ J4C77:  CALL    C4540
         LD      L,A
         LD      A,B
         AND     A
-        JR      Z,J4CA2
+        JR      Z,J4C8D
         INC     HL
         LD      A,(HL)
         CP      3AH     ; ":"
-        JR      Z,J4C94
+        JR      Z,J4C7F
         DEC     HL
         XOR     A
-        JR      J4CA2
+        JR      J4C8D
 
-J4C94:  DEC     HL
+J4C7F:  DEC     HL
         LD      A,(HL)
-        SUB     30H     ; "0"
-        JR      C,J4CBC
-        CP      0AH     ; 10 
-        JR      NC,J4CBC
+        SUB     "0"
+        JR      C,J4CA7
+        CP      0AH
+        JR      NC,J4CA7
         INC     HL
         INC     HL
         DEC     B
         DEC     B
-J4CA2:  LD      E,A
+J4C8D:  LD      E,A
         LD      A,(DEVNUM)
-        AND     0FH     ; 15 
+        AND     0FH                     ; get device number
         PUSH    HL
         EXX
         POP     HL
@@ -2018,65 +2001,65 @@ J4CA2:  LD      E,A
         POP     HL
         PUSH    AF
         DEC     HL
-        CALL    C452E
+        CALL    C453E                   ; get next BASIC character
         LD      D,A
         POP     AF
         CP      E
         RET     Z
-J4CB6:  POP     HL
+J4CA1:  POP     HL
         PUSH    IX
         POP     HL
         SCF
         RET
 
-J4CBC:  POP     HL
-        JR      J4CB6
+J4CA7:  POP     HL
+        JR      J4CA1
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4CBF:  LD      A,B
+C4CAA:  LD      A,B
         OR      C
         RET     Z
         LD      A,B
         AND     C
         INC     A
         RET     Z
-        JP      J44A3
+        JP      J44B3                   ; illegal function call
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4CC9:  PUSH    HL
+C4CB4:  PUSH    HL
         LD      HL,VALTYP
         LD      A,(HL)
         CP      2
-        JR      Z,J4CF7
+        JR      Z,J4CE2
         CP      4
-        JR      Z,J4CE7
+        JR      Z,J4CD2
         CP      8
-        JP      NZ,J44A9
-        LD      (HL),02H        ; 2 
+        JP      NZ,J44B9
+        LD      (HL),2
         PUSH    DE
         LD      A,08H   ; 8 
-        CALL    C457C
+        CALL    C458C
         LD      C,08H   ; 8 
-        JR      J4CF1
+        JR      J4CDC
 
-J4CE7:  LD      (HL),02H        ; 2 
+J4CD2:  LD      (HL),02H        ; 2 
         PUSH    DE
         LD      A,04H   ; 4 
-        CALL    C457C
+        CALL    C458C
         LD      C,04H   ; 4 
-J4CF1:  POP     DE
-        LD      HL,DAC
-        JR      J4CFC
+J4CDC:  POP     DE
+        LD      HL,DAC+0
+        JR      J4CE7
 
-J4CF7:  LD      HL,DAC+2
+J4CE2:  LD      HL,DAC+2
         LD      C,02H   ; 2 
-J4CFC:  LD      B,00H
+J4CE7:  LD      B,00H
         LDIR
         POP     HL
         RET
@@ -2085,50 +2068,50 @@ J4CFC:  LD      B,00H
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4D02:  CP      61H     ; "a"
+C4CED:  CP      "a"
         RET     C
-        CP      7BH     ; "{"
+        CP      "z"+1
         RET     NC
-        SUB     20H     ; " "
+        SUB     20H
         RET
 
 ;         Subroutine initialize RS232
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4D0B:  LD      A,(IY)
-        SUB     35H     ; "5"
-        CP      04H     ; 4 
-        JR      NC,J4D2C
+C4CF6:  LD      A,(IY+0)
+        SUB     "5"
+        CP      04H
+        JR      NC,J4D17
         LD      B,A
         LD      D,A
-        CALL    C4DE0
+        CALL    C4DCB
         LD      A,(IY+1)
-        CP      45H     ; "E"
-        JR      Z,J4D2E
-        CP      4FH     ; "O"
-        JR      Z,J4D30
-        CP      49H     ; "I"
-        JR      Z,J4D34
-        CP      4EH     ; "N"
-        JR      Z,J4D3B
-J4D2C:  SCF
+        CP      "E"
+        JR      Z,J4D19
+        CP      "O"
+        JR      Z,J4D1B
+        CP      "I"
+        JR      Z,J4D1F
+        CP      "N"
+        JR      Z,J4D26
+J4D17:  SCF
         RET
 
-J4D2E:  SET     3,B
-J4D30:  SET     2,B
-        JR      J4D3B
+J4D19:  SET     3,B
+J4D1B:  SET     2,B
+        JR      J4D26
 
-J4D34:  LD      A,B
+J4D1F:  LD      A,B
         CP      03H     ; 3 
-        JP      Z,J4D2C
+        JP      Z,J4D17
         INC     B
-J4D3B:  RLC     B
+J4D26:  RLC     B
         RLC     B
         LD      A,(IY+2)
-        SUB     31H     ; "1"
-        CP      03H     ; 3 
-        JP      NC,J4D2C
+        SUB     "1"
+        CP      03H
+        JP      NC,J4D17
         INC     A
         RRCA
         RRCA
@@ -2136,69 +2119,69 @@ J4D3B:  RLC     B
         LD      B,A
         LD      C,00H
         LD      A,(IY+3)
-        CP      58H     ; "X"
-        JR      NZ,J4D5B
-        SET     0,C
-        JR      J4D60
+        CP      "X"
+        JR      NZ,J4D46
+        SET     0,C                     ; use XON/XOFF protocol
+        JR      J4D4B
 
-J4D5B:  CP      4EH     ; "N"
-        JP      NZ,J4D2C
-J4D60:  LD      A,(IY+4)
-        CP      48H     ; "H"
-        JR      NZ,J4D6B
-        SET     1,C
-        JR      J4D70
+J4D46:  CP      "N"
+        JP      NZ,J4D17
+J4D4B:  LD      A,(IY+4)
+        CP      "H"
+        JR      NZ,J4D56
+        SET     1,C                     ; use RTS/CTS handshake
+        JR      J4D5B
 
-J4D6B:  CP      4EH     ; "N"
-        JP      NZ,J4D2C
-J4D70:  LD      A,(IY+5)
-        CP      41H     ; "A"
-        JR      NZ,J4D7B
-        SET     3,C
-        JR      J4D80
+J4D56:  CP      "N"
+        JP      NZ,J4D17
+J4D5B:  LD      A,(IY+5)
+        CP      "A"
+        JR      NZ,J4D66
+        SET     3,C                     ; use Auto LF receive
+        JR      J4D6B
 
-J4D7B:  CP      4EH     ; "N"
-        JP      NZ,J4D2C
-J4D80:  LD      A,(IY+6)
-        CP      41H     ; "A"
-        JR      NZ,J4D8B
-        SET     2,C
-        JR      J4D90
+J4D66:  CP      "N"
+        JP      NZ,J4D17
+J4D6B:  LD      A,(IY+6)
+        CP      "A"
+        JR      NZ,J4D76
+        SET     2,C                     ; use Auto LF send
+        JR      J4D7B
 
-J4D8B:  CP      4EH     ; "N"
-        JP      NZ,J4D2C
-J4D90:  LD      A,(IY+7)
-        CP      53H     ; "S"
-        JR      NZ,J4DA1
+J4D76:  CP      "N"
+        JP      NZ,J4D17
+J4D7B:  LD      A,(IY+7)
+        CP      "S"
+        JR      NZ,J4D8C
         LD      A,D
         CP      02H     ; 2 
-        JP      NZ,J4D2C
-        SET     4,C
-        JR      J4DA6
+        JP      NZ,J4D17
+        SET     4,C                     ; use SI/SO control
+        JR      J4D91
 
-J4DA1:  CP      4EH     ; "N"
-        JP      NZ,J4D2C
-J4DA6:  LD      A,C
+J4D8C:  CP      "N"
+        JP      NZ,J4D17
+J4D91:  LD      A,C
         LD      (ESTBLS),A
         LD      A,02H   ; 2 
         OR      B
         LD      (LSTMOD),A
-        CALL    C50E3
+        CALL    C50C5
         LD      E,(IY+8)
         LD      D,(IY+9)
-        CALL    C4DF4
-        JP      C,J4D2C
-        LD      C,00H
-        CALL    C5248
+        CALL    C4DDF                   ; get countervalue
+        JP      C,J4D17
+        LD      C,0                     ; timer 0
+        CALL    C51DE                   ; initialize timer
         LD      E,(IY+10)
         LD      D,(IY+11)
-        CALL    C4DF4
-        JP      C,J4D2C
-        LD      C,01H   ; 1 
-        CALL    C5248
+        CALL    C4DDF                   ; get countervalue
+        JP      C,J4D17
+        LD      C,1                     ; timer 1
+        CALL    C51DE                   ; initialize timer
         LD      A,(IY+12)
         LD      (TOCNT),A
-        CALL    C51A9
+        CALL    C514A                   ; DTR=1
         OR      A
         RET
 
@@ -2206,15 +2189,15 @@ J4DA6:  LD      A,C
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4DE0:  PUSH    AF
+C4DCB:  PUSH    AF
         PUSH    BC
         XOR     03H     ; 3 
         LD      C,0FFH
-        JR      Z,J4DED
+        JR      Z,J4DD8
         LD      B,A
-J4DE9:  SRL     C
-        DJNZ    J4DE9
-J4DED:  LD      A,C
+J4DD4:  SRL     C
+        DJNZ    J4DD4
+J4DD8:  LD      A,C
         LD      (COMMSK),A
         POP     BC
         POP     AF
@@ -2224,46 +2207,46 @@ J4DED:  LD      A,C
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4DF4:  PUSH    HL
+C4DDF:  PUSH    HL
         BIT     7,D
-        JR      Z,J4E06
+        JR      Z,J4DF1
         LD      A,E
         AND     D
         INC     A
-        JR      Z,J4E22
+        JR      Z,J4E0D
         LD      HL,0
         SBC     HL,DE
         EX      DE,HL
-        JR      J4E21
+        JR      J4E0C
 
-J4E06:  LD      HL,I4E25
-J4E09:  LD      C,(HL)
+J4DF1:  LD      HL,I4E10
+J4DF4:  LD      C,(HL)
         INC     HL
         LD      B,(HL)
         INC     HL
         LD      A,B
         OR      C
-        JR      Z,J4E22
+        JR      Z,J4E0D
         PUSH    HL
         LD      L,E
         LD      H,D
         AND     A
         SBC     HL,BC
         POP     HL
-        JR      Z,J4E1E
+        JR      Z,J4E09
         INC     HL
         INC     HL
-        JR      J4E09
+        JR      J4DF4
 
-J4E1E:  LD      E,(HL)
+J4E09:  LD      E,(HL)
         INC     HL
         LD      D,(HL)
-J4E21:  SCF
-J4E22:  CCF
+J4E0C:  SCF
+J4E0D:  CCF
         POP     HL
         RET
 
-I4E25:  DEFW    50,00900h
+I4E10:  DEFW    50,00900h
         DEFW    75,00600h
         DEFW    110,00417h
         DEFW    300,00180h
@@ -2282,28 +2265,25 @@ I4E25:  DEFW    50,00900h
 ;         Subroutine get my slotid
 ;            Inputs  ________________________
 ;            Outputs ________________________
-;            Remark  BUGFIX: EXPTBL, use only b7
 
-C4E5F:  PUSH    BC
+C4E4A:  PUSH    BC
         PUSH    HL
         IN      A,(0A8H)
         RRCA
         RRCA
-        AND     03H     ; 3 
+        AND     03H
         LD      C,A
         LD      B,00H
         LD      HL,EXPTBL
         ADD     HL,BC
-        LD      A,(HL)
-J4E6F:  AND     80H
-        OR      C
-        LD      C,A
+        OR      (HL)
+J4E5A:  LD      C,A
         INC     HL
         INC     HL
         INC     HL
         INC     HL
         LD      A,(HL)
-        AND     0CH     ; 12 
+        AND     0CH
         OR      C
         POP     HL
         POP     BC
@@ -2313,7 +2293,7 @@ J4E6F:  AND     80H
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4E7E:  PUSH    AF
+C4E66:  PUSH    AF
         LD      A,0FFH
         OUT     (82H),A
         POP     AF
@@ -2323,7 +2303,7 @@ C4E7E:  PUSH    AF
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4E85:  PUSH    AF
+C4E6D:  PUSH    AF
         LD      A,0FEH
         OUT     (82H),A
         POP     AF
@@ -2333,20 +2313,20 @@ C4E85:  PUSH    AF
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-I4E8C:  CALL    C4EF2
+I4E74:  CALL    C4EDA
         JP      OLDINT
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4E92:  CALL    C4EA1
+C4E7A:  CALL    C4E89                   ; check if characters in receive buffer
         PUSH    BC
         LD      B,A
-        CALL    C439A
-        JR      Z,J4E9E
+        CALL    C43AA
+        JR      Z,J4E86                 ; nope,
         LD      A,01H   ; 1 
-J4E9E:  ADD     A,B
+J4E86:  ADD     A,B
         POP     BC
         RET
 
@@ -2354,7 +2334,7 @@ J4E9E:  ADD     A,B
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4EA1:  LD      A,(DATCNT)
+C4E89:  LD      A,(DATCNT+0)
         AND     A
         RET
 
@@ -2362,165 +2342,162 @@ C4EA1:  LD      A,(DATCNT)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4EA6:  PUSH    HL
+C4E8E:  PUSH    HL
         PUSH    DE
         PUSH    BC
         LD      HL,DATCNT
-J4EAC:  EI
-        CALL    C44DF
-        JR      C,J4EEA
+J4E94:  EI
+        CALL    C44EF
+        JR      C,J4ED2
         LD      A,(HL)
-        AND     A
-        JR      NZ,J4EC2
-        CALL    C5189
-        CALL    C4FB5
-        JR      C,J4EEA
-        JR      Z,J4EEA
-        JR      J4EAC
+        AND     A                       ; characters in receive buffer ?
+        JR      NZ,J4EAA                ; yep,
+        CALL    C5134                   ; RTS=1
+        CALL    C4F97                   ; signal sender to resume sending
+        JR      C,J4ED2
+        JR      Z,J4ED2
+        JR      J4E94
 
-J4EC2:  CP      03H     ; 3 
-        JR      NC,J4ED1
-        CALL    C5189
-        CALL    C4FB5
+J4EAA:  CP      3                       ; 3 or more ?
+        JR      NC,J4EB9                ; yep,
+        CALL    C5134                   ; RTS=1
+        CALL    C4F97                   ; signal sender to resume sending
         EI
-        JR      C,J4EEA
-        JR      Z,J4EEA
-J4ED1:  DI
+        JR      C,J4ED2
+        JR      Z,J4ED2
+J4EB9:  DI
         DEC     (HL)
-        CALL    C4F9A
+        CALL    C4F7C                   ; get pointer in receive buffer
         LD      C,(HL)
         LD      B,80H
         INC     HL
         LD      A,(HL)
         LD      (ERRORS),A
         AND     A
-        JR      Z,J4EE2
+        JR      Z,J4ECA
         INC     B
-J4EE2:  LD      A,C
+J4ECA:  LD      A,C
         OR      A
         DEC     B
-J4EE5:  EI
+J4ECD:  EI
         POP     BC
         POP     DE
         POP     HL
         RET
 
-J4EEA:  PUSH    AF
+J4ED2:  PUSH    AF
         POP     BC
         RES     7,C
         PUSH    BC
         POP     AF
-        JR      J4EE5
+        JR      J4ECD
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-;            Remark  BUGFIX: check if RS232 open
+;            Remark  FIX: speed optimize
 
-C4EF2:  LD      A,(FLAGS)
-        BIT     3,A                     ; RS232 open ?
-        RET     Z                       ; nope, quit
-        IN      A,(81H)
-        AND     02H     ; 2 
+C4EDA:  IN      A,(81H)
+        AND     02H
         RET     Z
         IN      A,(80H)
         LD      HL,COMMSK
-        AND     (HL)
+        AND     (HL)                    ; mask off unused bits
         LD      C,A
-        CALL    C5175
+        CALL    C5120                   ; read error status
         LD      B,A
-        AND     A
-        JR      NZ,J4F25
+        AND     A                       ; errors ?
+        JR      NZ,J4F07                ; yep,
         LD      HL,FLAGS
         LD      A,C
-        CP      11H     ; 17 
-        JR      Z,J4F1B
-        CP      13H     ; 19 
-        JR      NZ,J4F36
+        CP      11H                     ; XON ?
+        JR      Z,J4EFD                 ; yep,
+        CP      13H                     ; XOFF ?
+        JR      NZ,J4F18                ; nope,
         SET     2,(HL)
-        JR      J4F1D
+        JR      J4EFF
 
-J4F1B:  RES     2,(HL)
-J4F1D:  LD      A,(ESTBLS)
-        BIT     0,A
-        RET     NZ
-        JR      J4F36
+J4EFD:  RES     2,(HL)
+J4EFF:  LD      A,(ESTBLS)
+        BIT     0,A                     ; use XON/XOFF protocol ?
+        RET     NZ                      ; yep,
+        JR      J4F18
 
-J4F25:  AND     20H     ; " "
-        JR      Z,J4F4E
+J4F07:  AND     20H                     ; framing error ?
+        JR      Z,J4F30                 ; nope, put in receive buffer
         LD      A,C
         AND     A
-        JR      NZ,J4F4E
+        JR      NZ,J4F30
         LD      HL,FLAGS
         SET     4,(HL)
-        LD      B,00H
-        JR      J4F4E
+        LD      B,0
+        JR      J4F30
 
-J4F36:  LD      A,(ESTBLS)
-        BIT     4,A
-        JR      Z,J4F4E
+J4F18:  LD      A,(ESTBLS)
+        BIT     4,A                     ; use SI/SO protocol ?
+        JR      Z,J4F30                 ; nope,
         LD      HL,FLAGS
         LD      A,C
-        SUB     0FH     ; 15 
-        JR      NZ,J4F48
+        SUB     0FH                     ; SI ?
+        JR      NZ,J4F2A
         RES     7,(HL)
         RET
 
-J4F48:  INC     A
-        JR      NZ,J4F4E
-        SET     7,(HL)
+J4F2A:  INC     A                       ; SO ?
+        JR      NZ,J4F30
+        SET     7,(HL)                  ; flag shift-out
         RET
 
-J4F4E:  LD      HL,DATCNT
+J4F30:  LD      HL,DATCNT+0
         LD      A,(RSIQLN)
-        CP      (HL)
-        RET     Z
+        CP      (HL)                    ; receive buffer full ?
+        RET     Z                       ; yep, quit
         INC     (HL)
         INC     HL
         PUSH    BC
-        CALL    C4F9A
+        CALL    C4F7C                   ; get pointer in receive buffer
         POP     BC
         LD      A,(ESTBLS)
-        BIT     4,A
+        BIT     4,A                     ; use SI/SO protocol ?
         LD      A,C
-        JR      Z,J4F73
-        CP      20H     ; " "
-        JR      C,J4F73
+        JR      Z,J4F55                 ; nope,
+        CP      20H                     ; control character ?
+        JR      C,J4F55                 ; yep,
         LD      A,(FLAGS)
-        BIT     7,A
+        BIT     7,A                     ; shift-out ?
         LD      A,C
-        JR      Z,J4F73
-        OR      80H
-J4F73:  LD      (HL),A
+        JR      Z,J4F55                 ; nope,
+        OR      80H                     ; yep, set b7 of character
+J4F55:  LD      (HL),A                  ; put character in receive buffer
         PUSH    HL
-        LD      HL,DATCNT
+        LD      HL,DATCNT+0
         LD      A,(RSIQLN)
-        SUB     (HL)
+        SUB     (HL)                    ; receive buffer full ?
         POP     HL
-        JR      NZ,J4F81
-        SET     7,B
-J4F81:  CP      10H     ; 16 
-        CALL    C,C4FCF
+        JR      NZ,J4F63                ; nope,
+        SET     7,B                     ; yep,
+J4F63:  CP      16                      ; receive buffer has <16 room ?
+        CALL    C,C4FB1                 ; yep, signal sender to stop sending
         LD      A,B
         INC     HL
-        LD      (HL),A
+        LD      (HL),A                  ; put receive status in receive buffer
         DEC     HL
-        AND     A
-        RET     NZ
+        AND     A                       ; error ?
+        RET     NZ                      ; yep, quit
         LD      A,(ESTBLS)
-        BIT     3,A
-        RET     Z
+        BIT     3,A                     ; use Auto LF receive ?
+        RET     Z                       ; nope, quit
         LD      A,(HL)
-        CP      0DH     ; 13 
-        RET     NZ
-        LD      C,0AH   ; 10 
-        JR      J4F4E
+        CP      0DH                     ; CR received ?
+        RET     NZ                      ; nope, quit
+        LD      C,0AH
+        JR      J4F30                   ; put LF in receive buffer
 
 ;         Subroutine get pointer in receive buffer
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4F9A:  INC     HL
+C4F7C:  INC     HL
         LD      A,(HL)
         LD      C,A
         INC     A
@@ -2528,12 +2505,12 @@ C4F9A:  INC     HL
         LD      HL,RSIQLN
         CP      (HL)
         POP     HL
-        JR      C,J4FA7
+        JR      C,J4F89
         XOR     A
-J4FA7:  LD      (HL),A
+J4F89:  LD      (HL),A
         EX      DE,HL
         LD      HL,(RSFCB)
-        LD      B,00H
+        LD      B,0
         ADD     HL,BC
         ADD     HL,BC
         LD      BC,9
@@ -2544,18 +2521,18 @@ J4FA7:  LD      (HL),A
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4FB5:  DI
+C4F97:  DI
         LD      A,(FLAGS)
         BIT     1,A
-        JR      NZ,J4FC0
+        JR      NZ,J4FA2
         XOR     A
         INC     A
         RET
 
-J4FC0:  LD      C,11H   ; 17 
-        CALL    C4FEB
-        RET     C
-        RET     Z
+J4FA2:  LD      C,11H                   ; XON
+        CALL    C4FCD                   ; send XON (if XON/XOFF handshake is enabled)
+        RET     C                       ; CTRL-STOP, quit
+        RET     Z                       ; timeout, quit
         PUSH    HL
         LD      HL,FLAGS
         RES     1,(HL)
@@ -2566,39 +2543,39 @@ J4FC0:  LD      C,11H   ; 17
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4FCF:  DI
+C4FB1:  DI
         XOR     A
         INC     A
         LD      A,(FLAGS)
-        BIT     1,A
-        RET     NZ
+        BIT     1,A                     ; sender already signaled ?
+        RET     NZ                      ; yep, quit
         PUSH    HL
         LD      HL,FLAGS
         SET     1,(HL)
         POP     HL
-        LD      C,13H   ; 19 
-        CALL    C4FEB
-        CALL    C51E4
-        CALL    C5191
+        LD      C,13H                   ; XOFF
+        CALL    C4FCD                   ; send XOFF (if XON/XOFF handshake is enabled)
+        CALL    C5185                   ; wait for empty transmitter
+        CALL    C513C                   ; RTS=0
         RET
 
 ;         Subroutine send XON/XOFF (if XON/XOFF handshake is enabled)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C4FEB:  LD      A,(ESTBLS)
-        BIT     0,A
-        JR      NZ,J4FF5
+C4FCD:  LD      A,(ESTBLS)
+        BIT     0,A                     ; use XON/XOFF protocol ?
+        JR      NZ,J4FD7                ; yep,
         XOR     A
         INC     A
         RET
 
-J4FF5:  CALL    C51E4
+J4FD7:  CALL    C5185                   ; wait for empty transmitter
         PUSH    DE
-        CALL    C51F3
+        CALL    C5194                   ; wait for CTS (if RTS/CTS handshake is enabled)
         POP     DE
-        RET     C
-        RET     Z
+        RET     C                       ; CTRL-STOP, quit
+        RET     Z                       ; timeout, quit
         LD      A,C
         OUT     (80H),A
         RET
@@ -2606,10 +2583,11 @@ J4FF5:  CALL    C51E4
 ;         Subroutine RS232 sndchr
 ;            Inputs  ________________________
 ;            Outputs ________________________
+;            Remark  BUGFIX: save A register
 
-C5003:  PUSH    BC
+C4FE5:  PUSH    BC
         LD      C,A
-        CALL    C500B
+        CALL    C4FED
         LD      A,C
         POP     BC
         RET
@@ -2618,59 +2596,59 @@ C5003:  PUSH    BC
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C500B:  EI
+C4FED:  EI
         PUSH    BC
         LD      C,A
         LD      A,(ESTBLS)
-        BIT     4,A
-        JR      Z,J504D
+        BIT     4,A                     ; use SI/SO protocol ?
+        JR      Z,J502F                 ; nope,
         LD      A,C
         CP      20H     ; " "
-        JR      C,J504D
+        JR      C,J502F
         LD      A,(FLAGS)
         BIT     0,A
-        JR      NZ,J5037
+        JR      NZ,J5019
         BIT     7,C
-        JR      Z,J504D
+        JR      Z,J502F
         LD      A,0EH   ; 14 
-        CALL    C504F
-        JR      C,J5098
-        JR      Z,J5098
+        CALL    C5031
+        JR      C,J507A
+        JR      Z,J507A
         PUSH    HL
         LD      HL,FLAGS
         SET     0,(HL)
         POP     HL
-        JR      J504B
+        JR      J502D
 
-J5037:  BIT     7,C
-        JR      NZ,J504B
+J5019:  BIT     7,C
+        JR      NZ,J502D
         LD      A,0FH   ; 15 
-        CALL    C504F
-        JR      C,J5098
-        JR      Z,J5098
+        CALL    C5031
+        JR      C,J507A
+        JR      Z,J507A
         PUSH    HL
         LD      HL,FLAGS
         RES     0,(HL)
         POP     HL
-J504B:  RES     7,C
-J504D:  LD      A,C
+J502D:  RES     7,C
+J502F:  LD      A,C
         POP     BC
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C504F:  PUSH    HL
+C5031:  PUSH    HL
         LD      HL,ESTBLS
-        BIT     2,(HL)
+        BIT     2,(HL)                  ; use Auto LF send ?
         POP     HL
-        JR      Z,J506E
-        CP      0AH     ; 10 
-        JR      NZ,J506E
+        JR      Z,J5050                 ; nope,
+        CP      0AH
+        JR      NZ,J5050
         LD      A,(FLAGS)
         BIT     5,A
         LD      A,0AH   ; 10 
-        JR      Z,J506E
+        JR      Z,J5050
         PUSH    HL
         LD      HL,FLAGS
         RES     5,(HL)
@@ -2678,32 +2656,32 @@ C504F:  PUSH    HL
         AND     A
         RET
 
-J506E:  PUSH    BC
+J5050:  PUSH    BC
         LD      C,A
         PUSH    DE
-        CALL    C509E
+        CALL    C5080
         POP     DE
-        JR      C,J5098
-        JR      Z,J5098
-        CALL    C51E4
-        CALL    C51F3
-        JR      C,J5098
-        JR      Z,J5098
+        JR      C,J507A
+        JR      Z,J507A
+        CALL    C5185                   ; wait for empty transmitter
+        CALL    C5194                   ; wait for CTS (if RTS/CTS handshake is enabled)
+        JR      C,J507A
+        JR      Z,J507A
         LD      A,C
         OUT     (80H),A
         EI
         PUSH    HL
         LD      HL,FLAGS
         CP      0DH     ; 13 
-        JR      NZ,J5093
+        JR      NZ,J5075
         SET     5,(HL)
-        JR      J5095
+        JR      J5077
 
-J5093:  RES     5,(HL)
-J5095:  POP     HL
+J5075:  RES     5,(HL)
+J5077:  POP     HL
         XOR     A
         INC     A
-J5098:  CALL    C50D1
+J507A:  CALL    C50B3
         LD      A,C
         POP     BC
         RET
@@ -2712,33 +2690,33 @@ J5098:  CALL    C50D1
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C509E:  LD      A,(ESTBLS)
-        BIT     0,A
-        JR      Z,J50CE
+C5080:  LD      A,(ESTBLS)
+        BIT     0,A                     ; use XON/XOFF protocol ?
+        JR      Z,J50B0                 ; nope,
         LD      A,(TOCNT)
         LD      D,A
-J50A9:  LD      E,100
-J50AB:  CALL    C5237
-J50AE:  EI
-        CALL    C44DF
+J508B:  LD      E,64H   ; "d"
+J508D:  CALL    C51CD
+J5090:  EI
+        CALL    C44EF
         DI
         RET     C
         LD      A,(FLAGS)
         BIT     2,A
-        JR      Z,J50CE
+        JR      Z,J50B0
         LD      A,(TOCNT)
         AND     A
-        JR      Z,J50AE
-        CALL    C5243
-        JR      NC,J50AE
+        JR      Z,J5090
+        CALL    C51D9
+        JR      NC,J5090
         AND     A
         DEC     E
-        JR      NZ,J50AB
+        JR      NZ,J508D
         DEC     D
-        JR      NZ,J50A9
+        JR      NZ,J508B
         RET
 
-J50CE:  XOR     A
+J50B0:  XOR     A
         INC     A
         RET
 
@@ -2746,148 +2724,92 @@ J50CE:  XOR     A
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C50D1:  PUSH    HL
+C50B3:  PUSH    HL
         LD      HL,ERRORS
         LD      (HL),00H
-        JR      C,J50DF
-        JR      NZ,J50E1
+        JR      C,J50C1
+        JR      NZ,J50C3
         SET     6,(HL)
-        JR      J50E1
+        JR      J50C3
 
-J50DF:  SET     2,(HL)
-J50E1:  POP     HL
+J50C1:  SET     2,(HL)
+J50C3:  POP     HL
         RET
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-;            Remark  R800 compatible
 
-C50E3:  XOR     A
+C50C5:  XOR     A
         OUT     (81H),A
         PUSH    AF
-
-        IF      R800 EQ 1
-        PUSH    BC
-        LD      C,01H   ; 1 
-        OUT     (0E6H),A
-J50EC:  IN      A,(0E7H)
-        CP      C
-        JR      C,J50EC
-        POP     BC
-        ENDIF
-
         POP     AF
         OUT     (81H),A
         PUSH    AF
-
-        IF      R800 EQ 1
-        PUSH    BC
-        LD      C,01H   ; 1 
-        OUT     (0E6H),A
-J50FB:  IN      A,(0E7H)
-        CP      C
-        JR      C,J50FB
-        POP     BC
-        ENDIF
-
         POP     AF
         OUT     (81H),A
         PUSH    AF
-
-        IF      R800 EQ 1
-        PUSH    BC
-        LD      C,01H   ; 1 
-        OUT     (0E6H),A
-J510A:  IN      A,(0E7H)
-        CP      C
-        JR      C,J510A
-        POP     BC
-        ENDIF
-
         POP     AF
         LD      A,40H   ; "@"
         OUT     (81H),A
         PUSH    AF
-
-        IF      R800 EQ 1
-        PUSH    BC
-        LD      C,01H   ; 1 
-        OUT     (0E6H),A
-J511B:  IN      A,(0E7H)
-        CP      C
-        JR      C,J511B
-        POP     BC
-        ENDIF
-
         POP     AF
         LD      A,(LSTMOD)
         OUT     (81H),A
         PUSH    AF
-
-        IF      R800 EQ 1
-        PUSH    BC
-        LD      C,01H   ; 1 
-        OUT     (0E6H),A
-J512D:  IN      A,(0E7H)
-        CP      C
-        JR      C,J512D
-        POP     BC
-        ENDIF
-
         POP     AF
         IN      A,(80H)
-        CALL    C5175
+        CALL    C5120
         LD      A,07H   ; 7 
-        CALL    C5224
+        CALL    C51C5
         IN      A,(80H)
-        JP      C5175
+        JP      C5120
 
 ;         Subroutine RS232 sndbrk
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5143:  PUSH    BC
+C50EE:  PUSH    BC
         DI
-        CALL    C4E7E
+        CALL    C4E66                   ; disable RS232 interrupts
         EI
         LD      A,(LSTCOM)
         OR      08H     ; 8 
         LD      B,A
-J514F:  CALL    C44DF
-        JR      C,J5163
-        CALL    C51E4
+J50FA:  CALL    C44EF
+        JR      C,J510E
+        CALL    C5185                   ; wait for empty transmitter
         XOR     A
         OUT     (80H),A
         LD      A,B
-        CALL    C5224
+        CALL    C51C5
         DEC     DE
         LD      A,E
         OR      D
-        JR      NZ,J514F
-J5163:  PUSH    AF
-        CALL    C51E4
+        JR      NZ,J50FA
+J510E:  PUSH    AF
+        CALL    C5185                   ; wait for empty transmitter
         LD      A,B
         AND     0F7H
-        CALL    C5224
+        CALL    C51C5
         DI
-        CALL    C4E85
+        CALL    C4E6D                   ; enable RS232 interrupts
         EI
         POP     AF
         POP     BC
         RET
 
-;         Subroutine __________________________
+;         Subroutine read error status
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5175:  IN      A,(81H)
-        AND     38H     ; "8"
+C5120:  IN      A,(81H)
+        AND     38H
         PUSH    AF
-I517A:  LD      A,(LSTCOM)
+        LD      A,(LSTCOM)
         PUSH    AF
-        OR      10H     ; 16 
-        CALL    C5224
+        OR      10H
+        CALL    C51C5
         POP     AF
         LD      (LSTCOM),A
         POP     AF
@@ -2897,30 +2819,19 @@ I517A:  LD      A,(LSTCOM)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5189:  PUSH    AF
+C5134:  PUSH    AF
         LD      A,(LSTCOM)
         SET     5,A
-        JR      J51A1
+        JR      J5142
 
 ;         Subroutine RTS=0
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5191:  PUSH    AF
-        LD      A,(ESTBLS)
-        BIT     1,A
-        JR      NZ,J519C
-        POP     AF
-        RET
-
-;         Subroutine 
-;            Inputs  ________________________
-;            Outputs ________________________
-
-?519B:  PUSH    AF
-J519C:  LD      A,(LSTCOM)
+C513C:  PUSH    AF
+        LD      A,(LSTCOM)
         RES     5,A
-J51A1:  CALL    C5224
+J5142:  CALL    C51C5
         POP     AF
         RET
 
@@ -2928,28 +2839,28 @@ J51A1:  CALL    C5224
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C51A6:  AND     A
-        JR      Z,J51B2
+C5147:  AND     A
+        JR      Z,J5153
 
 ;         Subroutine DTR=1
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C51A9:  DI
+C514A:  DI
         PUSH    AF
         LD      A,(LSTCOM)
-        OR      02H     ; 2 
-        JR      J51B9
+        OR      02H
+        JR      J515A
 
 ;         Subroutine DTR=0
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-J51B2:  DI
+J5153:  DI
         PUSH    AF
         LD      A,(LSTCOM)
         AND     0FDH
-J51B9:  CALL    C5224
+J515A:  CALL    C51C5
         POP     AF
         RET
 
@@ -2957,7 +2868,7 @@ J51B9:  CALL    C5224
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C51BE:  PUSH    AF
+C515F:  PUSH    AF
         IN      A,(82H)
         LD      L,0C1H
         XOR     L
@@ -2965,16 +2876,16 @@ C51BE:  PUSH    AF
         LD      L,A
         IN      A,(81H)
         AND     80H
-        JR      Z,J51CE
+        JR      Z,J516F
         SET     3,L
-J51CE:  DI
+J516F:  DI
         LD      A,(FLAGS)
         BIT     4,A
-        JR      Z,J51DD
+        JR      Z,J517E
         SET     2,L
         RES     4,A
         LD      (FLAGS),A
-J51DD:  EI
+J517E:  EI
         LD      A,(ERRORS)
         LD      H,A
         POP     AF
@@ -2984,15 +2895,15 @@ J51DD:  EI
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C51E4:  PUSH    AF
-J51E5:  EI
+C5185:  PUSH    AF
+J5186:  EI
         NOP
         NOP
         DI
         IN      A,(81H)
-        AND     05H     ; 5 
-        CP      05H     ; 5 
-        JR      NZ,J51E5
+        AND     05H
+        CP      05H
+        JR      NZ,J5186
         POP     AF
         RET
 
@@ -3000,54 +2911,42 @@ J51E5:  EI
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C51F3:  LD      A,(ESTBLS)
-        BIT     1,A
-        JR      Z,J5221
+C5194:  LD      A,(ESTBLS)
+        BIT     1,A                     ; use RTS/CTS handshake ?
+        JR      Z,J51C2                 ; nope, quit
         LD      A,(TOCNT)
-        LD      D,A
-J51FE:  LD      E,100
-J5200:  CALL    C5237
-J5203:  CALL    C44DF
+        LD      D,A                     ; timeout in seconds
+J519F:  LD      E,100                   ; 100x 10ms = 1 second
+J51A1:  CALL    C51CD                   ; initialize timer 2 for 10 ms
+J51A4:  CALL    C44EF                   ; CTRL-STOP pressed ?
         EI
         RET     C
         IN      A,(82H)
-        BIT     7,A
-        JR      Z,J5221
+        BIT     7,A                     ; CTS asserted ?
+        JR      Z,J51C2                 ; yep, quit
         LD      A,(TOCNT)
-        AND     A
-        JR      Z,J5203
-        CALL    C5243
-        JR      NC,J5203
+        AND     A                       ; no timeout ?
+        JR      Z,J51A4                 ; yep, wait (forever)
+        CALL    C51D9                   ; timer 2 finished ?
+        JR      NC,J51A4                ; nope, wait
         AND     A
         DEC     E
-        JR      NZ,J5200
+        JR      NZ,J51A1
         DEC     D
-        JR      NZ,J51FE
+        JR      NZ,J519F
         RET
 
-J5221:  XOR     A
+J51C2:  XOR     A
         INC     A
         RET
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
-;            Remark  R800 compatible
 
-C5224:  OUT     (81H),A
+C51C5:  OUT     (81H),A
         LD      (LSTCOM),A
         PUSH    AF
-
-        IF      R800 EQ 1
-        PUSH    BC
-        LD      C,01H   ; 1 
-        OUT     (0E6H),A
-J522F:  IN      A,(0E7H)
-        CP      C
-        JR      C,J522F
-        POP     BC
-        ENDIF
-
         POP     AF
         RET
 
@@ -3055,19 +2954,19 @@ J522F:  IN      A,(0E7H)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5237:  PUSH    AF
+C51CD:  PUSH    AF
         PUSH    BC
         PUSH    DE
-        LD      A,0B0H
-        LD      C,86H
-        LD      DE,I4800
-        JR      J5255
+        LD      A,0B0H                  ; LSB/MSB, interrupt generator, binary
+        LD      C,86H                   ; timer 2
+        LD      DE,4800H                ; 10 ms
+        JR      J51EB
 
 ;         Subroutine __________________________
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5243:  IN      A,(82H)
+C51D9:  IN      A,(82H)
         RLCA
         RLCA
         RET
@@ -3076,7 +2975,7 @@ C5243:  IN      A,(82H)
 ;            Inputs  ________________________
 ;            Outputs ________________________
 
-C5248:  PUSH    AF
+C51DE:  PUSH    AF
         PUSH    BC
         PUSH    DE
         LD      A,C
@@ -3086,8 +2985,8 @@ C5248:  PUSH    AF
         LD      A,B
         RRCA
         RRCA
-        OR      36H     ; "6"
-J5255:  OUT     (87H),A
+        OR      36H                     ; LSB/MSB, square wave generator, binary
+J51EB:  OUT     (87H),A
         OUT     (C),E
         OUT     (C),D
         POP     DE

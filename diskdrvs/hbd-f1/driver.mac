@@ -18,6 +18,15 @@
 MYSIZE		equ	9
 SECLEN		equ	512
 
+D7FF8	EQU	07FF8H			; WD2793
+D7FF9	EQU	D7FF8+1			; WD2793
+D7FFA	EQU	D7FF8+2			; WD2793
+D7FFB	EQU	D7FF8+3			; WD2793
+
+D7FFC	EQU	07FFCH			; side select
+D7FFD	EQU	07FFDH			; motor/in use/DC/drive select
+D7FFF	EQU	07FFFH			; INT,DRQ
+
 ; driver version
 ; 205,206 or 207
 
@@ -211,7 +220,7 @@ J752C:	LD	A,H
         PUSH	BC
         LD	DE,($SECBUF)
         PUSH	DE
-        LD	BC,512
+        LD	BC,SECLEN
         CALL	XFER			; first transfer to SECBUF
         POP	HL
         POP	BC
@@ -323,7 +332,7 @@ J75DC:	LD	A,H
         PUSH	BC
         EX	DE,HL
         LD	HL,($SECBUF)
-        LD	BC,512
+        LD	BC,SECLEN
         CALL	XFER			; transfer from SECBUF
         POP	BC
         POP	DE
@@ -1179,13 +1188,11 @@ C7B95:	CALL	GETWRK
         LD	(IX+7),A		; track 0
         LD	(D7FFC),A		; select side 0
         RET	
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C7BA0:	LD	A,(D7FFC)
         RRA				; current side = 1 ?
         JP	C,C7BAD			; yep, select side 0
@@ -1226,13 +1233,11 @@ C7BC0:	CALL	C77C0			; select next track
         JP	M,J7C07
         LD	A,06H	; 6 
         JP	J7C07
-;
-;	-----------------
-;
+
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
-;
+
 C7BD4:	LD	HL,I7405
         LD	DE,($SECBUF)
         LD	BC,I74D6-I7405
@@ -1287,7 +1292,7 @@ J7C08:	EI
         CALL	ENAINT
         JP	J7811		; reset controller and stop motor drive(s) and quit
 
-;	  Subroutine __________________________
+;	  Subroutine format track
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
@@ -1299,8 +1304,8 @@ C7C0F:	CALL	C77F5			; wait for command ready
         LD	(D7FF8),A
         EX	(SP),HL
         EX	(SP),HL
-        LD	C,4EH	; "N"
-        LD	B,50H	; "P"
+        LD	C,4EH
+        LD	B,80
 J7C23:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1309,7 +1314,7 @@ J7C23:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C23
         LD	C,00H
-        LD	B,0CH	; 12 
+        LD	B,12
 J7C35:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1318,7 +1323,7 @@ J7C35:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C35
         LD	C,0F6H
-        LD	B,03H	; 3 
+        LD	B,3
 J7C47:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1336,7 +1341,7 @@ J7C58:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C58
         LD	C,4EH
-        LD	B,1AH
+        LD	B,26
 J7C6A:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1345,7 +1350,7 @@ J7C6A:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C6A
 J7C78:	LD	C,00H
-        LD	B,0CH	; 12 
+        LD	B,12
 J7C7C:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1354,7 +1359,7 @@ J7C7C:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7C7C
         LD	C,0F5H
-        LD	B,03H	; 3 
+        LD	B,3
 J7C8E:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1419,8 +1424,8 @@ J7CF9:	LD	A,(D7FFF)
         LD	A,C
         LD	(D7FFB),A
         DJNZ	J7CF9
-        LD	C,4EH	; "N"
-        LD	B,16H
+        LD	C,4EH
+        LD	B,22
 J7D0B:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1429,7 +1434,7 @@ J7D0B:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7D0B
         LD	C,00H
-        LD	B,0CH	; 12 
+        LD	B,12
 J7D1D:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1438,7 +1443,7 @@ J7D1D:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7D1D
         LD	C,0F5H
-        LD	B,03H	; 3 
+        LD	B,3
 J7D2F:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1481,7 +1486,7 @@ J7D71:	LD	A,(D7FFF)
         LD	(D7FFB),A
         DJNZ	J7D71
         LD	C,4EH	; "N"
-        LD	B,36H	; "6"
+        LD	B,54
 J7D83:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1491,10 +1496,10 @@ J7D83:	LD	A,(D7FFF)
         DJNZ	J7D83
         INC	D
         LD	A,D
-        CP	0AH	; 10 
+        CP	9+1
         JP	NZ,J7C78
         LD	C,4EH	; "N"
-        LD	B,00H
+        LD	B,0
 J7D9C:	LD	A,(D7FFF)
         ADD	A,A
         RET	P			; IRQ (end of command), quit
@@ -1518,24 +1523,13 @@ J7DB8:	LD	A,(D7FFF)
         DJNZ	J7DB8
         POP	HL
 
-I7DC7:	LD	A,(D7FF8)
+I7DC7:	LD	A,(D7FF8)               ; read status
 
 
-        IF	DRVVER EQ 206
+        IF	DRVVER GE 206
 
-        BIT	1,A
-        JP	Z,J7DD6
-        LD	B,A
-        LD	A,4EH
-        LD	(D7FFB),A
-        LD	A,B
-J7DD6:
-        ENDIF
-
-        IF	DRVVER EQ 207
-
-        BIT	1,A
-        JP	Z,J7DD6
+        BIT	1,A                     ; DRQ ?
+        JP	Z,J7DD6                 ; nope,
         LD	B,A
         LD	A,4EH
         LD	(D7FFB),A
@@ -1544,16 +1538,16 @@ J7DD6:
         ENDIF
 
 
-        AND	0C4H
-        RET	Z
+        AND	0C4H                    ; ready/write protect, lost data
+        RET	Z                       ; no errors, quit
         SCF	
         LD	E,A
-        LD	A,02H
+        LD	A,2
         JP	M,J7C07
         BIT	6,E
-        LD	A,00H
+        LD	A,0
         JP	NZ,J7C07
-        LD	A,10H
+        LD	A,16
         JP	J7C07
 
 
@@ -1573,15 +1567,5 @@ C7DE2:	LD	A,3CH
         LD	A,3FH
         LD	(D7FFD),A		; motor off, not in use, leave disk change, deselect drive
         RET	
-
-
-D7FF8	EQU	07FF8H			; WD2793
-D7FF9	EQU	07FF9H			; WD2793
-D7FFA	EQU	07FFAH			; WD2793
-D7FFB	EQU	07FFBH			; WD2793
-
-D7FFC	EQU	07FFCH			; side select
-D7FFD	EQU	07FFDH			; motor/in use/DC/drive select
-D7FFF	EQU	07FFFH			; INT,DRQ
 
         END

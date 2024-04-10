@@ -49,16 +49,16 @@ S.RSTPLT	EQU	0145H
 S.GETPLT	EQU	0149H
 S.SETPLT	EQU	014DH
 
-M406F	EQU	406FH			; BASIC error
-M57F1	EQU	57F1H			; PSET
-M58C1	EQU	58C1H			; LINE boxfill
-M58FC	EQU	58FCH			; LINE
-M5912	EQU	5912H			; LINE box
+ERROR	EQU	406FH			; BASIC error
+PSET	EQU	57EAH			; PSET
+DOBOXF	EQU	58C1H			; LINE boxfill
+DOLINE	EQU	58FCH			; LINE
+BOXLIN	EQU	5912H			; LINE box
 M59E3	EQU	59E3H			; PAINT MSX1
-M5B19	EQU	5B19H			; CIRCLE
-M5EA4	EQU	5EA4H			; locate variable
-M5F5D	EQU	5F5DH			; locate variable (search only)
-M7810	EQU	7810H			; check ON <trap> GOTO
+CIRCLE	EQU	5B11H			; CIRCLE
+PTRGET	EQU	5EA4H			; locate variable
+PTRGTV	EQU	5F5DH			; locate variable (search only)
+ONGOT	EQU	7810H			; check ON <trap> GOTO
 
 S266E	EQU	266EH			; PAINT MSX2 (subrom)
 
@@ -1201,7 +1201,7 @@ J46BD:	JP	C431C			; fetch code pointer of line number and generate address
 C46C0:	CALL	C6032			; get BASIC character (skip spaces)
 	PUSH	IX
 	POP	HL
-	LD	IX,M7810
+	LD	IX,ONGOT
 	CALL	CALBAS			; check if trap identifier
 	EI
 	PUSH	HL
@@ -2637,7 +2637,7 @@ J4E25:	LD	E,9
 I4E28:	LD	E,3
 	LD	HL,MODE
 	RES	4,(HL)			; 212 lines mode
-	LD	IX,M406F
+	LD	IX,ERROR
 	JP	CALBAS			; BASIC error
 
 ;	  Subroutine CALL statement
@@ -2716,7 +2716,7 @@ J4EA9:	LD	(HL),"%"		; add % to variable name (force integer type)
 	JR	Z,J4EDB			; yep,
 	LD	HL,SWPTMP
 	PUSH	IX
-	LD	IX,M5F5D
+	LD	IX,PTRGTV
 	CALL	CALBAS			; locate variable (search only)
 	EI
 	POP	IX
@@ -2739,7 +2739,7 @@ J4EDB:	INC	IX
 	LD	A,1
 	LD	(SUBFLG),A		; variable search flag = array variable
 	PUSH	IX
-	LD	IX,M5EA4
+	LD	IX,PTRGET
 	CALL	CALBAS			; locate variable
 	EI
 	POP	IX
@@ -10120,13 +10120,13 @@ J746E:	XOR	A
 	LD	IX,CLS
 	JP	J74EE
 
-J7476:	LD	BC,M58FC		; line handler
+J7476:	LD	BC,DOLINE		; line handler
 	JR	J7483
 
-J747B:	LD	BC,M5912		; line box handler
+J747B:	LD	BC,BOXLIN		; line box handler
 	JR	J7483
 
-J7480:	LD	BC,M58C1		; line boxfill handler
+J7480:	LD	BC,DOBOXF		; line boxfill handler
 J7483:	POP	AF
 	LD	(ATRBYT),A
 	PUSH	BC
@@ -10144,7 +10144,7 @@ J749A:	POP	AF
 	LD	C,E
 	LD	B,D
 	EX	DE,HL
-	LD	IX,M57F1+4
+	LD	IX,PSET+11
 	JP	J74EE			; PSET handler
 
 J74A8:	LD	C,E
@@ -10191,7 +10191,7 @@ I74DC:	EX	DE,HL
 	LD	(HL),0FH
 	DEC	HL
 	LD	(HL),","		; ,<int constant>
-	LD	IX,M5B19		; CIRCLE handler
+	LD	IX,CIRCLE+8		; CIRCLE handler
 J74EE:	CALL	CALBAS
 	EI
 	RET

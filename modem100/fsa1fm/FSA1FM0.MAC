@@ -1,0 +1,4211 @@
+; FSA1FM-0.MAC
+;
+; MSX-MODEM Panasonic FSA1FM
+;
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+;
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+;
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+;
+
+        .Z80
+        ASEG
+
+        org     04000H
+
+RDSLT	EQU	000CH	; -C---
+WRSLT	EQU	0014H	; JC--I
+ENASLT	EQU	0024H	; -C---
+INIFNK	EQU	003EH	; -C---
+WRTVDP	EQU	0047H	; JC--I
+LPTSTT	EQU	00A8H	; -C---
+SNSMAT	EQU	0141H	; -C---
+KILBUF	EQU	0156H	; ----I
+
+D.6048	EQU	6048H                   ; firmware exit code
+I$604A	EQU	604AH	; ----I
+I$604B	EQU	604BH	                ; b7-b4 = trap number, b3-b0 = com number
+J.604C	EQU	604CH	; J---I
+J.6051	EQU	6051H	; J---I
+J.6056	EQU	6056H	; J---I
+J.605B	EQU	605BH	; J---I
+J.6060	EQU	6060H	; J---I
+I.6065	EQU	6065H	; ----I
+D.6072	EQU	6072H	; --S-I
+D$6074	EQU	6074H                   ; printer echo enabled
+D.6075	EQU	6075H                   ; printer echo receive buffer not empty
+I$6076	EQU	6076H	; ----I
+D.6078	EQU	6078H                   ; counter set #1, number of interrupts
+D$607A	EQU	607AH                   ; counter set #1, number of 100 ms
+D.607C	EQU	607CH                   ; counter set #1, number of seconds
+D.607D	EQU	607DH                   ; counter set #2, number of interrupts
+D$6081	EQU	6081H                   ; counter set #2, number of seconds
+D.6082	EQU	6082H                   ; last i8251 mode byte
+D.6083	EQU	6083H                   ; last i8251 command byte
+D.6084	EQU	6084H	                ; mask byte (for unused bits)
+D.6085	EQU	6085H                   ; b7,b6 = dialer mode,b5, b4 = SI/SO handshake, b3 = auto LF on receive, b2 = auto LF on send, b1 = RTS/CTS handshake, b0 = XON/XOFF handshake
+D.6086	EQU	6086H	                ; b7 = SI/SO receive, b6 = tone/pulse dail, b5 = CR on send, b4 = ?, b3 = channel open, b2 = XON/XOFF receive, b1 = sending suspended, b0 = SI/SO send
+D.6087	EQU	6087H                   ; receive byte error status
+D.6088	EQU	6088H                   ; put offset in receive buffer
+D.608A	EQU	608AH                   ; get offset in receive buffer
+D.608C	EQU	608CH                   ; get offset in receive buffer (printer echo)
+D.608E	EQU	608EH                   ; get offset in receive buffer (download text/log)
+D.6090	EQU	6090H                   ; number of bytes in receive buffer
+D.6092	EQU	6092H                   ; number of bytes in receive buffer (printer echo)
+D.6094	EQU	6094H                   ; number of bytes in receive buffer (download text/log)
+D.6096	EQU	6096H	                ; pointer to FCB
+D.6098	EQU	6098H                   ; buffer size
+D.609B	EQU	609BH                   ; ring detected
+D.609C	EQU	609CH	; --SL-
+I$609D	EQU	609DH	; ----I
+D$609E	EQU	609EH	; ---L-
+I$609F	EQU	609FH	; ----I
+I$60A0	EQU	60A0H	; ----I
+D.60A1	EQU	60A1H                   ; carrier status
+D.60A3	EQU	60A3H	                ; i8255 port A register backup
+D.60A4	EQU	60A4H	                ; i8255 port B register backup
+D.60A5	EQU	60A5H	; --SL-
+D.60A6	EQU	60A6H	                ; 7FCC register backup (0)
+D.60A7	EQU	60A7H	                ; 7FCC register backup (1)
+D.60A8	EQU	60A8H	                ; 7FCC register backup (3)
+D.60A9	EQU	60A9H	                ; modem type
+I$60AF	EQU	60AFH	; ----I
+D.60B0	EQU	60B0H	                ; automatic dialer detection
+I.60B1	EQU	60B1H	; ----I
+D.60B2	EQU	60B2H	; --SL-
+D.60B4	EQU	60B4H	; --SL-
+D.60B5	EQU	60B5H                   ; dail tone handler
+D.60B6	EQU	60B6H	; --SL-
+D.60B7	EQU	60B7H                   ; modem mode
+D$615D	EQU	615DH                   ; comterm mode (b0 = interlace, b1 = full, b2 = chinese, b3/b4 = srceen mode, b5/b6 = kanji code, b7 = DEL operation)
+D.615F	EQU	615FH                   ; flags before interrupt disable
+D.6172	EQU	6172H                   ; received byte
+D$6173	EQU	6173H                   ; comterm activated
+D.619C	EQU	619CH	; --SL-
+D$619F	EQU	619FH	; --S--
+D$61A1	EQU	61A1H                   ; timer value
+D$61A3	EQU	61A3H	; --S--
+D$61A4	EQU	61A4H	; --S--
+D$61A5	EQU	61A5H	; --S--
+D$634E	EQU	634EH	; ---L-
+D.6351	EQU	6351H                   ; download text/log enabled
+D$6354	EQU	6354H	; --S--
+D.635C	EQU	635CH	; --SL-
+D$635E	EQU	635EH                   ; not CALL TELCOM
+D.635F	EQU	635FH	; --SL-
+D.6360	EQU	6360H                   ; current slot id page 2
+D.6363	EQU	6363H	; --S-I
+D$6372	EQU	6372H	; --S--
+D$6373	EQU	6373H	; ---L-
+D$6374	EQU	6374H			; BTELCOM operand
+I$6900	EQU	6900H	; ----I
+I$6FFF	EQU	6FFFH	; ----I
+I$7C25	EQU	7C25H	; ----I
+D.7EE7	EQU	7EE7H                   ; printer not ready counter
+D$7EE9	EQU	7EE9H                   ; printer output enabled
+D$7EED	EQU	7EEDH                   ; auto CR on receive
+
+D.7FC0	EQU	7FC0H	; i8251 dataport
+D.7FC1	EQU	7FC1H	; i8251 cmd/status
+D.7FC4	EQU	7FC4H	; i8255 port A, bank select register
+D$7FC5	EQU	7FC5H	; i8255 port B
+D.7FC6	EQU	7FC6H	; i8255 port C
+D$7FC7	EQU	7FC7H	; i8255 mode register
+D.7FC8	EQU	7FC8H	; NCU register select
+D.7FCC	EQU	7FCCH	; NCU register data
+I$7FFF	EQU	7FFFH	; ----I
+
+DISKVE	EQU	0F323H	; --SL-
+RG1SAV	EQU	0F3E0H	; ---L-
+FORCLR	EQU	0F3E9H	; --SL-
+
+KBUF    EQU     0F41FH
+BUF     EQU     0F55EH
+
+MDMTMP  EQU     KBUF
+RSTMP   EQU     BUF
+
+FILTAB	EQU	0F860H	; --SL-
+NULBUF	EQU	0F862H	; --S--
+FNKSTR  EQU     0F87FH
+EXBRSA	EQU	0FAF8H	; ---L-
+HOKVLD	EQU	0FB20H	; ----I
+INTFLG	EQU	0FC9BH	; --SL-
+JIFFY	EQU	0FC9EH	; ---L-
+EXPTBL	EQU	0FCC1H	; ----I
+H.KEYA	EQU	0FD9AH	; ----I
+H.TIMI	EQU	0FD9FH	; ----I
+H.STKE	EQU	0FEDAH	; --S-I
+H.NEWS	EQU	0FF3EH	; ----I
+H.PHYD	EQU	0FFA7H	; ---L-
+H.ERRO	EQU	0FFB1H	; ----I
+EXTBIO	EQU	0FFCAH	; -CS-I
+DISINT	EQU	0FFCFH	; ----I
+RG8SAV	EQU	0FFE7H	; ---L-
+I$FFFF	EQU	0FFFFH	; ----I
+
+
+?.4000:	DEFB	"AB"
+        DEFW	J.407F                  ; init handler
+        DEFW	J.406A                  ; CALL statement handler
+        DEFW	J.4071                  ; BASIC device handler
+        DEFW	0                       ; BASIC program
+        DEFS	6,0
+
+?.4010:	DEFB	"JWrite EXTEND   "
+
+?.4020:	DEFB	0
+        DEFB	0
+
+        JP	J$4077
+?.4025:	JP	J$4078
+
+?.4028: DEFW    08306H
+        DEFW    08370H
+        DEFW    0835CH
+        DEFW    08352H
+        DEFW    09293H
+        DEFW    090CAH
+        DEFW    0004DH
+
+; disk error handler
+
+I$4036:	CALL	C.6000			; interbank call (EI)
+        DEFB	0
+        DEFW	C.45EA
+
+; rs232 interrupt handler
+
+C.403C:	CALL	C.6039			; inter bank call
+        DEFB	0                       ; bank 0
+        DEFW	C.4F40                  ; interrupt handler
+        JP	J.604C
+
+; vdp interrupt handler
+
+?.4045:	CALL	C.6039			; inter bank call
+        DEFB	0
+        DEFW	C.44AB                  ; vdp interrupt handler
+        JP	J.6051
+
+; EXTBIO handler
+
+?.404E:	DI
+        CALL	C.6039			; inter bank call
+        DEFB	0
+        DEFW	C.438A
+        JP	J.6060
+
+; H.ERRO handler
+
+?.4058:	CALL	C.6000			; interbank call (EI)
+        DEFB	3
+        DEFW	C.40A8
+        JP	J.605B
+
+; H.NEWS handler
+
+?.4061:	CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40BD
+        JP	J.6056
+
+; STATEMENT handler
+
+J.406A:	CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40B7
+        RET
+
+; BASIC DEVICE handler
+
+J.4071:	CALL	C.6000			; interbank call (EI)
+        DEFB	0
+        DEFW	C.4374
+J$4077:	RET
+
+J$4078:	CALL	C.6000			; interbank call (EI)
+        DEFB	0
+        DEFW	C.4502
+        RET
+
+; CART INIT
+
+J.407F:	DI
+        LD	A,89H
+        LD	(D$7FC7),A              ; i8255 mode, I/O mode, mode 1, port A = output, port C = input, mode 0, port B = output
+        LD	A,0C0H
+        LD	(D.7FC4),A              ; segment = 0
+        JP	J$4207                  ; firmware init
+
+	DEFS	4090H-$,0
+
+; From here it's different between pages
+
+I.4090:	JP	C.4437                  ; CTRL-STOP pressed (clear STOP flag) ?
+?.4093:	JP	J$46CD                  ; clear receive buffer
+?.4096:	JP	C.55D2			; get carrier detect status
+?.4099:	JP	C.49A6			; RS232.LOC
+?.409C:	JP	C.4921			; RS232.GETCHR
+?.409F:	JP	C.51CF			; RS232.SNDCHR
+?.40A2:	JP	C.509D                  ; wait for received byte
+I$40A5:	JP	J$41C9                  ; echo to screen/printer (literal)
+I$40A8:	JP	J$55D7			; initialize dial tone detect
+I$40AB:	JP	J$55EA			; finish dial tone detect
+I.40AE:	JP	C.44DC                  ; counter #1, clear
+I$40B1:	JP	J$44EF			; counter #1, get number of seconds
+I$40B4:	JP	C.4466			; get my slotid
+I$40B7:	JP	J$41B4			; comterm
+I$40BA:	JP	J$41BB			; set comterm mode
+I$40BD:	JP	J$41C2			; set protocol and timer values
+I$40C0:	JP	C.557C                  ; get line status
+I.40C3:	JP	J$41EC			; save phone book data to file
+I$40C6:	JP	J$41F3			; load phone book data from file
+?.40C9:	JP	J$4195			; MAIN BIOS CALL
+I$40CC:	JP	C.5190                  ; signal sender to resume sending
+?.40CF:	JP	C.51A6                  ; signal sender to stop sending
+?.40D2:	JP	J$41FA                  ; get phone book data info
+?.40D5:	JP	J$419C			; set comterm mode
+?.40D8:	JP	J$41A6			; echo to screen
+?.40DB:	JP	J$41AD			; revert to normal graphic screen
+?.40DE:	JP	J$41D0                  ; open file
+?.40E1:	JP	J$41D7			; read byte from file
+?.40E4:	JP	J$41DE                  ; close file
+?.40E7:	JP	J$41E5			; get usable screen size
+?.40EA:	JP	J$52E2			; dialtone ?? counter > 70 ?
+?.40ED:	JP	J$55FA                  ; get dial tone dectect flag
+?.40F0:	JP	J$52E8                  ; send 300ms break
+?.40F3:	JP	C.5077                  ; set communication mode
+?.40F6:	JP	C.4449                  ; STOP pressed ?
+?.40F9:	JP	C.4457			; port open ?
+?.40FC:	JP	J$4F34                  ; get ring status
+?.40FF:	JP	J$4A55
+?.4102:	JP	J.4A4C
+?.4105:	JP	C.4BDC                  ; set dial mode
+?.4108:	JP	J$4BD6                  ; set dialer mode
+?.410B:	JP	C.4A84                  ; translate dail character
+?.410E:	JP	J$4986                  ; eof
+?.4111:	JP	J$5088                  ; set modem mode
+?.4114:	JP	C.5385			; enable i8251 receiver
+?.4117:	JP	C.538D			; disable i8251 receiver
+?.411A:	JP	C.4739			; initialize serial
+?.411D:	JP	C.55AC                  ; update error flags
+?.4120:	JP	J$5610
+?.4123:	JP	C.4A76			; error
+?.4126:	JP	C.4B77                  ; wait for dial tone
+?.4129:	JP	J$53B8                  ; on/off hook
+?.412C:	JP	J$50DA
+?.412F:	JP	J$50F0
+?.4132:	JP	J$4203
+?.4135:	JP	J$52C3
+?.4138:	JP	J$52D4
+?.413B:	JP	J$52DF
+?.413E:	JP	J$502D                  ; receive buffer full ?
+?.4141:	JP	C.5037                  ; determine number of bytes in receive buffer (version)
+?.4144:	JP	J$55F5                  ; disable dail tone handler
+
+;
+; BIOS table for RS232
+;
+
+;     Device information byte indicates following options are installed or not:
+;	bits #  76543210
+;		||||||||
+;		|||||||+----- reserved
+;		|||||||
+;		||||||+------ TXREADY interrupt
+;		||||||
+;		|||||+------- sync/break character detected
+;		|||||
+;		||||+-------- timer interrupt
+;		||||
+;		|||+--------- carrier detect
+;		|||
+;		||+---------- ring indicator
+;		||
+;		|+----------- reserved
+;		|
+;		+------------ reserved
+
+?.4147:	DEFB	030H			; +00 MSX serial features (no TxReady INT, No Sync detect, No Timer INT, Have CD, Have RI)
+        DEFB	0			; +01 MSX serial version (version 1.0)
+        DEFB	0			; +02 reserved
+?.414A: JP	J$46E9			; RS232.INIT
+?.414D:	JP	J.47F1			; RS232.OPEN
+?.4150:	JP	J$5508			; RS232.STAT
+?.4153:	JP	C.4921			; RS232.GETCHR
+?.4156:	JP	C.51CF			; RS232.SNDCHR
+?.4159:	JP	J.48E5			; RS232.CLOSE
+?.415C:	JP	J$4982			; RS232.EOF
+?.415F:	JP	C.49A6			; RS232.LOC
+?.4162:	JP	J$49CC			; RS232.LOF
+?.4165:	JP	C.4965			; RS232.BACKUP
+?.4168:	JP	J$52F6			; RS232.SNDBRK
+?.416B:	RET				; RS232.DTR (not supported)
+        RET
+        RET
+?.416E:	RET				; RS232.SETCHN (not supported in msx serial 1.0)
+        RET
+        RET
+?.4171:	JP	J$553C			; MODEM.NCUSTA
+?.4174:	JP	C.55FE			; MODEM.SPKCNT
+?.4177:	JP	J$5398			; MODEM.LINSEL
+?.417A:	JP	J$4A0C			; MODEM.DIALST
+?.417D:	JP	J$4A4E			; MODEM.DIALCH
+?.4180:	JP	C.4A76			; MODEM.DTMFST, error
+?.4183:	JP	C.4A76			; MODEM.RDDTMF, error
+?.4186:	JP	C.4A76			; MODEM.HOKCNT, error
+?.4189:	JP	J$5612			; MODEM.CONFIG
+?.418C:	RET				; MODEM.SPCIAL
+        RET
+        RET
+?.418F:	RET				; MODEM reserved entry
+        RET
+        RET
+?.4192:	RET				; MODEM reserved entry
+        RET
+        RET
+
+J$4195:	CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40AB
+        RET
+
+J$419C:	LD	(D$615D),A              ; store comterm mode
+        CALL	C.6000			; interbank call (EI)
+        DEFB	2
+        DEFW	C.4090                  ; set comterm mode
+        RET
+
+J$41A6:	CALL	C.6000			; interbank call (EI)
+        DEFB	2
+        DEFW	C.4093			; echo to screen
+        RET
+
+J$41AD:	CALL	C.6000			; interbank call (EI)
+        DEFB	2
+        DEFW	C.4096                  ; revert to normal graphic screen
+        RET
+
+;	  Subroutine comterm
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$41B4:	CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40B4                  ; comterm
+        RET
+
+J$41BB:	CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40B1                  ; set comterm mode
+        RET
+
+J$41C2:	CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40C3                  ; store protocol and timer values
+        RET
+
+J$41C9:	CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40C6                  ; echo to screen/printer (literal)
+        RET
+
+J$41D0:	CALL	C.6000			; interbank call (EI)
+        DEFB	3
+        DEFW	C.40B1                  ; open file
+        RET
+
+J$41D7:	CALL	C.6000			; interbank call (EI)
+        DEFB	3
+        DEFW	C.40B4                  ; read byte from file
+        RET
+
+J$41DE:	CALL	C.6000			; interbank call (EI)
+        DEFB	3
+        DEFW	C.40B7                  ; close file
+        RET
+
+J$41E5:	CALL	C.6000			; interbank call (EI)
+        DEFB	2
+        DEFW	C.40A8			; get usable screen size
+        RET
+
+J$41EC:	CALL	C.6000			; interbank call (EI)
+        DEFB	3
+        DEFW	C.40AB			; save phone book data to file
+        RET
+
+J$41F3:	CALL	C.6000			; interbank call (EI)
+        DEFB	3
+        DEFW	C.40AE			; load phone book data from file
+        RET
+
+J$41FA:	LD	A,100                   ; number of phone book entries
+        LD	BC,I$6900               ; start of phone book data
+        LD	DE,I$7C25               ; end of phone book data
+        RET
+
+J$4203:	LD	(D.619C),A
+        RET
+
+;	  Subroutine firmware init
+;	     Inputs  ________________________
+;	     Outputs ________________________
+        
+J$4207:	LD	A,(D.619C)
+        PUSH	AF                      ; store 619C
+        CALL	C$4658                  ; initialize MSX-modem
+        POP	AF
+        LD	(D.619C),A              ; restore 619C
+        CALL	C$4351                  ; initialize additional firmware
+        LD	A,8
+        CALL	SNSMAT
+        AND	08H			; DEL key ?
+        JR	NZ,J$4224		; nope,
+        DEC	A
+        LD	(D.6047),A		; MSX modem disabled
+        EI
+        RET
+
+J$4224:	IN	A,(0A8H)
+        AND	30H
+        RRCA
+        RRCA
+        RRCA
+        RRCA                            ; primairy slot in page 2
+        LD	HL,EXPTBL
+        LD	C,A
+        LD	B,0
+        ADD	HL,BC
+        LD	A,(HL)
+        AND	80H                     ; slot expanded ?
+        JR	Z,J$4242                ; nope,
+        INC	HL
+        INC	HL
+        INC	HL
+        INC	HL
+        LD	A,(HL)
+        AND	30H
+        RRCA
+        SCF
+        RRA
+J$4242:	OR	C
+        LD	(D.635F),A		; my slotid
+        CALL	C.6000			; interbank call (EI)
+        DEFB	8
+        DEFW	C.4090                  ; start panasonic firmware
+        LD	(D.6048),A              ; store exit code
+        OR	A                       ; TELCOM application ?
+        JR	Z,J$4255                ; yep, setup H.STKE
+        DEC	A                       ; quit firmware ?
+        JR	Z,J$4264                ; yep, skip setup H.STKE
+J$4255:	LD	HL,I$4314
+        LD	(H.STKE+2),HL
+        CALL	C.4466			; get my slotid
+        LD	H,A
+        LD	L,0F7H
+        LD	(H.STKE+0),HL
+J$4264:	DI
+        LD	HL,H.KEYA
+        LD	DE,J.604C
+        LD	BC,I$42FB
+        CALL	C.42ED                  ; install handler with backup
+        LD	HL,H.TIMI
+        LD	DE,J.6051
+        LD	BC,I$4300
+        CALL	C.42ED                  ; install handler with backup
+        LD	HL,H.NEWS
+        LD	DE,J.6056
+        LD	BC,I$4305
+        CALL	C.42ED                  ; install handler with backup
+        LD	HL,H.ERRO
+        LD	DE,J.605B
+        LD	BC,I$430F
+        CALL	C.42ED                  ; install handler with backup
+        CALL	C.4466			; get my slotid
+        LD	(H.KEYA+1),A
+        LD	(H.TIMI+1),A
+        LD	(H.NEWS+1),A
+        LD	(H.ERRO+1),A
+        EI
+        PUSH	AF
+        LD	HL,HOKVLD
+        BIT	0,(HL)                  ; EXTBIO setup ?
+        JR	NZ,J$42B9               ; yep, skip initialize
+        SET	0,(HL)
+        LD	HL,EXTBIO
+        LD	B,5
+J$42B4:	LD	(HL),0C9H
+        INC	HL
+        DJNZ	J$42B4                  ; initialize EXTBIO
+J$42B9:	XOR	A
+        LD	DE,00801H
+        CALL	EXTBIO
+        LD	HL,I$604B
+        LD	(HL),A			; my COM number
+        XOR	A
+        LD	DE,00001H
+        CALL	EXTBIO			; my trap number
+        ADD	A,A
+        ADD	A,A
+        ADD	A,A
+        ADD	A,A
+        OR	(HL)
+        LD	(HL),A
+        POP	AF
+        LD	HL,EXTBIO
+        LD	DE,J.6060
+        LD	BC,I$430A
+        CALL	C.42ED                  ; install handler with backup
+        LD	(EXTBIO+1),A
+        LD	BC,S.435C
+        LD	HL,I$435C
+        LD	DE,DISINT
+        LDIR                            ; install DISINT,ENAINT handlers
+        RET
+
+;	  Subroutine install handler with backup
+;	     Inputs  HL = hook address, DE = backup, BC = new hook content
+;	     Outputs ________________________
+
+C.42ED:	PUSH	BC
+        LD	BC,5
+        PUSH	BC                      ; store hook size
+        PUSH	HL
+        LDIR
+        POP	DE                      ; hook address
+        POP	BC                      ; hook size
+        POP	HL                      ; new hook content
+        LDIR
+        RET
+
+I$42FB:	RST	30H
+        DEFB	0
+        DEFW	C.403C
+        RET
+
+I$4300:	RST	30H
+        DEFB	0
+        DEFW	C.4045
+        RET
+
+I$4305:	RST	30H
+        DEFB	0
+        DEFW	C.4061
+        RET
+
+I$430A:	RST	30H
+        DEFB	0
+        DEFW	C.404E
+        RET
+
+I$430F:	RST	30H
+        DEFB	0
+        DEFW	C.4058
+        RET
+
+; H.STKE handler
+
+I$4314:	PUSH	AF
+        PUSH	BC
+        PUSH	DE
+        PUSH	HL
+        EX	DE,HL
+        DEC	DE
+        LD	B,5
+        LD	HL,H.STKE
+J$431F:	LD	(HL),0C9H
+        INC	HL
+        DJNZ	J$431F                  ; clear H.STKE
+        CALL	C.4466			; get my slotid
+        ADD	A,A
+        LD	HL,16
+        JR	NC,J$432F
+        LD	L,16+8
+J$432F:	LD	B,H
+        LD	C,L
+        DEC	HL
+        ADD	HL,SP
+        LDDR
+        INC	DE
+        EX	DE,HL
+        LD	SP,HL
+        LD	A,(D.6048)
+        OR	A                       ; TELCOM application ?
+        JR	NZ,J$4346               ; nope,
+        CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40AE                  ; start TELCOM application
+        JR	J$434C
+
+J$4346:	CALL	C.6000			; interbank call (EI)
+        DEFB	8
+        DEFW	C.5000                  ; the links/document management
+J$434C:	POP	HL
+        POP	DE
+        POP	BC
+        POP	AF
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4351:	CALL	C.6000			; interbank call (EI)
+        DEFB	8
+        DEFW	C.5800
+        RET
+
+?.4358:	LD	A,01H	; 1 
+        RET
+
+?.435B:	RET
+
+I$435C:	PUSH	DE
+        LD	E,2
+        JR	J$4364
+
+?.4361:	PUSH	DE
+        LD	E,3
+J$4364:	LD	D,00H
+        PUSH	IX
+        PUSH	IY
+        CALL	EXTBIO
+        EI
+        POP	IY
+        POP	IX
+        POP	DE
+        RET
+
+S.435C  EQU     $-I$435C
+
+
+; BASIC DEVICE handler
+
+?.4374:	SCF
+        PUSH	AF
+        PUSH	HL
+        LD	HL,D.6047
+        LD	A,(D$634E)		; in disk operation ?
+        OR	(HL)                    ; or MSX modem disabled ?
+        POP	HL
+        JP	NZ,J.441C		; yep, quit
+        POP	AF
+        CALL	C.6000			; interbank call (EI)
+        DEFB	1                       ; bank 1
+        DEFW	C.40C0                  ; BASIC device handler
+        RET
+
+; EXTBIO
+
+?.438A:	EI
+        PUSH	AF
+        LD	A,D
+        INC	A
+        JP	Z,J$43D9
+        DEC	A
+        JP	NZ,J$43F9
+        LD	A,E
+        AND	A
+        JR	Z,J$43A4
+        DEC	A
+        JR	Z,J$43B1
+        DEC	A
+        JR	Z,J$43B5
+        DEC	A
+        JR	Z,J$43C8
+        JR	J$43AE
+
+; EXTBIO Build Device Name Table
+
+J$43A4:	LD	A,08H                   ; device = MSX-serial
+        CALL	C.4421                  ; write byte to slot
+        LD	A,00H                   ; reserved byte
+        CALL	C.4421                  ; write byte to slot
+J$43AE:	JP	J.441C
+
+; EXTBIO Return Number of Trap Entries
+
+J$43B1:	POP	AF
+        INC	A
+        INC	A			; 2 trap entries are used
+        RET
+
+; EXTBIO Disable Interrupt
+
+J$43B5:	CALL	C.4457			; port open ?
+        JR	Z,J$43C6                ; nope, quit
+        PUSH	BC
+        LD	A,(D.6086)              ; flags
+        LD	(D.615F),A              ; store flags before interrupt disable
+        CALL	C.51A6                  ; signal sender to stop sending
+        EI
+        POP	BC
+J$43C6:	JR	J.43F7
+
+; EXTBIO Enable Interrupt
+
+J$43C8:	CALL	C.4457			; port open ?
+        JR	Z,J$43D7                ; nope, quit
+        LD	A,(D.615F)              ; flags before interrupt disable
+        BIT	1,A
+        DI
+        CALL	Z,C.5190                ; signal sender to resume sending
+        EI
+J$43D7:	JR	J.43F7
+
+; EXTBIO System Exclusive
+
+J$43D9:	LD	A,E
+        AND	A
+        JR	NZ,J.43F7
+        CALL	C.4466			; get my slotid
+        CALL	C.4421                  ; write byte to slot
+        LD	A,LOW I.4090
+        CALL	C.4421                  ; write byte to slot
+        LD	A,HIGH I.4090
+        CALL	C.4421                  ; write byte to slot
+        LD	A,0			; maker ID = ASCII
+        CALL	C.4421                  ; write byte to slot
+        LD	A,0                     ; reserved byte
+        CALL	C.4421                  ; write byte to slot
+J.43F7:	JR	J.441C
+
+J$43F9:	CP	08H
+        JR	NZ,J.441C
+        LD	A,E
+        AND	A
+        JR	Z,J$4407
+        CP	01H
+        JR	Z,J$441E
+        JR	J.441C
+
+; EXTBIO RS232 Build Slot Address Table
+
+J$4407:	CALL	C.4466			; get my slotid
+        CALL	C.4421                  ; write byte to slot
+        LD	A,LOW I.4147
+        CALL	C.4421                  ; write byte to slot
+        LD	A,HIGH I.4147
+        CALL	C.4421                  ; write byte to slot
+        LD	A,0
+        CALL	C.4421                  ; write byte to slot
+J.441C:	POP	AF
+        RET
+
+; EXTBIO RS232 Return Number of Channels
+
+J$441E:	POP	AF
+        INC	A                       ; this device has 1 channel
+        RET
+
+;	  Subroutine write byte to slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4421:	PUSH	BC
+        PUSH	DE
+        PUSH	AF
+        LD	E,A
+        LD	A,B
+        CALL	WRSLT
+        POP	AF
+J$442A:	EI
+        INC	HL
+        POP	DE
+        POP	BC
+        RET
+
+;	  Subroutine read byte from slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.442F:	PUSH	BC
+        PUSH	DE
+        LD	A,B
+        CALL	RDSLT
+        JR	J$442A
+
+;	  Subroutine CTRL-STOP pressed (clear STOP flag) ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4437:	CALL	C$4440                  ; CTRL-STOP pressed ?
+        RET	NC                      ; nope, quit
+        CALL	C$4451                  ; clear STOP flag
+        SCF
+        RET
+
+;	  Subroutine CTRL-STOP pressed ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4440:	LD	A,(INTFLG)
+        CP	3
+        SCF
+        RET	Z
+        OR	A
+        RET
+
+;	  Subroutine STOP pressed ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4449:	LD	A,(INTFLG)
+        AND	A
+        RET	Z
+        CP	3
+        RET	Z
+
+;	  Subroutine clear STOP flag
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4451:	XOR	A
+        LD	(INTFLG),A
+        INC	A
+        RET
+
+;	  Subroutine RS232 port open ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4457:	LD	A,(D.6086)
+        BIT	3,A
+        RET
+
+;	  Subroutine to upper
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$445D:	CP	"a"
+        RET	C
+        CP	"z"+1
+        RET	NC
+        SUB	20H	; " "
+        RET
+
+;	  Subroutine get my slotid
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4466:	PUSH	HL
+I$4467:	LD	HL,I$4467
+        CALL	C.446F                  ; get slotid
+        POP	HL
+        RET
+
+;	  Subroutine get slotid
+;	     Inputs  HL = address
+;	     Outputs ________________________
+
+C.446F:	PUSH	BC
+        PUSH	DE
+        PUSH	HL
+        LD	A,H
+        RLCA
+        RLCA
+        AND	03H
+        LD	B,A                     ; page
+        CALL	C$447F                  ; get slotid (page)
+        POP	HL
+        POP	DE
+        POP	BC
+        RET
+
+;	  Subroutine get slotid (page)
+;	     Inputs  B = page
+;	     Outputs ________________________
+
+C$447F:	IN	A,(0A8H)
+        CALL	C.44A1                  ; shift page
+        AND	03H                     ; primairy slot
+        LD	E,A
+        LD	D,0
+        LD	HL,EXPTBL
+        ADD	HL,DE
+        LD	A,(HL)
+        AND	80H
+        OR	E
+        RET	P                       ; slot is not expanded, quit
+        LD	E,A
+        INC	HL
+        INC	HL
+        INC	HL
+        INC	HL
+        LD	A,(HL)                  ; backup secundairy slot register
+        RLCA
+        RLCA                            ; adjust for b3-b2
+        CALL	C.44A1                  ; shift page
+        AND	0CH
+        OR	E
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  B = page
+;	     Outputs ________________________
+
+C.44A1:	INC	B
+        DEC	B
+        RET	Z
+        PUSH	BC
+J$44A5:	RRCA
+        RRCA
+        DJNZ	J$44A5
+        POP	BC
+        RET
+
+;	  Subroutine vdp interrupt handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.44AB:	PUSH	AF
+        CALL	C$44FB
+        LD	HL,D.6078               ; counter set #1
+        CALL	C.44C2                  ; increase interrupt counter
+        LD	HL,D.607D               ; counter set #2
+        CALL	C.44C2                  ; increase interrupt counter
+        CALL	C$5682
+        POP	AF
+        JP	J$4C8A			; modem interrupt handler
+
+;	  Subroutine increase interrupt counter
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.44C2:	INC	(HL)                    ; increase # of interrupts
+        INC	HL
+        INC	(HL)                    ; increase # of interrups (0-5)
+        LD	A,6
+        SUB	(HL)
+        RET	NZ
+        LD	(HL),A
+        INC	HL
+        INC	(HL)                    ; increase # of 100 ms
+        INC	HL
+        INC	(HL)                    ; increase # of 100 ms (0-9)
+        LD	A,10
+        SUB	(HL)
+        RET	NZ
+        LD	(HL),A
+        INC	HL
+        INC	(HL)                    ; increase # of seconds
+        RET
+
+
+;	  Subroutine clear counter set #2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.44D6:	PUSH	HL
+        LD	HL,D.607D               ; counter set #2
+        JR	J$44E0
+
+
+;	  Subroutine clear counter set #1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.44DC:	PUSH	HL
+        LD	HL,D.6078               ; counter set #1
+J$44E0:	PUSH	BC
+        PUSH	AF
+        LD	B,5
+        DI
+J$44E5:	LD	(HL),0
+        INC	HL
+        DJNZ	J$44E5
+        EI
+        POP	AF
+        POP	BC
+        POP	HL
+        RET
+
+J$44EF:	LD	A,(D.607C)
+        RET
+
+?.44F3:	LD	A,(D$607A)
+        RET
+
+?.44F7:	LD	A,(D.6078)
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$44FB:	PUSH	HL
+        LD	HL,I$604A
+        DEC	(HL)
+        POP	HL
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4502:	LD	A,(D.6047)
+        OR	A			; MSX modem disabled ?
+        RET	NZ			; yep, quit
+        LD	H,HIGH 8000H
+        CALL	C.446F                  ; get slotid
+        LD	(D.6360),A		; current slotid on page 2
+        LD	HL,MDMTMP+0
+        LD	(FILTAB),HL             ; 
+        LD	HL,MDMTMP+4
+        LD	(MDMTMP+0),HL           ; pointer to i/o channel 0
+        LD	HL,MDMTMP+4+9+16
+        LD	(MDMTMP+2),HL           ; pointer to i/o channel 1
+        LD	HL,MDMTMP+4+9
+        LD	(NULBUF),HL             ; pointer to i/o channel 0 buffer
+        XOR	A
+        LD	(MDMTMP+4),A            ; i/o channel 0 closed
+        LD	(MDMTMP+4+9+16),A       ; i/o channel 1 closed
+        LD	HL,(FORCLR)
+        PUSH	HL                      ; store fore and background color
+        LD	HL,4*256+15
+        LD	(FORCLR),HL             ; foreground color = 4, background = 15
+        LD	B,0                     ; 8x8 sprites
+        CALL	C$45D2                  ; select sprite size
+        LD	A,(H.PHYD)
+        CP	0C9H			; disksystem ?
+        JR	Z,J$455E		; nope, skip
+        LD	HL,(DISKVE)
+        PUSH	HL			; save diskerror handler
+        CALL	C.4466			; get my slotid
+        LD	HL,I$4036
+        PUSH	HL
+        LD	L,0F7H                  ; RST 30H
+        LD	H,A                     ; slotid
+        PUSH	HL
+        LD	HL,0
+        ADD	HL,SP
+        PUSH	HL
+        DEC	HL
+        DEC	HL
+        LD	(DISKVE),HL		; setup new diskerror handler
+        DEC	H
+J$455E:	PUSH	AF
+        LD	A,0F7H                  ; enable EXTBIO
+        LD	E,4                     ; write 4
+        CALL	C.45DE			; write 6FFF
+        LD	A,(D.635F)		; my slotid
+        LD	H,80H
+        CALL	ENASLT			; enable on page 2
+        LD	A,0FFH
+        LD	(D$635E),A              ; not CALL TELCOM
+        CALL	INIFNK
+        CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40AE                  ; TELCOM
+        XOR	A
+        LD	HL,FNKSTR+10*16-1
+        LD	DE,FNKSTR+10*16-2
+        LD	BC,10*16-1
+        LD	(HL),A
+        LDDR                            ; clear function key definitions
+        LD	BC,16
+J$458C:	INC	A
+        LD	(HL),A
+        ADD	HL,BC
+        CP	5
+        JR	NZ,J$458C
+        LD	A,18
+J$4595:	INC	A
+        LD	(HL),A
+        ADD	HL,BC
+        CP	18+5
+        JR	NZ,J$4595
+        LD	A,(D.6360)
+        LD	H,80H
+        CALL	ENASLT			; restore slot on page 2
+        LD	A,0C9H                  ; disable EXTBIO
+        LD	E,0			; write 0
+        CALL	C.45DE                  ; write 6FFF
+        LD	E,1                     ; write 1
+        LD	HL,I$7FFF
+        CALL	C$45E4                  ; write 7FFF
+        POP	AF
+        JR	Z,J$45BD                ; no disk system, skip
+        POP	HL
+        POP	HL
+        POP	HL
+        POP	HL
+        LD	(DISKVE),HL		; restore diskerror handler
+J$45BD:	POP	HL
+        LD	(FORCLR),HL             ; restore fore and background color
+        LD	A,(RG8SAV)
+        AND	0DFH                    ; color 0 = transparant
+        LD	B,A
+        LD	C,8
+        LD	A,(EXBRSA)
+        AND	A                       ; MSX1 ?
+        CALL	NZ,WRTVDP               ; nope,
+        LD	B,2                     ; 16x16 sprites
+
+;	  Subroutine select sprite size
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$45D2:	LD	A,(RG1SAV)
+        AND	0FDH
+        OR	B
+        LD	B,A
+        LD	C,1
+        JP	WRTVDP
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.45DE:	LD	(EXTBIO+0),A
+        LD	HL,I$6FFF
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$45E4:	LD	A,(D.6360)
+        JP	WRSLT
+
+;	  Subroutine disk error handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.45EA:	BIT	7,C                     ; bad fat ?
+        LD	E,60
+        JR	NZ,J.45FD               ; yep, Bad FAT error
+        SRL	C                       ; disk error
+        DEC	C                       ; write protocted error ?
+        LD	E,68
+        JP	M,J.45FD                ; yep, disk write protected error
+        LD	E,70
+        JR	Z,J.45FD                ; not ready, disk offline error
+        DEC	E                       ; disk i/o error
+J.45FD:	CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40BA                  ; BASIC error
+        RET
+
+I$4604:
+
+        .PHASE	06000H
+
+;	  Subroutine inter bank call (DI/EI)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6000:	DI
+        CALL	C.6011			; get parameters save page and set page
+        CALL	C.600C			; call subroutine
+        DI
+        CALL	C.602A			; restore page
+        DEFB	0FEH                    ; skip next instruction
+C.600C:	PUSH	DE
+        EX	AF,AF'
+        EXX
+        EI
+        RET
+
+;	  Subroutine get parameters save page and set page
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6011:	EXX
+        EX	AF,AF'
+        POP	HL                      ; return address
+        EX	(SP),HL                 ; C.6000 caller address
+        LD	A,(D.60A3)
+        LD	B,A                     ; i8255 port A register backup
+        AND	0F0H
+        OR	(HL)                    ; bank
+        INC	HL
+        LD	E,(HL)
+        INC	HL
+        LD	D,(HL)                  ; subroutine address
+        INC	HL
+        EX	(SP),HL                 ; return address
+        PUSH	BC
+J$4627:	LD	(D.7FC4),A
+        LD	(D.60A3),A              ; update i8255 port A register backup
+        JP	(HL)
+
+;	  Subroutine restore page
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.602A:	EX	AF,AF'
+        EXX
+        POP	HL
+        POP	AF
+        AND	0FH
+        LD	B,A
+        LD	A,(D.60A3)              ; i8255 port A register backup
+        AND	0F0H
+        OR	B
+        JR	J$4627
+
+;	  Subroutine inter bank call
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.6039:	CALL	C.6011			; get parameters save page and set page
+        CALL	C.6043			; call routine
+        CALL	C.602A			; restore page
+        DEFB	0FEH                    ; skip next instruction
+C.6043:	PUSH	DE
+        EX	AF,AF'
+        EXX
+        RET
+
+        .DEPHASE
+
+S4604   EQU     $-I$4604
+
+
+I$464B:	DEFB	"8N1XONNN"
+        DEFW	300
+        DEFW	300
+        DEFB	0
+
+;	  Subroutine initialize MSX-modem
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4658:	LD	A,0C0H
+        CALL	C.540C			; update i8255 port A register (bank)
+        LD	A,7BH
+        CALL	C.5414			; update i8255 port B register
+        LD	HL,C.6000
+        LD	DE,C.6000+1
+        LD	BC,I$0363
+        LD	(HL),0
+        LDIR				; initialize modem RAM
+        XOR	A
+        LD	L,A
+        LD	H,A
+        LD	(D$7EE9),A              ; printer output disabled
+        LD	(D$6372),A
+        LD	(D.7EE7),HL             ; reset printer not ready counter
+        LD	(D$6374),HL             ; BTELCOM operand = 0
+        LD	A,0C0H
+        CALL	C.540C			; update i8255 port A register (bank)
+        LD	A,7BH
+        CALL	C.5414			; update i8255 port B register
+        LD	BC,S4604
+        LD	HL,I$4604
+        LD	DE,C.6000
+        LDIR				; initalize bank switch routines
+        LD	HL,I$464B
+        LD	DE,I.6065
+        PUSH	DE
+        POP	IY
+        LD	BC,13
+        LDIR                            ; default serial parameters
+        LD	A,0FFH
+        LD	(D.60A9),A              ; modem type = default
+        CALL	C.4739			; initialize serial
+        LD	A,"T"
+        LD	DE,0
+        CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40C3			; store protocol and timer values
+        LD	C,0
+        CALL	C.5077                  ; set communication mode
+        LD	A,(D.6085)
+        OR	0C0H
+        LD	(D.6085),A              ; set dial mode = pulse dial, 20pps
+        LD	A,40H                   ; pulse dial
+        JR	J$46C8			; clear flags and receive buffer
+
+;	  Subroutine clear flags and receive buffer
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$46C5:	LD	A,(D.6086)
+J$46C8:	AND	40H                     ; leave pulse/tone dial
+        LD	(D.6086),A
+
+;	  Subroutine clear receive buffer
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$46CD:	PUSH	HL
+        DI
+        LD	HL,0
+        LD	(D.6090),HL             ; number of bytes in receive buffer = 0
+        LD	(D.6092),HL             ; number of bytes in receive buffer (printer echo) = 0
+        LD	(D.6094),HL             ; number of bytes in receive buffer (download text/log) = 0
+        LD	(D.6088),HL             ; put offset in receive buffer = 0
+        LD	(D.608A),HL             ; get offset in receive buffer = 0
+        LD	(D.608C),HL             ; get offset in receive buffer (printer echo) = 0
+        LD	(D.608E),HL             ; get offset in receive buffer (download text/log) = 0
+        POP	HL
+        RET
+
+;	  Subroutine RS232.INIT
+;	     Inputs  A = modem type, C = dialer mode
+;	     Outputs ________________________
+
+J$46E9:	EI
+        CP	0FFH                    ; default mode type ?
+        JR	Z,J$46F5                ; yep,
+        CP	3+1
+        CCF
+        RET	C
+        CP	1+1
+        RET	C
+J$46F5:	LD	(D.60A9),A              ; store modem type
+        PUSH	BC
+        PUSH	DE
+        PUSH	HL
+        LD	A,C
+        OR	A                       ; dailer mode 0 (tone dial) ?
+        LD	D,A
+        JR	Z,J.4718                ; yep,
+        LD	D,0C0H
+        INC	A                       ; default dailer mode ?
+        JR	Z,J.4718                ; yep, dailer mode 2 (pulse dial, 20pps)
+        SUB	3                       ; dailer mode 2 (pulse dial, 20pps) ?
+        LD	D,0C0H
+        JR	Z,J.4718                ; yep,
+        DEC	A                       ; dailer mode 3 (pulse dial, 10pps) ?
+        LD	D,40H
+        JR	Z,J.4718                ; yep,
+        DEC	A                       ; dailer mode 4 (automatic) ?
+        LD	D,80H
+        JR	Z,J.4718                ; yep,
+        SCF
+        JR	NZ,J$4735               ; nope, quit with error
+J.4718:	LD	A,(D.6085)
+        AND	3FH
+        OR	D
+        LD	(D.6085),A              ; update dailer mode
+        LD	DE,I.6065
+        PUSH	DE
+        POP	IY
+        LD	C,13
+J$4729:	CALL	C.442F                  ; read byte from slot
+        LD	(DE),A
+        INC	DE
+        DEC	C
+        JR	NZ,J$4729
+        CALL	C.4739			; initialize serial
+        DI
+J$4735:	POP	HL
+        POP	DE
+        POP	BC
+        RET
+
+;	  Subroutine initialize serial
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4739:	LD	A,(IY+0)                ; data bits (ASCII)
+        SUB	"5"
+        CP	04H	; 4 
+        CCF
+        RET	C
+        LD	B,A
+        LD	D,A
+        CALL	C$5598
+        LD	A,(IY+1)                ; parity (ASCII)
+        CP	"E"
+        JR	Z,J$475C
+        CP	"O"
+        JR	Z,J$475E
+        CP	"I"
+        JR	Z,J$4762
+        CP	"N"
+        JR	Z,J.4768
+        SCF
+        RET
+
+J$475C:	SET	3,B
+J$475E:	SET	2,B
+        JR	J.4768
+
+J$4762:	LD	A,B
+        CP	03H	; 3 
+        SCF
+        RET	Z
+        INC	B
+J.4768:	RLC	B
+        RLC	B
+        LD	A,(IY+2)                ; stop bits (ASCII)
+        SUB	"1"
+        CP	03H	; 3 
+        CCF
+        RET	C
+        INC	A
+        RRCA
+        RRCA
+        OR	B
+        LD	B,A
+        LD	C,0
+        LD	A,(IY+3)                ; XON/XOFF protocol (ASCII)
+        CP	"X"
+        JR	NZ,J$4787
+        SET	0,C
+        JR	J$478B
+
+J$4787:	CP	"N"
+        SCF
+        RET	NZ
+J$478B:	LD	A,(IY+4)                ; 
+        CP	"A"
+        JR	NZ,J$4796
+J$4792:	SET	1,C
+        JR	J$47A3
+
+J$4796:	CP	"O"
+        JR	Z,J$47A1
+        LD	A,(D.6085)
+        BIT	1,A
+        JR	NZ,J$4792
+J$47A1:	RES	1,C
+J$47A3:	LD	A,(IY+5)                ; auto LF on receive (ASCII)
+        CP	"A"
+        JR	NZ,J$47AE
+        SET	3,C
+        JR	J$47B2
+
+J$47AE:	CP	"N"
+        SCF
+        RET	NZ
+J$47B2:	LD	A,(IY+6)                ; auto LF on send (ASCII)
+        CP	"A"
+        JR	NZ,J$47BD
+        SET	2,C
+        JR	J$47C1
+
+J$47BD:	CP	"N"
+        SCF
+        RET	NZ
+J$47C1:	LD	A,(IY+7)                ; SI/SO protocol (ASCII)
+        CP	"S"
+        JR	NZ,J$47D1
+        LD	A,D
+        CP	2
+        SCF
+        RET	NZ
+        SET	4,C
+        JR	J$47D5
+
+J$47D1:	CP	"N"
+        SCF
+        RET	NZ
+J$47D5:	LD	A,C
+        LD	(D.6085),A
+        LD	A,02H
+        OR	B
+        LD	(D.6082),A              ; update last i8251 mode byte
+        DI
+        CALL	C$5627                  ; update modem mode
+        LD	A,(IY+12)               ; timeout value
+        LD	(D.6072),A              ; store timeout value
+        CALL	C$54C3
+        CALL	C.541C
+        OR	A
+        RET
+
+;	  Subroutine RS232.OPEN
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J.47F1:	LD	A,(D.6086)
+        BIT	3,A                     ; RS232 port open ?
+        LD	A,2
+        SCF
+        RET	NZ                      ; yep, quit with error
+        LD	A,E
+        CP	8                       ; mode = sequential append ?
+        LD	A,1
+        SCF
+        RET	Z                       ; yep, quit with error
+        PUSH	BC
+        PUSH	DE
+        PUSH	HL                      ; store pointer to FCB
+        LD	(D.6096),HL             ; store pointer to FCB
+        PUSH	HL                      ; store pointer to FCB
+        LD	H,0
+        LD	L,C                     ; buffer size
+        LD	A,C
+        OR	A                       ; buffer size = 0 ?
+        JR	NZ,J$4811               ; nope,
+        LD	H,D
+        LD	L,B
+J$4811:	LD	(D.6098),HL             ; buffer size
+        POP	HL                      ; restore pointer to FCB
+        LD	(HL),E                  ; store device mode
+        XOR	A
+        INC	HL
+        INC	HL
+        LD	(HL),A                  ; clear backup byte status
+        INC	HL
+        LD	(HL),A                  ; clear backup byte
+        INC	HL
+        INC	HL
+        INC	HL
+        LD	(HL),A
+        INC	HL
+        INC	HL
+        LD	(HL),A
+        CALL	C$46C5                   ; clear flags and receive buffer
+        LD	HL,D.60A1
+        LD	A,(D.635C)
+        OR	A
+        LD	A,0
+        LD	(D.635C),A
+        JR	Z,J$4843
+        LD	A,(D.6085)
+        BIT	1,A
+        LD	A,10
+        JR	NZ,J$483F
+        LD	A,3
+J$483F:	LD	(HL),A
+        JP	J.489F
+
+J$4843:	LD	A,(D.6085)
+        BIT	1,A
+        JR	NZ,J$4863
+        DI
+        CALL	C$5340
+        LD	A,(D.60B6)
+        CP	3
+        CALL	NZ,C.5352
+        LD	A,(HL)
+        CP	84H
+        JR	NZ,J$485F
+        LD	(HL),4
+        JR	J.489F
+
+J$485F:	LD	(HL),1
+        JR	J.489F
+
+J$4863:	LD	A,(D.60B6)
+        CP	3
+        JR	Z,J.489A
+        CALL	C.537B
+        CALL	C.5352
+        CALL	C$5337
+        LD	A,(D.60B7)
+        OR	A                       ; modem mode 0 ?
+        JR	Z,J.489A                ; yep, skip
+        LD	C,21
+        CALL	C.4BCA                  ; wait
+        CALL	C.5349
+        CALL	C$5373
+        LD	C,198
+        CALL	C.4BCA                  ; wait
+        CALL	C.537B
+        CALL	C$5367
+        CALL	C.5352
+        LD	C,4
+        CALL	C.4BCA                  ; wait
+        CALL	C$5380
+J.489A:	CALL	C.5349
+        LD	(HL),8
+J.489F:	EI
+        LD	A,(D.60B6)
+        CP	3
+        JR	Z,J$48BD
+        XOR	A
+        LD	(D$61A3),A
+        LD	(D$61A4),A
+        LD	(D$61A5),A
+        LD	HL,(JIFFY)
+        LD	(D$619F),HL
+        LD	HL,600
+        LD	(D$61A1),HL             ; timer value = 600
+J$48BD:	XOR	A
+        LD	(D.60B6),A
+        LD	HL,D.6086
+        SET	3,(HL)                  ; RS232 port open
+        EI
+        LD	HL,(FILTAB)
+        LD	E,(HL)
+        INC	HL
+        LD	D,(HL)                  ; pointer to FCB of I/O channel 0
+        POP	HL                      ; restore pointer to FCB
+        PUSH	HL                      ; store pointer to FCB
+        SBC	HL,DE                   ; same as this FCB ?
+        POP	HL                      ; restore pointer to FCB
+        PUSH	HL                      ; store pointer to FCB
+        JR	NZ,J.48E0               ; nope, quit
+        LD	A,(HL)                  ; device mode
+        CP	2                       ; mode = sequential output ?
+        JR	NZ,J.48E0               ; nope, skip
+        CALL	C.55BE                  ; wait for CD
+        CALL	C$4BC8                  ; wait 3 seconds
+J.48E0:	OR	A
+        POP	HL                      ; restore pointer to FCB
+        POP	DE
+        POP	BC
+        RET
+
+; RS232.CLOSE
+
+J.48E5:	PUSH	HL
+        LD	A,(D.635C)
+        OR	A
+        JR	NZ,J.490C               ; yep, skip
+        LD	HL,(D.6096)             ; pointer to FCB
+        LD	A,(HL)                  ; device mode
+        CP	2                       ; sequential output mode ?
+        LD	A,1AH                   ; EOF
+        CALL	Z,C.51CF		; yep, RS232.SNDCHR
+        CALL	C.54AD                  ; wait for empty transmitter
+        LD	C,30
+        CALL	C.4BCA                  ; wait
+        LD	A,(D.60B6)
+        CP	3
+        JR	Z,J.490C
+        CALL	C.5352
+        CALL	C.537B
+J.490C:	XOR	A
+        LD	(D.60A1),A              ; clear carrier status
+        CALL	C.538D			; disable i8251 receiver
+        EI
+        LD	HL,D.6086
+        RES	3,(HL)                  ; RS232 port closed
+        LD	HL,0
+        LD	(D.6090),HL             ; number of bytes in receive buffer = 0
+        POP	HL
+        RET
+
+;	  Subroutine RS232.GETCHR
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4921:	PUSH	HL
+        PUSH	BC
+        CALL	C.497B                  ; get pointer to backup byte
+        LD	C,(HL)                  ; backup byte
+        LD	(HL),0                  ; clear backup byte
+        DEC	HL
+        LD	A,(HL)                  ; backup byte status
+        LD	(D.6087),A              ; update receive byte error status
+        LD	(HL),0                  ; clear backup byte status
+        INC	HL
+        AND	A                       ; any errors ?
+        JR	NZ,J.495B               ; yep, quit with error flag
+        LD	A,C
+        AND	A                       ; zero byte ?
+        JR	NZ,J$4947               ; nope,
+        CALL	C.509D                  ; wait for received byte
+        EI
+        LD	C,A                     ; store received byte
+        JP	M,J.495B                ; error, quit with error flag
+        CALL	C.55AC                  ; update error flags
+        JR	C,J.495B                ; aborted by ctrl-stop, quit with error flag
+        JR	Z,J.495B                ; timeout, quit with error flag
+J$4947:	PUSH	HL
+        LD	HL,(D.6096)             ; pointer to FCB
+        LD	A,(HL)                  ; device mode
+        POP	HL
+        CP	4                       ; raw mode ?
+        JR	Z,J.495F                ; yep,
+        LD	A,C
+        CP	1AH                     ; EOF ?
+        JR	NZ,J.495F               ; nope,
+        LD	(HL),A
+        AND	A
+        SCF
+        JR	J$4962
+
+J.495B:	OR	80H
+        JR	J$4961
+
+J.495F:	XOR	A
+        INC	A
+J$4961:	LD	A,C
+J$4962:	POP	BC
+        POP	HL
+        RET
+
+;	  Subroutine RS232.BACKUP
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4965:	PUSH	HL
+        CALL	C.497B                  ; get pointer to backup byte
+        LD	(HL),C                  ; store backup byte
+        PUSH	AF
+        DEC	HL
+        LD	A,(D.6087)              ; receive byte error status
+        LD	(HL),A                  ; store backup byte status
+        POP	AF
+        POP	HL
+        RET
+
+
+;	  Subroutine get backup byte
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4973:	PUSH	HL
+        CALL	C.497B                  ; get pointer to backup byte
+        LD	A,(HL)                  ; backup byte
+        POP	HL
+        AND	A
+        RET
+
+
+;	  Subroutine get pointer to backup byte
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.497B:	LD	HL,(D.6096)             ; pointer to FCB
+        INC	HL
+        INC	HL
+        INC	HL
+        RET
+
+; RS232.EOF
+
+J$4982:	CALL	C.49FF                  ; get number of bytes in receive buffer (with backup)
+        RET	Z                       ; receive buffer empty, quit
+J$4986:	PUSH	BC
+        LD	B,A
+        EI
+        CALL	C.4921			; RS232.GETCHR
+        JP	M,J.49A3                ; error, quit
+        PUSH	BC
+        LD	C,A
+        CALL	C.4965			; RS232.BACKUP
+        POP	BC
+        CP	1AH                     ; EOF ?
+        JR	Z,J$499F                ; yep, quit with true
+        XOR	A                       ; clear Cx
+        LD	L,A
+        LD	H,A                     ; false
+        INC	A                       ; clear Zx
+        JR	J.49A3
+
+J$499F:	LD	HL,-1
+        SCF
+J.49A3:	LD	A,B
+        POP	BC
+        RET
+
+;	  Subroutine RS232.LOC
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.49A6:	PUSH	AF
+        PUSH	BC
+        EI
+        LD	HL,(D.6096)             ; pointer to FCB
+        LD	A,(HL)                  ; device mode
+        CP	1                       ; sequential input mode ?
+        JR	NZ,J$49C6               ; nope,
+        CALL	C.4973                  ; get backup byte
+        LD	HL,0                    ; assume no extra
+        JR	Z,J$49C0                ; no backup byte,
+        SUB	1AH                     ; EOF ?
+        JR	Z,J.49C9                ; yep, quit
+        LD	HL,1                    ; 1 extra (backup byte)
+J$49C0:	CALL	C$49DD                  ; get number of characters in receiver buffer (with EOF check)
+        ADD	HL,DE                   ; + extra
+        JR	J.49C9                  ; quit
+
+J$49C6:	CALL	C.49FF                  ; get number of bytes in receive buffer (with backup)
+J.49C9:	POP	BC
+        POP	AF
+        RET
+
+; RS232.LOF
+
+J$49CC:	PUSH	AF
+        EI
+        CALL	C.49A6			; RS232.LOC
+        PUSH	DE
+        EX	DE,HL
+        LD	HL,(D.6098)             ; buffer size
+        OR	A
+        SBC	HL,DE
+        INC	HL
+        POP	DE
+        POP	AF
+        RET
+
+
+;	  Subroutine get number of characters in receiver buffer (with EOF check)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$49DD:	PUSH	AF
+        PUSH	BC
+        PUSH	HL
+        LD	DE,(D.6090)             ; number of bytes in receive buffer
+        LD	A,E
+        OR	D                       ; receive buffer empty ?
+        JR	Z,J.49FB                ; yep, quit
+        LD	C,E
+        LD	B,D                     ; number of bytes
+        LD	DE,0                    ; offset = 0
+J$49ED:	CALL	C$5106                  ; get pointer in receive buffer
+        LD	A,(HL)                  ; received byte
+        CP	1AH                     ; EOF ?
+        JR	Z,J.49FB                ; yep, quit
+        INC	DE
+        DEC	BC
+        LD	A,B
+        OR	C
+        JR	NZ,J$49ED               ; next byte
+J.49FB:	POP	HL
+        POP	BC
+        POP	AF
+        RET
+
+;	  Subroutine get number of bytes in receive buffer (with backup)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.49FF:	LD	HL,(D.6090)             ; number of bytes in receive buffer
+        CALL	C.4973                  ; get backup byte
+        JR	Z,J$4A09                ; no backup byte,
+        INC	HL                      ; include backup byte
+        RET
+
+J$4A09:	LD	A,H
+        OR	L                       ; Zx set if empty
+        RET
+
+;	  Subroutine MODEM.DIALST
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4A0C:	CALL	C$4A1C                  ; dial string
+
+;	  Subroutine update speaker status
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4A0F:	PUSH	AF
+        LD	A,(D.60A5)
+        XOR	40H
+        AND	40H
+        CALL	C.55FE                  ; MODEM.SPKCNT
+        POP	AF
+        RET
+
+;	  Subroutine dial string
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4A1C:	PUSH	HL
+J$4A1D:	CALL	C.442F                  ; read byte from slot
+        OR	A                       ; end of string ?
+        JR	Z,J$4A28                ; yep,
+        CALL	C.4A84                  ; to upper, translate dail character
+        JR	NC,J$4A1D               ; no error, next
+J$4A28:	POP	HL
+        RET	C                       ; error, quit
+        CALL	C.4BDC                  ; set dial mode
+        RET	C                       ; error, quit
+        DI
+        CALL	C.539F			; off hook
+        EI
+        CALL	C.4B77                  ; wait for dial tone
+J$4A36:	CALL	C.4449                  ; STOP pressed ?
+        CALL	NZ,C.4A76               ; yep, set error flag
+        JR	NZ,J.4A4C               ; yep, quit
+        CALL	C.442F                  ; read byte from slot
+        OR	A                       ; end of string ?
+        JR	Z,J.4A4C                ; yep, quit
+        CALL	C.4A84                  ; to upper, translate dail character
+        CALL	C.4A78                  ; dial character
+        JR	J$4A36                  ; next character
+
+J.4A4C:	EI
+        RET
+
+;	  Subroutine MODEM.DIALCH
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4A4E:	PUSH	AF
+        CALL	C.4BDC                  ; set dial mode
+        JR	C,J$4A75                ; error, quit
+        POP	AF
+J$4A55:	PUSH	AF
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        LD	(D.60A5),A              ; store current port B register value (current speaker status)
+        POP	AF
+        CALL	C$4A63                  ; dial character
+        JP	C.4A0F                  ; update speaker status
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4A63:	PUSH	BC
+        PUSH	AF
+        CALL	C.4A84                  ; to upper, translate dail character
+        JR	C,J$4A71                ; error, quit
+        CALL	C.4A78                  ; dial character
+        POP	AF
+        POP	BC
+        OR	A
+        RET
+
+J$4A71:	POP	AF
+        POP	BC
+        SCF
+        RET
+
+J$4A75:	POP	AF
+
+;	  Subroutine set error flag
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4A76:	SCF
+        RET
+
+;	  Subroutine dial character
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4A78:	CALL	NZ,C$4A94               ; valid, dial character
+        EI
+        LD	C,55
+        CALL	C.4B62                  ; wait ? ms
+        JP	J$4B2E                  ; handle automatic detection
+
+
+;	  Subroutine to upper, translate dail character
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4A84:	CALL	C$445D                  ; to upper
+        PUSH	AF
+        CALL	C.4C21                  ; translate dail character
+        OR	A                       ; valid dail character ?
+        JR	Z,J$4A91                ; nope,
+        POP	AF
+        OR	A                       ; clear Cx
+        RET
+
+J$4A91:	POP	AF
+        XOR	A
+        RET
+
+;	  Subroutine dial character
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4A94:	CP	"H"                     ; on hook for 1 second ?
+        JP	Z,J$4B6C                ; yep, on hook for 1 second
+        CP	":"                     ; wait for second dial tone ?
+        JP	Z,C.4B77                ; yep, wait for dial tone and quit
+        CP	"<"                     ; wait for 3 seconds ?
+        JP	Z,J$4BC5                ; yep, wait for 3 seconds
+        CP	"T"                     ; switch to tone dial ?
+        JP	Z,J$4BBA                ; yep, set tone dial
+        PUSH	AF
+        PUSH	BC
+        PUSH	AF
+        LD	A,(D.6086)
+        BIT	6,A                     ; tone dial ?
+        JR	NZ,J$4ABE               ; nope,
+        POP	AF
+        CALL	C.4C21                  ; translate dail character
+        JR	Z,J.4ABB                ; not valid, quit
+        CALL	C$4AF2                  ; tone dial
+J.4ABB:	POP	BC
+        POP	AF
+        RET
+
+J$4ABE:	XOR	A                       ; speaker off
+        CALL	C.55FE                  ; MODEM.SPKCNT
+        LD	A,(D.6085)
+        BIT	7,A                     ; 20pps ?
+        LD	BC,33*256+54
+        JR	Z,J$4ACF                ; nope,
+        LD	BC,17*256+40
+J$4ACF:	CALL	C.4BCA                  ; wait
+        POP	AF                      ; restore dial character
+        CALL	C.4C21                  ; translate dail character
+        JR	Z,J.4ABB                ; not valid, quit
+        DI
+J$4AD9:	CALL	C.539F			; off hook
+        LD	C,B
+        CALL	C.4B62                  ; wait ? ms
+        CALL	C.53AA			; on hook
+        LD	C,B
+        SLA	C
+        CALL	C.4B62                  ; wait ? ms
+        DEC	A
+        JR	NZ,J$4AD9
+        CALL	C.539F			; off hook
+        EI
+        JR	J.4ABB                  ; quit
+
+;	  Subroutine tone dial
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4AF2:	PUSH	DE
+        PUSH	BC
+        LD	B,A                     ; store dial character
+        DI
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        RES	1,A
+        CALL	C.5414			; update i8255 port B register
+        LD	A,(D.60A6)
+        PUSH	AF
+        LD	A,19H
+        CALL	C.5480                  ; write NCU register 0
+        EI
+        LD	A,B                     ; dial character
+        CALL	C.5491                  ; write NCU register 3
+        CALL	C.5349
+        EI
+        LD	C,5
+        CALL	C.4BCA                  ; wait
+        CALL	C.5352
+        LD	A,00H
+        CALL	C.5491                  ; write NCU register 3
+        DI
+        POP	AF
+        CALL	C.5480                  ; write NCU register 0
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        SET	1,A
+        CALL	C.5414			; update i8255 port B register
+        EI
+        POP	BC
+        POP	DE
+        RET
+
+;	  Subroutine handle automatic detection
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4B2E:	PUSH	BC
+        PUSH	AF
+        LD	A,(D.6086)
+        BIT	6,A                     ; tone dial ?
+        JR	NZ,J.4B5F               ; nope, quit
+        LD	A,(D.60B0)
+        AND	A                       ; automatic dialer detection ?
+        JR	Z,J.4B5F                ; nope, quit
+        DI
+        CALL	C.5592                  ; detected 400 Hz ?
+        EI
+        JR	Z,J.4B58                ; nope,
+        LD	A,(D.6086)
+        SET	6,A
+        LD	(D.6086),A              ; pulse dial
+        DEC	HL                      ; retry previous dial character
+        LD	A,(D.60B0)
+        CP	2
+        JR	NZ,J.4B58
+        INC	A
+        LD	(D.60B0),A
+J.4B58:	LD	A,(D.60B0)
+        DEC	A
+        LD	(D.60B0),A
+J.4B5F:	POP	AF
+        POP	BC
+        RET
+
+;	  Subroutine wait ? ms
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4B62:	PUSH	BC
+J$4B63:	LD	B,0
+J$4B65:	DJNZ	J$4B65
+        DEC	C
+        JR	NZ,J$4B63
+        POP	BC
+        RET
+
+;	  Subroutine on hook for 1 second
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4B6C:	CALL	C.53AA			; on hook
+        LD	C,60                    ; 1 second
+        CALL	C.4BCA                  ; wait
+        JP	C.539F			; off hook
+
+;	  Subroutine wait for dial tone
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4B77:	PUSH	HL
+        PUSH	BC
+        PUSH	AF
+        CALL	C.4A0F                  ; update speaker status
+        LD	A,(D.6086)
+        BIT	6,A                     ; tone dial ?
+        LD	C,200
+        JR	NZ,J$4B88               ; nope,
+        LD	C,250
+J$4B88:	LD	HL,I$60AF
+        XOR	A
+        LD	(HL),A
+        CALL	C.44DC                  ; clear counter set #1
+J$4B90:	LD	A,(D.6078)
+        CP	20                      ; 1/3 second passed ?
+        JR	C,J$4B90                ; nope, wait
+J$4B97:	CALL	C.5592                  ; detected 400 Hz ?
+        EI
+        JR	NZ,J$4BA5               ; yep,
+J$4B9D:	LD	A,(D.6078)
+        CP	C                       ; time passed ?
+        JR	C,J$4B97                ; nope,
+        JR	J$4BB6
+
+J$4BA5:	INC	(HL)
+        LD	A,(HL)
+        CP	9+1
+        JR	C,J$4B9D
+        LD	C,40                    ; 2/3 second
+        CALL	C.44DC                  ; clear counter set #1
+J$4BB0:	LD	A,(D.6078)
+        CP	C                       ; time passed ?
+        JR	C,J$4BB0                ; nope,
+J$4BB6:	POP	AF
+        POP	BC
+        POP	HL
+        RET
+
+;	  Subroutine set tone dail
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4BBA:	CALL	C.4A0F                  ; update speaker status
+        PUSH	HL
+        LD	HL,D.6086
+        RES	6,(HL)                  ; tone dial
+        POP	HL
+        RET
+
+J$4BC5:	CALL	C.4A0F                  ; update speaker status
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4BC8:	LD	C,180                   ; 3 seconds
+
+;	  Subroutine wait
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4BCA:	PUSH	AF
+        CALL	C.44DC                  ; clear counter set #1
+J$4BCE:	LD	A,(D.6078)
+        CP	C                       ; time passed ?
+        JR	C,J$4BCE                ; nope, wait
+        POP	AF
+        RET
+
+;	  Subroutine set dialer mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4BD6:	LD	A,C
+        INC	A                       ; default dialer mode ?
+        JR	NZ,C.4BDC               ; nope,
+        LD	C,02H                   ; use
+
+;	  Subroutine set dialer mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4BDC:	PUSH	BC
+        LD	A,(D.6085)
+        INC	C                       ; default dial mode ?
+        JR	Z,J$4C0C                ; yep,
+        DEC	C                       ; dial mode 0 ?
+        LD	B,00H                   ; tone dial
+        JR	Z,J.4BFF
+        DEC	C
+        DEC	C                       ; dial mode 2 ?
+        LD	B,0C0H                  ; pulse dial, 20pps
+        JR	Z,J.4BFF
+        DEC	C                       ; dial mode 3 ?
+        LD	B,40H                   ; pulse dial, 10pps
+        JR	Z,J.4BFF
+        DEC	C                       ; dial mode 4 ?
+        LD	B,80H                   ; automatic
+        JR	Z,J$4BFB
+        POP	BC
+        SCF
+        RET
+
+J$4BFB:	LD	A,1                     ; automatic detection
+        JR	J$4C00
+
+J.4BFF:	XOR	A                       ; no automatic detection
+J$4C00:	LD	(D.60B0),A              ; automatic dialer detection flag
+        LD	A,(D.6085)
+        AND	3FH
+        OR	B
+        LD	(D.6085),A              ; update dailer mode
+J$4C0C:	BIT	6,A                     ; tone or automatic dial ?
+        LD	B,00H                   ; tone dial
+        JR	Z,J$4C14
+        LD	B,40H                   ; pulse dial
+J$4C14:	DI
+        LD	A,(D.6086)
+        AND	0BFH
+        OR	B
+        LD	(D.6086),A              ; update pulse/tone dial
+        EI
+        POP	BC
+        RET
+
+;	  Subroutine translate dail character
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4C21:	PUSH	HL
+        PUSH	BC
+        LD	HL,D.6086
+        BIT	6,(HL)                  ; tone dial ?
+        LD	HL,I$4C46
+        LD	BC,S4C46
+        JR	Z,J$4C36                ; yep,
+        LD	HL,I$4C6E
+        LD	BC,S4C6E
+J$4C36:	PUSH	BC
+        CPIR                            ; valid character ?
+        POP	BC
+        JR	Z,J$4C3F                ; yep,
+        XOR	A                       ; set Zx
+        JR	J$4C43
+
+J$4C3F:	DEC	BC
+        ADD	HL,BC
+        LD	A,(HL)
+        OR	A                       ; reset Zx
+J$4C43:	POP	BC
+        POP	HL
+        RET
+
+I$4C46: DEFB    "1234567890*#ABCDHT<:"
+        DEFB    11H,12H,13H,14H,15H,16H,17H,18H,19H,1AH,1BH,1CH,1DH,1EH,1FH,10H,"H","T","<",":"
+
+S4C46   EQU     ($-I$4C46)/2
+
+I$4C6E: DEFB    "1234567890HT<:"
+        DEFB    01H,02H,03H,04H,05H,06H,07H,08H,09H,0AH,"H","T","<",":"
+
+S4C6E   EQU     ($-I$4C6E)/2
+
+;	  Subroutine modem interrupt handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4C8A: PUSH    AF
+        CALL    C.4C96                  ; update carrier status
+        CALL	C$4E28                  ; update incoming call/data status
+        CALL	C$4E83			; update dial tone status
+        POP	AF
+        RET
+
+;	  Subroutine update carrier status
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4C96:	CALL	C$4CA2
+        CALL	C.55D2                  ; get carrier detect status
+        JP	NC,J$53BD		; nope, set b4 7FC5
+        JP	J$53C6			; yep, reset b4 7FC5
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4CA2:	LD	HL,D.60A1
+        LD	A,(HL)
+        OR	A                       ; carrier status cleared ?
+        JR	Z,J$4CB6                ; yep,
+        JP	P,J$4CD0                ; no carrier,
+        CALL	C$52B5
+        INC	HL
+J$4CB0:	LD	A,(HL)
+        JR	C,J$4CB9
+J$4CB3:	XOR	A
+J$4CB4:	LD	(HL),A
+        RET
+
+J$4CB6:	JP	C.44D6                  ; clear counter set #2
+
+J$4CB9:	CP	0FH
+        JR	Z,J$4CC0
+        INC	A
+        JR	J$4CB4
+
+J$4CC0:	LD	(HL),0
+        DEC	HL
+        LD	A,(HL)
+        AND	7FH
+        LD	(HL),A                  ; no carrier
+        CALL	C.538D			; disable i8251 receiver
+        BIT	6,A
+        RET	NZ
+        JP	C.5352
+
+J$4CD0:	PUSH	HL
+        DEC	A
+        LD	C,A
+        LD	B,0
+        LD	A,(D.60B7)
+        OR	A                       ; modem mode 0 ?
+        LD	HL,I$4CFD
+        JR	Z,J$4CE1                ; yep,
+        LD	HL,I$4CE9
+J$4CE1:	ADD	HL,BC
+        ADD	HL,BC
+        LD	E,(HL)
+        INC	HL
+        LD	D,(HL)
+        POP	HL
+        PUSH	DE
+C.4CE8: RET
+
+I$4CE9: DEFW    C.4D11
+        DEFW    C.4D37
+        DEFW    C.4D54
+        DEFW    C.4D62
+        DEFW    C.4CE8
+        DEFW    C.4CE8
+        DEFW    C.4CE8
+        DEFW    C.4D7B
+        DEFW    C.4D86
+        DEFW    C.4D9D
+
+I$4CFD: DEFW    C.4DB0
+        DEFW    C.4DBB
+        DEFW    C.4DD2
+        DEFW    C.4DD7
+        DEFW    C.4CE8
+        DEFW    C.4CE8
+        DEFW    C.4CE8
+        DEFW    C.4DF0
+        DEFW    C.4DFD
+        DEFW    C.4E13
+
+C.4D11: CALL	C.54A3                  ; read NCU register 2
+        BIT	4,A
+        JR	Z,J$4D20
+        BIT	3,A
+        RET	Z
+        CALL	C.44D6                  ; clear counter set #2
+        INC	(HL)
+        RET
+
+J$4D20:	AND	0EH
+        CP	08H
+        RET	NZ
+        LD	A,(D.607D)
+        CP	26+1                    ; time passed ?
+        RET	C                       ; nope, quit
+        CALL	C.537B
+        CALL	C.535E
+        CALL	C.5349
+        LD	(HL),3
+        RET
+
+C.4D37:	CALL	C.54A3                  ; read NCU register 2
+        BIT	4,A
+        JR	Z,J$4D4F
+        LD	A,(D.607D)
+        CP	26+1                    ; time passed ?
+        RET	C                       ; nope, quit
+        CALL	C.537B
+        CALL	C.535E
+        CALL	C.5349
+        INC	(HL)
+        RET
+
+J$4D4F:	CALL	C.5352
+        DEC	(HL)
+        RET
+
+C.4D54:	CALL	C.54A3                  ; read NCU register 2
+        BIT	4,A
+        RET	NZ
+        BIT	3,A
+        RET	Z
+        CALL	C.44D6                  ; clear counter set #2
+        INC	(HL)
+        RET
+
+C.4D62:	CALL	C.54A3                  ; read NCU register 2
+        BIT	3,A
+        JR	Z,J$4D75
+        LD	A,(D.607D)
+        CP	59+1                    ; time passed ?
+        RET	C                       ; nope, quit
+        LD	(HL),84H
+        CALL	C.5385			; enable i8251 receiver
+        RET
+
+J$4D75:	CALL	C.5352
+        LD	(HL),1
+        RET
+
+C.4D7B:	CALL	C.54A3                  ; read NCU register 2
+        BIT	3,A
+        RET	Z
+        CALL	C.44D6                  ; clear counter set #2
+        INC	(HL)
+        RET
+
+C.4D86:	CALL	C.54A3                  ; read NCU register 2
+        BIT	3,A
+        JR	Z,J.4D9B
+        LD	A,(D.607D)
+        CP	9+1                     ; time passed ?
+        RET	C                       ; nope, quit
+        CALL	C.44D6                  ; clear counter set #2
+        CALL	C.535E
+        INC	(HL)
+        RET
+
+J.4D9B:	DEC	(HL)
+        RET
+
+C.4D9D:	CALL	C.54A3                  ; read NCU register 2
+        BIT	3,A
+        JR	Z,J.4D9B
+        LD	A,(D.607D)
+        CP	45+1                    ; timme passed ?
+        RET	C                       ; nope, quit
+        LD	(HL),8AH
+        CALL	C.5385			; enable i8251 receiver
+        RET
+
+C.4DB0:	CALL	C.54A3                  ; read NCU register 2
+        BIT	3,A
+        RET	Z
+        CALL	C.44D6                  ; clear counter set #2
+        INC	(HL)
+        RET
+
+C.4DBB:	CALL	C.54A3                  ; read NCU register 2
+        BIT	3,A
+        JR	Z,J$4DCD
+        LD	A,(D.607D)
+        CP	26+1                    ; time passed ?
+        RET	C                       ; nope, quit
+        CALL	C.5349
+        INC	(HL)
+        RET
+
+J$4DCD:	CALL	C.5352
+        DEC	(HL)
+        RET
+
+C.4DD2:	CALL	C.44D6                  ; clear counter set #2
+        INC	(HL)
+        RET
+
+C.4DD7:	CALL	C.54A3                  ; read NCU register 2
+        BIT	3,A
+        JR	Z,J$4DEA
+        LD	A,(D.607D)
+        CP	59+1                    ; time passed ?
+        RET	C                       ; nope, quit
+        LD	(HL),84H
+        CALL	C.5385			; enable i8251 receiver
+        RET
+
+J$4DEA:	CALL	C.5352
+        LD	(HL),1
+        RET
+
+C.4DF0:	CALL	C.54A3                  ; read NCU register 2
+        AND	0EH	; 14 
+        CP	08H	; 8 
+        RET	NZ
+        CALL	C.44D6                  ; clear counter set #2
+        INC	(HL)
+        RET
+
+C.4DFD:	CALL	C.54A3                  ; read NCU register 2
+        AND	0EH	; 14 
+        CP	08H	; 8 
+        JR	NZ,J.4E11
+        LD	A,(D.607D)
+        CP	9+1                     ; time passed ?
+        RET	C                       ; nope, quit
+        CALL	C.44D6                  ; clear counter set #2
+        INC	(HL)
+        RET
+
+J.4E11:	DEC	(HL)
+        RET
+
+C.4E13:	CALL	C.54A3                  ; read NCU register 2
+        AND	0EH
+        CP	08H
+        JR	NZ,J.4E11
+        LD	A,(D.607D)
+        CP	45+1                    ; time passed ?
+        RET	C                       ; nope, quit
+        LD	(HL),8AH
+        CALL	C.5385			; enable i8251 receiver
+        RET
+
+;	  Subroutine update incoming call/data status
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4E28:	LD	A,(D.60A4)              ; i8255 port B register backup
+        BIT	0,A                     ; off hook ?
+        LD	A,0
+        JR	Z,J.4E5B                ; yep,
+        LD	IX,I$609D
+        LD	A,(D.7FC6)              ; i8255 port C
+        BIT	6,A                     ; b6 set ?
+        CALL	C.4E5F
+        LD	IX,I$609F
+        LD	A,(D.7FC6)              ; i8255 port C
+        BIT	7,A                     ; b7 set ?
+        CALL	C.4E5F
+        LD	HL,I$60A0
+        LD	A,(D$609E)
+        AND	(HL)
+        JR	Z,J.4E5B                ; ring not detected
+        LD	A,(D.609B)
+        OR	A                       ; ring detected ?
+        RET	NZ                      ; yep, quit
+        CPL
+        LD	(D.609C),A
+                                        ; ring detected
+
+J.4E5B:	LD	(D.609B),A
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4E5F:	LD	A,(IX+0)
+        JR	NZ,J$4E7C
+        ADD	A,07H	; 7 
+        CP	11H	; 17 
+        JR	C,J.4E6C
+        LD	A,10H	; 16 
+J.4E6C:	LD	(IX+0),A
+        CP	03H	; 3 
+        JR	C,J$4E77
+        CP	0CH	; 12 
+        RET	C
+        DEFB	03EH
+J$4E77:	XOR	A
+        LD	(IX+1),A
+        RET
+
+J$4E7C:	DEC	A
+        JP	P,J.4E6C
+        XOR	A
+        JR	J.4E6C
+
+;	  Subroutine update dial tone status
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$4E83:	LD	A,(D.60A4)              ; i8255 port B register backup
+        BIT	0,A                     ; off hook ?
+        RET	NZ                      ; nope, quit
+        LD	A,(D.60B5)
+        OR	A			; dail tone handler = disabled ?
+        RET	Z                       ; yep, quit
+        LD	IY,I.60B1
+        LD	A,(IY+1)
+        OR	A
+        JP	M,J$4F24
+        CALL	C.557C                  ; get line status
+        AND	03H                     ; b1-b0
+        LD	L,A
+        LD	A,(D$6373)
+        AND	03H
+        CP	L                       ; changed ?
+        JP	NZ,J.4F1E               ; yep,
+        LD	A,(D.607C)
+        CP	9+1                     ; >9 seconds passed ?
+        JP	NC,J.4F1E               ; yep,
+        DI
+        CALL	C.5592                  ; detected 400 Hz ?
+        LD	HL,D.6363
+        JR	NZ,J$4EC0               ; yep,
+        DEC	(HL)                    ; update 400 Hz timer
+        JP	P,J.4EC2                ; timer not finished,
+        INC	(HL)
+        JR	J.4EC2                  ; timer finished
+
+J$4EC0:	LD	(HL),3                  ; initialize 400 Hz timer
+J.4EC2:	LD	A,(HL)
+        OR	A                       ; timer finished ?
+        JR	NZ,J$4EF0               ; nope,
+        INC	(IY+2)
+        LD	A,(IY+2)
+        CP	36
+        JR	C,J$4EDB
+        DEC	(IY+2)
+        LD	(IY+1),0
+        LD	A,0FFH
+        JR	J$4EE8
+
+J$4EDB:	LD	A,(IY+0)
+        CP	42
+        JR	NC,J.4F1E
+        CP	24
+        JR	C,J$4EEB
+        LD	A,0FEH                  ; dail tone handler = enabled, fase 1
+J$4EE8:	LD	(D.60B5),A
+J$4EEB:	LD	(IY+0),0
+        RET
+
+J$4EF0:	LD	A,(IY+2)
+        LD	(IY+2),0
+        CP	36
+        JR	NC,J.4F10
+        CP	24
+        JR	C,J.4F10
+        LD	A,(D.60B5)
+        CP	0FEH                    ; dail tone handler = enabled, fase 1 ?
+        JR	NZ,J.4F10               ; nope,
+        LD	A,(IY+1)
+        INC	A
+        JP	M,J.4F10
+        LD	(IY+1),A
+J.4F10:	LD	A,0FFH                  ; dail tone handler = enabled, fase 2
+        LD	(D.60B5),A
+        INC	(IY+0)
+        LD	A,(IY+0)
+        CP	100
+        RET	C
+J.4F1E:	LD	A,0FEH
+        LD	(IY+1),A
+        RET
+
+J$4F24:	CALL	C.54A3                  ; read NCU register 2
+        AND	08H
+        JR	Z,J$4F30
+        LD	A,(D.60B4)
+        INC	A
+        RET	Z
+J$4F30:	LD	(D.60B4),A
+        RET
+
+J$4F34:	DI
+        LD	A,(D.609C)
+        OR	A
+        LD	A,0
+        LD	(D.609C),A
+        EI
+        RET
+
+;	  Subroutine interrupt handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4F40:	CALL	C$53E5			; set b6 7FC4
+        CALL	C.53FA		        ; set b7 7FC4
+        LD	A,(D.6086)
+        BIT	3,A                     ; RS232 port open ?
+        RET	Z                       ; nope, quit
+        LD	A,(D.7FC1)
+        AND	02H			; char in receiver ?
+        RET	Z			; nope, quit
+        CALL	C$53F1			; reset b6 7FC4
+        LD	A,(D.7FC0)              ; received byte
+        LD	HL,D.6084
+        AND	(HL)                    ; mask off
+        LD	C,A                     ; store receive byte
+        CALL	C.54F3			; reset 8251 errors
+        LD	B,A                     ; store receive byte status
+        OR	A                       ; any errors ?
+        JR	NZ,J$4F7D               ; yep,
+        LD	A,(D.6085)
+        BIT	0,A                     ; XON/XOFF handshake ?
+        JR	Z,J.4F8E                ; nope, skip
+        LD	HL,D.6086
+        LD	A,C
+        CP	11H                     ; XON ?
+        JR	Z,J$4F7A
+        CP	13H                     ; XOFF ?
+        JR	NZ,J.4F8E
+        SET	2,(HL)                  ; enter XOFF mode
+        RET
+
+J$4F7A:	RES	2,(HL)                  ; leave XOFF mode
+        RET
+
+J$4F7D:	AND	20H                     ; framing error ?
+        JR	Z,J.4FA6                ; nope,
+        LD	A,C
+        AND	A                       ; zero byte ?
+        JR	NZ,J.4FA6               ; nope,
+        LD	HL,D.6086
+        SET	4,(HL)                  ; break detected
+        LD	B,0                     ; no errors
+        JR	J.4FA6
+
+J.4F8E:	LD	A,(D.6085)
+        BIT	4,A                     ; SI/SO handshake ?
+        JR	Z,J.4FA6                ; nope,
+        LD	HL,D.6086
+        LD	A,C
+        SUB	0FH                     ; SI ?
+        JR	NZ,J$4FA0               ; nope,
+        RES	7,(HL)                  ; leave SO mode
+        RET
+
+J$4FA0:	INC	A                       ; SO ?
+        JR	NZ,J.4FA6               ; nope,
+        SET	7,(HL)                  ; enter SO mode
+        RET
+
+J.4FA6:	LD	A,C
+        LD	(D.6172),A              ; store received byte
+J.4FAA:	CALL	C.5037                  ; determine number of bytes in receive buffer (version)
+        LD	HL,(D.6098)             ; buffer size
+        OR	A
+        SBC	HL,DE                   ; receive buffer full ?
+        RET	Z                       ; yep, quit
+        PUSH	BC
+        CALL	C$514D                  ; get put pointer in receive buffer
+        POP	BC
+        LD	A,(D.6085)
+        BIT	4,A                     ; SI/SO handshake ?
+        LD	A,C
+        JR	Z,J.4FCF                ; nope,
+        CP	20H
+        JR	C,J.4FCF
+        LD	A,(D.6086)
+        BIT	7,A                     ; SO mode ?
+        LD	A,C
+        JR	Z,J.4FCF                ; nope,
+        OR	80H
+J.4FCF:	LD	(HL),A
+        CP	1AH                     ; EOF ?
+        JR	NZ,J$4FD7               ; nope,
+        LD	(D$6354),A
+J$4FD7:	PUSH	HL
+        CALL	C.5037                  ; determine number of bytes in receive buffer (version)
+        LD	HL,(D.6098)             ; buffer size
+        PUSH	HL
+        OR	A
+        SBC	HL,DE                   ; receive buffer full ?
+        JR	NZ,J$4FE6               ; nope,
+        SET	7,B                     ; overflow
+J$4FE6:	EX	(SP),HL
+        SRL	H
+        RR	L
+        SRL	H
+        RR	L
+        POP	DE
+        EX	DE,HL
+        OR	A
+        SBC	HL,DE
+        POP	HL
+        CALL	C,C.51A6                ; signal sender to stop sending
+        DI
+        LD	A,B
+        INC	HL
+        LD	(HL),A                  ; store received byte status in receive buffer
+        DEC	HL
+        AND	A                       ; any errors ?
+        RET	NZ                      ; yep, quit
+        LD	A,(D.6085)
+        BIT	3,A                     ; auto LF on receive ?
+        JR	NZ,J$501E               ; yep,
+J$5006:	LD	A,(D$6173)
+        OR	A                       ; comterm activated ?
+        RET	Z                       ; nope, quit
+        LD	A,(D$7EED)
+        OR	A                       ; auto CR on receive ?
+        RET	Z                       ; nope, quit
+        LD	A,(D.6172)              ; received byte
+        LD	C,0AH
+        SUB	C                       ; is LF ?
+        RET	NZ                      ; nope, quit
+        LD	(D.6172),A
+        LD	(HL),0DH                ; put CR in receive buffer
+        JR	J.4FAA
+
+J$501E:	LD	A,(D.6172)
+        SUB	0DH
+        JR	NZ,J$5006
+        LD	(D.6172),A
+        LD	C,0AH
+        JP	J.4FAA
+
+J$502D:	CALL	C.5037                  ; determine number of bytes in receive buffer (version)
+        LD	HL,(D.6098)             ; buffer size
+        OR	A
+        SBC	HL,DE                   ; receive buffer full ?
+        RET
+
+;	  Subroutine determine number of bytes in receive buffer (version)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5037:	PUSH	HL
+        CALL	C$5047                  ; determine get offset in receive buffer version
+        LD	D,0
+        LD	HL,D.6090
+        ADD	HL,DE
+        ADD	HL,DE
+        LD	E,(HL)
+        INC	HL
+        LD	D,(HL)
+        POP	HL
+        RET
+
+;	  Subroutine determine get offset version
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5047:	PUSH	BC
+        LD	E,0                     ; assume get offset in receive buffer
+        LD	HL,(D.6090)             ; number of bytes in receive buffer
+        LD	A,(D.6075)
+        OR	A                       ; printer echo receive buffer empty ?
+        JR	Z,J.5061                ; yep,
+        LD	BC,(D.6092)             ; number of bytes in receive buffer (printer echo)
+        PUSH	HL
+        SBC	HL,BC
+        POP	HL
+        JR	NC,J.5061
+        LD	L,C
+        LD	H,B
+        LD	E,1                     ; get offset in receive buffer (printer echo)
+J.5061:	LD	A,(D.6351)
+        OR	A                       ; download text/log enabled ?
+        JR	Z,J.5075                ; nope,
+        LD	BC,(D.6094)             ; number of bytes in receive buffer (download text/log)
+        PUSH	HL
+        SBC	HL,BC
+        POP	HL
+        JR	NC,J.5075
+        LD	L,C
+        LD	H,B
+        LD	E,2                     ; number of bytes in receive buffer (download text/log)
+J.5075:	POP	BC
+        RET
+
+;	  Subroutine set communication mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5077:	PUSH	AF
+        LD	A,C
+        OR	A
+        LD	A,(D.6085)
+        SET	1,A
+        JR	NZ,J$5083
+        RES	1,A
+J$5083:	LD	(D.6085),A
+        POP	AF
+        RET
+
+;	  Subroutine set modem mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$5088:	LD	A,D
+        INC	A                       ; default modem mode ?
+        JR	NZ,J$508E               ; nope,
+        LD	A,3
+J$508E:	SUB	3
+        CP	2                       ; valid mode mode ?
+        CCF
+        RET	C                       ; nope, quit
+        LD	(D.60B7),A              ; update modem mode
+        DI
+        CALL	C.541C
+        EI
+        RET
+
+;	  Subroutine wait for received byte
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.509D:	PUSH	HL
+        PUSH	DE
+        PUSH	BC
+J$50A0:	EI
+        CALL	C.4437                  ; CTRL-STOP pressed (clear STOP flag) ?
+        JR	C,J$50D2                ; yep, quit with Cx set
+        CALL	C.5037                  ; determine number of bytes in receive buffer (version)
+        LD	A,E
+        OR	D                       ; receive buffer empty ?
+        JR	NZ,J$50B2               ; nope,
+        CALL	C.5190                  ; signal sender to resume sending
+        JR	J$50A0                  ; wait for received byte
+
+J$50B2:	LD	HL,3
+        SBC	HL,DE                   ; <= 3 bytes in receive buffer ?
+        CALL	NC,C.5190               ; yep, signal sender to resume sending
+        DI
+        CALL	C$5140                  ; get pointer in receive buffer and decrease
+        LD	C,(HL)                  ; received byte
+        LD	B,80H
+        INC	HL
+        LD	A,(HL)                  ; received byte status
+        LD	(D.6087),A              ; update receive byte error status
+        AND	A                       ; any errors ?
+        JR	Z,J$50CA                ; nope, quit with sign flag reset
+        INC	B                       ; quit with sign flag set
+J$50CA:	LD	A,C
+        OR	A
+        DEC	B
+J.50CD:	EI
+        POP	BC
+        POP	DE
+        POP	HL
+        RET
+
+J$50D2:	PUSH	AF
+        POP	BC
+        RES	7,C
+        PUSH	BC
+        POP	AF
+        JR	J.50CD
+
+J$50DA:	PUSH	HL
+        PUSH	DE
+        PUSH	BC
+        DI
+        CALL	C.5037                  ; determine number of bytes in receive buffer (version)
+        LD	HL,3
+        SBC	HL,DE                   ; <= 3 bytes in receive buffer ?
+        CALL	NC,C.5190               ; yep, signal sender to resume sending
+        DI
+        CALL	C$5133                  ; get pointer in receive buffer and decrease (download text/log)
+        LD	A,(HL)                  ; received byte
+        JR	J.50CD                  ; quit
+
+J$50F0:	PUSH	HL
+        PUSH	DE
+        PUSH	BC
+        DI
+        CALL	C.5037                  ; determine number of bytes in receive buffer (version)
+        LD	HL,3
+        SBC	HL,DE                   ; <= 3 bytes in receive buffer ?
+        CALL	NC,C.5190               ; yep, signal sender to resume sending
+        DI
+        CALL	C$5126                  ; get pointer in receive buffer (printer echo) and decrease
+        LD	A,(HL)                  ; received byte
+        JR	J.50CD                  ; quit
+
+;	  Subroutine get pointer in receive buffer
+;	     Inputs  DE = offset
+;	     Outputs ________________________
+
+C$5106:	PUSH	DE
+        LD	HL,(D.608A)             ; get offset in receive buffer
+        ADD	HL,DE                   ; + offset
+        LD	DE,(D.6098)             ; buffer size
+        PUSH	HL
+        OR	A
+        SBC	HL,DE                   ; warp around ?
+        JR	C,J.511A                ; nope,
+        EX	DE,HL
+        POP	DE
+        SBC	HL,DE                   ; buffer size - 
+        PUSH	HL                      ; store offset
+J.511A:	LD	HL,(D.6096)             ; pointer to FCB
+        LD	DE,9
+        ADD	HL,DE                   ; pointer to buffer
+        POP	DE                      ; restore offset
+        ADD	HL,DE
+        ADD	HL,DE
+        POP	DE
+        RET
+
+;	  Subroutine get pointer in receive buffer (printer echo) and decrease
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5126:	LD	HL,(D.6092)
+        DEC	HL
+        LD	(D.6092),HL             ; update number of bytes in receive buffer (printer echo)
+        LD	IX,D.608C               ; get offset in receive buffer (printer echo)
+        JR	J.5172
+
+;	  Subroutine get pointer in receive buffer and decrease (download text/log)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5133:	LD	HL,(D.6094)
+        DEC	HL
+        LD	(D.6094),HL             ; update number of bytes in receive buffer (download text/log)
+        LD	IX,D.608E               ; get offset in receive buffer (download text/log)
+        JR	J.5172
+
+;	  Subroutine get pointer in receive buffer and decrease
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5140:	LD	HL,(D.6090)
+        DEC	HL
+        LD	(D.6090),HL             ; update number of bytes in receive buffer
+        LD	IX,D.608A               ; get offset in receive buffer
+        JR	J.5172
+
+;	  Subroutine get put pointer in receive buffer
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$514D:	LD	HL,(D.6090)
+        INC	HL
+        LD	(D.6090),HL             ; update number of bytes in receive buffer
+        LD	A,(D$6074)
+        OR	A                       ; printer echo enabled ?
+        JR	Z,J$5161                ; nope,
+        LD	HL,(D.6092)
+        INC	HL
+        LD	(D.6092),HL             ; update number of bytes in receive buffer (printer echo)
+J$5161:	LD	A,(D.6351)
+        OR	A                       ; download text/log enabled ?
+        JR	Z,J$516E                ; nope,
+        LD	HL,(D.6094)
+        INC	HL
+        LD	(D.6094),HL             ; update number of bytes in receive buffer (download text/log)
+J$516E:	LD	IX,D.6088               ; put offset in receive buffer
+J.5172:	PUSH	DE
+        LD	L,(IX+0)
+        LD	H,(IX+1)                ; get offset
+        PUSH	HL
+        INC	HL                      ; update offset
+        PUSH	HL
+        LD	DE,(D.6098)             ; buffer size
+        OR	A
+        SBC	HL,DE                   ; warp around ?
+        JR	NZ,J$5187               ; nope,
+        POP	DE                      ; discard
+        DEFB    03EH                    ; skip next instruction, use offset = 0
+J$5187: POP     HL
+        LD	(IX+0),L
+        LD	(IX+1),H                ; update offset
+        JR	J.511A                  ; return pointer
+
+
+;	  Subroutine signal sender to resume sending
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5190:	DI
+        LD	A,(D.6086)
+        BIT	1,A                     ; sending suspended ?
+        RET	Z                       ; nope, quit
+        PUSH	BC
+        LD	C,11H                   ; XON
+        CALL	C.51BE                  ; send XON/XOFF (if XON/XOFF handshake is enabled)
+        POP	BC
+        PUSH	HL
+        LD	HL,D.6086
+        RES	1,(HL)                  ; leave XOFF mode
+        POP	HL
+        RET
+
+
+;	  Subroutine signal sender to stop sending
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.51A6:	DI
+        LD	A,(D.6086)
+        BIT	1,A                     ; sending suspended ?
+        RET	NZ                      ; yep, quit
+        PUSH	HL
+        LD	HL,D.6086
+        SET	1,(HL)                  ; sending suspended
+        POP	HL
+        PUSH	BC
+        LD	C,13H                   ; XOFF
+        CALL	C.51BE                  ; send XON/XOFF (if XON/XOFF handshake is enabled)
+        POP	BC
+        JP	C.54AD                  ; wait for empty transmitter and quit
+
+
+;	  Subroutine send XON/XOFF (if XON/XOFF handshake is enabled)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.51BE:	LD	A,(D.6085)
+        BIT	0,A                     ; XON/XOFF handshake ?
+        RET	Z                       ; nope, quit
+        CALL	C.54AD                  ; wait for empty transmitter
+        CALL	C.5403			; reset b7 7FC4
+        LD	A,C
+        LD	(D.7FC0),A
+        RET
+
+;	  Subroutine RS232.SNDCHR
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.51CF:	PUSH	BC
+        LD	C,A
+        CALL	C$51D7
+        LD	A,C
+        POP	BC
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$51D7:	EI
+        PUSH	BC
+        LD	C,A
+        LD	A,(D.6085)
+        BIT	4,A                     ; SI/SO handshake ?
+        JR	Z,J.5214                ; nope,
+        LD	A,(D.6086)
+        BIT	0,A                     ; in SI mode ?
+        JR	NZ,J$51FE               ; yep,
+        BIT	7,C
+        JR	Z,J.5214
+        LD	A,0EH
+        CALL	C.5216
+        JR	C,J.5264
+        JR	Z,J.5264
+        PUSH	HL
+        LD	HL,D.6086
+        SET	0,(HL)                  ; enter SI mode
+        POP	HL
+        JR	J.5212
+
+J$51FE:	BIT	7,C
+        JR	NZ,J.5212
+        LD	A,0FH
+        CALL	C.5216
+        JR	C,J.5264
+        JR	Z,J.5264
+        PUSH	HL
+        LD	HL,D.6086
+        RES	0,(HL)                  ; leave SI mode
+        POP	HL
+J.5212:	RES	7,C
+J.5214:	LD	A,C
+        POP	BC
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5216:	PUSH	HL
+        LD	HL,D.6085
+        BIT	2,(HL)                  ; auto LF on send ?
+        POP	HL
+        JR	Z,J.5235                ; nope,
+        CP	0AH                     ; LF ?
+        JR	NZ,J.5235               ; nope,
+        LD	A,(D.6086)
+        BIT	5,A                     ; CR send ?
+        LD	A,0AH
+        JR	Z,J.5235                ; nope,
+        PUSH	HL
+        LD	HL,D.6086
+        RES	5,(HL)                  ; no CR send
+        POP	HL
+        AND	A
+        RET
+
+J.5235:	PUSH	BC
+        LD	C,A
+        PUSH	DE
+        CALL	C$527F                  ; wait for CD (when XON/XOFF)
+        POP	DE
+        JR	C,J.5264                ; aborted by CTRL-STOP,
+        JR	Z,J.5264                ; timeout,
+        CALL	C.55BE                  ; wait for CD
+        JR	C,J.5264                ; aborted by CTRL-STOP,
+        JR	Z,J.5264                ; timeout,
+        DI
+        CALL	C.54AD                  ; wait for empty transmitter
+        CALL	C.5403			; reset b7 7FC4
+        LD	A,C
+        LD	(D.7FC0),A              ; send byte
+        EI
+        PUSH	HL
+        LD	HL,D.6086
+        CP	0DH
+        JR	NZ,J$525F
+        SET	5,(HL)                  ; CR send
+        JR	J$5261
+
+J$525F:	RES	5,(HL)                  ; no CR send
+J$5261:	POP	HL
+        XOR	A
+        INC	A
+J.5264:	CALL	C.55AC                  ; update error flags
+        JR	C,J$526B
+        JR	NZ,J$527C
+J$526B:	LD	IX,I$0156
+        CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFw	C.40A8
+        PUSH	HL
+        LD	HL,D.6086
+        RES	2,(HL)                  ; leave XOFF mode
+        POP	HL
+J$527C:	LD	A,C
+        POP	BC
+        RET
+
+
+;	  Subroutine wait for CD (when XON/XOFF)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$527F:	LD	A,(D.6085)
+        BIT	0,A                     ; XON/XOFF handshake ?
+        JR	Z,J.52A1                ; nope, quit
+        CALL	C.44D6                  ; clear counter set #2
+J$5289:	EI
+        CALL	C.4437                  ; CTRL-STOP pressed (clear STOP flag) ?
+        DI
+        RET	C                       ; yep, quit
+        LD	A,(D.6086)
+        BIT	2,A                     ; in XOFF mode ?
+        JR	Z,J.52A1                ; nope, quit
+        CALL	C.55D2                  ; get carrier detect status
+        CCF
+        RET	C                       ; nope, quit
+        CALL	C.52A4                  ; timeout occured ?
+        RET	Z                       ; yep, quit
+        JR	J$5289                  ; wait
+
+J.52A1:	XOR	A
+        INC	A
+        RET
+
+;	  Subroutine timeout occured ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.52A4:	PUSH	HL
+        LD	HL,D.6072
+        LD	A,(HL)                  ; timeout value
+        OR	A                       ; wait forever ?
+        JR	NZ,J$52AF               ; nope, check counter #2
+        INC	A                       ; counter not finished
+        JR	J$52B3
+
+J$52AF:	LD	A,(D$6081)
+        CP	(HL)
+J$52B3:	POP	HL
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$52B5:	PUSH	BC
+        LD	B,A
+        CALL	C.54A3                  ; read NCU register 2
+        OR	A
+        BIT	3,A
+        JR	NZ,J$52C0
+        SCF
+J$52C0:	LD	A,B
+        POP	BC
+        RET
+
+J$52C3:	XOR	A
+        LD	(D.60B6),A
+        LD	(D.635C),A
+        LD	HL,RSTMP
+        LD	E,4                     ; file mode = random
+        LD	C,120                   ; buffer size = 120
+        JP	J.47F1			; RS232.OPEN
+
+J$52D4:	LD	A,3
+J$52D6:	LD	(D.60B6),A
+        LD	(D.635C),A
+        JP	J.48E5			; RS232.CLOSE
+
+J$52DF:	XOR	A
+        JR	J$52D6
+
+;	  Subroutine dialtone ?? counter > 70 ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$52E2:	LD	A,(D.60B4)
+        CP	70
+        RET
+
+;	  Subroutine send 300ms break
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$52E8:	PUSH	BC
+        CALL	C.532B                  ; enable break sending
+        LD	C,18                    ; 300 ms
+        CALL	C.4BCA                  ; wait
+        CALL	C.531B                  ; disable break sending
+        POP	BC
+        RET
+
+; RS232.SNDBRK
+
+J$52F6:	CALL	C.532B                  ; enable break sending
+        EX	DE,HL
+        LD	A,(D.60B7)
+        OR	A                       ; modem mode 0 ?
+        JR	Z,J$530A                ; yep, *2
+        SRL	L
+        RR	H                       ; /2
+        LD	A,H
+        OR	L                       ; zero ?
+        JR	NZ,J$530B               ; nope,
+        INC	HL                      ; 1
+        DEFB    03EH                    ; skip next instruction
+J$530A:	ADD     HL,HL
+J$530B:	EX	DE,HL
+        LD	C,1                     ; 16.6 ms
+J$530E:	CALL	C.4437                  ; CTRL-STOP pressed (clear STOP flag) ?
+        JR	C,C.531B                ; yep, quit
+        CALL	C.4BCA                  ; wait
+        DEC	DE
+        LD	A,D
+        OR	E
+        JR	NZ,J$530E               ; again
+
+;	  Subroutine disable break sending
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.531B:	DI
+        CALL	C.53FA			; set b7 7FC4
+        PUSH	AF
+        LD	A,(D.60A7)
+        AND	3FH                     ; reset b7,b6
+J$5325:	CALL	C.5488                  ; write NCU register 1
+        EI
+        POP	AF
+        RET
+
+;	  Subroutine enable break sending
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.532B:	DI
+        CALL	C.5403			; reset b7 7FC4
+        PUSH	AF
+        LD	A,(D.60A7)
+        OR	0C0H                    ; set b7,b6
+        JR	J$5325
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5337:	PUSH	AF
+        DI
+        LD	A,(D.60A6)
+        RES	0,A
+        JR	J.5359
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5340:	PUSH	AF
+        DI
+        LD	A,(D.60A6)
+        SET	0,A
+        JR	J.5359
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5349:	PUSH	AF
+        DI
+        LD	A,(D.60A6)
+        SET	1,A                     ; set b1
+        JR	J.5359
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5352:	PUSH	AF
+        DI
+        LD	A,(D.60A6)
+        RES	1,A                     ; reset b1
+J.5359:	CALL	C.5480                  ; write NCU register 0
+        POP	AF
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.535E:	PUSH	AF
+        DI
+        LD	A,(D.60A7)
+        RES	4,A                     ; reset b4
+        JR	J$536E
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5367:	PUSH	AF
+        DI
+        LD	A,(D.60A7)
+        SET	4,A                     ; set b4
+J$536E:	CALL	C.5488                  ; write NCU register 1
+        POP	AF
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5373:	PUSH	AF
+        LD	A,21H
+J.5376:	CALL	C.5491                  ; write NCU register 3
+        POP	AF
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.537B:	PUSH	AF
+        LD	A,00H
+        JR	J.5376
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5380:	PUSH	AF
+        LD	A,40H
+        JR	J.5376
+
+;	  Subroutine enable i8251 receiver
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5385:	PUSH	AF
+        LD	A,(D.6083)
+        OR	04H
+        JR	J$5393
+
+;	  Subroutine disable i8251 receiver
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.538D:	PUSH	AF
+        LD	A,(D.6083)
+        AND	0FBH
+J$5393:	CALL	C.54BC                  ; write i8251 command byte
+        POP	AF
+        RET
+
+;	  Subroutine MODEM.LINSEL
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$5398:	OR	A                       ; <> 0 ?
+        JR	NZ,C.53AA               ; yep, on hook
+        CPL
+        AND	A
+        JR	Z,C.53AA                ; ??
+
+;	  Subroutine off hook
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.539F:	DI
+        PUSH	AF
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        RES	0,A                     ; off hook
+        RES	5,A
+        JR	J.53B3
+
+;	  Subroutine on hook
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.53AA:	DI
+        PUSH	AF
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        SET	0,A                     ; on hook
+        SET	5,A
+J.53B3:	CALL	C.5414			; update i8255 port B register
+        POP	AF
+        RET
+
+J$53B8:	AND	A
+        JR	Z,C.53AA		; on hook
+        JR	C.539F			; off hook
+
+J$53BD:	DI
+        PUSH	AF
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        SET	4,A
+        JR	J.53B3
+
+J$53C6:	DI
+        PUSH	AF
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        RES	4,A
+        JR	J.53B3
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$53CF:	DI
+        PUSH	AF
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        RES	2,A
+        SET	3,A
+        JR	J.53B3
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$53DA:	DI
+        PUSH	AF
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        SET	2,A
+        RES	3,A
+        JR	J.53B3
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$53E5:	DI
+        PUSH	AF
+        LD	A,(D.60A3)              ; i8255 port A register backup
+        SET	6,A
+J.53EC:	CALL	C.540C			; update i8255 port A register (bank)
+        POP	AF
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$53F1:	DI
+        PUSH	AF
+        LD	A,(D.60A3)              ; i8255 port A register backup
+        RES	6,A
+        JR	J.53EC                  ; update bank register
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.53FA:	DI
+        PUSH	AF
+        LD	A,(D.60A3)              ; i8255 port A register backup
+        SET	7,A
+        JR	J.53EC                  ; update bank register
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5403:	DI
+        PUSH	AF
+        LD	A,(D.60A3)              ; i8255 port A register backup
+        RES	7,A
+        JR	J.53EC                  ; update bank register
+
+;	  Subroutine update i8255 port A register (bank)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.540C:	DI
+        LD	(D.60A3),A              ; i8255 port A register backup
+        LD	(D.7FC4),A
+        RET
+
+;	  Subroutine update i8255 port B register
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5414:	DI
+        LD	(D.60A4),A              ; i8255 port B register backup
+        LD	(D$7FC5),A
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.541C:	PUSH	HL
+        PUSH	DE
+        PUSH	BC
+        LD	A,(D.60B7)
+        OR	A                       ; modem mode 0 ?
+        JR	NZ,J$5457               ; nope,
+        CALL	C$53CF			; reset b2,set b3 7FC5
+        DI
+        LD	A,(D.60A6)
+        AND	02H
+        OR	0B1H
+J$5430:	LD	B,A
+        LD	A,(D.6085)
+        BIT	1,A
+        JR	Z,J$543A
+        RES	0,B
+J$543A:	LD	A,B
+        CALL	C.5480                  ; write NCU register 0
+        LD	A,(D.60A7)
+        AND	0F0H                    ; reset b3-b0
+        OR	08H                     ; set b3
+        CALL	C.5488                  ; write NCU register 1
+        LD	A,(D.60A8)              ; 7FCC register backup
+        AND	6FH
+        OR	00H
+        CALL	C.5491                  ; write NCU register 3
+        POP	BC
+        POP	DE
+        POP	HL
+        EI
+        RET
+
+J$5457:	CALL	C$53DA			; set b2,reset b3 7FC5
+        LD	HL,I$5470
+        LD	A,(D.6082)              ; last i8251 mode byte
+        RRCA
+        RRCA
+        AND	0FH
+        LD	D,0
+        LD	E,A
+        ADD	HL,DE
+        LD	A,(D.60A6)
+        AND	02H
+        OR	(HL)
+        JR	J$5430
+
+I$5470: DEFB    11H,11H,15H,19H,11H,15H,19H,1DH
+        DEFB    11H,11H,15H,19H,11H,15H,19H,1DH
+
+;	  Subroutine write NCU register 0
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5480:	PUSH	HL
+        PUSH	AF
+        LD	HL,D.60A6
+        XOR	A
+        JR	J.5498
+
+;	  Subroutine write NCU register 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5488:	PUSH	HL
+        PUSH	AF
+        LD	HL,D.60A7
+        LD	A,1
+        JR	J.5498
+
+;	  Subroutine write NCU register 3
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5491:	PUSH	HL
+        PUSH	AF
+        LD	HL,D.60A8
+        LD	A,3
+J.5498:	DI
+        LD	(D.7FC8),A
+        POP	AF
+        LD	(D.7FCC),A
+        LD	(HL),A
+        POP	HL
+        RET
+
+;	  Subroutine read NCU register 2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.54A3:	LD	A,2
+        DI
+        LD	(D.7FC8),A
+        LD	A,(D.7FCC)
+        RET
+
+;	  Subroutine wait for empty transmitter
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.54AD:	PUSH	AF
+J$54AE:	EI
+        NOP
+        DI
+        LD	A,(D.7FC1)
+        AND	05H
+        CP	05H
+        JR	NZ,J$54AE
+        POP	AF
+        RET
+
+;	  Subroutine write i8251 command byte
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.54BC:	LD	(D.7FC1),A
+        LD	(D.6083),A              ; update last i8251 command byte
+        RET
+
+;	  Subroutine reset i8251
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$54C3:	XOR	A
+        LD	(D.7FC1),A
+        PUSH	AF
+        POP	AF
+        LD	(D.7FC1),A
+        PUSH	AF
+        POP	AF
+        LD	(D.7FC1),A
+        PUSH	AF
+        POP	AF
+        LD	A,40H
+        LD	(D.7FC1),A
+        PUSH	AF
+        POP	AF				; reset 8251
+        LD	A,(D.6082)                      ; last i8251 mode byte
+        LD	(D.7FC1),A			; write i8251 mode byte
+        PUSH	AF
+        POP	AF
+        LD	A,(D.7FC0)
+        CALL	C.54F3				; reset 8251 errors
+        LD	A,(D.6083)                      ; last i8251 command byte
+        OR	01H                             ; enable transmitter
+        CALL	C.54BC				; write i8251 command byte
+        LD	A,(D.7FC0)
+
+;	  Subroutine reset i8251 errors
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.54F3:	LD	A,(D.7FC1)
+        AND	38H
+        PUSH	AF
+        LD	A,(D.6083)                      ; last i8251 command byte
+        PUSH	AF
+        OR	10H                             ; clear errors
+        CALL	C.54BC				; write i8251 command byte
+        POP	AF
+        CALL	C.54BC                          ; write i8251 command byte
+        POP	AF
+        RET
+
+; RS232.STAT
+
+J$5508:	PUSH	AF
+        LD	L,18H			; b4 set, DSR=1, RI=0
+        LD	A,(D.609B)
+        OR	A                       ; ring detected ?
+        JR	Z,J$5513                ; nope,
+        LD	L,1AH			; b4 set, DSR=1, RI=1
+J$5513:	DI
+        LD	A,(D.6086)
+        BIT	4,A                     ; break detected ?
+        JR	Z,J$5522                ; nope,
+        SET	2,L	                ; Break detected
+        RES	4,A			; reset break detected
+        LD	(D.6086),A
+J$5522:	CALL	C.55D2                  ; get carrier detect status
+        JR	NC,J$5529
+        SET	0,L			; yep, CD=1
+J$5529:	CALL	C.54A3                  ; read NCU register 2
+        EI
+        BIT	0,A
+        LD	H,0			; b9 reset
+        JR	Z,J$5535
+        LD	H,2			; b9 set
+J$5535:	LD	A,(D.6087)              ; receive byte error status
+        OR	H
+        LD	H,A
+        POP	AF
+        RET
+
+;	  Subroutine MODEM.NCUSTA
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$553C:	PUSH	AF
+        LD	HL,0
+        LD	A,(D.609B)
+        OR	A                       ; ring detected ?
+        JR	Z,J$5548                ; nope,
+        SET	0,L                     ; ring signal
+J$5548:	LD	A,(D.6085)
+        AND	0C0H                    ; dailer mode
+        JR	Z,J.555F                ; tone dial,
+        CP	40H                     ; pulse dial 10pps ?
+        JR	Z,J$555D                ; yep,
+        CP	0C0H                    ; pulse dial 20pps ?
+        JR	Z,J$5559                ; yep,
+
+; automatic dailer mode
+
+        SET	1,L
+J$5559:	SET	2,L
+        JR	J.555F
+
+J$555D:	SET	1,L
+J.555F:	LD	A,(D.7FC6)              ; i8255 port C
+        CPL
+        AND	0C0H                    ; b7/b6
+        RRA
+        RRA
+        RRA                             ; b7/b6 -> b4/b3
+        OR	L                       ; combine
+        LD	L,A
+        CALL	C.5592                  ; detected 400 Hz ?
+        JR	Z,J$5571                ; nope,
+        SET	6,L                     ; detected 400 Hz
+J$5571:	LD	A,(D.7FC6)              ; i8255 port C
+        BIT	5,A                     ; on hook ?
+        JR	NZ,J$557A               ; yep, quit
+        SET	7,L                     ; off hook
+J$557A:	POP	AF
+        RET
+
+;	  Subroutine get line status
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.557C:	PUSH	BC
+        LD	A,(D.7FC6)              ; i8255 port C
+        RLCA
+        RLCA                            ; b7/b6 -> b1/b0, b5 -> b7
+        AND	83H
+        LD	B,A
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        RRA
+        RRA
+        AND	08H                     ; b5 -> b3
+        OR	B
+        CPL
+        AND	8FH                     ; clear b6-b4
+        POP	BC
+        RET
+
+;	  Subroutine detected 400 Hz ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.5592:	CALL	C.54A3                  ; read NCU register 2
+        BIT	1,A
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5598:	PUSH	AF
+        PUSH	BC
+        XOR	03H	; 3 
+        LD	C,0FFH
+        JR	Z,J$55A5
+        LD	B,A
+J$55A1:	SRL	C
+        DJNZ	J$55A1
+J$55A5:	LD	A,C
+        LD	(D.6084),A
+        POP	BC
+        POP	AF
+        RET
+
+
+;	  Subroutine update error flags
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.55AC:	PUSH	HL
+        LD	HL,D.6087
+        LD	(HL),0                  ; update receive byte error status
+        JR	C,J$55BA
+        JR	NZ,J.55BC
+        SET	6,(HL)
+        JR	J.55BC
+
+J$55BA:	SET	2,(HL)
+J.55BC:	POP	HL
+        RET
+
+;	  Subroutine wait for CD
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.55BE:	CALL	C.44D6                  ; clear counter set #2
+J$55C1:	CALL	C.52A4                  ; timeout occured ?
+        RET	Z                       ; yep, quit
+        CALL	C.4437                  ; CTRL-STOP pressed (clear STOP flag) ?
+        EI
+        RET	C                       ; yep, quit
+        CALL	C.55D2                  ; get carrier detect status
+        JR	NC,J$55C1               ; nope, wait
+        XOR	A
+        INC	A
+        RET
+
+;	  Subroutine get carrier detect status
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.55D2:	LD	A,(D.60A1)
+        RLCA
+        RET
+
+
+;	  Subroutine initialize dial tone detect
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$55D7:	DI
+        XOR	A
+        LD	(D.6363),A
+        LD	HL,I.60B1
+        LD	(HL),A
+        INC	HL
+        LD	(HL),A
+        INC	HL
+        LD	(HL),A
+        INC	HL
+        LD	(HL),A
+        INC	HL
+        DEC	A
+        LD	(HL),A                  ; dail tone handler = enabled, fase 2
+        RET
+
+;	  Subroutine finish dial tone detect
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$55EA:	LD	A,(D.60B2)
+        INC	A
+        RET	Z
+        LD	A,0FFH
+        LD	(D.60B2),A
+        RET
+
+;	  Subroutine disable dail tone handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$55F5:	XOR	A                       ; dail tone handler = disabled
+        LD	(D.60B5),A
+        RET
+
+;	  Subroutine get dial tone dectect flag
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$55FA:	LD	A,(D.60B2)
+        RET
+
+;	  Subroutine MODEM.SPKCNT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.55FE:	PUSH	AF
+        AND	A                       ; speaker on ?
+        DI
+        LD	A,(D.60A4)              ; i8255 port B register backup
+        RES	6,A                     ; assume speaker on
+        JR	NZ,J$560A               ; yep,
+        SET	6,A                     ; speaker off
+J$560A:	CALL	C.5414			; update i8255 port B register
+        EI
+        POP	AF
+        RET
+
+J$5610:	SCF
+        RET
+
+;	  Subroutine MODEM.CONFIG
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$5612:	LD	H,00H
+        LD	L,0CH                   ; CCITT V21 300bps Full duplex, CCITT V22 1200bps Full duplex
+        OR	A                       ; mode = 0 (modem function) ?
+        RET	Z                       ; yep, quit
+        LD	L,0FFH                  ; push button (DTMF), dial pulse (lOpps), dial pulse (20pps), auto-detection, Supports A to D, Supports H, DTMF-Pulse switching is possible with software, 10pps and 20pps can be switched by software.
+        DEC	A                       ; mode = 1 (dailer function) ?
+        RET	Z                       ; yep, quit
+        LD	L,03H                   ; external phone, internal modem
+        DEC	A                       ; mode = 2 (line function)
+        RET	Z                       ; yep, quit
+        LD	HL,011A7H               ; Ring signal detection, Call progress detection, line polarity detection, speakers, External phone ONFF HOOK detection, MSX standard cartridge, Long loop detection
+        DEC	A                       ; mode = 3 (other functions) ?
+        RET	Z                       ; yep, quit
+        SCF
+        RET
+
+;	  Subroutine pdate modem mode
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$5627:	PUSH	HL
+        PUSH	DE
+        PUSH	BC
+        LD	L,(IY+8)
+        LD	H,(IY+9)                ; receiver baudrate
+        CALL	C.565D                  ; get baudrate code
+        OR	A                       ; default ?
+        JR	Z,J.5656                ; yep, modem mode 0
+        LD	C,A
+        LD	L,(IY+10)
+        LD	H,(IY+11)               ; transmitter baudrate
+        CALL	C.565D                  ; get baudrate code
+        OR	A                       ; default ?
+        JR	Z,J.5656                ; yep, modem mode 0
+        LD	HL,I$5672
+        LD	D,0
+        RLCA
+        RLCA                            ; *4
+        LD	E,A
+        ADD	HL,DE
+        LD	E,C                     ; receiver baudrate code
+        ADD	HL,DE
+        LD	A,(HL)
+        LD	E,A
+        INC	A
+        LD	A,0
+        JR	Z,J.5656
+        LD	A,E
+J.5656:	LD	(D.60B7),A              ; update modem mode
+        POP	BC
+        POP	DE
+        POP	HL
+        RET
+
+;	  Subroutine get baudrate code
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.565D:	LD	A,H
+        OR	L                       ; default baudrate ?
+        RET	Z                       ; yep, quit
+        LD	A,1
+        LD	DE,300
+        SBC	HL,DE                   ; 300 bps ?
+        RET	Z                       ; yep
+        INC	A
+        LD	DE,1200-300
+        OR	A
+        SBC	HL,DE                   ; 1200 bps ?
+        RET	Z                       ; yep
+        INC	A
+        RET
+
+I$5672:
+; default transmitter speed
+
+	DEFB	0FFH                    ; default receiver speed
+        DEFB	0FFH                    ; 300 bps receiver speed
+        DEFB	0FFH                    ; 1200 bps receiver speed
+        DEFB	0FFH                    ; other receiver speed
+
+; 300 bps transmitter speed
+
+        DEFB	0FFH                    ; default receiver speed
+        DEFB	0                       ; 300 bps receiver speed
+        DEFB	0                       ; 1200 bps receiver speed
+        DEFB	0                       ; other receiver speed
+
+; 1200 bps transmitter speed
+
+        DEFB	0FFH                    ; default receiver speed
+        DEFB	0                       ; 300 bps receiver speed
+        DEFB	1                       ; 1200 bps receiver speed
+        DEFB	1                       ; other receiver speed
+
+; other transmitter speed
+
+        DEFB	0FFH                    ; default receiver speed
+        DEFB	0                       ; 300 bps receiver speed
+        DEFB	1                       ; 1200 bps receiver speed
+        DEFB	0FFH                    ; other receiver speed
+
+C$5682:	LD	A,(D.7EE9)
+        OR	A                       ; printer output enabled ?
+        JR	Z,J$5694                ; nope, handle remaining buffer
+        CALL	LPTSTT                  ; get printer status
+        JR	Z,J$56AC                ; printer not ready,
+        LD	HL,0
+        LD	(D.7EE7),HL             ; reset printer not ready counter
+        RET
+
+J$5694:	LD	A,(D.6075)
+        OR	A                       ; printer echo receive buffer empty ?
+        RET	Z                       ; yep, quit
+        LD	B,4
+J$569B:	CALL	LPTSTT                  ; get printer status
+        JR	Z,J$56A6                ; printer not ready,
+        CALL	C$56B6
+        DJNZ	J$569B
+        RET
+
+J$56A6:	LD	HL,(D.6092)             ; number of bytes in receive buffer (printer echo)
+        LD	A,L
+        OR	H                       ; receiver buffer empty ?
+        RET	Z                       ; yep, quit
+J$56AC:	DI
+        LD	HL,(D.7EE7)
+        INC	HL
+        LD	(D.7EE7),HL             ; update printer not ready counter
+        EI
+        RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$56B6:	LD	HL,I$6076
+        LD	A,(HL)
+        OR	A
+        RET	NZ
+        CPL
+        LD	(HL),A
+        PUSH	HL
+        LD	HL,0
+        LD	(D.7EE7),HL             ; reset printer not ready counter
+        CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40CC                  ; get received byte (printer echo)
+        JR	Z,J$56D5
+        PUSH	BC
+        CALL	C.6000			; interbank call (EI)
+        DEFB	1
+        DEFW	C.40A5
+        POP	BC
+J$56D5:	POP	HL
+        LD	(HL),0
+        RET
+
+        DEFS    6000H-$,0FFH

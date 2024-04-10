@@ -1,0 +1,805 @@
+; SPCDEV.MAC
+
+; BASIC load and save statements , MSX Turbo-R version (version 4.1)
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
+        .Z80
+        ASEG
+        ORG     6F15H
+
+
+        INCLUDE MSX.INC
+
+
+SYNCHR  equ     0008H
+CHRGTR  equ     0010H
+OUTDO   equ     0018H
+DCOMPR  equ     0020H
+GRPPRT  equ     008DH
+CHPUT   equ     00A2H
+TAPION  equ     00E1H
+TAPIN   equ     00E4H
+TAPIOF  equ     00E7H
+TAPOON  equ     00EAH
+TAPOUT  equ     00EDH
+TAPOOF  equ     00F0H
+OUTDLP  equ     014DH
+CHGCPU  equ     0180H
+GETCPU  equ     0183H
+
+FRCNEW  equ     0F3F5H
+CURLIN  equ     0F41CH
+TXTTAB  equ     0F676H
+VARTAB  equ     0F6C2H
+DAC     equ     0F7F6H
+PTRFIL  equ     0F864H
+FILNAM  equ     0F866H
+FILNM2  equ     0F871H
+SAVEND  equ     0F87DH
+SCRMOD  equ     0FCAFH
+CASPRV  equ     0FCB1H
+SAVENT  equ     0FCBFH
+
+H.PARD  equ     0FEB2H
+H.NODE  equ     0FEB7H
+H.POSD  equ     0FEBCH
+H.GEND  equ     0FEC6H
+
+
+        PUBLIC  CSAVE
+        PUBLIC  CLOAD
+        PUBLIC  GENDSP
+        PUBLIC  PARDEV
+        PUBLIC  CBSAVE
+        PUBLIC  CBLOAD
+        PUBLIC  POPAL2
+        PUBLIC  POPAL3
+	PUBLIC	C71DB                   ; PCMPLY
+	PUBLIC	C7042                   ; PCMREC
+
+        EXTRN   DERNMF
+        EXTRN   FCERR
+        EXTRN   DERSOO
+        EXTRN   MAKUPL
+        EXTRN   EXTDEV
+        EXTRN   EXTDFN
+	EXTRN	SNERR
+
+
+; START SUBTTL  SPCDEV
+
+        SUBTTL  SPCDEV
+
+;       Subroutine      devicename parser
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+PARDEV:
+C6F15:  CALL    H.PARD                  ; hook devicename parser: start of parser
+        LD      A,(HL)
+        CP      3AH                     ; 00H-39H ?
+        JR      C,J6F37                 ; yep, bad filename
+        PUSH    HL
+        LD      D,E
+        LD      A,(HL)
+        INC     HL
+        DEC     E
+        JR      Z,J6F2E                 ; filespec has length 1, no device
+J6F24:  CP      ":"                     ; device seperator ?
+        JR      Z,J6F3D                 ; yep,
+        LD      A,(HL)
+        INC     HL
+        DEC     E
+        JP      P,J6F24                 ; check for device
+J6F2E:  LD      E,D
+        POP     HL
+        XOR     A                       ; Zx set
+        LD      A,0FFH                  ; devicecode for CAS
+        CALL    H.NODE                  ; hook devicename parser: no device specified
+        RET
+
+J6F37:  CALL    H.POSD                  ; hook devicename parser: first character filespecification has code 00-39H
+        JP      DERNMF                  ; bad filename
+
+J6F3D:  LD      A,D
+        SUB     E
+        DEC     A                       ; length of devicename
+        POP     BC
+        PUSH    DE
+        PUSH    BC
+        LD      C,A
+        LD      B,A
+        LD      DE,I6F76                ; internal devicename table
+        EX      (SP),HL
+        PUSH    HL
+J6F4A:  CALL    MAKUPL                  ; get char uppercase
+        PUSH    BC
+        LD      B,A
+        LD      A,(DE)
+        INC     HL
+        INC     DE
+        CP      B                       ; match ?
+        POP     BC
+        JR      NZ,J6F63                ; nope,
+        DEC     C
+        JR      NZ,J6F4A                ; next
+J6F59:  LD      A,(DE)
+        OR      A                       ; name in table also ends ?
+        JP      P,J6F63                 ; nope, this is not it!
+        POP     HL                      ; yep, A=devicecode
+        POP     HL
+        POP     DE
+        OR      A                       ; Zx reset
+        RET
+
+J6F63:  OR      A                       ; already at devicecode ?
+        JP      M,J6F59                 ; yep, found device!
+J6F67:  LD      A,(DE)
+        ADD     A,A
+        INC     DE
+        JR      NC,J6F67                ; skip to next devicename in table
+        LD      C,B
+        POP     HL
+        PUSH    HL
+        LD      A,(DE)
+        OR      A
+        JR      NZ,J6F4A                ; try next devicename
+        JP      EXTDEV                  ; try external devices (in expansion roms)
+
+I6F76:  DEFB    "CAS",0FFH
+        DEFB    "LPT",0FEH
+        DEFB    "CRT",0FDH
+        DEFB    "GRP",0FCH
+        DEFB    0
+
+I6F87:  DEFW    C71C7                   ; CAS jumptable
+        DEFW    C72A6                   ; LPT jumptable
+        DEFW    C71A2                   ; CRT jumptable
+        DEFW    C7182                   ; GRP jumptable
+
+;       Subroutine      i/o function dispatcher
+;       Inputs          A = function, HL = i/o channel pointer
+;       Outputs         ________________________
+
+GENDSP:
+C6F8F:  CALL    H.GEND
+        PUSH    HL
+        PUSH    DE
+        PUSH    AF
+        LD      DE,4
+        ADD     HL,DE
+        LD      A,(HL)			; device code
+        CP      0FCH                    ; i/o channel device a internal device ?
+        JP      C,EXTDFN                ; nope, start i/o function in expansion ROM
+        LD      A,0FFH
+        SUB     (HL)
+        ADD     A,A
+        LD      E,A
+        LD      HL,I6F87
+        ADD     HL,DE
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)
+        POP     AF                      ; functioncode
+        LD      L,A
+        LD      H,0
+        ADD     HL,DE
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)
+        EX      DE,HL
+        POP     DE                      ; filemode
+        EX      (SP),HL                 ; i/o channel control block
+        RET
+
+;	Subroutine	CSAVE statement
+;	Inputs		________________________
+;	Outputs		________________________
+
+CSAVE:
+C6FB7:	jp	SNERR
+
+	DEFS	6FD7H-$,0
+
+CBSAVE:
+J6FD7:	jp	DERNMF
+
+	DEFS	7014H-$,0
+
+CBLOAD:
+J7014:	jp	DERNMF
+
+	DEFS	703FH-$,0
+
+CLOAD:
+C703F:	jp	SNERR
+
+	DEFS	7182H-$,0
+;
+;       Table GRP device
+
+C7182:  DEFW    J71B6                   ; open, check if output/append and open
+        DEFW    J71C2                   ; close, quit
+        DEFW    DERSOO                  ; random i/o, sequential i/o only error
+        DEFW    J7196                   ; sequential output, output char to screen
+        DEFW    FCERR                   ; sequential input, illegal function call
+        DEFW    FCERR                   ; loc, illegal function call
+        DEFW    FCERR                   ; lof, illegal function call
+        DEFW    FCERR                   ; eof, illegal function call
+        DEFW    FCERR                   ; fpos, illegal function call
+        DEFW    FCERR                   ; backup, illegal function call
+
+;       Subroutine      sequential output (GRP device)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J7196:  LD      A,(SCRMOD)
+        CP      2                       ; in graphic screenmode ?
+        JP      C,FCERR                 ; nope, illegal function call
+        LD      A,C
+        JP      GRPPRT                  ; output char to graphic screen
+
+;       Table CRT device
+
+C71A2:  DEFW    J71B6                   ; open, check if output/append and open
+        DEFW    J71C2                   ; close, quit
+        DEFW    DERSOO                  ; random i/o, sequential i/o only error
+        DEFW    J71C3                   ; sequential output, output char to screen
+        DEFW    FCERR                   ; sequential input, illegal function call
+        DEFW    FCERR                   ; loc, illegal function call
+        DEFW    FCERR                   ; lof, illegal function call
+        DEFW    FCERR                   ; eof, illegal function call
+        DEFW    FCERR                   ; fpos, illegal function call
+        DEFW    FCERR                   ; backup, illegal function call
+
+J71B6:  CALL    C72CD                   ; bad filename error if in random i/o mode
+        CP      1			; sequential input mode ?
+        JP      Z,DERNMF                ; yep, bad filename error
+J71BE:  LD      (PTRFIL),HL             ; interpreter input/output device
+        LD      (HL),E			; i/o channel mode
+J71C2:  RET
+
+;       Subroutine      sequential output (CRT device)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J71C3:  LD      A,C
+        JP      CHPUT
+
+;       Table CAS device
+
+C71C7:	DEFW	DERNMF			; open,
+        DEFW	FCERR			; close,
+        DEFW    DERSOO                  ; random i/o, sequential i/o only error
+        DEFW	FCERR			; sequential output, illegal function call
+        DEFW	FCERR			; sequential input, illegal function call
+        DEFW    FCERR                   ; loc, illegal function call
+        DEFW    FCERR                   ; lof, illegal function call
+        DEFW	FCERR			; eof
+        DEFW    FCERR                   ; fpos, illegal function call
+        DEFW	FCERR			; backup
+
+
+	DEFS	72A6H-$,0		; removed CAS device operations
+
+
+;       Table LPT device
+
+C72A6:  DEFW    J71B6                   ; open, check if output/append and open
+        DEFW    J71C2                   ; close, quit
+        DEFW    DERSOO                  ; random i/o, sequential i/o only error
+        DEFW    J72BA                   ; sequential output, output char to printer
+        DEFW    FCERR                   ; sequential input, illegal function call
+        DEFW    FCERR                   ; loc, illegal function call
+        DEFW    FCERR                   ; lof, illegal function call
+        DEFW    FCERR                   ; eof, illegal function call
+        DEFW    FCERR                   ; fpos, illegal function call
+        DEFW    FCERR                   ; backup, illegal function call
+
+;       Subroutine      sequential output (LPT device)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J72BA:  LD      A,C
+        JP      OUTDLP
+
+
+	DEFS	72CDH-$,0
+	
+
+;       Subroutine      bad filename error if in random i/o mode
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C72CD:  LD      A,E
+        CP      8
+        JP      Z,DERNMF                ; bad filename
+        RET
+
+
+	DEFS	72FFH-$,0
+
+POPAL2: POP     AF
+POPAL3: POP     BC
+        POP     DE
+        POP     HL
+        RET
+
+
+	ORG	6FBAH
+
+
+C6FBA:  OUT     (0A4H),A
+J6FBC:  IN      A,(0A4H)
+        OR      A
+        JR      Z,J6FBC
+        EXX
+J6FC2:  IN      A,(0A4H)
+        CP      E
+        JR      NZ,J6FC2
+        EXX
+        RET
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C6FC9:  DI
+        IN      A,(0AAH)
+        AND     0F0H
+        ADD     A,07H
+        OUT     (0AAH),A
+        RET
+
+
+	ORG	6FDAH
+
+
+J6FDA:  EXX
+        LD      E,A
+        LD      HL,0C00H
+        EXX
+J6FE0:  IN      A,(0A9H)
+        AND     10H
+        JR      NZ,J6FF0
+        LD      A,02H
+J6FE8:  POP     HL
+        POP     HL
+        POP     HL
+        POP     DE
+        POP     BC
+        JP      J7222
+
+J6FF0:  CALL    C70F1
+        SUB     80H
+        JP      P,J6FFA
+        NEG
+J6FFA:  DEFB    0FDH
+        CP      L                       ; CP IYL
+        JR      C,J6FE0
+        DEFB    0FDH
+        LD      H,01H                   ; LD IYH,01H
+        POP     AF
+        EX      AF,AF'
+        POP     AF
+        AND     04H
+        EX      AF,AF'
+        POP     HL
+        POP     DE
+        POP     BC
+        JP      P,J7080
+        CALL    C7287
+        JR      J7084
+
+
+	ORG	7017H
+
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7017:  EXX
+        LD      E,01H
+        LD      HL,0800H
+        EXX
+        LD      HL,0
+        LD      D,H
+        LD      B,04H 
+D7024:  DEFB    0DDH
+        LD      L,0                     ; LD    IXL,0
+J7027:  CALL    C70F1
+        LD      E,A
+        ADD     HL,DE
+        DJNZ    J7027
+        INC     HL
+        INC     HL
+        SRL     H
+        RR      L
+        SRL     H
+        RR      L
+        LD      A,L
+        SUB     80H
+        DEFB    0DDH
+        LD      L,A                     ; LD    IXL,A
+        RET
+
+
+	ORG	7042H
+
+
+;       Subroutine      PCMREC
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7042:  EX      AF,AF'
+        LD      A,0CH
+        OUT     (0A5H),A
+        LD      A,80H
+        OUT     (0A4H),A
+        CALL    GETCPU
+        PUSH    AF
+        OR      A
+        LD      A,1
+        CALL    Z,CHGCPU
+        CALL    C6FC9
+        EX      AF,AF'
+        PUSH    BC
+        PUSH    DE
+        PUSH    HL
+        PUSH    AF
+        AND     78H
+        DEFB    0FDH
+        LD      L,A                     ; LD    IYL,A
+        POP     AF
+        PUSH    AF
+        AND     83H
+        INC     A
+        RES     7,A
+        RES     2,A
+        PUSH    AF
+        DEC     A
+        JR      NZ,J7078
+        CALL    GETCPU
+        DEC     A
+        JR      NZ,J7078
+        INC     A
+        JP      J6FE8
+
+J7078:  CALL    C7017
+        POP     AF
+        PUSH    AF
+        JP      J6FDA
+
+J7080:  LD      D,00H
+        DEFB    0FDH
+        LD      H,D                     ; LD    IYH,D
+J7084:  EX      AF,AF'
+        JR      Z,J70E0
+J7087:  IN      A,(0A9H)
+        AND     10H
+        JR      Z,J70E4
+        CALL    C70F1
+J7090:  DEFB    0DDH
+        LD      H,A                     ; LD    IXH,A
+        SUB     7FH
+        CP      03H
+        JR      NC,J709E
+        LD      A,C
+        DEC     A
+        OR      B
+        OR      D
+        JR      NZ,J70A8
+J709E:  DEFB    0DDH
+        LD      A,H                     ; LD    A,IXH
+J70A0:  CALL    C7270
+        JR      NC,J7087
+J70A5:  JP      J720B
+
+J70A8:  DEFB    0FDH
+        LD      L,1                     ; LD    IYL,1
+J70AB:  CALL    C70F1
+        SUB     7FH
+        CP      03H
+        JR      NC,J70C6
+        DEFB    0FDH
+        INC     L                       ; INC   IYL
+        JR      NZ,J70AB
+        XOR     A
+        CALL    C7270
+        XOR     A
+        CALL    C7270
+        JR      C,J70A5
+        LD      A,80H
+        JR      J7090
+
+J70C6:  ADD     A,7FH
+        DEFB    0DDH
+        LD      H,A                     ; LD    IXH,A
+        DEFB    0FDH
+        LD      A,L                     ; LD    A,IYL
+        DEC     A
+        LD      A,80H
+        JR      Z,J70D7
+        XOR     A
+        CALL    C7270
+        DEFB    0FDH
+        LD      A,L                     ; LD    A,IYL
+J70D7:  CALL    C7270
+        JR      C,J70A5
+        DEFB    0DDH
+        LD      A,H                     ; LD    A,IXH
+        JR      J70A0
+
+J70E0:  IN      A,(0A9H)
+        AND     10H
+J70E4:  JP      Z,J7220
+        CALL    C70F1
+        CALL    C7270
+        JR      NC,J70E0
+        JR      J70A5
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C70F1:  EXX
+        LD      A,E
+        OR      A
+        JR      NZ,J70FD
+J70F6:  IN      A,(0A4H)
+        OR      A
+        JR      NZ,J70F6
+        LD      L,01H
+J70FD:  IN      A,(0A4H)
+        CP      L
+        JR      NZ,J70FD
+        ADD     A,E
+        AND     03H
+        LD      L,A
+        LD      C,0A5H
+        LD      A,H
+        OR      10H
+        OUT     (C),A
+        LD      A,80H
+        OUT     (0A4H),A
+        DEFB    0EDH,070H               ; IN    (C)
+        JP      M,J7118
+        AND     7FH
+J7118:  OR      40H
+        OUT     (0A4H),A
+        DEFB    0EDH,070H               ; IN    (C)
+        JP      M,J7123
+        AND     0BFH
+J7123:  OR      20H
+        OUT     (0A4H),A
+        DEFB    0EDH,070H               ; IN    (C)
+        JP      M,J712E
+        AND     0DFH
+J712E:  OR      10H
+        OUT     (0A4H),A
+        DEFB    0EDH,070H               ; IN    (C)
+        JP      M,J7139
+        AND     0EFH
+J7139:  OR      08H
+        OUT     (0A4H),A
+        DEFB    0EDH,070H               ; IN    (C)
+        JP      M,J7144
+        AND     0F7H
+J7144:  OR      04H
+        OUT     (0A4H),A
+        DEFB    0EDH,070H               ; IN    (C)
+        JP      M,J714F
+        AND     0FBH
+J714F:  OR      02H
+        OUT     (0A4H),A
+        DEFB    0EDH,070H               ; IN    (C)
+        JP      M,J715A
+        AND     0FDH
+J715A:  OR      01H
+        OUT     (0A4H),A
+        DEFB    0EDH,070H               ; IN    (C)
+        JP      M,J7165
+        AND     0FEH
+J7165:  OUT     (C),H
+        DEFB    0DDH,04DH               ; LD    C,IXL
+        BIT     7,C
+        JR      NZ,J7174
+        SUB     C
+        JR      NC,J717B
+        LD      A,01H
+        EXX
+        RET
+
+J7174:  SUB     C
+        JR      C,J717B
+        LD      A,0FFH
+        EXX
+        RET
+
+J717B:  SUB     01H
+        ADC     A,01H
+        EXX
+        RET
+
+
+	ORG	71DBH
+
+
+;       Subroutine      PCMPLY
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C71DB:	CALL    C721D
+        EX      AF,AF'
+        CALL    GETCPU
+        PUSH    AF
+        OR      A
+        LD      A,1
+        CALL    Z,CHGCPU
+        CALL    C6FC9
+        EX      AF,AF'
+        INC     A
+        RES     7,A
+        RES     2,A
+        EXX
+        LD      E,A
+        EXX
+        JP      M,J7233
+J71F8:  IN      A,(0A9H)
+        AND     10H
+        JR      Z,J7220
+        LD      A,(HL)
+        INC     HL
+        OR      A
+        JR      Z,J7225
+        CALL    C6FBA
+J7206:  DEC     BC
+        LD      A,B
+        OR      C
+        JR      NZ,J71F8
+J720B:  OR      A
+J720C:  EX      AF,AF'
+        POP     AF
+        OR      A
+        CALL    Z,CHGCPU
+J7212:  LD      A,80H
+        OUT     (0A4H),A
+        LD      A,03H
+        OUT     (0A5H),A
+        EX      AF,AF'
+        EI
+        RET
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C721D:  EX      AF,AF'
+        JR      J7212
+
+J7220:  LD      A,02H
+J7222:  SCF
+        JR      J720C
+
+J7225:  DEC     BC
+        LD      A,C
+        OR      B
+        JR      Z,J720B
+        PUSH    BC
+        LD      B,(HL)
+        INC     HL
+        CALL    C725A
+        POP     BC
+        JR      J7206
+
+J7233:  CALL    C728E
+J7236:  IN      A,(0A9H)
+        AND     10H
+        JR      Z,J7220
+        IN      A,(98H)
+        OR      A
+        JR      Z,J724B
+        CALL    C6FBA
+J7244:  CALL    C7262
+        JR      NC,J7236
+        JR      J720B
+
+J724B:  CALL    C7262
+        JR      C,J720B
+        PUSH    BC
+        IN      A,(98H)
+        LD      B,A
+        CALL    C725A
+        POP     BC
+        JR      J7244
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C725A:  LD      A,80H
+        CALL    C6FBA
+        DJNZ    C725A
+        RET
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7262:  INC     HL
+        LD      A,L
+        OR      A
+        JR      NZ,J727B
+        OR      H
+        JR      NZ,J726B
+        INC     E
+J726B:  CALL    C728E
+        JR      J727B
+
+C7270:  DEFB    0FDH
+        INC     H                       ; INC   IYH
+        DEFB    0FDH
+        DEC     H                       ; INC   IYH
+        JR      NZ,J7278
+        LD      (HL),A
+        DEFB    0C2H                    ; JP    NZ,xxxx, skip next instruction
+J7278:  OUT     (098H),A
+        INC     HL
+J727B:  DEC     D
+        LD      A,B
+        OR      C
+        DEC     BC
+        RET     Z
+        INC     D
+        LD      A,B
+        OR      C
+        OR      D
+        RET     NZ
+        SCF
+        RET
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7287:  LD      A,H
+        AND     3FH
+        OR      40H
+        JR      J7291
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C728E:  LD      A,H
+        AND     3FH
+J7291:  PUSH    AF
+        LD      A,H
+        AND     0C0H
+        OR      E
+        RLCA
+        RLCA
+        OUT     (99H),A
+        LD      A,8EH
+        OUT     (99H),A
+        LD      A,L
+        OUT     (99H),A
+        POP     AF
+        OUT     (99H),A
+        RET
+
+
+; END 	SUBTTL  SPCDEV
+
+        END
+

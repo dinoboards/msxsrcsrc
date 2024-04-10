@@ -1,0 +1,3360 @@
+; RSINST.MAC
+
+; Kashiwazaki Fast RS232 BIOS
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by Taro Kashiwazaki
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+	.Z80
+	ASEG
+	ORG	0100H
+
+BDOS	EQU	0005H
+CPMADR	EQU	0006H
+VDP.DR	EQU	0006H
+RDSLT	EQU	000CH
+WRSLT	EQU	0014H
+CALSLT	EQU	001CH
+ENASLT	EQU	0024H
+IDBYT0	EQU	002BH
+IDBYT2	EQU	002DH
+DBUF	EQU	0080H
+CHPUT	EQU	00A2H
+
+D.4000	EQU	4000H
+
+I.6000	EQU	6000H			; receive buffer
+D.7000	EQU	7000H			; slot id
+J.7001	EQU	7001H			; old EXTBIO handler
+D.7006	EQU	7006H			; fast rs232 interrupt handler activated
+J.7007	EQU	7007H			; old H.KEYI handler
+D.700C	EQU	700CH			; channel initialized table
+I.7010	EQU	7010H			; interrupt handlers (4 channels)
+C.701D	EQU	701DH			; disable RTS handlers (4 channels)
+C.702A	EQU	702AH			; enable RTS handlers (4 channels)
+D$7F37	EQU	7F37H			; pointer to FCB
+D.7F39	EQU	7F39H			; FCB buffer size
+D.7F3B	EQU	7F3BH			; FCB mode
+D.7F70	EQU	7F70H			; space left in receive buffer
+D.7F72	EQU	7F72H			; receive buffer put pointer
+D.7F74	EQU	7F74H			; receive buffer get pointer
+D.7F76	EQU	7F76H			; backup byte flag
+D.7F77	EQU	7F77H			; backup byte
+D$7F78	EQU	7F78H			; unused flags
+D.7F79	EQU	7F79H			; send FIFO space left
+D$7F7A	EQU	7F7AH			; unused ?
+I.7F80	EQU	7F80H			; running channel settings
+; channel info block
+; +0	chipset type
+; +1	clock speed
+; +2	FCR
+; +3	MCR
+;
+; +15
+
+D.7FF7	EQU	7FF7H			; SPR register
+
+D.7FF8	EQU	7FF8H			; RHR/THR register
+D.7FF9	EQU	7FF9H			; IER register
+D.7FFA	EQU	7FFAH			; IR/FCR register
+D.7FFB	EQU	7FFBH			; LCR register
+D.7FFC	EQU	7FFCH			; MCR register
+D.7FFD	EQU	7FFDH			; LSR register
+D.7FFE	EQU	7FFEH			; MSR register
+D.7FFF	EQU	7FFFH			; SPR register
+
+I.C000	EQU	0C000H
+
+RAMAD1	EQU	0F342H
+RAMAD3	EQU	0F344H
+HOKVLD	EQU	0FB20H
+EXPTBL	EQU	0FCC1H
+H.KEYI	EQU	0FD9AH
+EXTBIO	EQU	0FFCAH
+DISINT	EQU	0FFCFH
+ENAINT	EQU	0FFD4H
+RG9SAV	EQU	0FFE8H
+
+
+I.0100:	JP	J$016B
+
+?.0103:	DEFB	13
+	DEFM	'RS-232C BIOS installer version 1.30',13,10
+	DEFM	'Copyright (C) 1996,1997 Taro Kashiwazaki.',13,10
+	DEFM	'All rights reserved.',13,10
+	DEFB	1AH
+
+J$016B:	LD	SP,(CPMADR)
+	LD	HL,I$0C00
+	CALL	C.0B78			; string to console output
+	CALL	C$0A2B			; cleanup command line arguments
+	CALL	C$082E			; parse command line arguments
+	LD	DE,8*256+0		; MSX serial, build a slot address table
+	LD	A,(RAMAD3)
+	LD	B,A			; slotid DOS RAM page 3
+	LD	HL,I.C000
+	CALL	EXTBIO
+	LD	DE,0-I.C000
+	ADD	HL,DE			; size of slot address table
+	LD	A,L
+	SRL	A
+	SRL	A			; number of entries
+	LD	(D.12A0),A		; number of MSX serial interfaces
+	LD	A,(D.12A2)		; option
+	LD	E,A
+	LD	D,0
+	LD	HL,I$127E
+	ADD	HL,DE
+	ADD	HL,DE
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	JP	(HL)			; start option routine
+
+;	  Subroutine quit program
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J.01A4:	LD	C,0
+	JP	BDOS
+
+;	  Subroutine INFO
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.01A9:	LD	E,0
+	LD	A,0FFH			; start autosearch
+J$01AD:	PUSH	DE			; store number of fast rs232
+	CALL	C.0693			; search fast rs232
+	JP	C,J$0232		; not found,
+	PUSH	AF			; store slotid
+	PUSH	BC			; store fast rs232 type
+	CALL	C.03F1			; slot to console output
+	POP	BC			; restore fast rs232 type
+	LD	HL,I$1005		; type string
+	CALL	C.0B78			; string to console output
+	INC	B
+	DEC	B			; normal MSX serial ?
+	JR	NZ,J$01CD		; nope,
+	LD	HL,I$100D		; normal MSX serial string
+	CALL	C.0B78			; string to console output
+	JP	J.0226			; continue
+
+J$01CD:	POP	AF			; restore slotid
+	PUSH	AF			; store slotid
+	PUSH	BC			; store fast rs232 type
+	CALL	C.04EB			; select slot on page 1
+	EI
+	POP	BC			; restore fast rs232 type
+	DEC	B			; fast rs232 with bios disabled ?
+	JR	Z,J$01F3		; yep,
+	LD	HL,I$101E		; fast rs232 with bios enabled string
+	CALL	C.0B78			; string to console output
+	LD	HL,I.7F80
+	LD	DE,I.12A6
+	LD	BC,4*16
+	LDIR				; copy running channel settings
+	CALL	C.04F1			; enable DOS RAM on page 1
+	EI
+	SCF				; display chipset settings
+	CALL	C.04BA			; channel information to console output
+	JR	J.0226			; continue
+
+J$01F3:	LD	HL,I$103B		; fast rs232 with bios disabled string
+	CALL	C.0B78			; string to console output
+	LD	IX,D.7FF8
+	LD	IY,I.12A6+3*16
+	LD	B,4
+J$0203:	PUSH	BC
+	DI
+	CALL	C.050A			; determine rs232 chipset type
+	LD	(IY+0),D		; store chipset type
+	INC	D
+	DEC	D			; no chipset or 8250/16450 ?
+	CALL	NZ,C.0557		; nope, measure clockspeed
+	EI
+	LD	(IY+1),E		; store clockspeed
+	LD	DE,-16
+	ADD	IX,DE
+	ADD	IY,DE
+	POP	BC
+	DJNZ	J$0203			; next channel
+	CALL	C.04F1			; enable DOS RAM on page 1
+	EI
+	OR	A			; do not display chipset settings
+	CALL	C.04BA			; channel information to console output
+J.0226:	LD	HL,I$10A2
+	CALL	C.0B78			; string to console output
+	POP	AF			; restore slotid
+	POP	DE			; restore number of fast rs232
+	INC	E			; update number of fast rs232
+	JP	J$01AD			; next fast rs232
+
+J$0232:	POP	DE
+	INC	E
+	DEC	E			; found a fast rs232 ?
+	JR	NZ,J$023C		; yep,
+	LD	HL,I$0DEE		; no MSX serial string
+	JR	J$0245
+
+J$023C:	CALL	C.0B1A			; convert to BCD in buffer
+	CALL	C.0AAB			; BCD buffer to console output
+	LD	HL,I$0DF0		; MSX serial string
+J$0245:	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+;	  Subroutine INSTALL
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.024B:	LD	A,(D.12A3)
+	BIT	0,A			; autosearch ?
+	JR	NZ,J$0264		; nope,
+	LD	A,0FFH			; start autosearch
+J$0254:	CALL	C.0693			; search fast rs232
+	JR	C,J.0274		; not found,
+	DEC	B			; fast rs232 with bios disabled ?
+	JR	NZ,J$0254		; nope, continue search
+	LD	(D.12A1),A		; slotid RS232
+	CALL	C.03F1			; slot to console output
+	JR	J.027D
+
+J$0264:	LD	A,(D.12A1)		; slotid RS232
+	PUSH	AF
+	CALL	C.03F1			; slot to console output
+	POP	AF
+	CALL	C.0649			; determine fast rs232 mode in slot
+	JR	C,J.0274		; not found,
+	DEC	B			; fast rs232 with bios disabled ?
+	JR	Z,J.027D		; yep,
+J.0274:	LD	HL,I.0E12		; no fast rs232 string
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+J.027D:	CALL	C.06BF			; initialize fast rs232 bios
+	LD	HL,I.0E8C		; reset to activate string
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+;	  Subroutine ACTIVATE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0289:	LD	A,(D.12A3)
+	BIT	0,A			; autosearch ?
+	JR	NZ,J$02A2		; nope,
+	LD	A,0FFH			; start autosearch
+J$0292:	CALL	C.0693			; search fast rs232
+	JR	C,J.02B2		; not found,
+	DEC	B			; fast rs232 with bios disabled ?
+	JR	NZ,J$0292		; nope, continue search
+	LD	(D.12A1),A		; slotid RS232
+	CALL	C.03F1			; slot to console output
+	JR	J.02BB
+
+J$02A2:	LD	A,(D.12A1)		; slotid RS232
+	PUSH	AF
+	CALL	C.03F1			; slot to console output
+	POP	AF
+	CALL	C.0649			; determine fast rs232 mode in slot
+	JR	C,J.02B2		; not found,
+	DEC	B			; fast rs232 with bios disabled ?
+	JR	Z,J.02BB		; yep,
+J.02B2:	LD	HL,I.0E12		; no fast rs232 string
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+J.02BB:	CALL	C.06BF			; initialize fast rs232 bios
+	CALL	C$0769			; activate fast rs232 bios
+	JP	J.01A4			; quit program
+
+;	  Subroutine FORCE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.02C4:	LD	A,(D.12A3)
+	BIT	0,A			; autosearch ?
+	JR	NZ,J$02DE		; nope,
+	LD	A,0FFH			; start autosearch
+J$02CD:	CALL	C.0693			; search fast rs232
+	JR	C,J.02EF		; not found,
+	INC	B
+	DEC	B			; normal MSX serial ?
+	JR	Z,J$02CD		; yep, continue search
+	LD	(D.12A1),A		; slotid RS232
+	CALL	C.03F1			; slot to console output
+	JR	J.02F8
+
+J$02DE:	LD	A,(D.12A1)		; slotid RS232
+	PUSH	AF
+	CALL	C.03F1			; slot to console output
+	POP	AF
+	CALL	C.0649			; determine fast rs232 mode in slot
+	JR	C,J.02EF		; not found,
+	INC	B
+	DEC	B			; normal MSX serial ?
+	JR	NZ,J.02F8		; nope,
+J.02EF:	LD	HL,I.0E12		; no fast rs232 string
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+J.02F8:	CALL	C.06BF			; initialize fast rs232 bios
+	LD	HL,I.0E8C		; reset to activate string
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+;	  Subroutine DISABLE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0304:	LD	A,(D.12A3)
+	BIT	0,A			; autosearch ?
+	JR	NZ,J$031E		; nope,
+	LD	A,0FFH			; start autosearch
+J$030D:	CALL	C.0693			; search fast rs232
+	JR	C,J.032F		; not found,
+	DEC	B
+	DEC	B			; fast rs232 with bios enabled ?
+	JR	NZ,J$030D		; nope, continue search
+	LD	(D.12A1),A		; slotid RS232
+	CALL	C.03F1			; slot to console output
+	JR	J.0338
+
+J$031E:	LD	A,(D.12A1)		; slotid RS232
+	PUSH	AF
+	CALL	C.03F1			; slot to console output
+	POP	AF
+	CALL	C.0649			; determine fast rs232 mode in slot
+	JR	C,J.032F		; not found,
+	DEC	B
+	DEC	B			; fast rs232 with bios enabled ?
+	JR	Z,J.0338		; yep,
+J.032F:	LD	HL,I.0E12		; no fast rs232 string
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+J.0338:	CALL	C$077F			; disable fast rs232 bios
+	JP	J.01A4			; quit program
+
+;	  Subroutine CUSTOMIZE/SAVE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.033E:	LD	A,(D.12A3)
+	BIT	0,A			; autosearch ?
+	JR	NZ,J$0358		; nope,
+	LD	A,0FFH			; start autosearch
+J$0347:	CALL	C.0693			; search fast rs232
+	JR	C,J.0369		; not found,
+	DEC	B
+	DEC	B			; fast rs232 with bios enabled ?
+	JR	NZ,J$0347		; nope, continue search
+	LD	(D.12A1),A		; slotid RS232
+	CALL	C.03F1			; slot to console output
+	JR	J.0372
+
+J$0358:	LD	A,(D.12A1)		; slotid RS232
+	PUSH	AF
+	CALL	C.03F1			; slot to console output
+	POP	AF
+	CALL	C.0649			; determine fast rs232 mode in slot
+	JR	C,J.0369		; not found,
+	DEC	B
+	DEC	B			; fast rs232 with bios enabled ?
+	JR	Z,J.0372		; yep,
+J.0369:	LD	HL,I.0E12		; no fast rs232 string
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+J.0372:	CALL	C.04E8			; enable RS232 on page 1
+	EI
+	LD	HL,I.7F80
+	LD	DE,I.12A6
+	LD	BC,4*16
+	LDIR				; copy running channel settings
+	LD	IX,I.12E6		; mask tables
+	LD	B,64
+J$0387:	LD	A,(IX-64)		; current setting
+	AND	(IX+0)			; AND mask
+	OR	(IX+64)			; OR mask
+	LD	(IX-64),A		; update current setting
+	INC	IX
+	DJNZ	J$0387
+	LD	HL,I.12A6
+	LD	DE,I.7F80
+	LD	BC,4*16
+	LDIR				; update running channel settings
+	LD	A,(D.12A2)
+	CP	7			; SAVE option ?
+	JR	NZ,J$03BE		; nope, skip
+	LD	HL,D.7FFC
+	SET	2,(HL)			; set OUT1 (enable SRAM write)
+	PUSH	HL
+	LD	HL,I.12A6
+	LD	DE,I$40C0
+	LD	BC,4*16
+	LDIR				; update initial settings
+	POP	HL
+	EI
+	RES	2,(HL)			; reset OUT1 (disable SRAM write)
+J$03BE:	CALL	C.04F1			; enable DOS RAM on page 1
+	EI
+	SCF				; display chipset settings
+	CALL	C.04BA			; channel information to console output
+	LD	A,(D.12A2)
+	CP	7			; SAVE option ?
+	JR	NZ,J$03D6		; nope,
+	LD	HL,I$0E6B		; customized saved string
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+J$03D6:	LD	HL,I$0E4B		; is customized string
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+;	  Subroutine HELP
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.03DF:	LD	HL,I$0C81
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+;	  Subroutine <no option>
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.03E8:	LD	HL,I$0C69
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+;	  Subroutine slot to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.03F1:	LD	HL,I$0FF5		; slot string
+	CALL	C.0B78			; string to console output
+	PUSH	AF			; store slotid
+	LD	E,A			; byte
+	CALL	C$0B2A			; initialize BCD byte buffer
+	LD	A,2			; number of digits=2
+	CALL	C$0AE2			; hexadecimal digits to console output
+	LD	HL,I$0FFD		; ( string
+	CALL	C.0B78			; string to console output
+	POP	AF			; restore slotid
+	PUSH	AF			; store slotid
+	AND	03H
+	LD	E,A			; primairy slot
+	CALL	C.0B1A			; convert to BCD in buffer
+	CALL	C.0AAB			; BCD buffer to console output
+	POP	AF			; restore slotid
+	BIT	7,A			; slot expanded ?
+	JR	Z,J$0427		; nope,
+	LD	E,"-"
+	CALL	C.0B52			; character to console output
+	RRCA
+	RRCA
+	AND	03H
+	LD	E,A			; secundairy slot
+	CALL	C.0B1A			; convert to BCD in buffer
+	CALL	C.0AAB			; BCD buffer to console output
+J$0427:	LD	HL,I$1001		; ) string
+	CALL	C.0B78			; string to console output
+	RET
+
+;	  Subroutine on/off to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.042E:	LD	HL,I$11C3		; off string
+	JR	Z,J$0436
+	LD	HL,I$11BE		; on string
+J$0436:	CALL	C.0B78			; string to console output
+	RET
+
+;	  Subroutine chipset and clock speed to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$043A:	PUSH	HL
+	LD	A,(HL)
+	AND	A			; chipset found ?
+	PUSH	AF
+	LD	HL,I$10A5
+	CP	4+1			; valid chipset type ?
+	JR	NC,J$0451		; no, unknown string
+	LD	L,A
+	LD	H,0
+	ADD	HL,HL
+	LD	DE,I$1069
+	ADD	HL,DE
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+J$0451:	CALL	C.0B78			; string to console output
+	POP	AF
+	POP	HL
+	RET	Z			; chipset not found, quit
+	PUSH	HL
+	INC	HL
+	LD	A,(HL)
+	AND	A
+	JR	Z,J.0462
+	CP	0EH	; 14 
+	JR	C,J.0462
+	XOR	A
+J.0462:	LD	L,A
+	LD	H,0
+	ADD	HL,HL
+	LD	DE,I$10AE
+	ADD	HL,DE
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	CALL	C.0B78			; string to console output
+	POP	HL
+	RET
+
+;	  Subroutine chipset settings to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$0473:	LD	A,(HL)
+	AND	A			; chipset found ?
+	RET	Z			; nope, quit
+	PUSH	HL
+	INC	HL
+	INC	HL
+	LD	A,(HL)			; flags
+	INC	HL
+	PUSH	HL
+	LD	HL,I$1176		; fifo string
+	CALL	C.0B78			; string to console output
+	BIT	0,A			; FIFO enabled
+	CALL	C.042E			; on/off to console output
+	LD	HL,I$1188		; trigger string
+	CALL	C.0B78			; string to console output
+	RLCA
+	RLCA
+	AND	03H			; trigger level
+	LD	L,A
+	LD	H,0
+	ADD	HL,HL
+	LD	DE,I$11C9
+	ADD	HL,DE
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A			; tigger level string
+	CALL	C.0B78			; string to console output
+	POP	HL
+	LD	A,(HL)
+	LD	HL,I$119A		; auto flow string
+	CALL	C.0B78			; string to console output
+	BIT	5,A			;
+	CALL	C.042E			; on/off to console output
+	LD	HL,I$11AC		; internal/external flow string
+I$04B0:	CALL	C.0B78			; string to console output
+	BIT	3,A			;
+	CALL	C.042E			; on/off to console output
+	POP	HL
+	RET
+
+;	  Subroutine channel information to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.04BA:	LD	HL,I.12A6+3*16
+	LD	E,"0"			; channel
+	LD	B,4
+J$04C1:	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	HL,I$105A		; channel string
+	CALL	C.0B78			; string to console output
+	CALL	C.0B52			; character to console output (channel)
+	LD	HL,I$1065		; : string
+	CALL	C.0B78			; string to console output
+	POP	HL
+	PUSH	AF
+	CALL	C$043A			; chipset and clock speed to console output
+	POP	AF
+	PUSH	AF
+	CALL	C,C$0473		; flag set, chipset settings to console output
+	LD	DE,-16
+	ADD	HL,DE
+	POP	AF
+	POP	DE
+	INC	E
+	POP	BC
+	DJNZ	J$04C1
+	RET
+
+;	  Subroutine enable RS232 on page 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.04E8:	LD	A,(D.12A1)		; slotid RS232
+
+;	  Subroutine select slot on page 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.04EB:	LD	H,HIGH 4000H
+	CALL	ENASLT
+	RET
+
+;	  Subroutine enable DOS RAM on page 1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.04F1:	LD	A,(RAMAD1)		; slotid DOS RAM page 1
+	JR	C.04EB			; select slot on page 1
+
+;	  Subroutine is writeable and readback inverted location
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$04F6:	LD	A,(HL)
+	LD	B,A
+	CPL
+	LD	(HL),A
+	XOR	(HL)
+	CP	0FFH
+	LD	(HL),B
+	RET	Z
+	SCF
+I$0500:	RET
+
+;	  Subroutine is writeable location
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0501:	LD	A,(HL)
+I$0502:	LD	B,A
+	CPL
+	LD	(HL),A
+	CP	(HL)
+	LD	(HL),B
+	RET	Z
+	SCF
+	RET
+
+;	  Subroutine determine rs232 chipset type
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.050A:	PUSH	IX
+	POP	HL
+	LD	DE,7
+	ADD	HL,DE
+	LD	D,0			; assume 8250/16450
+	CALL	C.0501			; is writeable location (SPR register 16550 and above)
+	RET	C			; nope, quit
+	LD	A,(IX+7)		; store SPR register
+	CP	(IX-1)
+	RET	NZ
+	CPL
+	LD	(IX+7),A
+	CP	(IX-1)
+	CPL
+	LD	(IX+7),A		; restore SPR register
+	RET	NZ
+	INC	D			; assume PC16550D
+	LD	A,(IX+2)
+	RLCA
+	AND	01H 
+	LD	B,A			; store current FIFO enabled
+	LD	(IX+2),00H		; FIFO disabled
+	LD	(IX+2),01H		; FIFO enabled
+	LD	A,(IX+2)
+	AND	0C0H			; FIFO enabled bits
+	CP	0C0H			; both FIFOs enabled ?
+	LD	(IX+2),B		; restore FIFO enabled
+	RET	NZ			; nope, quit
+	INC	D			; assume TL16C550C
+	LD	A,(IX+4)		; store modem control status
+	SET	5,(IX+4)		; enable ?
+	BIT	5,(IX+4)		; still enabled ?
+	LD	(IX+4),A
+	RET	Z			; nope, quit
+	INC	D			; TL16C750
+	RET
+
+;	  Subroutine measure clockspeed
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0557:	PUSH	IX
+	PUSH	IY
+	LD	(IX+1),00H		; reset IER
+	LD	(IX+2),00H		; reset FCR, FIFO disabled
+	LD	(IX+3),83H		; DLAB=1, 8 bit
+	LD	(IX+0),LOW 120		; DLL
+	LD	(IX+1),HIGH 120		; DLM
+	LD	(IX+3),03H		; DLAB=0, 8 bit
+	LD	(IX+4),13H		; MCR: loopback enabled, RTS=1, DTR=1
+	PUSH	IX
+	POP	DE
+	LD	HL,0
+	ADD	HL,DE
+	EX	DE,HL			; THR/RHR
+	PUSH	IX
+	POP	HL
+	LD	BC,5
+	ADD	HL,BC			; LSR
+	PUSH	HL
+	PUSH	DE
+	LD	A,(EXPTBL+0)
+	LD	HL,IDBYT2
+	CALL	RDSLT
+	EI
+	AND	A			; MSX1 ?
+	JR	NZ,J$05A9		; nope,
+	LD	A,(EXPTBL+0)
+	LD	HL,IDBYT0
+	CALL	RDSLT
+	EI
+	BIT	7,A			; VDP VBLANK frequency = 60 Hz ?
+	LD	B,60
+	JR	Z,J.05B4		; yep, use 60 Hz
+	LD	B,50
+	JR	J.05B4
+
+J$05A9:	LD	A,(RG9SAV)
+	BIT	1,A			; VDP in NTSC mode ?
+	LD	B,60
+	JR	Z,J.05B4		; yep, use 60 Hz
+	LD	B,50
+J.05B4:	PUSH	BC
+	LD	A,(EXPTBL+0)
+	LD	HL,VDP.DR
+	CALL	RDSLT
+	EI
+	POP	BC
+	LD	C,A
+	INC	C			; vdp i/o register for status read
+	POP	DE
+	POP	HL
+	LD	IY,0
+	DI
+J$05C9:	BIT	6,(HL)			; transmitter empty ?
+	JR	Z,J$05C9		; nope, wait
+J$05CD:	IN	A,(C)
+	RLCA				; VDP VBLANK interrupt ?
+	JR	NC,J$05CD		; nope, wait
+J$05D2:	IN	A,(C)
+	RLCA				; VDP VBLANK interrupt ?
+	JR	NC,J$05D2		; nope, wait
+J.05D7:	BIT	6,(HL)			; transmitter empty ?
+	JR	Z,J$05DE		; nope,
+	LD	(DE),A			; transmit byte
+	INC	IY
+J$05DE:	IN	A,(C)
+	RLCA				; VDP VBLANK interrupt ?
+	JR	NC,J.05D7		; nope, continue
+	DJNZ	J.05D7
+	DEC	HL
+	EI
+	LD	(HL),01H		; MCR: loopback disabled, RTS=0, DTR=0
+	PUSH	IY
+	POP	HL
+	LD	DE,48
+	ADD	HL,DE
+	EX	DE,HL
+	LD	BC,96
+	CALL	C$0B90			; divide
+	POP	IY
+	POP	IX
+	RET
+
+;	  Subroutine check for fast rs232 hardware
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$05FC:	LD	HL,D.4000
+	CALL	C$04F6			; is writeable and readback inverted location
+	RET	C			; nope, quit
+	LD	HL,D.7000
+	CALL	C.0501			; is writeable location
+	RET	C			; nope, quit
+	LD	HL,I.6000
+	CALL	C.0501			; is writeable location
+	RET	C			; nope, quit
+	LD	HL,D.7FFF
+	CALL	C.0501			; is writeable location
+	RET	C			; nope, quit
+	LD	A,(D.7FFF)
+	LD	B,A			; store SPR register
+	LD	A,(D.7FF7)
+	CP	B
+	JR	Z,J$0624
+	SCF
+	RET
+
+J$0624:	CPL
+	LD	(D.7FFF),A
+	LD	C,A
+	LD	A,(D.7FF7)
+	CP	C
+	LD	A,B
+	LD	(D.7FFF),A		; restore SPR register
+	JR	Z,J$0635
+	SCF
+	RET
+
+J$0635:	LD	A,(D.7FFC)
+	LD	C,A
+	SET	2,A			; set OUT1 (enable SRAM write)
+	LD	(D.7FFC),A
+	LD	HL,D.4000
+	CALL	C.0501			; is writeable location
+	LD	A,C
+	LD	(D.7FFC),A		; reset OUT1 (disable SRAM write)
+	RET
+
+;	  Subroutine determine fast rs232 mode in slot
+;	     Inputs  ________________________
+;	     Outputs B=fast rs232 mode
+
+C.0649:	PUSH	AF
+	CALL	C.04EB			; select slot on page 1
+	EI
+	LD	HL,I.C000
+	LD	A,(D.12A0)
+	LD	B,A			; number of MSX serial interfaces
+	INC	B
+	DEC	B			; none found ?
+	JR	Z,J$0664		; yep, skip
+	POP	AF
+	PUSH	AF
+J$065B:	CP	(HL)			; same slot ?
+	JR	Z,J$0670		; yep,
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	DJNZ	J$065B
+J$0664:	DI
+	CALL	C$05FC			; check for fast rs232 hardware
+	EI
+	JR	C,J.0688		; nope,
+	LD	B,1			; fast rs232 with bios disabled
+	OR	A			; found
+	JR	J.0688
+
+J$0670:	LD	HL,I$4010
+	LD	DE,I$1290
+	LD	B,12
+J$0678:	LD	A,(DE)
+	CP	(HL)
+	INC	DE
+	INC	HL
+	JR	NZ,J$0685
+	DJNZ	J$0678
+	LD	B,2			; fast rs232 with bios enabled
+	OR	A			; found
+	JR	J.0688
+
+J$0685:	LD	B,0
+	OR	A			; found
+J.0688:	PUSH	AF
+	PUSH	BC
+	CALL	C.04F1			; enable DOS RAM on page 1
+	EI
+	POP	BC
+	POP	AF
+	POP	DE
+	LD	A,D
+	RET
+
+;	  Subroutine search fast rs232
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0693:	CP	0FFH			; start autosearch ?
+	JR	NZ,J$06A0		; nope, continue from specified slot
+	LD	A,(EXPTBL+0)
+	AND	80H
+J.069C:	CALL	C.0649			; determine fast rs232 mode in slot
+	RET	NC			; found, quit
+J$06A0:	BIT	7,A
+	JR	Z,J$06AA
+	ADD	A,4
+	BIT	4,A
+	JR	Z,J.069C
+J$06AA:	AND	03H
+	INC	A
+	CP	3+1
+	CCF
+	RET	C
+	LD	L,A
+	LD	H,0
+	LD	DE,EXPTBL
+	ADD	HL,DE
+	LD	E,A
+	LD	A,(HL)
+	AND	80H
+	OR	E
+	JR	J.069C
+
+;	  Subroutine initialize fast rs232 bios
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.06BF:	CALL	C.04E8			; enable RS232 on page 1
+	EI
+	LD	IX,D.7FF8
+	LD	IY,I.12A6+3*16
+	LD	B,4			; 4 channels
+J$06CD:	PUSH	BC
+	DI
+	CALL	C.050A			; determine rs232 chipset type
+	EI
+	LD	A,D
+	LD	(IY+0),A		; store chipset type
+	LD	BC,0*256+0
+	CP	4+1			; valid chipset ?
+	JR	NC,J.06EC		; nope,
+	CP	1+1			; none or 8250/16450 ?
+	JR	C,J.06EC		; yep,
+	LD	C,49H			; receive trigger=4, DMA mode 1, FIFO enabled
+	CP	2+1			; PC16550D ?
+	JR	C,J.06EC		; yep,
+	LD	B,20H			; AFE=1 (autoflow enabled)
+	LD	C,49H			; receive trigger=4, DMA mode 1, FIFO enabled
+J.06EC:	LD	(IY+2),C		; FCR
+	LD	(IY+3),B		; MCR
+	LD	A,(IY+0)
+	AND	A			; no chipset found ?
+	JR	Z,J$0708		; yep, skip
+	PUSH	IX
+	PUSH	IY
+	DI
+	CALL	C.0557			; measure clockspeed
+	EI
+	POP	IY
+	POP	IX
+	LD	(IY+1),E		; store clockspeed
+J$0708:	POP	BC
+	LD	DE,-16
+	ADD	IX,DE
+	ADD	IY,DE
+	DJNZ	J$06CD			; next channel
+	CALL	C.04F1			; enable DOS RAM on page 1
+	EI
+	LD	IX,I.12E6		; mask tables
+	LD	B,64
+J$071C:	LD	A,(IX-64)		; current setting
+	AND	(IX+0)			; AND mask
+	OR	(IX+64)			; OR mask
+	LD	(IX-64),A		; update current setting
+	INC	IX
+	DJNZ	J$071C
+	SCF				; display chipset settings
+	CALL	C.04BA			; channel information to console output
+	CALL	C.04E8			; enable RS232 on page 1
+	LD	HL,D.7FFC
+	SET	2,(HL)			; set OUT1 (enable SRAM write)
+	PUSH	HL
+	LD	HL,I$148F
+	LD	DE,D.4000
+	LD	BC,I$07EF
+	LDIR				; install fast rs232 bios
+	LD	HL,I.12A6
+	LD	DE,I$4080
+	LD	BC,4*16
+	LDIR				; update current settings
+	LD	HL,I.12A6
+	LD	DE,I$40C0
+	LD	BC,4*16
+	LDIR				; update initial settings
+	POP	HL
+	EI
+	RES	2,(HL)			; reset OUT1 (disable SRAM write)
+	CALL	C.04F1			; enable DOS RAM on page 1
+	EI
+	LD	HL,I$0E2F		; install succeeded string
+	CALL	C.0B78			; string to console output
+	RET
+
+;	  Subroutine activate fast rs232 bios
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$0769:	CALL	C.04E8			; enable RS232 on page 1
+	LD	HL,I$0774
+	PUSH	HL
+	LD	HL,(I$4002)
+	JP	(HL)
+
+I$0774:	CALL	C.04F1			; enable DOS RAM on page 1
+	EI
+	LD	HL,I$0EB2		; bios activated string
+	CALL	C.0B78			; string to console output
+	RET
+
+;	  Subroutine disable fast rs232 bios
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$077F:	CALL	C.04E8			; enable RS232 on page 1
+	LD	HL,D.7FFC
+	SET	2,(HL)			; set OUT1 (enable SRAM write)
+	XOR	A
+	LD	(D.4000),A		; disable extension
+	EI
+	RES	2,(HL)			; reset OUT1 (disable SRAM write)
+	CALL	C.04F1			; enable DOS RAM on page 1
+	EI
+	LD	HL,I$0ECF		; bios disabled string
+	CALL	C.0B78			; string to console output
+	RET
+
+;	  Subroutine to upper
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0799:	CP	"a"
+	RET	C
+	CP	"z"+1
+	RET	NC
+	SUB	20H
+	RET
+
+;	  Subroutine is digit ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.07A2:	LD	A,(HL)
+	SUB	"0"
+	RET	C
+	CP	9+1
+	CCF
+	RET
+
+;	  Subroutine parse numeric operand
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.07AA:	LD	DE,0
+	CALL	C.07A2			; is digit ?
+	RET	C
+J$07B1:	CALL	C.07A2			; is digit ?
+	CCF
+	RET	NC
+	EX	DE,HL
+	ADD	HL,HL
+	LD	C,L
+	LD	B,H			; *2
+	ADD	HL,HL
+	ADD	HL,HL			; *8
+	ADD	HL,BC			; *10
+	LD	C,A
+	LD	B,0
+	ADD	HL,BC
+	EX	DE,HL
+	INC	D
+	DEC	D
+	SCF
+	RET	NZ
+	INC	HL
+	JR	J$07B1
+
+;	  Subroutine parse digit
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.07C9:	LD	A,(HL)
+	CALL	C.0799			; to upper
+	SUB	"0"
+	RET	C
+	CP	9+1
+	CCF
+	RET	NC
+	CP	17H
+	CCF
+	RET	C
+	SUB	07H
+	RET
+
+;	  Subroutine parse hexdecimal slot id
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$07DB:	LD	DE,0
+	LD	B,D
+	CALL	C.07C9			; parse digit
+	RET	C			; no digit, quit
+J$07E3:	CALL	C.07C9			; parse digit
+	CCF
+	RET	NC			; no digit, quit
+	EX	DE,HL
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL			; *16
+	LD	C,A
+	ADD	HL,BC			; + value
+I$07EF:	EX	DE,HL
+	INC	D
+	DEC	D
+	SCF
+	RET	NZ
+	INC	HL
+	JR	J$07E3			; next
+
+;	  Subroutine parse on/off operand
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.07F7:	LD	A,(HL)
+	AND	A
+	SCF
+	RET	Z
+	CALL	C.0799			; to upper
+	CP	"O"
+	SCF
+	RET	NZ
+	INC	HL
+	LD	A,(HL)
+	AND	A
+	SCF
+	RET	Z
+	CALL	C.0799			; to upper
+	CP	"N"
+	JR	Z,J$0825
+	CP	"F"
+	SCF
+	RET	NZ
+	INC	HL
+	LD	A,(HL)
+	AND	A
+	SCF
+	RET	Z
+	CALL	C.0799			; to upper
+	CP	"F"
+	SCF
+	RET	NZ
+	INC	HL
+	LD	A,(HL)
+	AND	A
+	SCF
+	RET	NZ
+	XOR	A
+	RET
+
+J$0825:	INC	HL
+	LD	A,(HL)
+	AND	A
+	SCF
+	RET	NZ
+	LD	A,0FFH
+	OR	A
+	RET
+
+;	  Subroutine parse command line arguments
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$082E:	LD	A,(D.1366)		; command line argument length
+	AND	A			; arguments specified ?
+	RET	Z			; nope, quit
+	LD	B,A			; store command line argument length
+	LD	HL,I.1367
+J$0837:	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)			; pointer to argument
+	INC	HL
+	LD	A,(DE)
+	CP	"-"
+	JR	Z,J$0844
+	CP	"/"
+	JR	NZ,J$0848
+J$0844:	INC	DE
+	CALL	C$084B			; parse option
+J$0848:	DJNZ	J$0837
+	RET
+
+;	  Subroutine parse option
+;	     Inputs  B = command line argument length left
+;	     Outputs ________________________
+
+C$084B:	PUSH	HL
+	PUSH	BC
+	LD	HL,I$11E2		; option table
+J$0850:	PUSH	DE
+J$0851:	LD	C,(HL)
+	INC	HL
+	INC	C
+	DEC	C			; end of option name ?
+	JR	Z,J$0869		; yep, handle option
+	LD	A,(DE)
+	INC	DE
+	CALL	C.0799			; to upper
+	CP	C			; still equal ?
+	JR	Z,J$0851		; yep, continue
+	POP	DE
+J$0860:	LD	A,(HL)
+	INC	HL
+	AND	A			; end of option name ?
+	JR	NZ,J$0860		; nope, continue to end of name
+	INC	HL
+	INC	HL			; skip over routine address
+	JR	J$0850			; try next option
+
+J$0869:	POP	DE
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A			; option routine
+	XOR	A
+	POP	BC
+	EX	(SP),HL
+	RET
+
+; HELP
+
+C.0872:	INC	A
+
+; SAVE
+
+C.0873:	INC	A
+
+; CUSTOMIZE
+
+C.0874:	INC	A
+
+; DISABLE
+
+C.0875:	INC	A
+
+; FORCE
+
+C.0876:	INC	A
+
+; ACTIVATE
+
+C.0877:	INC	A
+
+; INSTALL
+
+C.0878:	INC	A
+
+; INFO
+
+C.0879:	INC	A
+	LD	(D.12A2),A		; set option
+	RET
+
+;	  Subroutine AUTOSEARCH
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.087E:	LD	A,(D.12A3)
+	RES	0,A
+	LD	(D.12A3),A		; autosearch
+	RET
+
+;	  Subroutine check if argument specified
+;	     Inputs  B = command line argument length left
+;	     Outputs ________________________
+
+C.0887:	LD	A,B
+	DEC	A			; argument ?
+	SCF
+	RET	Z			; nope, quit
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)			; pointer to argument
+	INC	HL
+	DEC	B
+	OR	A
+	RET
+
+J.0892:	LD	E,"'"
+	CALL	C.0B52			; character to console output
+	EX	(SP),HL
+	CALL	C.0B78			; string to console output
+	POP	HL
+	CALL	C.0B78			; string to console output
+	JP	J.01A4			; quit program
+
+;	  Subroutine SLOT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.08A2:	CALL	C.0887			; check if argument specified
+	RET	C			; nope, quit
+	PUSH	BC
+	PUSH	HL
+	EX	DE,HL
+	LD	A,(D.12A3)
+	SET	0,A
+	LD	(D.12A3),A		; slot specified
+	PUSH	HL
+	LD	A,(HL)
+	CP	"#"
+	JR	Z,J$08C2
+	CALL	C$07DB			; parse hexdecimal slot id
+	JR	C,J.0904		; error, illegal slot
+	LD	A,(HL)
+	AND	A			; end of operand ?
+	JR	NZ,J.0904		; nop, illegal slot
+	JR	J.08EC
+
+J$08C2:	INC	HL
+	CALL	C.07AA			; parse numeric operand
+	JR	C,J.0904		; error, illegal slot
+	LD	A,E
+	CP	3+1			; valid primairy slot ?
+	JR	NC,J.0904		; nope, illegal slot
+	LD	A,(HL)
+	AND	A			; end of operand ?
+	JR	Z,J.08EC		; yep,
+	CP	"-"			; seperator ?
+	JR	NZ,J.0904		; nope, illegal slot
+	INC	HL
+	PUSH	DE
+	CALL	C.07AA			; parse numeric operand
+	POP	BC
+	JR	C,J.0904		; error, illegal slot
+	LD	A,(HL)
+	AND	A			; end of operand ?
+	JR	NZ,J.0904		; nope, illegal slot
+	LD	A,E
+	CP	3+1			; valid secundairy slot
+	JR	NC,J.0904		; nope, illegal slot
+	ADD	A,A
+	ADD	A,A
+	ADD	A,C
+	SET	7,A
+	LD	E,A			; slot id
+J.08EC:	LD	A,E
+	AND	03H
+	LD	C,A
+	LD	B,0
+	LD	HL,EXPTBL
+	ADD	HL,BC
+	LD	A,(HL)
+	XOR	E
+	BIT	7,A
+	JR	NZ,J.0904
+	LD	A,E
+	LD	(D.12A1),A		; slotid RS232
+	POP	HL
+	POP	HL
+	POP	BC
+	RET
+
+J.0904:	LD	HL,I$0F11		; illegal slot
+	JP	J.0892
+
+;	  Subroutine CHANNEL
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.090A:	CALL	C.0887			; check if argument specified
+	RET	C			; nope, quit
+	PUSH	BC
+	PUSH	HL
+	EX	DE,HL
+	PUSH	HL
+	CALL	C.07AA			; parse numeric operand
+	JR	C,J.0933		; error,
+	LD	A,(HL)
+	AND	A			; end of operand ?
+	JR	NZ,J.0933		; nope,
+	LD	A,E
+	CP	3+1			; valid channel number ?
+	JR	NC,J.0933		; nope,
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A
+	ADD	A,A			; *16
+	LD	E,A
+	LD	D,0
+	LD	HL,I.12E6+3*16		; mask table channel 0
+	SBC	HL,DE
+	LD	(D.12A4),HL		; update pointer to selected channel mask table
+	POP	HL
+	POP	HL
+	POP	BC
+	RET
+
+J.0933:	LD	HL,I$0F2D		; illegal channel
+	JP	J.0892
+
+;	  Subroutine CLOCK
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0939:	CALL	C.0887			; check if argument specified
+	RET	C			; nope, quit
+	PUSH	BC
+	PUSH	HL
+	EX	DE,HL
+	PUSH	HL
+	CALL	C.07AA			; parse numeric operand
+	JR	C,J.0961
+	LD	A,(HL)
+	AND	A			; end of operand ?
+	JR	NZ,J.0961		; nope,
+	LD	A,E
+	AND	A			; valid clock (>= 1) ?
+	JR	Z,J.0961		; nope,
+	CP	14			; valid clock (<= 14) ?
+	JR	NC,J.0961		; nope,
+	LD	IX,(D.12A4)		; pointer to selected channel mask table
+	LD	(IX+64+1),A		; update clock (OR mask)
+	LD	(IX+1),0		; update clock (AND mask)
+	POP	HL
+	POP	HL
+	POP	BC
+	RET
+
+J.0961:	LD	HL,I$0F4C		; illegal clock
+	JP	J.0892
+
+;	  Subroutine FIFO
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0967:	CALL	C.0887			; check if argument specified
+	RET	C			; nope, quit
+	PUSH	BC
+	PUSH	HL
+	EX	DE,HL
+	PUSH	HL
+	CALL	C.07F7			; parse on/off operand
+	JR	C,J$098A		; nope, illegal fifo
+	LD	IX,(D.12A4)		; pointer to selected channel mask table
+	RES	0,(IX+64+2)		; FIFO disabled (OR mask)
+	JR	Z,J$0982
+	SET	0,(IX+64+2)		; FIFO enabled (OR mask)
+J$0982:	RES	0,(IX+2)		; FIFO enabled (AND mask)
+	POP	HL
+	POP	HL
+	POP	BC
+	RET
+
+J$098A:	LD	HL,I$0F69		; illegal fifo
+	JP	J.0892
+
+;	  Subroutine TRIGGERLEVEL
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0990:	CALL	C.0887			; check if argument specified
+	RET	C			; nope, quit
+	PUSH	BC
+	PUSH	HL
+	EX	DE,HL
+	PUSH	HL
+	CALL	C.07AA			; parse numeric operand
+	JR	C,J.09D2
+	LD	A,(HL)
+	AND	A			; end of operand ?
+	JR	NZ,J.09D2		; nope,
+	LD	A,E
+	CP	1			; tiggerlevel = 1 ?
+	JR	Z,J.09B2		; yep,
+	CP	4			; tiggerlevel = 4 ?
+	JR	Z,J.09B2		; yep,
+	CP	8			; tiggerlevel = 8 ?
+	JR	Z,J.09B2		; yep,
+	CP	14			; tiggerlevel = 14 ?
+	JR	NZ,J.09D2		; nope,
+J.09B2:	RLCA
+	RLCA
+	RLCA
+	RLCA
+	AND	0C0H
+	LD	E,A
+	LD	IX,(D.12A4)		; pointer to selected channel mask table
+	LD	A,(IX+64+2)
+	AND	3FH
+	OR	E
+	LD	(IX+64+2),A		; update triggerlevel (OR mask)
+	LD	A,(IX+2)
+	AND	3FH
+	LD	(IX+2),A		; update triggerlevel (AND mask)
+	POP	HL
+	POP	HL
+	POP	BC
+	RET
+
+J.09D2:	LD	HL,I$0F88		; illegal trigger
+	JP	J.0892
+
+;	  Subroutine AUTOFLOW
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.09D8:	CALL	C.0887			; check if argument specified
+	RET	C			; nope, quit
+	PUSH	BC
+	PUSH	HL
+	EX	DE,HL
+	PUSH	HL
+	CALL	C.07F7			; parse on/off operand
+	JR	C,J$09FB		; nope, illegal autoflow
+	LD	IX,(D.12A4)		; pointer to selected channel mask table
+	RES	5,(IX+64+3)		; autoflow disabled (OR mask)
+	JR	Z,J$09F3
+	SET	5,(IX+64+3)		; autoflow enabled (OR mask)
+J$09F3:	RES	5,(IX+3)		; autoflow enabled (AND mask)
+	POP	HL
+	POP	HL
+	POP	BC
+	RET
+
+J$09FB:	LD	HL,I$0FA6		; illegal autoflow
+	JP	J.0892
+
+;	  Subroutine INT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0A01:	CALL	C.0887			; check if argument specified
+	RET	C			; nope, quit
+	PUSH	BC
+	PUSH	HL
+	EX	DE,HL
+	PUSH	HL
+	CALL	C.07F7			; parse on/off operand
+	JR	C,J$0A24		; nope, illegal interrupt
+	LD	IX,(D.12A4)		; pointer to selected channel mask table
+	RES	3,(IX+64+3)		; OUT2=0 (OR mask)
+	JR	Z,J$0A1C
+	SET	3,(IX+64+3)		; OUT2=1 (OR mask)
+J$0A1C:	RES	3,(IX+3)		; OUT2 (AND mask)
+	POP	HL
+	POP	HL
+	POP	BC
+	RET
+
+J$0A24:	LD	HL,I$0FCA		; illegal interrupt
+	JP	J.0892
+
+;	  Subroutine default handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0A2A:	RET
+
+;	  Subroutine cleanup command line arguments
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$0A2B:	LD	C,6FH
+	CALL	BDOS
+	LD	A,B
+	CP	2			; MSXDOS 2 or higher ?
+	JR	C,J$0A43		; nope, use MSXDOS 1
+	LD	HL,I$147F
+	LD	DE,I.137F
+	LD	BC,256*0FFH+6BH
+	CALL	BDOS
+	JR	J$0A55
+
+J$0A43:	LD	HL,DBUF
+	LD	C,(HL)			; length commandline
+	INC	HL
+	LD	B,0
+	LD	DE,I.137F
+	LD	A,C
+	OR	B			; empty commandline ?
+	JR	Z,J$0A53		; yep, skip copy
+	LDIR
+J$0A53:	XOR	A
+	LD	(DE),A			; end of string
+J$0A55:	LD	B,0			; number of parameters = 0
+	LD	HL,I.1367		; start of table with pointers
+	LD	DE,I.137F		; start of commandline
+J.0A5D:	LD	A,(DE)
+	INC	DE
+	AND	A			; end of string ?
+	JR	Z,J.0AA6		; yep,
+	CP	13			; cr ?
+	JR	Z,J.0AA6		; yep,
+	CP	9			; tab ?
+	JR	Z,J.0A5D		; yep, skip it
+	CP	" "			; space ?
+	JR	Z,J.0A5D		; yep, skip it
+	DEC	DE
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D
+	INC	HL			; store pointer
+	INC	B			; update number of parameters
+J$0A74:	LD	A,(DE)
+	AND	A			; end of string ?
+	JR	Z,J.0AA4		; yep, quit
+	CP	13			; cr ?
+	JR	Z,J.0AA4		; yep, quit
+	CP	9			; tab ?
+	JR	Z,J.0A8B		; yep,
+	CP	" "			; space ?
+	JR	Z,J.0A8B		; yep,
+	CP	","			; seperator ?
+	JR	Z,J$0A9F		; yep,
+	INC	DE
+	JR	J$0A74			; continue
+
+J.0A8B:	XOR	A
+	LD	(DE),A			; end of parameter
+	INC	DE
+J.0A8E:	LD	A,(DE)
+	INC	DE
+	CP	9			; tab ?
+	JR	Z,J.0A8E		; yep, skip it
+	CP	" "			; space ?
+	JR	Z,J.0A8E		; yep, skip it
+	CP	","			; seperator ?
+	JR	Z,J.0A5D		; yep, next parameter
+	DEC	DE
+	JR	J.0A5D			; next parameter
+
+J$0A9F:	XOR	A
+	LD	(DE),A			; end of parameter
+	INC	DE
+	JR	J.0A5D			; next parameter
+
+J.0AA4:	XOR	A
+	LD	(DE),A			; end of parameter
+J.0AA6:	LD	A,B
+	LD	(D.1366),A		; command line argument length
+	RET
+
+;	  Subroutine BCD buffer to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0AAB:	LD	IX,I.148A
+	LD	D,0			; no digit to console output yet
+	LD	BC,5*256+2
+J$0AB4:	DEC	C
+	CALL	Z,C.0B0F
+	LD	A,(IX+0)
+	RRCA
+	RRCA
+	RRCA
+	RRCA
+	AND	0FH
+	LD	E,A			; high nibble = 0
+	OR	D			; AND no digit to console output yet
+	LD	D,A
+	CALL	NZ,C.0B60		; nope, hexadecimal digit to console output
+	DEC	C
+	CALL	Z,C.0B0F
+	LD	A,(IX+0)
+	AND	0FH
+	LD	E,A			; low nibble = 0
+	OR	D			; AND no digit to console output yet
+	LD	D,A
+	CALL	NZ,C.0B60		; nope, hexadecimal digit to console output
+	INC	IX
+	DJNZ	J$0AB4			; next byte
+	INC	D
+	DEC	D			; no digit to console output yet ?
+	RET	NZ			; nope, quit
+	LD	E,D
+	CALL	C.0B60			; hexadecimal digit to console output
+	RET
+
+;	  Subroutine hexadecimal digits to console output
+;	     Inputs  A = number of digits
+;	     Outputs ________________________
+
+C$0AE2:	LD	IX,I.148A
+	NEG
+	ADD	A,10
+	LD	D,A
+	LD	BC,5*256+0
+J$0AEE:	LD	A,(IX+0)
+	RRCA
+	RRCA
+	RRCA
+	RRCA
+	AND	0FH
+	DEC	D
+	BIT	7,D
+	LD	E,A
+	CALL	NZ,C.0B60		; hexadecimal digit to console output
+	LD	A,(IX+0)
+	AND	0FH
+	DEC	D
+	BIT	7,D
+	LD	E,A
+	CALL	NZ,C.0B60		; hexadecimal digit to console output
+	INC	IX
+	DJNZ	J$0AEE
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+;
+C.0B0F:	LD	C,3
+	INC	D
+	DEC	D
+	RET	Z
+	LD	E,","
+	CALL	C.0B52			; character to console output
+	RET
+
+;	  Subroutine convert to BCD in buffer
+;	     Inputs  E = byte
+;	     Outputs ________________________
+
+C.0B1A:	CALL	C.0B32			; clear BCD byte buffer
+	LD	C,8			; 8 bits
+J$0B1F:	SLA	E			; shift b7 in Cx
+	LD	B,2			; 2 BCD bytes
+	CALL	C$0B41
+	DEC	C
+	JR	NZ,J$0B1F
+	RET
+
+;	  Subroutine initialize BCD byte buffer
+;	     Inputs  E = byte
+;	     Outputs ________________________
+
+C$0B2A:	CALL	C.0B32			; clear BCD byte buffer
+	LD	A,E
+	LD	(I.148A+4),A
+	RET
+
+;	  Subroutine clear byte buffer
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0B32:	LD	IX,I.148A
+	LD	B,5
+	XOR	A
+J$0B39:	LD	(IX+0),A
+	INC	IX
+	DJNZ	J$0B39
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$0B41:	LD	IX,I.148A+4
+J$0B45:	LD	A,(IX+0)
+	ADC	A,A
+	DAA
+	LD	(IX+0),A
+	DEC	IX
+	DJNZ	J$0B45
+	RET
+
+;	  Subroutine character to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0B52:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	C,2
+	CALL	BDOS	; fcn02= Console Output 
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+	RET
+
+;	  Subroutine hexadecimal digit to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0B60:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	A,E
+	ADD	A,"0"
+	CP	'9'+1
+	JR	C,J$0B6D
+	ADD	A,7
+J$0B6D:	LD	E,A
+	LD	C,2
+	CALL	BDOS	; fcn02= Console Output 
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+	RET
+
+;	  Subroutine string to console output
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.0B78:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+J$0B7C:	LD	A,(HL)
+	AND	A
+	JR	Z,J$0B8B
+	PUSH	HL
+	LD	E,A
+	LD	C,2
+	CALL	BDOS	; fcn02= Console Output 
+	POP	HL
+	INC	HL
+	JR	J$0B7C
+
+J$0B8B:	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+	RET
+
+;	  Subroutine divide
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$0B90:	LD	HL,0
+	LD	A,16
+J$0B95:	SLA	E
+	RL	D
+	ADC	HL,HL
+	SBC	HL,BC
+	JR	C,J$0BA2
+	INC	E
+	JR	J$0BA3
+
+J$0BA2:	ADD	HL,BC
+J$0BA3:	DEC	A
+	JR	NZ,J$0B95
+	RET
+
+	DEFS	89,0
+
+I$0C00:	DEFM	'RS-232C BIOS installer version 1.30',13,10
+	DEFM	'Copyright (C) 1996,1997 Taro Kashiwazaki.',13,10
+	DEFM	'All rights reserved.',13,10
+	DEFB	13,10
+	DEFB	0
+
+I$0C69:	DEFM	'Switch ''-?'' for help.',13,10
+	DEFB	0
+
+I$0C81:	DEFM	'Usage : RSINST '
+	DEFM	'[switches]',13,10
+	DEFB	13,10
+	DEFM	'Switches :',13,10
+	DEFB	13,10
+	DEFM	'  To determine operation :',13,10
+	DEFM	'   -info -install -activate',13,10
+	DEFM	'   -force -disable -customize -save',13,10
+	DEFB	13,10
+	DEFM	'  To determine slot to operate :',13,10
+	DEFM	'   -autosearch -slot <SlotNo>',13,10
+	DEFB	13,10
+	DEFM	' '
+	DEFM	' To customize :',13,10
+	DEFM	'   -clock <1-10> -fifo <on|off>',13,10
+	DEFM	'   -triggerlevel <1|4|8|14>',13,10
+	DEFM	'   -autoflow <on|off> -int <on|off>',13,10
+	DEFB	13,10
+	DEFM	'  '
+	DEFM	'To show this message :',13,10
+	DEFM	'   -help -?',13,10
+	DEFB	0
+
+I$0DEE:	DEFM	'No'
+I$0DF0:	DEFM	' RS-232C cartridge(s) detected.',13,10
+	DEFB	0
+
+I.0E12:	DEFM	'No Fast RS-232C cartridge.',13,10
+	DEFB	0
+
+I$0E2F:	DEFB	13,10
+	DEFM	'Installation succeeded.',13,10
+	DEFB	0
+
+I$0E4B:	DEFB	13,10
+	DEFM	'RS-232C BIOS is customized.',13,10
+	DEFB	0
+
+I$0E6B:	DEFB	13,10
+	DEFM	'Cusomize parameter is saved.',13,10
+	DEFB	0
+
+I.0E8C:	DEFM	'Reset MSX to activate RS-232C BIOS.',13,10
+	DEFB	0
+
+I$0EB2:	DEFM	'RS-232C BIOS is activated.',13,10
+	DEFB	0
+
+I$0ECF:	DEFM	'RS-232C BIOS is ready to disable.',13,10
+	DEFM	'Reset MSX to disable really.',13,10
+	DEFB	0
+
+I$0F11:	DEFM	''' -- Illegal slot number.',13,10
+	DEFB	0
+
+I$0F2D:	DEFM	''' -'
+	DEFM	'- Illegal channel number.',13,10
+	DEFB	0
+
+I$0F4C:	DEFM	''' -- Illegal clock factor.',13,10
+	DEFB	0
+
+I$0F69:	DEFM	''' -- Illegal FIFO parameter.',13,10
+	DEFB	0
+
+I$0F88:	DEFM	''' -- Illegal trigger level.',13,10
+	DEFB	0
+
+I$0FA6:	DEFM	''' '
+	DEFM	'-- Illegal auto flow parameter.',13,10
+	DEFB	0
+
+I$0FCA:	DEFM	''' -- Illegal interrupt/exflow parameter.',13,10
+	DEFB	0
+
+I$0FF5:	DEFM	'Slot : '
+	DEFB	0
+
+I$0FFD:	DEFM	' (#'
+	DEFB	0
+
+I$1001:	DEFM	')',13,10
+	DEFB	0
+
+I$1005:	DEFM	'Type : '
+	DEFB	0
+
+I$100D:	DEFM	'Normal RS-232C',13,10
+	DEFB	0
+
+I$101E:	DEFM	'Fast RS-232C (BIOS:active)',13,10
+	DEFB	0
+
+I$103B:	DEFM	'Fast RS-232C (BIOS:inactive)',13,10
+	DEFB	0
+
+I$105A:	DEFM	'  Channel '
+	DEFB	0
+
+I$1065:	DEFM	' : '
+	DEFB	0
+
+I$1069:	DEFW	I.109E			; 0
+	DEFW	I.1073			; 1
+	DEFW	I.107F			; 2
+	DEFW	I.1089			; 3
+	DEFW	I.1094			; 4
+
+I.1073:	DEFM	'8250/16450 '
+	DEFB	0
+
+I.107F:	DEFM	'PC16550D '
+	DEFB	0
+
+I.1089:	DEFM	'TL16C550C '
+	DEFB	0
+
+I.1094:	DEFM	'TL16C750 '
+	DEFB	0
+
+I.109E:	DEFM	'None'
+
+I$10A2:	DEFB	13,10
+	DEFB	0
+
+I$10A5:	DEFM	'Unknown '
+	DEFB	0
+
+I$10AE:	DEFW	I.10CA
+	DEFW	I.10D4
+	DEFW	I.10E0
+	DEFW	I.10EC
+	DEFW	I.10F8
+	DEFW	I.1104
+	DEFW	I.110F
+	DEFW	I.111C
+	DEFW	I.1129
+	DEFW	I.1136
+	DEFW	I.1143
+	DEFW	I.114F
+	DEFW	I.115C
+	DEFW	I.1169
+
+I.10CA:	DEFM	'?????Hz',13,10
+	DEFB	0
+
+I.10D4:	DEFM	'1.8432MHz',13,10
+	DEFB	0
+
+I.10E0:	DEFM	'3.6864MHz',13,10
+	DEFB	0
+
+I.10EC:	DEFM	'5.5296MHz',13,10
+	DEFB	0
+
+I.10F8:	DEFM	'7.3728MHz',13,10
+	DEFB	0
+
+I.1104:	DEFM	'9.216MHz',13,10
+	DEFB	0
+
+I.110F:	DEFM	'11.0592MHz',13,10
+	DEFB	0
+
+I.111C:	DEFM	'12.9024MHz',13,10
+	DEFB	0
+
+I.1129:	DEFM	'14.7456MHz',13,10
+	DEFB	0
+
+I.1136:	DEFM	'16.5888MHz',13,10
+	DEFB	0
+
+I.1143:	DEFM	'18.432MHz',13,10
+	DEFB	0
+
+I.114F:	DEFM	'20.2752MHz',13,10
+	DEFB	0
+
+I.115C:	DEFM	'22.1184MHz',13,10
+	DEFB	0
+
+I.1169:	DEFM	'23.9616MHz',13,10
+	DEFB	0
+
+I$1176:	DEFM	'    FIFO       : '
+	DEFB	0
+
+I$1188:	DEFM	'    Trig.level : '
+	DEFB	0
+
+I$119A:	DEFM	'    Auto flow  : '
+	DEFB	0
+
+I$11AC:	DEFM	'    Int/ExFlow : '
+	DEFB	0
+
+I$11BE:	DEFM	'ON',13,10
+	DEFB	0
+
+I$11C3:	DEFM	'OFF',13,10
+	DEFB	0
+
+I$11C9:	DEFW	I.11D1
+	DEFW	I.11D5
+	DEFW	I.11D9
+	DEFW	I.11DD
+
+I.11D1:	DEFM	'1',13,10
+	DEFB	0
+
+I.11D5:	DEFM	'4',13,10
+	DEFB	0
+
+I.11D9:	DEFM	'8',13,10
+	DEFB	0
+
+I.11DD:	DEFM	'14',13,10
+	DEFB	0
+
+I$11E2:	DEFM	'INFO',0
+	DEFW	C.0879
+	DEFM	'INSTALL',0
+	DEFW	C.0878
+	DEFM	'ACTIVATE',0
+	DEFW	C.0877
+	DEFM	'FORCE',0
+	DEFW	C.0876
+	DEFM	'DISABLE',0
+	DEFW	C.0875
+	DEFM	'CUSTOMIZE',0
+	DEFW	C.0874
+	DEFM	'SAVE',0
+	DEFW	C.0873
+	DEFM	'HELP',0
+	DEFW	C.0872
+	DEFM	'?',0
+	DEFW	C.0872
+	DEFM	'AUTOSEARCH',0
+	DEFW	C.087E
+	DEFM	'SLOT',0
+	DEFW	C.08A2
+	DEFM	'CHANNEL',0
+	DEFW	C.090A
+	DEFM	'CLOCK',0
+	DEFW	C.0939
+	DEFM	'FIFO',0
+	DEFW	C.0967
+	DEFM	'TRIGGERLEVEL',0
+	DEFW	C.0990
+	DEFM	'AUTOFLOW',0
+	DEFW	C.09D8
+	DEFM	'INT',0
+	DEFW	C.0A01
+	DEFB	0
+	DEFW	C.0A2A			; default handler
+
+I$127E:	DEFW	C.03E8			; 0	<no option>
+	DEFW	C.01A9			; 1	INFO
+	DEFW	C.024B			; 2	INSTALL
+	DEFW	C.0289			; 3	ACTIVATE
+	DEFW	C.02C4			; 4	FORCE
+	DEFW	C.0304			; 5	DISABLE
+	DEFW	C.033E			; 6	CUSTOMIZE
+	DEFW	C.033E			; 7	SAVE
+	DEFW	C.03DF			; 8	HELP
+
+I$1290:	DEFM	'RS-232C BIOS    '
+D.12A0:	DEFB	0			; number of MSX serial interfaces
+D.12A1:	DEFB	0			; slotid RS232
+D.12A2:	DEFB	0			; option
+D.12A3:	DEFB	0			; autosearch
+D.12A4:	DEFW	I.12E6+3*16		; mask table channel 0
+
+; current settings
+
+I.12A6:	DEFS	4*16,00H
+
+; settings AND mask table
+
+I.12E6:	DEFS	4*16,0FFH
+
+; settings OR mask table
+
+I.1326:	DEFS	4*16,00H
+
+D.1366:	DEFB	0			; command line argument length
+
+I.1367:	DEFS	12*2,0
+
+; command line argument
+
+I.137F:	DEFS	256,0
+
+I$147F:	DEFM	'PARAMETERS',0
+
+I.148A:	DEFB	0FFH
+	DEFB	0FFH
+	DEFB	0FFH
+	DEFB	0FFH
+	DEFB	0FFH
+
+I$148F:
+	.PHASE	04000H
+
+I$4000:	DEFM	'AB'			; extension header
+I$4002:	DEFW	C.4103			; extension init handler
+	DEFW	0			; extension statement handler
+	DEFW	0			; extension device handler
+	DEFW	0			; extension basic program
+	DEFS	6,0			; extension reserved
+
+I$4010:	DEFM	'RS-232C BIOS    '
+	DEFM	'version 1.30    '
+	DEFM	'Copyright (C)   '
+	DEFM	'1996,1997       '
+	DEFM	'Taro Kashiwazaki'
+	DEFM	'All rights      '
+	DEFM	'reserved        '
+
+; current settings
+
+I$4080:	DEFS	64,0
+
+; initial settings
+
+I$40C0:	DEFS	64,0
+
+;	  Subroutine EXTBIO handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$4100:	JP	J$41BD
+
+;	  Subroutine extension INIT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4103:	LD	HL,I$42AD
+J$4106:	LD	A,(HL)
+	INC	HL
+	AND	A
+	JR	Z,J$411A
+	PUSH	HL
+	LD	IX,CHPUT
+	LD	IY,(EXPTBL+0-1)
+	CALL	CALSLT
+	POP	HL
+	JR	J$4106
+
+J$411A:	LD	HL,I$40C0
+	LD	DE,I.7F80
+	LD	BC,4*16
+	LDIR				; update running channel settings with initial settings
+	LD	IX,I.7F80		; running channel settings channel 0
+	CALL	C$42C9			; initialize chipset of channel
+	IN	A,(0A8H)
+	RRCA
+	RRCA
+	AND	03H
+	LD	B,A
+	LD	HL,EXPTBL
+	ADD	A,L
+	LD	L,A
+	BIT	7,(HL)			; slot expanded ?
+	LD	A,B
+	JR	Z,J$4147		; nope,
+	INC	HL
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,(HL)
+	AND	0CH
+	OR	B
+	OR	80H
+J$4147:	LD	(D.7000),A		; store slot id
+	XOR	A
+	LD	(D.7006),A		; fast rs232 interrupt handler not activated
+	LD	HL,I.7010
+	LD	DE,I.7010+1
+	LD	BC,3*(3*4+1)-1
+	LD	(HL),0C9H
+	LDIR
+	LD	(D.700C+0),BC		; channel 0 + 1 not initialized
+	LD	(D.700C+2),BC		; channel 2 + 3 not initialized
+	LD	HL,HOKVLD
+	BIT	0,(HL)			; EXTBIO initialized ?
+	JR	NZ,J$4176		; yep, skip
+	SET	0,(HL)
+	LD	HL,EXTBIO
+	LD	B,5+24
+J$4171:	LD	(HL),0C9H
+	INC	HL
+	DJNZ	J$4171			; initialize EXTBIO,DISINT and ENAINT entries
+J$4176:	LD	HL,EXTBIO
+	LD	DE,J.7001
+	LD	BC,5
+	LDIR				; store old EXTBIO handler
+	LD	A,0F7H
+	DI
+	LD	(EXTBIO+0),A
+	LD	A,(D.7000)
+	LD	(EXTBIO+1),A
+	LD	HL,I$4100
+	LD	(EXTBIO+2),HL
+	LD	A,0C9H
+	LD	(EXTBIO+4),A		; install new EXTBIO handler
+	LD	HL,I$41A5
+	LD	DE,DISINT
+	LD	BC,S41A5
+	EI
+	LDIR				; install DISINT and ENAINT handlers
+	RET
+
+;	  Subroutine DISINT handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$41A5:	PUSH	DE
+	LD	E,2			; disable interrupt
+	JR	J$41AD
+
+;	  Subroutine ENAINT handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.41AA:	PUSH	DE
+	LD	E,3			; enable interrupt
+J$41AD:	LD	D,0			; broadcast device id
+	PUSH	IX
+	PUSH	IY
+	CALL	EXTBIO
+	EI
+	POP	IY
+	POP	IX
+	POP	DE
+	RET
+
+S41A5	EQU	$-I$41A5
+
+;	  Subroutine EXTBIO handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$41BD:	EI
+	PUSH	BC
+	PUSH	DE
+	PUSH	AF
+	LD	A,D
+	AND	A			; EXTBIO broadcast ?
+	JR	Z,J$41CF		; yep, handle
+	CP	8			; EXTBIO MSX serial ?
+	JR	Z,J$41F6		; yep, handle
+J.41C9:	POP	AF
+J$41CA:	POP	DE
+	POP	BC
+	JP	J.7001			; handle control to next EXTBIO handler
+
+J$41CF:	LD	A,E
+	AND	A			; build device name table ?
+	JR	Z,J$41DC		; yep, handle
+	SUB	2			; disable interrupt ?
+	JR	Z,J$41E8		; yep, handle
+	DEC	A			; enable interrupt ?
+	JR	Z,J$41EF		; yep, handle
+	JR	J.41C9			; handle control to next EXTBIO handler
+
+J$41DC:	LD	E,8			; MSX serial device id
+	CALL	C.4217			; write byte to slot
+	LD	E,0			; reserved
+	CALL	C.4217			; write byte to slot
+	JR	J.41C9			; handle control to next EXTBIO handler
+
+J$41E8:	PUSH	HL
+	CALL	C.701D			; disable RTS
+	POP	HL
+	JR	J.41C9			; handle control to next EXTBIO handler
+
+J$41EF:	PUSH	HL
+	CALL	C.702A			; enable RTS
+	POP	HL
+	JR	J.41C9			; handle control to next EXTBIO handler
+
+J$41F6:	LD	A,E
+	AND	A			; build a slot address table ?
+	JR	Z,J$41FF		; yep, handle
+	DEC	A			; return number of channels ?
+	JR	Z,J$4220		; yep, handle
+	JR	J.41C9			; handle control to next EXTBIO handler
+
+J$41FF:	LD	A,(D.7000)
+	LD	E,A			; slot id
+	CALL	C.4217			; write byte to slot
+	LD	E,LOW I.4526
+	CALL	C.4217			; write byte to slot
+	LD	E,HIGH I.4526		; jump table
+	CALL	C.4217			; write byte to slot
+	LD	E,0			; reserved
+	CALL	C.4217			; write byte to slot
+	JR	J.41C9			; handle control to next EXTBIO handler
+
+;	  Subroutine write byte to slot
+;	     Inputs  E = data, B = slotid, HL = address
+;	     Outputs ________________________
+
+C.4217:	LD	A,B
+	PUSH	BC
+	CALL	WRSLT
+	EI
+	POP	BC
+	INC	HL
+	RET
+
+;	  Subroutine return number of channels
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4220:	PUSH	HL
+	LD	BC,4*256+0		; 4 channels, no channels sofar
+	LD	HL,I.7F80		; running channel settings
+	LD	DE,16
+J$422A:	LD	A,(HL)
+	ADD	HL,DE
+	AND	A			; chipset found ?
+	JR	Z,J$4230		; nope, skip
+	INC	C			; update channels
+J$4230:	DJNZ	J$422A			; next channel
+	POP	HL
+	POP	AF
+	LD	A,C
+	JR	J$41CA			; handle control to next EXTBIO handler
+
+;	  Subroutine allocate channel
+;	     Inputs  A = channel
+;	     Outputs HL = offset
+
+C$4237:	LD	L,A
+	LD	H,0
+	LD	DE,D.700C
+	ADD	HL,DE
+	LD	A,(HL)
+	AND	A
+	SCF
+	RET	NZ
+	EX	DE,HL
+	XOR	A
+	LD	HL,D.700C
+	LD	B,4
+J$4249:	LD	C,(HL)
+	INC	HL
+	CP	C
+	JR	NC,J$424F
+	LD	A,C
+J$424F:	DJNZ	J$4249
+	EX	DE,HL
+	INC	A
+	LD	(HL),A
+	LD	HL,0
+	DEC	A
+	LD	E,A
+	LD	D,H
+	ADD	HL,DE
+	ADD	HL,DE
+	ADD	HL,DE
+	OR	A
+	RET
+
+;	  Subroutine deallocate channel
+;	     Inputs  A = channel
+;	     Outputs ________________________
+
+C$425F:	LD	L,A
+	LD	H,0
+	LD	DE,D.700C
+	ADD	HL,DE
+	LD	A,(HL)
+	AND	A			; channel initialized ?
+	RET	Z			; nope, quit
+	LD	(HL),0			; channel not initialized
+	LD	HL,0
+	DEC	A
+	LD	E,A
+	LD	D,H
+	ADD	HL,DE
+	ADD	HL,DE
+	ADD	HL,DE			; calculate channel offset
+	DI
+	LD	DE,I.7010		; interrupt handler
+	CALL	C.4289			; remove handler of channel
+	LD	DE,C.701D		; disable RTS handler
+	CALL	C.4289			; remove handler of channel
+	LD	DE,C.702A		; enable RTS handler
+	CALL	C.4289			; remove handler of channel
+	EI
+	RET
+
+;	  Subroutine remove handler of channel
+;	     Inputs  HL = channel offset
+;	     Outputs ________________________
+
+C.4289:	PUSH	HL
+	ADD	HL,DE
+	LD	(HL),0C9H
+	LD	BC,9
+J$4290:	LD	A,(DE)
+	CP	0C9H
+	JR	NZ,J$42A1
+	LD	L,E
+	LD	H,D
+	INC	HL
+	INC	HL
+	INC	HL
+	LDIR
+	LD	A,0C9H
+	LD	(DE),A
+	POP	HL
+	RET
+
+J$42A1:	INC	DE
+	INC	DE
+	INC	DE
+	DEC	BC
+	DEC	BC
+	DEC	BC
+	LD	A,C
+	OR	B
+	JR	NZ,J$4290
+	POP	HL
+	RET
+
+I$42AD:	DEFB	"RS-232C BIOS version 1.30",13,10
+	DEFB	0
+
+;	  Subroutine initialize chipset of channel
+;	     Inputs  IX = pointer to running channel settings
+;	     Outputs ________________________
+
+C$42C9:	XOR	A			; disable interrupts
+	LD	(IX+ (D.7FF9-I.7F80)),A	; IER
+	LD	A,(IX+50)
+	LD	(IX+ (D.7FFA-I.7F80)),A	; FCR
+	LD	A,(IX+51)
+	OR	01H			; DTR=1
+	LD	(IX+ (D.7FFC-I.7F80)),A	; MCR
+	LD	A,83H
+	LD	(IX+ (D.7FFB-I.7F80)),A	; DLAB=1, ..., 8 databits
+	LD	BC,1200			; baudrate = 1200 bps
+	EXX
+	LD	BC,0
+	EXX
+	CALL	C.4477			; calculate divisor
+	LD	A,L
+	LD	(IX+ (D.7FF8-I.7F80)),A	; divisor latch low byte
+	LD	A,H
+	LD	(IX+ (D.7FF9-I.7F80)),A	; divisor latch high byte
+	LD	A,3
+	LD	(IX+ (D.7FFB-I.7F80)),A	; DLAB=0, ..., 8 databits
+	RET
+
+;	  Subroutine initialize chipset channel with specified settings
+;	     Inputs  IX = pointer to running channel settings
+;	     Outputs ________________________
+
+C$42F9:	PUSH	IY
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	EX	AF,AF'
+	EXX
+	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	EX	AF,AF'
+	EXX
+	XOR	A			; disable interrupts
+	LD	(IX+ (D.7FF9-I.7F80)),A	; IER
+	LD	A,(IX+50)
+	LD	(IX+ (D.7FFA-I.7F80)),A	; FCR
+	LD	A,(IX+ (D.7FFC-I.7F80))	; MCR
+	AND	28H			; keep loopback, keep OUT1, clear OUT2, clear RTS
+	OR	01H			; DTR=1
+	OR	(IX+51)
+	LD	(IX+ (D.7FFC-I.7F80)),A	; MCR
+	LD	C,0
+	CALL	C.445F			; read from slot (number of data bits)
+	SUB	"5"
+	JR	NC,J$432C
+	LD	A,3			; 8 bit data
+	SET	7,C			; set error flag
+	JR	J.4334
+
+J$432C:	CP	3+1
+	JR	C,J.4334
+	LD	A,3			; 8 bit data
+	SET	7,C			; set error flag
+J.4334:	OR	C
+	LD	C,A
+	CALL	C.445F			; read from slot (parity type)
+	CP	"N"
+	JR	Z,J.4357
+	SET	3,C			; PEN=1 (parity enabled)
+	CP	"E"
+	JR	NZ,J$4347
+	SET	4,C			; EPS=1 (even parity)
+	JR	J.4357
+
+J$4347:	CP	"O"
+	JR	Z,J.4357
+	CP	"I"
+	JR	NZ,J$4353
+	SET	5,C			; stick parity
+	JR	J.4357
+
+J$4353:	RES	3,C			; PEN=0 (parity disabled)
+	SET	7,C			; DLAB=0
+J.4357:	CALL	C.445F			; read from slot (parity bits)
+	CP	"1"
+	JR	Z,J.4370
+	CP	"2"
+	JR	NZ,J$4366
+	SET	2,C			; STB=1
+	JR	J.4370
+
+J$4366:	CP	"3"
+	JR	NZ,J$436E
+	SET	2,C			; STB=1
+	JR	J.4370
+
+J$436E:	SET	7,C			; set error flag
+J.4370:	LD	A,C
+	RES	7,A			; DLAB=0
+	LD	(IX+ (D.7FFB-I.7F80)),A	; LCR
+	CALL	C.445F			; read from slot (XON/XOFF control)
+	CP	"X"
+	JR	NZ,J$4381
+	LD	A,0FFH
+	JR	J$4388
+
+J$4381:	CP	"N"
+	JR	Z,J$4387
+	SET	7,C			; set error flag
+J$4387:	XOR	A
+J$4388:	LD	(IX-80),A
+	CALL	C.445F			; read from slot (CTS/RTS handshake)
+	CP	"H"
+	JR	NZ,J$4396
+	LD	A,0FFH
+	JR	J$439D
+
+J$4396:	CP	"N"
+	JR	Z,J$439C
+	SET	7,C			; set error flag
+J$439C:	XOR	A
+J$439D:	LD	(IX-79),A
+	CALL	C.445F			; read from slot (auto LF receive)
+	CP	"A"
+	JR	NZ,J$43AB
+	LD	A,0FFH
+	JR	J$43B2
+
+J$43AB:	CP	"N"
+	JR	Z,J$43B1
+	SET	7,C			; set error flag
+J$43B1:	XOR	A
+J$43B2:	LD	(IX-78),A
+	CALL	C.445F			; read from slot (auto LF send)
+	CP	"A"
+	JR	NZ,J$43C0
+	LD	A,0FFH
+	JR	J$43C7
+
+J$43C0:	CP	"N"
+	JR	Z,J$43C6
+	SET	7,C			; set error flag
+J$43C6:	XOR	A
+J$43C7:	LD	(IX-77),A
+	CALL	C.445F			; read from slot (SI/SO control)
+	CP	"S"
+	JR	NZ,J$43D5
+	LD	A,0FFH
+	JR	J$43DC
+
+J$43D5:	CP	"N"
+	JR	Z,J$43DB
+	SET	7,C			; set error flag
+J$43DB:	XOR	A
+J$43DC:	LD	(IX-76),A
+	CALL	C.445F			; read from slot (low byte baudrate)
+	LD	E,A
+	PUSH	DE
+	CALL	C.445F			; read from slot (high byte baudrate)
+	POP	DE
+	PUSH	HL
+	PUSH	BC
+	LD	C,E
+	LD	B,A			; baudrate
+	BIT	7,B			; absolute 8253 value ?
+	JR	Z,J$4419		; nope,
+	LD	HL,8000H-23
+	ADD	HL,BC			; < 8017H ?
+	JR	NC,J$4403		; yep,
+	LD	A,B
+	CPL
+	LD	B,A
+	LD	A,C
+	CPL
+	LD	C,A
+	INC	BC
+	CALL	C$446C
+	OR	A
+	JR	J$4421
+
+J$4403:	LD	BC,23
+	ADD	HL,BC
+	ADD	HL,HL
+	ADD	HL,HL
+	LD	BC,I$44CA
+	ADD	HL,BC
+	LD	C,(HL)
+	INC	HL
+	LD	B,(HL)
+	INC	HL
+	LD	A,(HL)
+	EXX
+	LD	C,A
+	LD	B,0
+	EXX
+	JR	J$441E
+
+J$4419:	EXX
+	LD	BC,0
+	EXX
+J$441E:	CALL	C.4477			; calculate divisor
+J$4421:	EX	DE,HL
+	POP	BC
+	RRA
+	OR	C
+	LD	C,A
+	SET	7,(IX+ (D.7FFB-I.7F80))	; DLAB=1
+	LD	A,E
+	LD	(IX+ (D.7FF8-I.7F80)),A	; divisor latch low byte
+	LD	A,D
+	LD	(IX+ (D.7FF9-I.7F80)),A	; divisor latch high byte
+	RES	7,(IX+ (D.7FFB-I.7F80))	; DLAB=0
+	POP	HL
+	INC	HL
+	INC	HL
+	CALL	C.445F			; read from slot (timeout counter)
+	LD	L,A
+	LD	H,0
+	ADD	HL,HL
+	ADD	HL,HL			; *4
+	LD	E,L
+	LD	D,H
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL
+	ADD	HL,HL			; *64
+	SBC	HL,DE			; *60
+	LD	(IX-75),L
+	LD	(IX-74),H
+	RLC	C			; errorflag in Cx
+	EX	AF,AF'
+	EXX
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+	EX	AF,AF'
+	EXX
+	POP	HL
+	POP	DE
+	POP	BC
+	POP	IY
+	RET
+
+;	  Subroutine read from slot
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.445F:	PUSH	IX
+	LD	A,B
+	PUSH	BC
+	CALL	RDSLT
+	EI
+	POP	BC
+	INC	HL
+	POP	IX
+	RET
+
+;	  Subroutine __________________________
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$446C:	LD	A,(IX+49)		; clock speed
+	LD	HL,0
+J$4472:	ADD	HL,BC
+	DEC	A
+	JR	NZ,J$4472
+	RET
+
+;	  Subroutine calculate divisor
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4477:	EXX
+	PUSH	BC
+	EXX
+	PUSH	BC
+	LD	BC,0C200H
+	LD	A,(IX+49)
+	LD	L,A
+	LD	H,0			; clock speed
+	ADD	HL,HL
+	EX	DE,HL
+	EXX
+	LD	BC,1
+	LD	DE,0
+	EXX
+	CALL	C$47A0			; 32 bit multiply
+	EX	DE,HL
+	POP	BC
+	EXX
+	EX	DE,HL
+	POP	BC
+	EXX
+	CALL	C$47C3			; 32 bit divide
+	LD	A,E
+	AND	01H
+	OR	L
+	OR	H
+	EXX
+	OR	L
+	OR	H
+	EXX
+	LD	HL,1
+	ADD	HL,DE
+	EXX
+	LD	HL,0
+	ADC	HL,DE
+	RR	H
+	RR	L
+	OR	L
+	OR	H
+	EXX
+	RR	H
+	RR	L
+	AND	A
+	RET	Z
+	XOR	A
+	EX	DE,HL
+	LD	HL,85EEH
+	ADD	HL,BC
+	OR	L
+	OR	H
+	EXX
+	OR	C
+	OR	B
+	EXX
+	EX	DE,HL
+	RET	Z
+	SCF
+	RET
+
+I$44CA:	DEFW	0EAE9H,1
+	DEFW	0F400H,1
+	DEFW	00249H,2
+	DEFW	01C00H,2
+	DEFW	03280H,2
+	DEFW	05800H,2
+	DEFW	082DBH,2
+	DEFW	0A300H,2
+	DEFW	0D000H,2
+	DEFW	0EE00H,2
+	DEFW	0036EH,3
+	DEFW	08400H,3
+	DEFW	03800H,4
+	DEFW	06500H,4
+	DEFW	0B000H,4
+	DEFW	04600H,5
+	DEFW	0DC00H,5
+	DEFW	00800H,7
+	DEFW	0CA00H,8
+	DEFW	08C00H,10
+	DEFW	01000H,14
+	DEFW	09400H,17
+	DEFW	01800H,21
+
+I.4526:	DEFB	30H		; +00 MSX serial features (no TxReady INT, No Sync detect, No Timer INT, CD, RI)
+	DEFB	0		; +01 MSX serial version (version 1.0)
+	DEFB	0		; +02 reserved
+	JP	J$45C6		; +03 RS232.INIT
+	JP	J$45D2		; +06 RS232.OPEN
+	JP	J$4674		; +09 RS232.STAT
+	JP	J$468E		; +0C RS232.GETCHR
+	JP	J.46DA		; +0F RS232.SNDCHR
+	JP	J$4702		; +12 RS232.CLOSE
+	JP	J$4726		; +15 RS232.EOF
+	JP	J$472B		; +18 RS232.LOC
+	JP	J$475A		; +1B RS232.LOF
+	JP	J$4782		; +1E RS232.BACKUP
+	JP	J$478C		; +21 RS232.SNDBRK
+	JP	J$478E		; +24 RS232.DTR
+	JP	J$479F		; +27 RS232.SETCHN
+	RET			; +2A future
+	RET
+	RET
+	RET			; +2D future
+	RET
+	RET
+
+;	  Subroutine interrupt handler
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+I$4556:	CALL	C$455C			; receive bytes(s) if data ready
+	JP	J.7007			; next H.KEYI handler
+
+;	  Subroutine receive bytes(s) if data ready
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$455C:	LD	A,(D.7FFD)
+	LD	B,A			; receive status
+	RRCA				; data ready ?
+	RET	NC			; nope, quit
+
+;	  Subroutine receive byte(s)
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4562:	LD	A,(D.7FF8)
+	LD	C,A			; receive byte from FIFO
+	LD	HL,(D.7F70)		; space left in receive buffer
+	LD	A,L
+	AND	80H
+	OR	H
+	JR	Z,J.45AB
+	EX	DE,HL
+	LD	HL,(D.7F72)		; receive buffer put pointer
+	LD	(HL),C			; store byte
+	INC	HL
+	LD	(HL),B			; store receive status
+	INC	HL
+	RES	4,H
+	EX	DE,HL
+	DEC	HL
+	LD	BC,256
+	SBC	HL,BC
+	CALL	Z,C.45B6		; yep, disable RTS
+	ADD	HL,BC
+J$4584:	LD	A,(D.7FFD)
+	LD	B,A			; receive status
+	RRCA				; data ready ?
+	JR	NC,J$45A3		; nope,
+	LD	A,(D.7FF8)		; receive byte from FIFO
+	EX	DE,HL
+	LD	(HL),A			; store byte
+	INC	HL
+	LD	(HL),B			; store receive status
+	INC	HL
+	RES	4,H
+	EX	DE,HL
+	DEC	HL
+	LD	BC,256
+	OR	A
+	SBC	HL,BC
+	CALL	Z,C.45B6		; yep, disable RTS
+	ADD	HL,BC
+	JR	J$4584
+
+J$45A3:	LD	(D.7F72),DE		; update receive buffer put pointer
+	LD	(D.7F70),HL		; update space left in receive buffer
+	RET
+
+J.45AB:	LD	A,(D.7FFD)
+	LD	B,A
+	RRCA				; data ready ?
+	RET	NC			; nope, quit
+	LD	A,(D.7FF8)		; receive byte from FIFO
+	JR	J.45AB
+
+;	  Subroutine disable RTS
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.45B6:	PUSH	HL
+	LD	HL,D.7FFC
+	RES	1,(HL)			; RTS=0
+	POP	HL
+	RET
+
+;	  Subroutine enable RTS
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.45BE:	PUSH	HL
+	LD	HL,D.7FFC
+	SET	1,(HL)			; RTS=1
+	POP	HL
+	RET
+
+;	  Subroutine RS232.INIT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$45C6:	PUSH	IX
+	LD	IX,I.7F80		; running channel settings channel 0
+	CALL	C$42F9			; initialize chipset channel with specified settings
+	POP	IX
+	RET
+
+;	  Subroutine RS232.OPEN
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$45D2:	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	(D$7F37),HL		; store FCB
+	LD	B,0
+	LD	(D.7F39),BC		; store FCB buffer size
+	LD	A,E
+	LD	(D.7F3B),A		; store FCB mode
+	CP	1			; input mode ?
+	JR	Z,J.45EF
+	CP	2			; output mode ?
+	JR	Z,J.45EF
+	CP	4			; raw mode ?
+	JR	Z,J.45EF		; yep,
+	SCF				; set error flag
+J.45EF:	PUSH	AF
+	XOR	A
+	LD	(D$7F78),A		; clear flags
+	LD	(D.7F76),A		; clear backup byte flag
+	LD	(D$7F7A),A		; clear ?
+	LD	HL,2048
+	LD	(D.7F70),HL		; space left in receive buffer = 2048
+	LD	HL,I.6000
+	LD	(D.7F72),HL		; receive buffer put pointer = start of receive buffer
+	LD	(D.7F74),HL		; receive buffer get pointer = start of receive buffer
+	XOR	A
+	LD	(D.7F79),A		; send FIFO space left = 0
+	LD	A,(D.7006)
+	AND	A			; fast rs232 interrupt handler activated ?
+	JR	NZ,J$463A		; yep, skip
+	CPL
+	LD	(D.7006),A		; fast rs232 interrupt handler activated
+	LD	HL,H.KEYI
+	LD	DE,J.7007
+	LD	BC,5
+	LDIR				; store old H.KEYI handler
+	LD	A,0F7H
+	DI
+	LD	(H.KEYI+0),A
+	LD	A,(D.7000)
+	LD	(H.KEYI+1),A
+	LD	HL,I.7010
+	LD	(H.KEYI+2),HL
+	LD	A,0C9H
+	EI
+	LD	(H.KEYI+4),A		; install new H.KEYI handler
+J$463A:	XOR	A			; channel = 0
+	CALL	C$4237			; allocate channel
+	JR	C,J$465B		; channel already initailized, skip
+	LD	DE,I.7010		; channel interrupt handler
+	LD	BC,I$4556		; interrupt handler
+	CALL	C.466A			; install handler of channel
+	LD	DE,C.701D
+	LD	BC,C.45B6		; disable RTS routine
+	CALL	C.466A			; install handler of channel
+	LD	DE,C.702A
+	LD	BC,C.45BE		; enable RTS routine
+	CALL	C.466A			; install handler of channel
+J$465B:	LD	HL,D.7FF9
+	LD	(HL),01H		; enable receive interrupt
+	INC	HL
+	INC	HL
+	INC	HL
+	SET	1,(HL)			; RTS=1
+	POP	AF
+	POP	HL
+	POP	DE
+	POP	BC
+	RET
+
+;	  Subroutine install handler of channel
+;	     Inputs  HL = channel offset
+;	     Outputs ________________________
+
+C.466A:	PUSH	HL
+	ADD	HL,DE
+	LD	(HL),0CDH
+	INC	HL
+	LD	(HL),C
+	INC	HL
+	LD	(HL),B
+	POP	HL
+	RET
+
+;	  Subroutine RS232.STAT
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4674:	PUSH	AF
+	LD	A,(D.7FFE)
+	LD	L,A
+	XOR	A
+	LD	H,A
+	RLC	L
+	RRA
+	RLC	L
+	RRA
+	RRCA
+	RLC	L
+	RRA
+	RRCA
+	RRCA
+	RRCA
+	RLC	L
+	RRA
+	LD	L,A
+	POP	AF
+	RET
+
+;	  Subroutine RS232.GETCHR
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$468E:	DI
+	LD	A,(D.7FFD)
+	BIT	0,A			; data ready ?
+	JR	Z,J$46A0		; nope,
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	B,A
+	CALL	C.4562			; receive byte(s)
+	POP	HL
+	POP	DE
+	POP	BC
+J$46A0:	EI
+	LD	A,(D.7F76)
+	AND	A			; backup byte ?
+	JR	Z,J$46AF		; nope,
+	XOR	A
+	LD	(D.7F76),A		; clear backup byte flag
+	LD	A,(D.7F77)		; backup byte
+	RET
+
+J$46AF:	PUSH	DE
+	PUSH	HL
+	LD	HL,2048
+	DI
+	LD	DE,(D.7F70)		; space left in receive buffer
+	SBC	HL,DE			; receive buffer empty ?
+	JR	Z,J$46D6		; yep, quit
+	INC	DE
+	EI
+	LD	(D.7F70),DE		; update space left in receive buffer
+	LD	HL,(D.7F74)		; receive buffer get pointer
+	LD	A,(HL)			; get byte
+	INC	HL
+	INC	HL
+	RES	4,H
+	LD	(D.7F74),HL		; update receive buffer get pointer
+	LD	HL,512
+	SBC	HL,DE
+	CALL	Z,C.45BE		; yep, enable RTS
+J$46D6:	EI
+	POP	HL
+	POP	DE
+	RET
+
+;	  Subroutine RS232.SNDCHR
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J.46DA:	EI
+	PUSH	HL
+	PUSH	AF
+J$46DD:	LD	A,(D.7FFE)
+	BIT	4,A			; CTS ?
+	JR	Z,J$46DD		; nope, wait
+	LD	A,(D.7F79)
+	AND	A			; space left in send FIFO ?
+	JR	NZ,J$46F3		; yep,
+J$46EA:	LD	A,(D.7FFD)
+	BIT	5,A			; THR empty ?
+	JR	Z,J$46EA		; nope, wait
+	LD	A,16
+J$46F3:	DEC	A
+	LD	(D.7F79),A		; update send FIFO space left
+	POP	AF
+	LD	(D.7FF8),A		; put byte in send FIFO
+	LD	L,A
+	LD	A,0FFH
+	OR	A			; clear Cx, clear Zx
+	LD	A,L
+	POP	HL
+	RET
+
+;	  Subroutine RS232.CLOSE
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4702:	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	HL,D.7FFC
+	RES	1,(HL)			; RTS=0
+	DEC	HL
+	DEC	HL
+	DEC	HL
+	LD	(HL),0			; disable interrupts
+	XOR	A			; channel = 0
+	CALL	C$425F			; deallocate channel
+	POP	HL
+	POP	DE
+	POP	BC
+	LD	A,(D.7F3B)		; FCB mode
+	CP	2			; output mode ?
+	JR	Z,J$4721		; yep,
+	LD	A,0FFH
+	OR	A			; clear Cx, clear Zx
+	RET
+
+J$4721:	LD	A,1AH			; EOF
+	JP	J.46DA			; RS232.SNDCHR
+
+;	  Subroutine RS232.EOF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4726:	LD	HL,0
+	OR	A			; clear Cx
+	RET
+
+;	  Subroutine RS232.LOC
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$472B:	PUSH	DE
+	DI
+	LD	A,(D.7FFD)
+	BIT	0,A			; data ready ?
+	JR	Z,J$473A		; nope, skip
+	PUSH	BC
+	LD	B,A
+	CALL	C.4562			; receive byte(s)
+	POP	BC
+J$473A:	EI
+	LD	HL,2048
+	LD	DE,(D.7F70)		; space left in receive buffer
+	OR	A
+	SBC	HL,DE
+	LD	DE,(D.7F39)		; FCB buffer size
+	SBC	HL,DE
+	JR	C,J$4750
+	LD	HL,0
+J$4750:	ADD	HL,DE
+	LD	A,(D.7F76)
+	AND	A			; backup byte ?
+	JR	Z,J$4758		; nope,
+	INC	HL			; yep, 1 extra
+J$4758:	POP	DE
+	RET
+
+;	  Subroutine RS232.LOF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$475A:	PUSH	DE
+	DI
+	LD	A,(D.7FFD)
+	BIT	0,A			; data ready ?
+	JR	Z,J$4769		; nope,
+	PUSH	BC
+	LD	B,A
+	CALL	C.4562			; receive byte(s)
+	POP	BC
+J$4769:	EI
+	LD	HL,2048
+	LD	DE,(D.7F70)		; space left in receive buffer
+	OR	A
+	SBC	HL,DE
+	EX	DE,HL
+	LD	HL,(D.7F39)		; FCB buffer size
+	SBC	HL,DE
+	JR	NC,J$477F
+	LD	HL,0
+J$477F:	INC	HL
+	POP	DE
+	RET
+
+;	  Subroutine RS232.BACKUP
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$4782:	LD	A,C
+	LD	(D.7F77),A		; store backup byte
+	LD	A,0FFH
+	LD	(D.7F76),A		; set backup byte flag
+	RET
+
+;	  Subroutine RS232.SNDBRK
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$478C:	OR	A
+	RET
+
+;	  Subroutine RS232.DTR
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$478E:	PUSH	AF
+	PUSH	HL
+	LD	HL,D.7FFC
+	AND	A
+	JR	Z,J$479A
+	SET	0,(HL)			; DTR=1
+	JR	J$479C
+
+J$479A:	RES	0,(HL)			; DTR=0
+J$479C:	POP	HL
+	POP	AF
+	RET
+
+;	  Subroutine RS232.SETCHN
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+J$479F:	RET
+
+;	  Subroutine 32 bit multiply
+;	     Inputs  DE'DE = 32 bits integer, BC'BC = 32 bits integer
+;	     Outputs ________________________
+
+C$47A0:	LD	HL,0
+	EXX
+	LD	HL,0
+	EXX				; HL'HL=0
+	LD	A,32			; 32 bits
+J$47AA:	ADD	HL,HL			; shift out HL
+	EXX
+	ADC	HL,HL			; shift in HL'
+	EXX
+	EX	DE,HL
+	ADD	HL,HL
+	EX	DE,HL			; shift out DE
+	EXX
+	EX	DE,HL
+	ADC	HL,HL
+	EX	DE,HL			; shift in DE'
+	EXX
+	JR	NC,J$47BF		; shit out a zero, skip
+	ADD	HL,BC			; add BC to HL
+	EXX
+	ADC	HL,BC			; add BC' to HL' + overflow
+	EXX
+J$47BF:	DEC	A
+	JR	NZ,J$47AA		; next bit
+	RET
+
+;	  Subroutine 32 bit divide
+;	     Inputs  DE'DE = 32 bits integer, BC'BC = 32 bits integer
+;	     Outputs ________________________
+
+C$47C3:	LD	HL,0
+	EXX
+	LD	HL,0
+	EXX				; HL'HL=0
+	LD	A,32			; 32 bits
+J$47CD:	EX	DE,HL
+	ADD	HL,HL			; shift out DE
+	EXX
+	EX	DE,HL
+	ADC	HL,HL			; shift in DE'
+	EXX
+	EX	DE,HL
+	ADC	HL,HL			; shift in HL
+	EXX
+	EX	DE,HL
+	ADC	HL,HL			; shift in HL'
+	EXX
+	SBC	HL,BC			; subtract BC from HL
+	EXX
+	SBC	HL,BC			; subtract BC' from HL'
+	EXX
+	JR	NC,J$47EA		; no underflow, skip
+	ADD	HL,BC
+	EXX
+	ADC	HL,BC
+	EXX
+	DEC	E
+J$47EA:	INC	E
+	DEC	A
+	JR	NZ,J$47CD		; next bit
+	RET
+
+	.DEPHASE
+
+	END

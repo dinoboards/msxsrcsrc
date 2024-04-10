@@ -1,35 +1,14 @@
-; A driver section for MEGASCSI
-;
-;
-;
-                .Z80
+; Diskdriver ESE MEGASCSI (external sram + ascii megarom controller + scsi controller)
+; HDC   Fujitsu MB89352
 
-; Used externals from system kernel (permited)
-;
-;		EXTRN	GETSLT
-;		EXTRN	DIV16
-;		EXTRN	GETWRK
-;		EXTRN	SETINT
-;		EXTRN	PRVINT
-;		EXTRN	PROMPT
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
 
+; Code Copyrighted by ESE and maybe others
+; Source comments by Arjen Zeilemaker
 
-; Publics for DOS1 or DOS2 kernel
-
-;		PUBLIC	INIHRD
-;		PUBLIC	DRIVES
-;		PUBLIC	INIENV
-;		PUBLIC	DSKIO
-;		PUBLIC	DSKCHG
-;		PUBLIC	GETDPB
-;		PUBLIC	CHOICE
-;		PUBLIC	DSKFMT
-;		PUBLIC	MTOFF
-;		PUBLIC	OEMSTA
-;
-;		PUBLIC	MYSIZE
-;		PUBLIC	SECLEN
-;		PUBLIC	DEFDPB
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
 
 MYSIZE		equ	4		; Size of environment
 ; +0	driver bank lock
@@ -37,25 +16,25 @@ MYSIZE		equ	4		; Size of environment
 SECLEN		equ	512		; Size of biggest sector supported
 
 SCSIIC		equ	0		; SCSI controller installed
-SCSIADR		equ	05FF0H		; SCSI controller address
-SCSIDAT		equ	04000H		; SCSI controller data port address
+SCSIADR		equ	05FF0H		; SCSI controller address (5FF0H-5FFFH)
+SCSIDAT		equ	04000H		; SCSI controller data port address (4000H-4FFFH)
 
-SEL4000		equ	06000H		; ASCII Megarom bank select 04000-05FFFH
-SEL6000		equ	06800H		; ASCII Megarom bank select 06000-07FFFH
-SEL8000		equ	07000H		; ASCII Megarom bank select 08000-09FFFH
-SELA000		equ	07800H		; ASCII Megarom bank select 0A000-0BFFFH
+SEL4000		equ	06000H		; ASCII Megarom bank select 04000-05FFFH, MA18-MA13 (MA19-MA13 on M60002)
+SEL6000		equ	06800H		; ASCII Megarom bank select 06000-07FFFH, MA18-MA13 (MA19-MA13 on M60002)
+SEL8000		equ	07000H		; ASCII Megarom bank select 08000-09FFFH, MA18-MA13 (MA19-MA13 on M60002)
+SELA000		equ	07800H		; ASCII Megarom bank select 0A000-0BFFFH, MA18-MA13 (MA19-MA13 on M60002)
 
-BNKSRAM		equ	32		; bank number SRAM
+BNKSRAM		equ	32		; number of SRAM banks
 BNK4000		equ	0		; bank number DOS kernel
 BNKNDRV		equ	1		; bank number disk driver
 
                 IF	DOS2 EQ 1
 
-BNKADRV		equ	7		; bank number DOS1 disk driver (DOS2 segment 3)
+BNKADRV		equ	3*2+1		; bank number DOS1 disk driver (DOS2 segment 3)
 
                 ELSE
 
-BNKADRV		equ	1		; bank number DOS1 disk drive = 
+BNKADRV		equ	0*2+1		; bank number DOS1 disk driver
 
                 ENDIF
 
@@ -66,7 +45,7 @@ YF33F		equ	0F33FH
 DEVICE		equ	0FD99H
 DRVINF		equ	0FB21H
 DRVINT		equ	0FB29H
-D$F2FD		equ	0F2FDH
+BOOT_D		equ	0F2FDH
 H.RUNC		equ	0FECBH
 
 I$7405:	DEFB	0F9H
@@ -890,6 +869,7 @@ J$784F:	CALL	C.7DC0			; transfer
 ;	     Outputs ________________________
 
 DSKIO:
+?.785B:
         EI	
         CALL	C.7417			; get partitioninfo (with FD emulation)
 
@@ -1355,7 +1335,10 @@ CHOICE:
         LD	HL,0
         RET	NC			; ramdisk, no choice string
         LD	HL,I$7B48		; empty choice string (format invalid)
-        XOR	A
+
+
+MTOFF:
+?.7B46: XOR	A
         RET	
 
 I$7B48:	DEFB	0
@@ -1368,7 +1351,7 @@ I$7B48:	DEFB	0
 ;	     Outputs ________________________
 
 DSKFMT:
-J$7B52:	LD	A,10H			; write fault error
+?.7B52:	LD	A,10H			; write fault error
         SCF	
         RET	
 
@@ -1473,7 +1456,9 @@ J$7BFE:	LD	HL,(D$7F80)		; number of drives
         POP	DE
         POP	BC
         POP	AF
-        RET
+
+INIENV:
+?.7C04: RET
 
 ;	  Subroutine update driver bank
 ;	     Inputs  A = bank number, HL = driver workarea
@@ -1548,7 +1533,7 @@ C$7C37:	LD	A,(D$7F88)
 J$7C5A:	LD	A,(D$7F81)
         OR	A
         JR	Z,J.7C63		; no bootdrive specified
-        LD	(D$F2FD),A		; specify bootdrive
+        LD	(BOOT_D),A		; specify bootdrive
 J.7C63:	JP	0			; orginal H.RUNC
 
 ;	  Subroutine MEGASCSI BIOS entrypoint
@@ -1948,3 +1933,43 @@ I$7FDA:	RET
         RET	
 
 ?.7FE0:	DEFB	"MEGASCSI ver2.15 by K.Tsujikawa."
+
+; patch area
+
+        ORG     04002H
+
+        DEFW    I.41C1
+
+
+        ORG     041C1H
+
+I.41C1: XOR     A
+        LD      (SEL4000),A
+        INC     A
+        LD      (SEL6000),A
+        JP      A576F
+
+
+        ORG     04C10H
+
+        NOP
+
+
+        ORG     05809H
+
+        DEFW    C$7C37
+
+
+        ORG     05D37H
+
+        LD      HL,(YF355)
+        INC     HL
+        LD      A,(HL)
+        RET
+
+
+        ORG     065AEH
+
+        SCF
+        RET
+        RET

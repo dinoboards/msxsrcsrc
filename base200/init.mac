@@ -1,0 +1,781 @@
+; INIT.MAC
+
+; BASIC INIT, MSX 2 version (version 2.0)
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
+        .Z80
+        ASEG
+        ORG     07C76H
+
+        INCLUDE MSX.INC
+
+
+CGTABL  EQU     0004H
+SYNCHR  EQU     0008H
+RDSLT   EQU     000CH
+CALSLT  EQU     001CH
+DCOMPR  EQU     0020H
+ENASLT  EQU     0024H
+INITIO  EQU     003BH
+INIFNK  EQU     003EH
+CLRSPR  EQU     0069H
+INITXT  EQU     006CH
+INIT32  EQU     006FH
+EXTROM  EQU     015FH
+CHKSLZ  EQU     0162H
+
+BDOS	EQU	0F37DH
+
+VARWRK  EQU     0F380H
+KBFMIN  EQU     0F41EH
+BUFMIN  EQU     0F55DH
+ENDBUF  EQU     0F660H
+MEMSIZ  EQU     0F672H
+STKTOP  EQU     0F674H
+TXTTAB  EQU     0F676H
+TEMP    EQU     0F6A7H
+VARTAB  EQU     0F6C2H
+PRMSTK  EQU     0F6E4H
+PRMPRV  EQU     0F74CH
+MAXFIL  EQU     0F85FH
+FILTAB  EQU     0F860H
+NULBUF  EQU     0F862H
+NLONLY  EQU     0F87CH
+CGPNT   EQU     0F91FH
+QUETAB  EQU     0F959H
+BASROM  EQU     0FBB1H
+KEYBUF  EQU     0FBF0H
+BOTTOM  EQU     0FC48H
+HIMEM   EQU     0FC4AH
+SCRMOD  EQU     0FCAFH
+EXPTBL  EQU     0FCC1H
+SLTATR  EQU     0FCC9H
+SLTWRK  EQU     0FD09H
+PROCNM  EQU     0FD89H
+
+S.SETS          EQU     0179H
+S.SDFSCR        EQU     0185H
+S.PUTSPRT       EQU     0151H
+S.SCOPY         EQU     018DH
+
+H.KEYI  EQU     0FD9AH
+H.SETS  EQU     0FDF4H
+H.COPY  EQU     0FE08H
+D.FFFF  EQU     0FFFFH
+
+
+        PUBLIC  INIT
+        PUBLIC  MAXS
+        PUBLIC  ALCFIL
+        PUBLIC  RDWEXP
+        PUBLIC  ATRSLI
+        PUBLIC  ATRSL2
+        PUBLIC  CHKZDN
+	PUBLIC	J7CE3                   ; patch SET statement
+	PUBLIC	J7CF4                   ; patch PUT SPRITE statement
+	PUBLIC	J7D03                   ; patch COPY statement
+	PUBLIC	C7D75                   ; extension ROM handler
+	PUBLIC	C7FF5                   ; CALST after vertical retrace
+	PUBLIC	C7FBE                   ; RDSLT helper
+	PUBLIC	C7FC4                   ; WRSLT helper
+
+        EXTRN   SNERR
+        EXTRN   FCERR
+        EXTRN   GETBYT
+        EXTRN   STROUT
+        EXTRN   OMERR
+        EXTRN   SCRTCH
+        EXTRN   RUNC
+        EXTRN   CLEAR2
+        EXTRN   STKINI
+        EXTRN   CLSALL
+        EXTRN   NEWSTT
+        EXTRN   READY
+        EXTRN   LINPRT
+
+	EXTRN	J7AB6                   ; PUT SPRITE MSX1
+	EXTRN	C7BEE                   ; BASIC interpreter welcome screen
+
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+
+; START SUBTTL	INIT
+
+        SUBTTL	INIT
+
+
+;       Subroutine      System initialization routine
+;       Remark          RAM is invoked, EXPTBL and SLTTBL are initialized
+
+INIT:
+C7C76:  LD      SP,VARWRK-10            ; temporary stack
+        LD      BC,00230H-1
+        LD      DE,H.KEYI+1
+        LD      HL,H.KEYI
+        LD      (HL),0C9H
+        LDIR                            ; initialize hooks
+        LD      HL,VARWRK
+        LD      (HIMEM),HL              ; highest BASIC RAM address
+        CALL    C7D5D                   ; search lowest BASIC RAM address
+        LD      (BOTTOM),HL             ; save in BOTTOM
+        LD      BC,00090H
+        LD      DE,VARWRK
+        LD      HL,I7F27
+        LDIR                            ; initialize some systemvariables
+        CALL    INIFNK                  ; initialize functionkeys
+        XOR     A
+        LD      (ENDBUF),A              ; endmarker for BUF
+        LD      (NLONLY),A              ; not loading basic program, close i/o channels when requested
+        LD      A,","
+        LD      (BUFMIN),A              ; dummy prefix for BUF
+        LD      A,":"
+        LD      (KBFMIN),A              ; dummy prefix for KBUF
+        LD      HL,(CGTABL)
+        LD      (CGPNT+1),HL            ; address charactergenerator (but what about the slotid in CGPNT+0 ??)
+        LD      HL,PRMSTK
+        LD      (PRMPRV),HL             ; initialize previous FN block pointer
+        LD      (STKTOP),HL             ; Z80 stack temporary at PRMSTK
+        LD      BC,200
+        ADD     HL,BC
+        LD      (MEMSIZ),HL             ; a fake string heap of 200 bytes
+        LD      A,HIGH 0100H
+        LD      (VARTAB+1),A            ; a fake simple variable start at 0100H
+        CALL    ALCFIL                  ; allocate 1 i/o channel (also reinitialize STKTOP, MEMSIZ)
+        CALL    STKINI                  ; initialize stack
+        LD      HL,(BOTTOM)
+        XOR     A
+        LD      (HL),A                  ; end of BASIC line token before BASIC text
+        INC     HL
+        LD      (TXTTAB),HL             ; start of BASIC text
+        CALL    SCRTCH                  ; clear BASIC program
+        CALL    INITIO                  ; initialize I/O devices (PSG and LPT)
+        JR      J7D14                   ; jump over patch code
+
+	DEFS	7D14H-$,0
+
+J7D14:  CALL    CHKSLZ                  ; MSX2 patch: check subrom and do extension ROMs
+
+; Entrypoint used by diskrom
+; used when H.STKE was hooked by a extension ROM. BASIC programs in extension ROMs are NOT executed
+
+J7D17:  LD      HL,(BOTTOM)
+        XOR     A
+        LD      (HL),A                  ; end of BASIC line before BASIC text
+        INC     HL
+        LD      (TXTTAB),HL
+        CALL    SCRTCH                  ; clear basic program
+        CALL    C7D29                   ; display BASIC startscreen
+        JP      READY                   ; ok and mainloop
+
+;       Subroutine      display BASIC startscreen
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7D29:  JR      J7D31                   ; skip over unused space
+        DEFS    07D2FH-$,0
+
+D7D2F:  DEFW    C7CED                   ; initialize BASIC screen (done by S.SDFSCR)
+M722E	EQU	$-1
+
+J7D31:  CALL    C7BEE                   ; initialize BASIC screen + print BASIC version (done by S.SETSCR)
+        LD      HL,SLTWRK+0
+        LD      A,(HL)
+        AND     20H
+        LD      (HL),A                  ; ramdisk invalid, but flag ramdisk disabled remains unchanged
+
+	DEFS	7D3DH-$,0		; align to MSX1 code
+
+        LD      HL,T7EFD                ; copyright message
+        CALL    STROUT                  ; message to interpreter output
+        LD      HL,(VARTAB)
+        EX      DE,HL
+        LD      HL,(STKTOP)
+        LD      A,L
+        SUB     E
+        LD      L,A
+        LD      A,H
+        SBC     A,D
+        LD      H,A
+        LD      BC,-14
+        ADD     HL,BC
+        CALL    LINPRT                  ; number to interpreter output
+        LD      HL,I7F1B
+        JP      STROUT                  ; message to interpreter output
+
+;       Subroutine      search for start of ram 0EFFFH - 08000H area (downwards)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7D5D:  LD      HL,0EF00H
+J7D60:  LD      A,(HL)
+        CPL
+        LD      (HL),A
+        CP      (HL)
+        CPL
+        LD      (HL),A
+        JR      NZ,J7D71                ; no RAM, quit search
+        INC     L
+        JR      NZ,J7D60
+        LD      A,H
+        DEC     A
+        RET     P
+        LD      H,A
+        JR      J7D60
+
+J7D71:  LD      L,0
+        INC     H
+        RET
+
+;       Subroutine      do extension ROMs
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7D75:  DI
+        LD      C,0                     ; primairy slot
+        LD      DE,EXPTBL
+        LD      HL,SLTATR
+J7D7E:  LD      A,(DE)
+        OR      C
+        LD      C,A
+        PUSH    DE
+J7D82:  INC     HL
+        PUSH    HL
+        LD      HL,04000H               ; page 1
+J7D87:  CALL    RDWEXP
+        PUSH    HL
+        LD      HL,04241H
+        _RST    DCOMPR
+        POP     HL                      ; expansion ROM ?
+        LD      B,0                     ; reset extension flags
+        JR      NZ,J7DBE                ; nope, next slot
+        CALL    RDWEXP                  ; read INIT entry
+        PUSH    HL                      ; store address
+        PUSH    BC                      ; store extension flags, slotid
+        PUSH    DE
+        POP     IX                      ; IX = INIT address
+        LD      A,C
+        PUSH    AF
+        POP     IY                      ; IYH = slotid
+        CALL    NZ,C7FF5                ; if extension ROM has INIT, call INIT
+        POP     BC                      ; restore extension flags, slotid
+        POP     HL                      ; restore address
+        CALL    RDWEXP                  ; read STATEMENT entry
+        ADD     A,0FFH
+        RR      B                       ; extension STATEMENT flag
+        CALL    RDWEXP                  ; read DEVICE entry
+        ADD     A,0FFH
+        RR      B                       ; extension DEVICE flag
+        CALL    RDWEXP                  ; read BAS entry
+        ADD     A,0FFH
+        RR      B                       ; extension BASIC PROGRAM flag
+        LD      DE,-8
+        ADD     HL,DE
+J7DBE:  EX      (SP),HL
+        LD      (HL),B                  ; adjust SLTATR
+        INC     HL
+        EX      (SP),HL
+        LD      DE,04000H-2
+        ADD     HL,DE                   ; next page
+        LD      A,H
+        CP      0C0H
+        JR      C,J7D87                 ; we are doing only page 1 and 2
+        POP     HL
+        INC     HL
+        LD      A,C
+        AND     A
+        LD      DE,000CH
+        JP      P,J7DE0                 ; primary slot, next primary
+        ADD     A,04H
+        LD      C,A
+        CP      90H
+        JR      C,J7D82                 ; next secundair slot
+        AND     03H
+        LD      C,A
+        DEFB    03EH                    ; LD A,xx, trick to skip next instruction
+J7DE0:  ADD     HL,DE
+        POP     DE
+        INC     DE
+        INC     C
+        LD      A,C
+        CP      04H
+        JR      C,J7D7E                 ; next primary
+        LD      HL,SLTATR
+        LD      B,40H
+J7DEE:  LD      A,(HL)
+        ADD     A,A
+        JR      C,J7DF6                 ; extension ROM has BAS entry, run it
+        INC     HL
+        DJNZ    J7DEE
+        RET
+
+;       Subroutine      start basic program in extension ROM
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J7DF6:  CALL    ATRSL2                  ; translate SLTATR loopvar to address and slotid
+        CALL    ENASLT                  ; enable slot on page 2
+        LD      HL,(VARTAB)
+        LD      DE,0C000H
+        _RST    DCOMPR
+        JR      NC,J7E09                ; VARTAB is already in page 3, leave it alone
+        EX      DE,HL
+        LD      (VARTAB),HL             ; VARTAB = 0C000H (otherwise VARTAB would point into ROM)
+J7E09:  LD      HL,(08000H+8)
+        INC     HL
+        LD      (TXTTAB),HL             ; start of basiccode
+        LD      A,H
+        LD      (BASROM),A              ; flag execution of basic program in ROM (cannot be aborted)
+
+; Entrypoint used by diskrom to start extension ROM with basic program
+
+C7E14:  CALL    RUNC                    ; initialize interpreter, basic pointer at start of program
+        JP      NEWSTT                  ; execute new statement
+
+;       Subroutine      read word from extension ROM
+;       Inputs          HL = address, C = slotid
+;       Outputs         DE = word, Zx set if word is zero
+
+RDWEXP:
+C7E1A:  CALL    C7E1E                   ; read byte from extension ROM
+        LD      E,D
+C7E1E:  LD      A,C
+        PUSH    BC
+        PUSH    DE
+        CALL    RDSLT
+        POP     DE
+        POP     BC
+        LD      D,A
+        OR      E
+        INC     HL
+        RET
+
+;       Subroutine      translate SLTATR loopvar to address and slotid
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+ATRSL2:
+C7E2A:  LD      A,64
+        SUB     B
+
+;       Subroutine      translate SLTATR entrynumber to address and slotid
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+ATRSLI:
+C7E2D:  LD      B,A
+        LD      H,0
+        RRA
+        RR      H
+        RRA
+        RR      H                       ; highbyte address in page
+        RRA
+        RRA
+        AND     03H                     ; primairy slot
+        LD      C,A
+        LD      A,B
+        LD      B,0
+        PUSH    HL
+        LD      HL,EXPTBL
+        ADD     HL,BC
+        AND     0CH                     ; secundairy slot
+        OR      C                       ; + primairy slot
+        LD      C,A
+        LD      A,(HL)
+        POP     HL
+        OR      C                       ; + slot expanded flag
+        RET
+
+;       Subroutine      MAX statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+MAXS:
+C7E4B:  _RST    SYNCHR
+        DEFB    0B7H
+        _RST    SYNCHR
+        DEFB    0EFH                    ; check for FILES=
+        CALL    GETBYT                  ; evaluate byte operand
+        JP      NZ,SNERR                ; not end of statement, syntax error
+        CP      15+1                    ; number of i/o channels <16 ?
+        JP      NC,FCERR                ; nope, illegal function call
+        LD      (TEMP),HL               ; save BASIC pointer in TEMP
+        PUSH    AF
+        CALL    CLSALL                  ; close all i/o channels
+        POP     AF
+        CALL    ALCFIL                  ; allocate i/o channels
+        CALL    CLEAR2                  ; initialize interpreter, BASIC pointer from TEMP
+        JP      NEWSTT                  ; execute new statement
+
+;       Subroutine      allocate i/o channels
+;       Inputs          A = number of user i/o channels
+;       Outputs         ________________________
+
+ALCFIL:
+C7E6B:  PUSH    AF
+        LD      HL,(HIMEM)
+        LD      DE,-(256+9+2)
+J7E72:  ADD     HL,DE
+        DEC     A
+        JP      P,J7E72
+        EX      DE,HL                   ; calculate FILTAB address
+        LD      HL,(STKTOP)
+        LD      B,H
+        LD      C,L
+        LD      HL,(MEMSIZ)
+        LD      A,L
+        SUB     C
+        LD      L,A
+        LD      A,H
+        SBC     A,B
+        LD      H,A                     ; size of the string heap
+        POP     AF
+        PUSH    HL
+        PUSH    AF
+        LD      BC,140
+        ADD     HL,BC
+        LD      B,H
+        LD      C,L                     ; size of the string heap +140
+        LD      HL,(VARTAB)             ; start of the simple variables
+        ADD     HL,BC                   ; + size
+        _RST    DCOMPR                  ; does this fit ?
+        JP      NC,OMERR                ; nope, out of memory
+        POP     AF
+        LD      (MAXFIL),A              ; set number of i/o channels (excluding i/o channel 0)
+        LD      L,E
+        LD      H,D
+        LD      (FILTAB),HL             ; start of i/o channel pointers
+        DEC     HL
+        DEC     HL                      ; ?? why need a extra byte ??
+        LD      (MEMSIZ),HL             ; start of the string heap
+        POP     BC                      ; size of the string heap
+        LD      A,L
+        SUB     C
+        LD      L,A
+        LD      A,H
+        SBC     A,B
+        LD      H,A
+        LD      (STKTOP),HL             ; start of Z80 stack, end of string heap
+        DEC     HL
+        DEC     HL
+        POP     BC                      ; return address
+        LD      SP,HL                   ; new stack with dummy word on stack
+        PUSH    BC                      ; return address on stack
+        LD      A,(MAXFIL)
+        LD      L,A
+        INC     L                       ; number of i/o channels
+        LD      H,0
+        ADD     HL,HL                   ; *2
+        ADD     HL,DE
+        EX      DE,HL
+        PUSH    DE                      ; start of i/o channel buffers
+        LD      BC,-2+256+9+2
+J7EC2:  LD      (HL),E
+        INC     HL
+        LD      (HL),D
+        INC     HL                      ; pointer to i/o channel buffer
+        EX      DE,HL
+        LD      (HL),0                  ; i/o channel closed
+        ADD     HL,BC                   ; to the next i/o channel buffer
+        EX      DE,HL
+        DEC     A
+        JP      P,J7EC2                 ; next i/o channel
+        POP     HL                      ; start of i/o channel buffer
+        LD      BC,9
+        ADD     HL,BC
+        LD      (NULBUF),HL             ; pointer to the i/o channel 0 buffer
+        RET
+
+T7ED8:  DEFB    "MSX  system"
+        DEFB    0
+
+T7EE4:  DEFB    "version 2.0",13,10
+        DEFB    0
+
+T7EF2:  DEFB    "MSX BASIC "
+        DEFB    0
+T7EFD:  DEFB    "Copyright 1985 by Microsoft",13,10
+        DEFB    0
+
+I7F1B:  DEFB    " Bytes free"
+        DEFB    0
+
+
+; Initial Workarea variables
+
+
+I7F27:
+
+        .PHASE  VARWRK
+
+RDPRIM: OUT     (0A8H),A
+        LD      E,(HL)
+        JR      J7F2F
+
+WRPRIM: OUT     (0A8H),A
+        LD      (HL),E
+J7F2F:  LD      A,D
+        OUT     (0A8H),A
+        RET
+
+CLPRIM: OUT     (0A8H),A
+        EX      AF,AF'
+        CALL    CLPRM1
+        EX      AF,AF'
+        POP     AF
+        OUT     (0A8H),A
+        EX      AF,AF'
+        RET
+
+CLPRM1: JP      (IX)
+
+USRTAB: defw    FCERR                   ; illegal function call
+        defw    FCERR                   ; illegal function call
+        defw    FCERR                   ; illegal function call
+        defw    FCERR                   ; illegal function call
+        defw    FCERR                   ; illegal function call
+        defw    FCERR                   ; illegal function call
+        defw    FCERR                   ; illegal function call
+        defw    FCERR                   ; illegal function call
+        defw    FCERR                   ; illegal function call
+        defw    FCERR                   ; illegal function call
+
+LINL40:
+        IF BASVER EQ 0
+        defb    39
+        ELSE
+        defb    37
+        ENDIF
+
+LINL32: defb    29
+
+LINLEN:
+        IF BASVER EQ 0
+        defb    29
+        ELSE
+        defb    37
+        ENDIF
+
+CRTCNT: defb    24
+
+CLMLST: defb    14
+
+TXTNAM: defw    0
+TXTCOL: defw    0
+TXTCGP: defw    00800H
+TXTATR: defw    0
+TXTPAT: defw    0
+
+T32NAM: defw    01800H
+T32COL: defw    02000H
+T32CGP: defw    0
+T32ATR: defw    01B00H
+T32PAT: defw    03800H
+
+GRPNAM: defw    01800H
+GRPCOL: defw    02000H
+GRPCGP: defw    0
+GRPATR: defw    01B00H
+GRPPAT: defw    03800H
+
+MLTNAM: defw    00800H
+MLTCOL: defw    0
+MLTCGP: defw    0
+MLTATR: defw    01B00H
+MLTPAT: defw    03800H
+
+CLIKSW: defb    1
+CSRY:   defb    1
+CSRX:   defb    1
+CNSDFG: defb    0
+
+RG0SAV: defb    000H
+RG1SAV: defb    0E0H
+RG2SAV: defb    000H
+RG3SAV: defb    000H
+RG4SAV: defb    000H
+RG5SAV: defb    000H
+RG6SAV: defb    000H
+RG7SAV: defb    000H
+STATFL: defb    000H
+TRGFLG: defb    0FFH
+FORCLR: defb    15
+BAKCLR: defb    4
+
+BDRCLR:
+        IF BASVER EQ 0
+        defb    7
+        ELSE
+        defb    4
+        ENDIF
+
+MAXUPD: jp      0
+MINUPD: jp      0
+ATRBYT: defb    15
+QUEUES: defw    QUETAB
+FRCNEW: defb    0FFH
+SCNCNT: defb    1
+REPCNT: defb    50
+PUTPNT: defw    KEYBUF
+GETPNT: defw    KEYBUF
+CS1200: defb    053H,05CH,026H,02DH,00FH
+CS2400: defb    025H,02DH,00EH,016H,01FH
+        defb    053H,05CH
+        defb    026H,02DH
+        defb    00FH
+ASPCT1: defw    00100H
+ASPCT2: defw    00100H
+ENDPRG: defb    ':'
+
+        .DEPHASE
+
+; END   SUBTTL	INIT
+
+
+;       Bugfix          check for zero length devicenames (e.g. ":xxx" filenames)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+CHKZDN:
+C7FB7:  LD      DE,PROCNM
+        AND     A
+        RET     NZ
+        INC     B                       ; use length 1 (name ":" is used)
+        RET
+
+;       Bugfix          
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7FBE:  CALL    C7FD1
+        LD      E,(HL)
+        JR      J7FC8
+
+;       Bugfix          
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7FC4:  CALL    C7FD1
+        LD      (HL),E
+J7FC8:	IN      A,(0A8H)
+        AND     3FH
+        OUT     (0A8H),A
+        LD      A,C                     ; saved secundairy slotregister
+        JR      J7FE6                   ; restore orginal page 0
+
+;       Subroutine      switch page 0 primary slot 0
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7FD1:  RRCA
+        RRCA
+        AND     03H
+        LD      D,A
+        IN      A,(0A8H)
+        LD      B,A                     ; save primairy slotregister
+        AND     3FH
+        OUT     (0A8H),A                ; prim. slot 0 in page 3 (access the sec. slotreg)
+        LD      A,(D.FFFF)
+        CPL
+        LD      C,A                     ; save secundairy slotregister
+        AND     0FCH
+        OR      D
+        LD      D,A
+J7FE6:  LD      (D.FFFF),A              ; switch sec. slot page 0 (rombios gone!)
+        LD      A,B
+        OUT     (0A8H),A                ; restore primairy slotregister
+        LD      A,E
+        RET
+
+
+	ORG	7CE3H
+
+
+; #####################
+;       patch   extended SET statement
+
+J7CE3:  CALL    H.SETS                  ; hook for SET statement expansion
+        LD      IX,S.SETS
+        JP      EXTROM                  ; MSX2 and above SET statements
+
+;       Subroutine      INITXT replacement (setup BASIC screen)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7CED:  LD      IX,S.SDFSCR
+        JP      EXTROM
+
+; #####################
+;       patch   extended PUT SPRITE statement handler, because of new spritesmodes
+
+J7CF4:  LD      A,(SCRMOD)
+        CP      04H
+        JP      C,J7AB6                 ; MSX 1 style sprites, use classic
+        LD      IX,S.PUTSPRT
+        JP      EXTROM
+; #####################
+
+; #####################
+;       patch   extended COPY statement
+
+J7D03:  LD      IX,S.SCOPY
+        CALL    EXTROM
+        RET     NC                      ; handled by subrom, quit
+        CALL    H.COPY
+        JP      FCERR                   ; illegal function call
+; #####################
+
+
+	ORG	7FF5H
+
+
+;       Subroutine      CALSLT after Vertical Retrace
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7FF5:  IN      A,(99H)
+        RLCA
+        JR      NC,C7FF5                ; wait for VR
+        JP      CALSLT
+
+;       Subroutine      entrypoint for disksystem
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+;            Remark  used to call disksystem with basic rom active
+
+C7FFD:  JP      BDOS
+
+        
+        DEFS    08000H-$,0              ; unused space
+
+        END
+

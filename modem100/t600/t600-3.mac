@@ -1,0 +1,3052 @@
+; T600-3.MAC
+
+; MSX-MODEM Sony T600
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
+        .Z80
+        ASEG
+
+	ORG	04040H
+
+CHSNS	EQU	009CH
+CHGET	EQU	009FH
+
+FILEVL	EQU	6A0EH
+OPNFIL	EQU	6AFAH
+CLSFIL	EQU	6B24H
+FILOUT	EQU	6C48H
+INDSKC	EQU	6C71H
+
+BDOS	EQU	0F37DH
+CSRX	EQU	0F3DDH
+HOLD8	EQU	0F806H
+TMPFCB	EQU	HOLD8
+FILTAB	EQU	0F860H
+NULBUF	EQU	0F862H
+FILNAM	EQU	0F866H
+
+
+C.6000	EQU	6000H			; inter segment call (EI)
+D.6048	EQU	6048H			; b7,b6,b4 = comterm mode
+I$6049	EQU	6049H			; vdp interrupt counter
+I$6072	EQU	6072H			; literal mode
+D.6073	EQU	6073H			; printer echo
+D.6074	EQU	6074H			; duplex mode
+D$6077	EQU	6077H			; counter #1, number of 1/10 seconds
+D.6079	EQU	6079H			; counter #1, number of seconds
+D.6082	EQU	6082H			; b7,b6 = dail mode, b4 = SI/SO control, b3 = auto LF on receive, b2 = auto LF on send, b1 = originate/answer, b0 = XON/XOFF flow control
+D$6083	EQU	6083H			; flags
+D.6085	EQU	6085H			; number of bytes in receive buffer
+D$608A	EQU	608AH			; buffer size
+D$6093	EQU	6093H			; 7FC0 register backup
+D.6159	EQU	6159H			; protocol timer 1 value
+D$615A	EQU	615AH			; protocol timer 2 value
+D.62D8	EQU	62D8H			; timer #0 value
+D.62DA	EQU	62DAH			; timer #1 value
+D.62DC	EQU	62DCH			; timer #2 value
+I.62DE	EQU	62DEH			; timer flags, b0 = timer #0, b1 = timer #1, b2 = timer #2
+D.62DF	EQU	62DFH			; timer mark
+D.62E0	EQU	62E0H			; number of reties X-modem block
+D.62E1	EQU	62E1H			; current X-modem block number
+D.62E2	EQU	62E2H			; error with I/O channel
+D.62E3	EQU	62E3H			; in upload/download flag
+D.62E4	EQU	62E4H			; saved 6082
+D.62E5	EQU	62E5H			; file is open flag
+D.62E6	EQU	62E6H			; disk operation entered
+D.62E7	EQU	62E7H			; saved stack pointer disk operation entered
+D.62E9	EQU	62E9H			; download file raw flag
+D.62EA	EQU	62EAH			; offset in buffer
+D.62EB	EQU	62EBH			; current CRC16
+D.62ED	EQU	62EDH			; checksum/CRC16 flag
+D.62EE	EQU	62EEH			; block number
+D.62F0	EQU	62F0H			; wildcard flag
+
+
+?.4040:	JP	J$405B			; upload file
+?.4043:	JP	J$40A2			; download file
+?.4046:	JP	J$4B1F			; abort disk operation
+?.4049:	JP	J$465A			; save phone book data to file
+?.404C:	JP	J$46ED			; load phone book data from file
+I$404F:	JP	J$4112			; write byte to file
+I$4052:	JP	C.4772			; open file
+I$4055:	JP	J$4781			; read byte from file
+?.4058:	JP	C.4926                  ; close file
+
+	  Subroutine upload file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+J$405B:	LD	A,(D.6048)
+	AND	80H			; X-modem ?
+	LD	A,(D.6048)
+	LD	HL,I$4BDA		; upload X-modem
+	JR	NZ,J.4072		; yep,
+	AND	10H			; raw mode ?
+	LD	HL,I$4BC3		; upload raw
+	JR	NZ,J.4072		; yep,
+	LD	HL,I$4BAB		; upload text
+J.4072:	CALL	C.4132			; show message, get file name and initialize FCB
+	JR	C,J.4081
+	JR	NZ,J$407E		; text/raw,
+	CALL	C$42B1			; upload file with X-modem
+	JR	J.4081
+
+J$407E:	CALL	C$456E
+J.4081:	LD	HL,I$4C67		; end upload
+	JR	NC,J.4089
+	LD	HL,I$4C45		; upload aborted
+J.4089:	PUSH	HL
+	CALL	C,C.4E8A		; error, translate and show error message
+	LD	A,(D.62E5)
+	OR	A			; file open ?
+	CALL	NZ,C.4926               ; yep, close file (with stop/start sending)
+	CALL	C,C.4E8A		; error, translate and show error message
+	POP	HL
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+	LD	A,(D.62E4)		; saved 6082
+	LD	(D.6082),A
+	RET
+
+	  Subroutine download file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+J$40A2:	LD	A,(D.62E9)
+	OR	A			; download file raw ?
+	JR	NZ,J$40CB		; yep,
+	LD	A,(D.6048)
+	AND	80H			; X-modem ?
+	LD	A,(D.6048)
+	LD	HL,J.4C28		; download X-modem
+	JR	NZ,J.40BF		; yep,
+	AND	10H			; raw mode ?
+	LD	HL,I$4C0F		; download raw
+	JR	NZ,J.40BF		; yep,
+	LD	HL,I$4BF5		; download text
+J.40BF:	CALL	C.4132			; show message, get file name and initialize FCB
+	JR	C,J.4106		; abort download
+	JR	NZ,J$40EB		; text/raw,
+	CALL	C$4151			; download file with X-modem
+	JR	J.4106			; end or abort download
+
+J$40CB:	XOR	A
+	LD	(D.62E9),A		; clear download file raw flag
+	LD	A,(D.62EA)
+	OR	A			; bytes in buffer ?
+	JR	Z,J.4106		; nope, end download
+	LD	HL,(NULBUF)
+	LD	C,A
+	LD	B,0			; offset in buffer
+	ADD	HL,BC			; pointer in buffer
+	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JR	NC,J$40E4		; nope,
+	LD	(HL),1AH		; CTRL-Z
+	INC	C			; update offset in buffrr
+J$40E4:	LD	E,C
+	LD	D,B			; number of bytes = offset in buffer
+	CALL	C.48FB			; write random block to file (with stop/start sending)
+	JR	J.4106			; end or abort download
+
+; download file (text/raw)
+
+J$40EB:	LD	A,(D.6048)
+	AND	10H			; raw mode ?
+	JR	Z,J$4103		; nope,
+	LD	(D.62E9),A		; set download file raw flag
+	CALL	C.44C7			; create or append file
+	LD	A,0
+	LD	(D.62EA),A		; offset in buffer = 0
+	RET	NC			; no error, quit
+J$40FE:	XOR	A
+	LD	(D.62E9),A		; clear download file raw flag
+	SCF				; skip create/append
+J$4103:	CALL	NC,C.44C7		; create or append file
+J.4106:	LD	HL,J.4C76		; end download
+	JP	NC,J.4089
+	LD	HL,I$4C55		; download aborted
+	JP	J.4089
+
+	  Subroutine write byte to file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+J$4112:	PUSH	AF
+	LD	HL,(NULBUF)
+	LD	A,(D.62EA)		; offset in buffer
+	LD	C,A
+	LD	B,0
+	ADD	HL,BC			; pointer in buffer
+	POP	AF
+	LD	(HL),A
+	LD	A,C
+	INC	A
+	LD	(D.62EA),A		; update offset in buffer
+	RET	P			; buffer not full, quit
+	CALL	C.48F8			; write to file
+	JR	C,J$40FE		; error,
+	CALL	C.4ED2			; initialize I/O channel buffer
+	XOR	A
+	LD	(D.62EA),A		; offset in buffer = 0
+	RET
+
+	  Subroutine show message, get file name and initialize FCB
+	     Inputs  HL = pointer to message
+	     Outputs ________________________
+
+C.4132:	CALL	C.4B31			; initialize disk variables
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+	CALL	C$4A30			; get file name, initialize FCB
+	RET	C
+	CALL	C.49FC			; get pointer to buffer
+	LD	A,(D.6048)
+	AND	0C0H
+	SUB	80H			; X-modem ?
+	OR	A
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4148:	LD	A,(D.6082)
+	AND	0F2H
+	LD	(D.6082),A
+	RET
+
+	  Subroutine download file with X-modem
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4151:	XOR	A
+	LD	(D.62ED),A		; checksum mode
+	LD	DE,0
+	LD	(D.62EE),DE		; block number = 0
+	CALL	C.4148
+	CALL	C.47B4			; check if file exists
+	RET	C			; error, quit
+	PUSH	AF
+	CALL	C.44B3			; echo filename if wildcard
+	POP	AF
+	AND	A			; file exists ?
+	JR	NZ,J.4184		; nope, create file
+	LD	HL,I$4CA9		; file already exists
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+	CALL	C.4D4B			; wait for key
+	CALL	C.4EAB			; force new line
+	JR	C,J$4180		; CTRL-STOP pressed, quit
+	CALL	C.4EDF			; to upper
+	CP	"R"			; replace ?
+	JR	Z,J.4184		; yep, create file (replace)
+J$4180:	SCF
+	LD	E,1			; canceled
+	RET
+
+J.4184:	CALL	C.4851			; create file (swith stop/start sending)
+	RET	C			; error, quit
+	XOR	A
+	LD	(D.62E1),A		; reset X-modem block number
+	LD	A,11
+	LD	(D.62E0),A		; number of reties X-modem block
+	LD	A,1
+	LD	(D.62ED),A		; CRC16 mode
+	LD	A,"C"			; request CRC16
+	CALL	C.4469			; send byte (if connected)
+	RET	C
+	LD	HL,3*60
+	CALL	C.43F6			; reset timer mark and initialize timer #0
+J.41A2:	CALL	C.4417			; is timer #0 finished ?
+	JR	NZ,J$41C6		; yep,
+	CALL	C.43E0			; send CAN if CTRL-STOP pressed and quit if so
+	CALL	C.448D			; get receive buffer status (if connected)
+	RET	C
+	JR	Z,J.41A2		; empty,
+	CALL	C.44A3			; get received byte (if connnected)
+	RET	C
+	CP	1			; SOH ?
+	JR	NZ,J.41A2		; nope, wait
+	LD	HL,I.4CE2		; crc16 mode
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+	LD	HL,I.4D34		; receive block counter
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+	JR	J.420B
+
+J$41C6:	XOR	A
+	LD	(D.62ED),A		; checksum mode
+	LD	HL,I.4CD3		; checksum mode
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+	LD	HL,I.4D34		; receive block counter
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+J.41D6:	LD	A,15H			; NAK
+	CALL	C.4469			; send byte (if connected)
+	RET	C
+	LD	HL,D.62E0
+	DEC	(HL)			; update number of reties X-modem block
+	JP	Z,J.43D4		; no more reties,
+
+J$41E3:	LD	HL,10*60
+	CALL	C.43F6			; reset timer mark and initialize timer #0
+J.41E9:	CALL	C.4417			; is timer #0 finished ?
+	JR	NZ,J.41D6		; yep,
+	CALL	C.43E0			; send CAN if CTRL-STOP pressed and quit if so
+	CALL	C.448D			; get receive buffer status (if connected)
+	RET	C
+	JR	Z,J.41E9		; empty,
+	CALL	C.44A3			; get received byte (if connnected)
+	RET	C
+	CP	1			; SOH ?
+	JR	Z,J.420B		; yep,
+	CP	4			; EOT ?
+	JR	NZ,J.41E9		; nope, wait
+	LD	A,6			; ACK
+	CALL	C.4469			; send byte (if connected)
+	RET	C
+	XOR	A
+	RET
+
+J.420B:	CALL	C.6000
+	DEFB	0
+	DEFW	C.405E                  ; counter #1, clear
+	LD	HL,(NULBUF)
+	INC	HL
+	LD	B,128+3
+	LD	A,(D.62ED)
+	ADD	A,B
+	LD	B,A			; CRC16 has 1 byte extra
+J$421C:	PUSH	HL
+	LD	HL,1*60
+	CALL	C.43FC			; initialize timer #0
+	POP	HL
+J$4224:	CALL	C.4417			; is timer #0 finished ?
+	JR	NZ,J.41D6		; yep,
+	LD	A,(D$615A)		; protocol timer 2 value
+	AND	A			; protocol timer 2 value = default ?
+	LD	D,20
+	JR	Z,J$4232		; yep, use block monitoring timer value = 20
+	LD	D,A
+J$4232:	LD	A,(D.6079)		; counter #1, number of seconds
+	CP	D
+	JR	Z,J.41D6
+	CALL	C.43E0			; send CAN if CTRL-STOP pressed and quit if so
+	CALL	C.448D			; get receive buffer status (if connected)
+	RET	C
+	JR	Z,J$4224		; empty,
+	CALL	C.44A3			; get received byte (if connnected)
+	RET	C
+	LD	(HL),A
+	INC	HL
+	DJNZ	J$421C
+	LD	HL,(NULBUF)
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	A,(D.62ED)
+	AND	A			; CRC16 mode ?
+	JR	Z,J$4276		; nope,
+	PUSH	HL
+	POP	IX
+	LD	HL,0			; CRC16 = 0
+	LD	B,128
+J$425D:	LD	A,(IX+0)
+	INC	IX
+	CALL	C.4EF7			; update CRC16
+	DJNZ	J$425D
+	LD	A,(IX+0)
+	CP	H			; CRC16 correct ?
+	JR	NZ,J$4271		; nope,
+	LD	A,(IX+1)
+	CP	L			; CRC16 correct ?
+J$4271:	JP	NZ,J.41D6		; nope,
+	JR	J$4281
+
+J$4276:	LD	B,128
+	XOR	A
+J$4279:	ADD	A,(HL)
+	INC	HL
+	DJNZ	J$4279
+	CP	(HL)			; checksum correct ?
+	JP	NZ,J.41D6		; nope,
+J$4281:	LD	HL,(NULBUF)
+	INC	HL
+	INC	HL
+	LD	A,(HL)
+	CPL
+	DEC	HL
+	CP	(HL)
+	JP	NZ,J.41D6
+	LD	A,(HL)
+	LD	B,A
+	LD	HL,D.62E1
+	SUB	(HL)			; received block less then 2 off ?
+	CP	2
+	JR	NC,J$42A9		; nope, quit with wrong block received error
+	LD	(HL),B
+	OR	A			; expected block ?
+	CALL	NZ,C.521D		; nope, update and show block number
+	CALL	NZ,C.48F8		; nope, write to file
+	RET	C			; error, quit
+	LD	A,6			; ACK
+	CALL	C.4469			; send byte (if connected)
+	RET	C
+	JP	J$41E3
+
+J$42A9:	LD	E,6			; wrong block recieved
+	SCF
+	RET
+
+J$42AD:	LD	E,3			; timeout
+	SCF
+	RET
+
+	  Subroutine upload file with X-modem
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$42B1:	XOR	A
+	LD	(D.62ED),A		; checksum mode
+	LD	DE,0
+	LD	(D.62EE),DE		; block number
+	CALL	C.4148
+	CALL	C.47B4			; check if file exists
+	RET	C
+	CALL	C.44B3			; echo filename if wildcard
+	CALL	C.4882                  ; open file (with stop/start sending)
+	RET	C
+	LD	A,1
+	LD	(D.62E1),A		; X-modem block number = 1
+	LD	A,10
+	LD	(D.62E0),A		; number of reties X-modem block
+	LD	HL,60*60
+	CALL	C.43F6			; reset timer mark and initialize timer #0
+J.42DA:	CALL	C.4417			; is timer #0 finished ?
+	JR	NZ,J$42AD		; yep,
+	CALL	C.43D8			; send EOT if CTRL-STOP pressed and quit if so
+	CALL	C.448D			; get receive buffer status (if connected)
+	RET	C
+	JR	Z,J.42DA		; empty,
+	CALL	C.44A3			; get received byte (if connnected)
+	RET	C
+	CP	"C"			; request CRC16 ?
+	JR	NZ,J$42FD		; nope,
+	LD	HL,I.4CE2		; crc16 mode
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+	LD	A,1
+	LD	(D.62ED),A		; CRC16 mode
+	JR	J$4307
+
+J$42FD:	CP	15H			; NAK ?
+	JR	NZ,J.42DA		; nope, wait
+	LD	HL,I.4CD3		; checksum mode
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+J$4307:	LD	HL,J.4D21		; send block counter
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+J$430D:	LD	HL,(NULBUF)
+	LD	(HL),1
+	INC	HL
+	LD	A,(D.62E1)		; current X-modem block number
+	LD	(HL),A
+	INC	HL
+	CPL
+	LD	(HL),A
+	INC	HL
+	CALL	C$4ED5			; initialize buffer
+	PUSH	HL
+	CALL	C.48B2			; read from file (with stop/start sending)
+	POP	HL
+	RET	C			; error, quit
+	OR	A
+	JP	NZ,J.43AC
+	LD	A,(D.62ED)
+	AND	A			; CRC16 mode ?
+	JR	Z,J$4348		; nope,
+	PUSH	HL
+	POP	IX
+	LD	B,128
+	LD	HL,0			; CRC16 = 0
+J$4336:	LD	A,(IX+0)
+	INC	IX
+	CALL	C.4EF7			; update CRC16
+	DJNZ	J$4336
+	LD	(IX+0),H
+	LD	(IX+1),L		; store CRC16
+	JR	J.434F
+
+J$4348:	LD	B,128
+J$434A:	ADD	A,(HL)
+	INC	HL
+	DJNZ	J$434A
+	LD	(HL),A			; store checksum
+J.434F:	LD	B,128+4
+	LD	A,(D.62ED)
+	ADD	A,B
+	LD	B,A			; CRC16 has 1 extra byte
+	LD	HL,(NULBUF)
+J$4359:	LD	A,(HL)
+	CALL	C.4469			; send byte (if connected)
+	RET	C
+	INC	HL
+	DJNZ	J$4359
+	CALL	C.6000
+	DEFB	0
+	DEFW	C.4043                  ; clear receive buffer
+	CALL	C.6000
+	DEFB	0
+	DEFW	C.405E                  ; counter #1, clear
+J.436D:	EI
+	CALL	C.43D8			; send EOT if CTRL-STOP pressed and quit if so
+	LD	A,(D.6159)		; protocol timer 1 value
+	AND	A			; protocol timer 1 value = default ?
+	LD	D,10
+	JR	Z,J$437A		; yep, use protocol timeout value = 10
+	LD	D,A
+J$437A:	LD	A,(D.6079)		; counter #1, number of seconds
+	CP	D
+	JR	Z,J.43A4
+	CALL	C.448D			; get receive buffer status (if connected)
+	RET	C
+	JR	Z,J.436D		; empty,
+	CALL	C.44A3			; get received byte (if connnected)
+	RET	C
+	CP	15H			; NAK ?
+	JR	Z,J.43A4		; yep, retry
+	CP	18H			; CAN ?
+	JR	Z,J$43A0		; yep, quit with cancel received error
+	CP	6			; ACK ?
+	JR	NZ,J.436D		; nope, wait
+	LD	HL,D.62E1
+	INC	(HL)			; update X-modem block number
+	CALL	C.521D			; update and show block number
+	JP	J$430D
+
+J$43A0:	LD	E,4			; cancel received
+	SCF
+	RET
+
+J.43A4:	LD	HL,D.62E0
+	DEC	(HL)			; update number of retries X-modem block
+	JR	NZ,J.434F		; retries left, again
+	JR	J.43D4
+
+J.43AC:	LD	HL,10*60
+	CALL	C.43FC			; initialize timer #0
+	LD	A,4			; EOT
+	CALL	C.4469			; send byte (if connected)
+	RET	C
+J.43B8:	CALL	C.4417			; is timer #0 finished ?
+	JR	NZ,J$43CD		; yep,
+	CALL	C.448D			; get receive buffer status (if connected)
+	RET	C
+	JR	Z,J.43B8		; empty,
+	CALL	C.44A3			; get received byte (if connnected)
+	RET	C
+	CP	6			; ACK ?
+	JR	NZ,J.43B8		; nope, wait
+	XOR	A
+	RET
+
+J$43CD:	LD	HL,D.62E0
+	DEC	(HL)			; update number of reties X-modem block
+	JP	NZ,J.43AC		; retries left, again
+J.43D4:	LD	E,5			; out of retries
+	SCF
+	RET
+
+	  Subroutine send EOT if CTRL-STOP pressed and quit if so
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.43D8:	CALL	C.4EE8			; CTRL-STOP pressed (reset STOP flag) ?
+	RET	NC			; nope, quit
+	LD	A,4			; EOT
+	JR	J$43E6
+
+	  Subroutine send CAN if CTRL-STOP pressed and quit if so
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.43E0:	CALL	C.4EE8			; CTRL-STOP pressed (reset STOP flag) ?
+	RET	NC			; nope, quit
+	LD	A,18H			; CAN
+J$43E6:	PUSH	AF
+J$43E7:	CALL	C.4EE8			; CTRL-STOP pressed (reset STOP flag) ?
+	JR	C,J$43E7		; yep, wait
+	POP	AF
+	CALL	C.4469			; send byte (if connected)
+	POP	IX
+	SCF
+	LD	E,1			; canceled
+	RET
+
+	  Subroutine reset timer mark and initialize timer #0
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.43F6:	CALL	C.4462			; get current vdp interrupt counter
+	LD	(D.62DF),A		; update timer mark
+
+;	  Subroutine initialize timer #0
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.43FC:	LD	(D.62D8),HL		; update timer #0 value
+	LD	HL,I.62DE
+	RES	0,(HL)			; reset timer #0 flag
+	RET
+
+;	  Subroutine initialize timer #1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.4405:	LD	(D.62DA),HL		; update timer #1 value
+	LD	HL,I.62DE
+	RES	1,(HL)			; reset timer #1 flag
+	RET
+
+;	  Subroutine initialize timer #2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$440E:	LD	(D.62DC),HL		; update timer #2 value
+	LD	HL,I.62DE
+	RES	2,(HL)			; reset timer #2 flag
+	RET
+
+;	  Subroutine is timer #0 finished ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C.4417:	LD	A,1			; timer #0
+	DEFB	11H
+
+;	  Subroutine is timer #1 finished ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+?.441A:	LD	A,2			; timer #1
+	DEFB	11H
+
+;	  Subroutine is timer #2 finished ?
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$441D:	LD	A,4			; timer #2
+	PUSH	HL
+	PUSH	BC
+	PUSH	AF
+	CALL	C$442B			; update timers
+	POP	AF
+	EX	DE,HL
+	AND	(HL)			; is timer flag set ?
+	POP	BC
+	POP	HL
+	RET
+
+;	  Subroutine update timers
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
+C$442B:	LD	DE,I.62DE		; timer flags
+	CALL	C.4462			; get current vdp interrupt counter
+	LD	B,A
+	LD	HL,D.62DF
+	SUB	(HL)			; timer mark
+	RET	Z			; no vdp interrupt has accured, quit
+	LD	(HL),B
+	LD	C,A
+	LD	B,0FFH
+	LD	HL,(D.62D8)
+	ADD	HL,BC
+	LD	(D.62D8),HL		; update timer #0
+	JR	C,J$4448
+	EX	DE,HL
+	SET	0,(HL)			; set timer #0 flag
+	EX	DE,HL
+J$4448:	LD	HL,(D.62DA)
+	ADD	HL,BC
+	LD	(D.62DA),HL		; update timer #1
+	JR	C,J$4455
+	EX	DE,HL
+	SET	1,(HL)			; set timer #1 flag
+	EX	DE,HL
+J$4455:	LD	HL,(D.62DC)
+	ADD	HL,BC
+	LD	(D.62DC),HL		; update timer #2
+	RET	C
+	EX	DE,HL
+	SET	2,(HL)			; set timer #2 flag
+	EX	DE,HL
+	RET
+
+	  Subroutine get current vdp interrupt counter
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4462:	PUSH	HL
+	LD	HL,I$6049
+	LD	A,(HL)
+	POP	HL
+	RET
+
+	  Subroutine send byte (if connected)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4469:	PUSH	AF
+	CALL	C.4B86			; connected ?
+	JR	C,J.4488		; nope,
+	POP	AF
+	PUSH	AF
+	CALL	C.6000
+	DEFB	0
+	DEFW	C.404F			; RS232.SNDCHR
+	JR	C,J.4480
+	JP	Z,J.4484
+	POP	AF
+	EI
+	OR	A
+	RET
+
+J.4480:	LD	E,1			; canceled
+	JR	J.448A
+
+J.4484:	LD	E,3			; timeout
+	JR	J.448A
+
+J.4488:	LD	E,2			; carrier lost
+J.448A:	POP	AF
+	SCF
+	RET
+
+	  Subroutine get receive buffer status (if connected)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.448D:	PUSH	BC
+	PUSH	HL
+	CALL	C.6000
+	DEFB	0
+	DEFW	C.4049			; RS232.LOC
+	LD	A,L
+	OR	H			; receive buffer empty ?
+	POP	HL
+	POP	BC
+	PUSH	AF
+	CALL	C.4B86			; connected ?
+	JR	C,J.4488		; nope,
+	POP	AF
+	SCF
+	CCF
+	RET
+
+	  Subroutine get received byte (if connnected)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.44A3:	CALL	C.4B86			; connected ?
+	LD	E,2			; carrier lost
+	RET	C			; nope,
+	CALL	C.6000
+	DEFB	0
+	DEFW	C.404C			; RS232.GETCHR
+	EI
+	SCF
+	CCF
+	RET
+
+	  Subroutine echo filename if wildcard
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.44B3:	LD	A,(D.62F0)
+	AND	A			; wildcard flag ?
+	RET	Z			; nope, quit
+	LD	HL,TMPFCB+1
+	LD	B,8+3
+J$44BD:	LD	A,(HL)
+	CALL	C.4621			; echo character
+	INC	HL
+	DJNZ	J$44BD
+	JP	C.4EAB			; force new line
+
+	  Subroutine create or append file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.44C7:	CALL	C.47B4			; check if file exists
+	RET	C			; error, quit
+	PUSH	AF
+	CALL	C.44B3			; echo filename if wildcard
+	POP	AF
+	AND	A			; file exists ?
+	JR	NZ,J.44F5		; nope, create file
+	CALL	C$4EBE			; echo CAN and show file already exists message
+	CALL	C.4D4B			; wait for key
+	CALL	C.4EAB			; force new line
+	JR	C,J.44F1		; CTRL-STOP pressed, quit
+	CALL	C.4EDF			; to upper
+	CP	"R"			; replace ?
+	JR	Z,J.44F5		; yep, create file
+	CP	"A"			; append ?
+	JR	NZ,J.44F1		; nope, quit
+	CALL	C$511A			; open for append
+	CALL	C.4ED2			; initialize I/O channel buffer
+	JR	J$4502			; continue
+
+J.44F1:	LD	E,1			; canceled
+	SCF
+	RET
+
+J.44F5:	CALL	C.4851			; create file (swith stop/start sending)
+	RET	C			; error, quit
+J$44F9:	CALL	C.4ED2			; initialize I/O channel buffer
+	LD	A,(D.6048)
+	AND	10H			; raw mode ?
+	RET	NZ			; yep, quit
+J$4502:	LD	HL,(NULBUF)
+	LD	B,128
+J.4507:	CALL	C.4602			; check for CTRL-STOP
+	LD	A,(D.62E3)
+	CP	2			; in download ?
+	JP	Z,C.4555		; yep,
+	CALL	CHSNS
+	EI
+	PUSH	AF
+	CALL	C.6000
+	DEFB	2
+	DEFW	C.4049
+	POP	AF
+	JR	Z,J.453B
+	CALL	CHGET
+	EI
+	CP	0FFH
+	JR	NZ,J$452D
+	CALL	C.4B48
+	JR	J.453B
+
+J$452D:	CALL	C.4642
+	JR	C,J.4567
+	LD	D,A
+	LD	A,(D.6074)
+	AND	A                       ; full duplex mode ?
+	LD	A,D
+	CALL	NZ,C.4621		; nope, echo character
+J.453B:	CALL	C.4613
+	JR	C,J.4567
+	JR	Z,J.4507
+	CP	1AH
+	JR	Z,C.4555
+	CP	0FFH
+	JR	Z,J.4507
+	LD	(HL),A
+	INC	HL
+	DJNZ	J.4507
+	CALL	C.48F8			; write to file
+	RET	C			; error, quit
+	JP	J$44F9
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4555:	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JR	NC,J$455D		; nope,
+	LD	(HL),1AH
+	DEC	B
+J$455D:	LD	A,128
+	SUB	B
+	RET	Z
+	LD	E,A
+	LD	D,0
+	JP	C.48FB			; write random block to file (with stop/start sending)
+
+J.4567:	PUSH	DE
+	CALL	C.4555
+	POP	DE
+	SCF
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$456E:	CALL	C$4579
+	RET	NC
+	PUSH	DE
+	CALL	C.45F7
+	POP	DE
+	SCF
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4579:	CALL	C.47B4			; check if file exists
+	RET	C
+	CALL	C.44B3			; echo filename if wildcard
+	CALL	C.4882                  ; open file (with stop/start sending)
+	RET	C
+J$4584:	CALL	C.4ED2			; initialize I/O channel buffer
+	CALL	C.48B2			; read from file (with stop/start sending)
+	RET	C
+	OR	A
+	JR	NZ,C.45F7
+	LD	B,80H
+	LD	HL,(NULBUF)
+J$4593:	CALL	CHSNS
+	EI
+	PUSH	AF
+	CALL	C.6000
+	DEFB	2
+	DEFW	C.4049
+	POP	AF
+	JR	Z,J$45AA
+	CALL	CHGET
+	EI
+	CP	0FFH
+	CALL	Z,C.4B48
+J$45AA:	LD	A,(D.62E3)
+	CP	1			; in upload ?
+	JR	Z,C.45F7		; yep,
+	LD	A,(D.6048)
+	AND	10H			; raw mode ?
+	LD	A,(HL)
+	JR	NZ,J$45BD		; yep,
+	CP	1AH			; EOF ?
+	JR	Z,C.45F7		; yep,
+J$45BD:	CALL	C.4642
+	RET	C
+	CALL	C$45DE
+	LD	D,A
+	LD	A,(D.6074)
+	AND	A                       ; full duplex mode ?
+	LD	A,D
+	CALL	NZ,C.4621		; nope, echo character
+	INC	HL
+J$45CE:	CALL	C.4602			; check for CTRL-STOP
+	CALL	C.4613
+	RET	C
+	JR	NZ,J$45CE
+	DJNZ	J$4593
+	JP	J$4584
+
+?.45DC:	XOR	A
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$45DE:	PUSH	AF
+	PUSH	BC
+	PUSH	HL
+	LD	HL,(D.6159)		; protocol timer 1 value, timer 2 value
+	CP	0DH			; CR ?
+	JR	NZ,J$45E9		; nope, use default timer value
+	LD	L,H			; yep, use CR timer value
+J$45E9:	LD	H,0
+	CALL	C.43FC			; initialize timer #0
+J$45EE:	CALL	C.4417			; is timer #0 finished ?
+	JR	Z,J$45EE		; nope, wait
+	POP	HL
+	POP	BC
+	POP	AF
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.45F7:	LD	A,(D.6048)
+	AND	10H			; raw mode ?
+	RET	NZ			; yep, quit
+	LD	A,1AH			; EOF
+	JP	C.4642
+
+	  Subroutine check for CTRL-STOP
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4602:	CALL	C.4EE8			; CTRL-STOP pressed (reset STOP flag) ?
+	RET	NC			; nope, quit
+	PUSH	AF
+J$4607:	CALL	C.4EE8			; CTRL-STOP pressed (reset STOP flag) ?
+	JR	C,J$4607		; yep, wait
+	POP	AF
+	POP	IX
+	SCF
+	LD	E,1			; canceled
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4613:	CALL	C.4B86			; connected ?
+	LD	E,2			; carrier lost
+	RET	C			; nope,
+	CALL	C.6000
+	DEFB	1
+	DEFW	C.404F
+	EI
+	RET	Z
+
+	  Subroutine echo character
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4621:	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	PUSH	AF
+	CALL	C.6000
+	DEFB	2
+	DEFW	C.4043
+	POP	AF
+	PUSH	AF
+	LD	B,A
+	LD	A,(D.6073)
+	OR	A			; printer echo ?
+	LD	A,B
+	JR	Z,J$463B		; nope, quit
+	CALL	C.6000
+	DEFB	1
+	DEFW	C.4055			; byte to printer
+J$463B:	POP	AF
+	POP	HL
+	POP	DE
+	POP	BC
+	SCF
+	CCF
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4642:	PUSH	AF
+	CALL	C.4B86			; connected ?
+	JP	C,J.4488		; nope,
+	POP	AF
+	PUSH	AF
+	CALL	C.6000
+	DEFB	1
+	DEFW	C.4052
+	JP	C,J.4480
+	JP	Z,J.4484
+	POP	AF
+	OR	A
+	RET
+
+	  Subroutine save phone book data to file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+J$465A:	PUSH	AF
+	PUSH	DE
+	CALL	C.4765			; initialize FCB and check if file exists
+	JR	C,J.46CE		; error, quit
+	LD	L,A			; store file exists status
+	POP	DE
+	POP	AF
+	OR	L			; file exists ?
+	LD	H,E
+	LD	E,41H			; file already exists
+	SCF
+	RET	Z			; yep, quit with error
+	LD	E,H
+	PUSH	BC
+	PUSH	DE
+	CALL	C.4851			; create file (swith stop/start sending)
+	JR	C,J.46CE		; error, quit
+	POP	DE
+	POP	BC
+	LD	H,D
+	LD	L,E
+	OR	A
+	SBC	HL,BC
+	PUSH	DE
+	EX	DE,HL
+	CALL	C.49FC			; get pointer to buffer
+	XOR	A
+	LD	(HL),0FEH		; BSAVE file id
+	INC	HL
+	LD	(HL),A
+	INC	HL
+	LD	(HL),A			; start address = 0
+	INC	HL
+	LD	(HL),E
+	INC	HL
+	LD	(HL),D			; end address = size
+	INC	HL
+	LD	(HL),A
+	INC	HL
+	LD	(HL),A			; execute address = 0
+	POP	DE
+	PUSH	BC
+	PUSH	DE
+	LD	DE,7
+	CALL	C.48FB			; write random block to file (with stop/start sending)
+	JR	C,J.46CE		; error, quit
+	POP	DE
+	POP	BC
+J$469A:	LD	H,D
+	LD	L,E
+	SBC	HL,BC
+	JR	C,J$46C4
+	LD	A,H
+	OR	A
+	JR	Z,J$46A7
+	LD	HL,256-1
+J$46A7:	INC	HL
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	D,B
+	LD	E,C
+	LD	B,H
+	LD	C,L
+	CALL	C.49FC			; get pointer to buffer
+	EX	DE,HL
+	LDIR
+	POP	DE
+	PUSH	DE
+	CALL	C.48FB			; write random block to file (with stop/start sending)
+	JR	C,J$46C7		; error,
+	POP	BC
+	POP	DE
+	POP	HL
+	ADD	HL,BC
+	LD	B,H
+	LD	C,L
+	JR	J$469A
+
+J$46C4:	JP	C.4926                  ; close file (with stop/start sending)
+
+J$46C7:	PUSH	DE
+	CALL	C.4926                  ; close file (with stop/start sending)
+	POP	DE
+	SCF
+	POP	HL
+J.46CE:	POP	HL
+	POP	HL
+	RET
+
+	  Subroutine initialize FCB
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$46D1:	PUSH	BC
+	PUSH	HL
+	CALL	C.4B31			; initialize disk variables
+	LD	HL,(NULBUF)
+	LD	(HL),"""
+	INC	HL
+	EX	DE,HL
+	POP	HL
+J$46DE:	LD	A,(HL)
+	OR	A
+	JR	Z,J$46E7
+	LD	(DE),A
+	INC	HL
+	INC	DE
+	JR	J$46DE
+
+J$46E7:	EX	DE,HL
+	CALL	C$4AA1			; evaluate filename expression and initialize FCB
+	POP	BC
+	RET
+
+	  Subroutine load phone book data from file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+J$46ED:	PUSH	DE
+	PUSH	BC
+	CALL	C.4772			; open file
+	JR	C,J$4761		; error,
+	LD	DE,7
+	CALL	C.48D9			; read random block from file
+	JR	C,J.475C		; error,
+	LD	DE,7
+	SBC	HL,DE
+	LD	E,3DH
+	SCF
+	JR	NZ,J.475C
+	CALL	C.49FC			; get pointer to buffer
+	LD	A,(HL)
+	CP	0FEH			; BSAVE file id ?
+	SCF
+	JR	NZ,J.475C		; nope,
+	INC	HL
+	LD	C,(HL)
+	INC	HL
+	LD	B,(HL)			; start address
+	INC	HL
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A			; end address
+	OR	A
+	SBC	HL,BC			; size = end - start
+	POP	BC
+	POP	DE
+	ADD	HL,BC			; +size
+	OR	A
+	EX	DE,HL
+	SBC	HL,DE
+	EX	DE,HL
+	JR	NC,J.4728
+	LD	E,07H
+	RET
+
+J.4728:	PUSH	HL
+	OR	A
+	SBC	HL,BC
+	POP	HL
+	JR	C,J.4756
+	PUSH	BC
+	PUSH	HL
+	LD	DE,256
+	CALL	C.48D9			; read random block from file
+	JR	C,J.475C		; error,
+	EX	DE,HL
+	POP	HL
+	POP	BC
+	LD	A,D
+	OR	E
+	JR	Z,J.4756
+	PUSH	BC
+	PUSH	HL
+	CALL	C.49FC			; get pointer to buffer
+	PUSH	DE
+	LD	D,B
+	LD	E,C
+	POP	BC
+	PUSH	BC
+	LDIR
+	POP	DE
+	POP	BC
+	POP	HL
+	ADD	HL,DE
+	PUSH	HL
+	LD	H,B
+	LD	L,C
+	POP	BC
+	JR	J.4728
+
+J.4756:	PUSH	HL
+	CALL	C.4926                  ; close file (with stop/start sending)
+	POP	HL
+	RET
+
+J.475C:	PUSH	DE
+	CALL	C.4926                  ; close file (with stop/start sending)
+	POP	DE
+J$4761:	SCF
+	POP	HL
+	POP	HL
+	RET
+
+	  Subroutine initialize FCB and check if file exists
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4765:	CALL	C$46D1			; initialize FCB
+	RET	C			; error, quit
+	PUSH	BC
+	LD	HL,(NULBUF)
+	CALL	C.47B4			; check if file exists
+	POP	BC
+	RET
+
+	  Subroutine open file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4772:	CALL	C.4765			; initialize FCB and check if file exists
+	RET	C			; error, quit
+	CALL	C.4882                  ; open file (with stop/start sending)
+	RET	C			; error, quit
+	LD	HL,1
+	LD	(TMPFCB+14),HL
+	RET
+
+	  Subroutine read byte from file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+J$4781:	LD	DE,1
+	CALL	C.48D9			; read random block from file
+	RET	C
+	LD	A,H
+	OR	L
+	LD	HL,(NULBUF)
+	LD	A,(HL)
+	RET	NZ
+	LD	A,1AH
+	RET
+
+	  Subroutine TMPFCB to diskdrive file ?
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4792:	PUSH	BC
+	LD	B,A
+	LD	A,(TMPFCB+0)
+	CP	9
+	LD	A,B
+	POP	BC
+	RET
+
+	  Subroutine check if diskdrive or console device
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.479C:	LD	A,(TMPFCB+0)
+	CP	0FFH
+	RET	Z
+	CP	0FCH
+	CCF
+	RET
+
+	  Subroutine set DMA address
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$47A6:	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	RET	NC			; nope, quit
+	PUSH	DE
+	LD	D,H
+	LD	E,L
+	LD	C,1AH
+	CALL	C.4969			; Disk BASIC BDOS
+	POP	DE
+	RET
+
+	  Subroutine check if file exists
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.47B4:	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JR	C,J$47D1		; yep,
+	LD	A,(TMPFCB+0)
+	CP	0FFH			; CON device ?
+	JR	NZ,J$47C2               ; nope, test device open
+	OR	A
+	RET
+
+J$47C2:	CALL	C.4882                  ; open file (with stop/start sending)
+	PUSH	AF
+	CALL	C.4926                  ; close file (with stop/start sending)
+	POP	AF
+	LD	A,0FFH
+	JR	C,J$47CF
+	XOR	A
+J$47CF:	OR	A
+	RET
+
+J$47D1:	CALL	C$47A6			; set DMA address
+	CALL	C.47F3                  ; sender must stop sending
+	CALL	C$482E                  ; search file
+
+	  Subroutine sender may start sending
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.47DA:	PUSH	AF
+	PUSH	DE
+	PUSH	HL
+	CALL	C.4828			; port open ?
+	JR	Z,J.47EE		; nope, quit
+	LD	A,(D.6085)		; number of bytes in receive buffer
+	OR	A			; receive buffer empty ?
+	JR	NZ,J.47EE		; nope, quit
+	CALL	C.6000
+	DEFB	0
+	DEFW	C.407C                  ; signal sender to resume sending
+J.47EE:	EI
+	POP	HL
+	POP	DE
+	POP	AF
+	RET
+
+	  Subroutine sender must stop sending
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.47F3:	PUSH	AF
+	PUSH	DE
+	PUSH	HL
+	CALL	C.4828			; port open ?
+	JR	Z,J.47EE		; nope, quit
+	CALL	C.6000
+	DEFB	0
+	DEFW	C.407F                  ; signal sender to stop sending
+	LD	A,(D.6082)
+	BIT	0,A
+	CALL	NZ,C.480B
+	JR	J.47EE
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.480B:	CALL	C.6000
+	DEFB	0
+	DEFW	C.405E                  ; counter #1, clear
+	LD	A,(D.6085)		; number of bytes in receive buffer
+	LD	D,A
+J$4815:	LD	A,(D$608A)		; buffer size
+	CP	D
+	RET	Z
+	LD	A,(D.6085)		; number of bytes in receive buffer
+	CP	D
+	JR	NZ,C.480B
+	LD	A,(D$6077)		; counter #1, number of 1/10 seconds
+	CP	10
+	JR	C,J$4815
+	RET
+
+	  Subroutine port open ?
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4828:	LD	A,(D$6083)
+	BIT	3,A
+	RET
+
+	  Subroutine search file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$482E:	LD	BC,I.484F
+	CALL	C.4B08                  ; enter disk operation
+	LD	DE,TMPFCB
+	LD	C,11H
+	CALL	C.4969			; Disk BASIC BDOS
+	CALL	C.4B14                  ; leave disk operation
+	OR	A
+	RET	NZ
+	CALL	C.49FC			; get pointer to buffer
+	INC	HL
+	LD	DE,TMPFCB+1
+	LD	BC,8+3
+	LDIR
+	XOR	A
+	RET
+
+I.484F:	SCF
+	RET
+
+	  Subroutine create file (swith stop/start sending)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4851:	CALL	C.47F3                  ; sender must stop sending
+	CALL	C$4859			; create file
+	JR	C.47DA			; sender may start sending
+
+	  Subroutine create file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4859:	LD	BC,I.484F
+	CALL	C.4B08                  ; enter disk operation
+	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JR	NC,J$487D		; nope,
+	LD	DE,TMPFCB
+	LD	C,16H
+	CALL	C.4969			; Disk BASIC BDOS
+	OR	A
+J$486D:	CALL	C.4B14                  ; leave disk operation
+	LD	HL,1
+	LD	(TMPFCB+14),HL
+	OR	A
+	JR	Z,J$48A7
+	LD	E,43H
+	SCF
+	RET
+
+J$487D:	CALL	C$496E			; open I/O channel for sequential output
+	JR	J$486D
+
+	  Subroutine open file (with stop/start sending)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4882:	CALL	C.47F3                  ; sender must stop sending
+	CALL	C$488B			; open file (FCB)
+	JP	C.47DA			; sender may start sending
+
+	  Subroutine open file (FCB)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$488B:	LD	BC,I.484F
+	CALL	C.4B08                  ; enter disk operation
+	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JR	NC,J$48AD		; nope,
+	LD	DE,TMPFCB
+	LD	C,0FH
+	CALL	C.4969			; Disk BASIC BDOS
+	OR	A
+J$489F:	CALL	C.4B14                  ; leave disk operation
+	OR	A
+	LD	E,35H
+	SCF
+	RET	NZ
+J$48A7:	DEC	A
+	LD	(D.62E5),A		; set file is open flag
+	XOR	A
+	RET
+
+J$48AD:	CALL	C$4978			; open I/O channel for sequential input
+	JR	J$489F
+
+	  Subroutine read from file (with stop/start sending)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.48B2:	CALL	C.47F3                  ; sender must stop sending
+	CALL	C$48BB			; read from file
+	JP	C.47DA			; sender may start sending
+
+	  Subroutine read from file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$48BB:	LD	BC,I.484F
+	CALL	C.4B08                  ; enter disk operation
+	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JR	NC,J$48D2		; nope,
+	LD	DE,TMPFCB
+	LD	C,14H
+	CALL	C.4969			; Disk BASIC BDOS
+J$48CE:	CALL	C.4B14                  ; leave disk operation
+	RET
+
+J$48D2:	LD	B,128
+	CALL	C.49B6			; read from I/O channel
+	JR	J$48CE			; quit
+
+	  Subroutine read random block from file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.48D9:	LD	BC,I.484F
+	CALL	C.4B08                  ; enter disk operation
+	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JR	NC,J$48F2		; nope,
+	LD	H,D
+	LD	L,E
+	LD	DE,TMPFCB
+	LD	C,27H
+	CALL	C.4969			; Disk BASIC BDOS
+J$48EE:	CALL	C.4B14                  ; leave disk operation
+	RET
+
+J$48F2:	LD	B,E
+	CALL	C.49B6			; read from I/O channel
+	JR	J$48EE			; quit
+
+	  Subroutine write to file (with stop/start sending)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.48F8:	LD	DE,128
+
+	  Subroutine write random block to file (with stop/start sending)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.48FB:	CALL	C.47F3                  ; sender must stop sending
+	CALL	C$4904			; write random block to file
+	JP	C.47DA			; sender may start sending
+
+	  Subroutine write random block to file
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4904:	LD	BC,I.484F
+	CALL	C.4B08                  ; enter disk operation
+	EX	DE,HL
+	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JR	NC,J$4921		; nope,
+	LD	DE,TMPFCB
+	LD	C,26H
+	CALL	C.4969			; Disk BASIC BDOS
+J$4918:	CALL	C.4B14                  ; leave disk operation
+	OR	A
+	RET	Z
+	LD	E,42H
+	SCF
+	RET
+
+J$4921:	CALL	C$4992			; write to I/O channel
+	JR	J$4918			; quit
+
+	  Subroutine close file (with stop/start sending)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4926:	CALL	C.47F3                  ; sender must stop sending
+	CALL	C$492F			; close file/channel
+	JP	C.47DA			; sender may start sending
+
+	  Subroutine close file/channel
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$492F:	XOR	A
+	LD	(D.62E5),A		; reset file is open flag
+	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JP	NC,C.494C		; nope,
+	LD	BC,I.484F
+	CALL	C.4B08                  ; enter disk operation
+	LD	DE,TMPFCB
+	LD	C,10H
+	CALL	C.4969			; Disk BASIC BDOS
+J$4947:	CALL	C.4B14                  ; leave disk operation
+	OR	A
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.494C:	LD	BC,I$4957
+	CALL	C.4B08                  ; enter disk operation
+	CALL	C$49F1			; close I/O channel
+	JR	J$4947			; leave disk operation
+
+I$4957:	LD	HL,(FILTAB)
+	INC	HL
+	INC	HL
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,A
+	LD	(HL),0
+	CALL	C.494C
+	LD	E,13H
+	SCF
+	RET
+
+	  Subroutine Disk BASIC BDOS
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4969:	CALL	BDOS
+	EI
+	RET
+
+	  Subroutine open I/O channel for sequential output
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$496E:	CALL	C.479C                  ; check if diskdrive or console device
+	LD	E,3EH
+	RET	C
+	LD	E,2			; file mode = sequential output
+	JR	C.4980			; open I/O channel
+
+	  Subroutine open I/O channel for sequential input
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4978:	CALL	C.479C                  ; check if diskdrive or console device
+	LD	E,3EH
+	RET	C
+	LD	E,1			; file mode = sequential input
+
+	  Subroutine open I/O channel
+	     Inputs  E = file mode
+	     Outputs ________________________
+
+C.4980:	LD	A,(TMPFCB+0)
+	LD	D,A			; device code
+	LD	A,1
+	LD	HL,TMPFCB+13		; pointer to I/O channel
+	LD	IX,OPNFIL
+	CALL	C.4A0F			; wait ? ms when RS232 port is open, execute main bios
+	XOR	A
+	RET
+
+	  Subroutine write to I/O channel
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4992:	LD	B,L
+	CALL	C.49FC			; get pointer to buffer
+J$4996:	LD	A,(HL)
+	CP	1AH
+	JR	Z,J$499F
+	CP	03H
+	JR	NZ,J$49AA
+J$499F:	LD	A,3
+	LD	IX,FILOUT
+	CALL	C.4A12			; MAIN BIOS CALL
+	LD	A,(HL)
+	DEC	A
+J$49AA:	LD	IX,FILOUT
+	CALL	C.4A12			; MAIN BIOS CALL
+	INC	HL
+	DJNZ	J$4996
+	XOR	A
+	RET
+
+	  Subroutine read from I/O channel
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.49B6:	LD	A,(D.62E2)
+	CP	1			; error with I/O channel ?
+	RET	Z			; yep, quit
+	CALL	C.49FC			; get pointer to buffer
+	XOR	A
+	LD	C,A
+J$49C1:	PUSH	AF
+	LD	IX,INDSKC
+	CALL	C.4A12			; MAIN BIOS CALL
+	JR	C,J.49E7
+	CP	03H
+	JR	NZ,J$49D9
+	LD	IX,INDSKC
+	CALL	C.4A12			; MAIN BIOS CALL
+	JR	C,J.49E7
+	INC	A
+J$49D9:	LD	(HL),A
+	POP	AF
+	INC	HL
+	INC	A
+	JR	NZ,J$49E0
+	INC	C
+J$49E0:	DJNZ	J$49C1
+J$49E2:	LD	L,A
+	LD	H,C
+	XOR	A
+	OR	A
+	RET
+
+J.49E7:	LD	(HL),1AH
+	LD	A,1
+	LD	(D.62E2),A		; error with I/O channel
+	POP	AF
+	JR	J$49E2
+
+	  Subroutine close I/O channel
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$49F1:	LD	A,1
+	LD	IX,CLSFIL
+	CALL	C.4A0F			; wait ? ms when RS232 port is open, execute main bios
+	XOR	A
+	RET
+
+	  Subroutine get pointer to buffer
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.49FC:	LD	HL,(NULBUF)
+	CALL	C.4828			; port open ?
+	RET	Z			; nope, quit
+	LD	A,(D.6048)
+	AND	0C0H
+	CP	80H                     ; terminal mode = X-modem ?
+	RET	NZ			; nope, quit
+	INC	HL
+	INC	HL
+	INC	HL
+	RET
+
+	  Subroutine wait ? ms when RS232 port is open, execute main bios
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4A0F:	CALL	C$4A1D                  ; wait ? ms when RS232 port is open
+
+	  Subroutine MAIN BIOS CALL
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4A12:	PUSH	BC
+	PUSH	HL
+	CALL	C.6000
+	DEFB	0
+	DEFW	C.4079			; MAIN BIOS CALL
+	POP	HL
+	POP	BC
+	RET
+
+	  Subroutine wait ? ms when RS232 port is open
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4A1D:	PUSH	AF
+	CALL	C.4828			; port open ?
+	JR	Z,J$4A2E		; nope, quit
+	PUSH	BC
+	LD	BC,0
+J$4A27:	EI
+	DEC	BC
+	LD	A,B
+	OR	C
+	JR	NZ,J$4A27
+	POP	BC
+J$4A2E:	POP	AF
+	RET
+
+	  Subroutine get file name, initialize FCB
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4A30:	LD	HL,I$4C87		; enter file name
+	CALL	C.4EA8			; echo CAN and show message (with new line)
+	LD	HL,(NULBUF)
+	LD	(HL),"""
+	INC	HL
+	PUSH	HL
+	LD	B,31
+	LD	A," "
+J$4A41:	LD	(HL),A
+	INC	HL
+	DJNZ	J$4A41
+	LD	B,0
+	POP	HL
+J.4A48:	CALL	C.4D4B			; wait for key
+	LD	E,1			; canceled
+	RET	C			; CTRL-STOP pressed, quit
+	CP	1CH			; RIGHT ?
+	JR	NZ,J$4A57		; nope,
+
+; RIGHT
+
+	CALL	C$4AF0
+	JR	J$4A6B
+
+J$4A57:	CP	1DH			; LEFT ?
+	JR	Z,J$4A93		; yep,
+	CP	08H			; BS ?
+	JR	Z,J$4A81		; yep,
+	CP	0DH			; CR ?
+	JR	Z,J$4A9E		; yep,
+	CP	20H			; other control code ?
+	JR	C,J.4A48		; yep, ignore
+	CALL	C.4621			; echo character
+	LD	(HL),A
+J$4A6B:	INC	HL
+	INC	B
+	LD	A,B
+	CP	20H
+	JR	C,J.4A48
+	DEC	HL
+	DEC	B
+	CALL	C.4AFD
+	LD	A," "
+	CALL	C.4621			; echo character
+	CALL	C.4AFD
+	JR	J.4A48
+
+; BS
+
+J$4A81:	LD	A,B
+	AND	A
+	JR	Z,J.4A48
+	CALL	C.4AFD
+	LD	A," "
+	CALL	C.4621			; echo character
+	LD	(HL),A
+	CALL	C.4AFD
+	JR	J$4A9A
+
+; LEFT
+
+J$4A93:	LD	A,B
+	AND	A
+	JR	Z,J.4A48
+	CALL	C.4AFD
+J$4A9A:	DEC	HL
+	DEC	B
+	JR	J.4A48
+
+; CR
+
+J$4A9E:	CALL	C.4EAB			; force new line
+
+	  Subroutine evaluate filename expression and initialize FCB
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4AA1:	LD	(HL),"""
+	INC	HL
+	LD	(HL),0
+	LD	BC,I$4AEA
+	CALL	C.4B08                  ; enter disk operation
+	LD	HL,(NULBUF)
+	LD	IX,FILEVL
+	CALL	C.4A0F			; wait ? ms when RS232 port is open, execute main bios
+	CALL	C.4B14                  ; leave disk operation
+	LD	HL,TMPFCB
+	LD	(HL),D			; store FCB device id (disk drive id)
+	INC	HL
+	LD	DE,FILNAM
+	LD	B,8
+	CALL	C.4AD3			; store FCB file name (with wildcard support)
+	LD	B,3
+	CALL	C.4AD3			; store FCB file extension (with wildcard support)
+	XOR	A
+	LD	B,37-11-1
+J$4ACE:	LD	(HL),A
+	INC	HL
+	DJNZ	J$4ACE			; initialize rest of FCB
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4AD3:	LD	A,(DE)
+	CP	"*"
+	JR	Z,J.4ADE
+	LD	(HL),A
+	INC	HL
+	INC	DE
+	DJNZ	C.4AD3
+	RET
+
+J.4ADE:	LD	(HL),"?"
+	INC	HL
+	INC	DE
+	DJNZ	J.4ADE
+	LD	A,0FFH
+	LD	(D.62F0),A		; set wildcard flag
+	RET
+
+I$4AEA:	SCF
+	RET
+
+
+I$4AEC:	DEC	DE
+	LD	E,E
+	LD	B,E
+	NOP
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4AF0:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	HL,I$4AEC
+	CALL	C.4EC9			; show message
+J$4AFA:	JP	J.4B65			; quit
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4AFD:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	A,08H			; BS
+	CALL	C.4621			; echo character
+	JR	J$4AFA
+
+	  Subroutine enter disk operation
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4B08:	POP	HL
+	PUSH	BC
+	LD	A,1
+	LD	(D.62E6),A		; enter disk operation
+	LD	(D.62E7),SP
+	JP	(HL)
+
+	  Subroutine leave disk operation
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4B14:	POP	BC
+	INC	SP
+	INC	SP
+	PUSH	AF
+	XOR	A
+	LD	(D.62E6),A		; leave disk operation
+	POP	AF
+	PUSH	BC
+	RET
+
+	  Subroutine abort disk operation
+	     Inputs  ________________________
+	     Outputs ________________________
+
+J$4B1F:	PUSH	AF
+	LD	A,(D.62E6)
+	OR	A			; in disk operation ?
+	JR	Z,J$4B2F		; nope, quit
+	XOR	A
+	LD	(D.62E6),A		; leave disk operation
+	LD	SP,(D.62E7)		; restore stack before disk operation
+	RET
+
+J$4B2F:	POP	AF
+	RET
+
+	  Subroutine initialize disk variables
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4B31:	XOR	A
+	LD	(D.62E2),A		; no error with I/O channel
+	LD	(D.62E3),A		; not in upload/download
+	LD	(D.62E6),A		; not in disk operation
+	LD	(D.62E5),A		; reset file is open flag
+	LD	(D.62F0),A		; reset wildcard flag
+	LD	A,(D.6082)
+	LD	(D.62E4),A		; saved 6082
+	RET
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4B48:	PUSH	AF
+	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	HL,D.62E3
+	LD	(HL),0			; not in upload/download
+	CALL	CHGET
+	EI
+	SUB	06H			; F5 ?
+	JR	Z,J$4B6A
+	DEC	A			; F6 ?
+	JR	Z,J$4B6F
+	DEC	A			; F7 ?
+	JR	Z,J$4B74
+	DEC	A			; F8 ?
+	JR	Z,J$4B7E
+	DEC	A			; F9 ?
+	JR	Z,J$4B82
+J.4B65:	POP	HL
+	POP	DE
+	POP	BC
+	POP	AF
+	RET
+
+; F5, literal mode
+
+J$4B6A:	LD	HL,I$6072
+	JR	J.4B79
+
+; F6, duplex mode
+
+J$4B6F:	LD	HL,D.6074
+	JR	J.4B79
+
+; F7, printer echo
+
+J$4B74:	LD	HL,D.6073
+	JR	J.4B79
+
+J.4B79:	LD	A,(HL)
+	CPL
+	LD	(HL),A
+	JR	J.4B65			; quit
+
+; F8, upload
+
+J$4B7E:	LD	(HL),1			; in upload
+	JR	J.4B65			; quit
+
+; F9, download
+
+J$4B82:	LD	(HL),2			; in download
+	JR	J.4B65			; quit
+
+	  Subroutine connected ?
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4B86:	PUSH	BC
+	PUSH	DE
+	PUSH	HL
+	LD	A,(D$6093)		; 7FC0 register backup
+	AND	10H
+	JR	Z,J.4BA6
+	CALL	C.4EEF			; get carrier detect status
+	JR	NC,J.4BA6		; carrier, quit
+	LD	HL,4*60
+	CALL	C$440E			; initialize timer #2
+J$4B9B:	CALL	C.4EEF			; get carrier detect status
+	JR	NC,J.4BA6		; carrier, quit
+	CALL	C$441D			; is timer #2 finished ?
+	JR	Z,J$4B9B		; nope, wait
+	SCF
+J.4BA6:	EI
+	POP	HL
+	POP	DE
+	POP	BC
+	RET
+
+I$4BAB:	DEFB	"Up-load (Text protocol)",0
+
+I$4BC3:	DEFB	"Up-load (Raw protocol)",0
+
+I$4BDA:	DEFB	"Up-load (X-MODEM protocol)",0
+
+I$4BF5:	DEFB	"Down-load (Text protocol)",0
+
+I$4C0F:	DEFB	"Down-load (Raw protocol)",0
+
+J.4C28:	DEFB	"Down-load (X-MODEM protocol)",0
+
+I$4C45:	DEFB	"Up-load aborted",0
+
+I$4C55:	DEFB	"Down-load aborted",0
+
+I$4C67:	DEFB	"End of Up-load",0
+
+J.4C76:	DEFB	"End of Down-load",0
+
+I$4C87:	DEFB	"Enter file name",0
+
+	DEFB	"Up-load",0
+	DEFB	"Down-load",0
+
+I$4CA9:	DEFB	"File already exists",13,10
+	DEFB	"Replace,Cancel?(R/C)",0
+
+I.4CD3:	DEFB	"Sum-check mode",0
+
+I.4CE2:	DEFB	"CRC-16 mode",0
+
+I$4CEE:	DEFB	"File already exists",13,10
+	DEFB	"Replace,Append,Cancel?(R/A/C)",0
+
+J.4D21:	DEFB	"Sent block counter",0
+
+I.4D34:	DEFB	"Received block counter",0
+
+	  Subroutine wait for key
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4D4B:	PUSH	HL
+	PUSH	BC
+J$4D4D:	CALL	C.4EE8			; CTRL-STOP pressed (reset STOP flag) ?
+	JR	C,J$4D62		; yep, quit
+	CALL	C.6000
+	DEFB	2
+	DEFW	C.4049			; update function key display
+	EI
+	CALL	CHSNS			; key ?
+	JR	Z,J$4D4D		; nope, again
+	CALL	CHGET			; get key
+J$4D61:	OR	A
+J$4D62:	EI
+	POP	BC
+	POP	HL
+	RET
+
+I$4D66:	DEFB	1
+	DEFB	2
+	DEFB	3
+	DEFB	4
+	DEFB	5
+	DEFB	6
+	DEFB	19
+	DEFB	35H
+	DEFB	38H
+	DEFB	3DH
+	DEFB	3EH
+	DEFB	42H
+	DEFB	43H
+	DEFB	44H
+	DEFB	45H
+	DEFB	46H
+
+I$4D76:	DEFW	I.4D96
+	DEFW	I.4D9F
+	DEFW	I.4DAC
+	DEFW	I.4DB5
+	DEFW	I.4DC7
+	DEFW	I.4DD1
+	DEFW	I.4DE6
+	DEFW	I.4DF7
+	DEFW	I.4E06
+	DEFW	I.4E14
+	DEFW	I.4E22
+	DEFW	I.4E31
+	DEFW	I.4E3B
+	DEFW	I.4E4A
+	DEFW	I.4E5F
+	DEFW	I.4E6E
+
+I.4D96:	DEFB	"Canceled",0
+I.4D9F:	DEFB	"Carrier lost",0
+I.4DAC:	DEFB	"Time-out",0
+I.4DB5:	DEFB	"CAN code received",0
+I.4DC7:	DEFB	"Retry out",0
+I.4DD1:	DEFB	"Wrong block received",0
+I.4DE6:	DEFB	"Device I/O error",0
+I.4DF7:	DEFB	"File not found",0
+I.4E06:	DEFB	"Bad file name",0
+I.4E14:	DEFB	"Bad file mode",0
+I.4E22:	DEFB	"Bad drive name",0
+I.4E31:	DEFB	"Disk full",0
+I.4E3B:	DEFB	"Too many files",0
+I.4E4A:	DEFB	"Disk write protected",0
+I.4E5F:	DEFB	"Disk I/O error",0
+I.4E6E:	DEFB	"Disk offline",0
+I.4E7B:	DEFB	"Internal error",0
+
+	  Subroutine translate and show error message
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4E8A:	LD	A,E
+J.4E8B:	LD	HL,I$4D66
+	LD	BC,16
+	CPIR
+	LD	HL,I.4E7B		; internal error
+	JR	NZ,C.4EA8		; echo CAN and show message (with new line)
+	LD	A,10H
+	INC	C
+J$4E9B:	SUB	C
+	LD	E,A
+J$4E9D:	LD	D,0
+	LD	HL,I$4D76
+	ADD	HL,DE
+	ADD	HL,DE
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	EX	DE,HL
+
+	  Subroutine echo CAN and show message (with new line)
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4EA8:	CALL	C$4EC1			; echo CAN and show message
+
+	  Subroutine force new line
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4EAB:	PUSH	AF
+	LD	A,(CSRX)
+	OR	A
+	JR	Z,J$4EBC
+	LD	A,0DH			; CR
+	CALL	C.4621			; echo character
+	LD	A,0AH			; LF
+	CALL	C.4621			; echo character
+J$4EBC:	POP	AF
+	RET
+
+	  Subroutine echo CAN and show file already exists message
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4EBE:	LD	HL,I$4CEE		; file already exists
+
+	  Subroutine echo CAN and show message
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4EC1:	LD	A,18H			; CAN
+	CALL	C.4621			; echo character
+J$4EC6:	CALL	C.4EAB			; force new line
+
+	  Subroutine show message
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4EC9:	LD	A,(HL)
+	AND	A
+	RET	Z
+	CALL	C.4621			; echo character
+	INC	HL
+	JR	C.4EC9
+
+	  Subroutine initialize I/O channel buffer
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4ED2:	LD	HL,(NULBUF)
+
+	  Subroutine initialize buffer
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$4ED5:	PUSH	HL
+	LD	B,128
+J$4ED8:	LD	(HL)," "
+	INC	HL
+	DJNZ	J$4ED8
+	POP	HL
+	RET
+
+	  Subroutine to upper
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4EDF:	CP	"a"
+	RET	C
+	CP	"z"+1
+	RET	NC
+	SUB	20H
+	RET
+
+	  Subroutine CTRL-STOP pressed (reset STOP flag) ?
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4EE8:	CALL	C.6000
+	DEFB	0
+	DEFW	C.4040                  ; CTRL-STOP pressed (reset STOP flag) ?
+	RET
+
+	  Subroutine get carrier detect status
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4EEF:	CALL	C.6000
+	DEFB	0
+	DEFW	C.4046                  ; get carrier detect status
+	CCF
+	RET
+
+	  Subroutine update CRC16
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.4EF7:	LD	(D.62EB),HL
+	LD	HL,D.62EB+1
+	XOR	(HL)
+	LD	D,0
+	LD	E,A
+	LD	HL,I$4F1A
+	ADD	HL,DE
+	LD	A,(D.62EB+0)
+	LD	C,A
+	LD	A,(HL)
+	LD	(D.62EB+0),A
+	LD	HL,I$501A
+	ADD	HL,DE
+	LD	A,C
+	XOR	(HL)
+	LD	(D.62EB+1),A
+	LD	HL,(D.62EB)
+	RET
+
+I$4F1A:	NOP
+	RET	NZ
+
+	POP	BC
+	LD	BC,I$03C3
+	LD	(BC),A
+	JP	NZ,J$06C6
+
+	RLCA
+	RST	00H
+
+	DEC	B
+	PUSH	BC
+	CALL	NZ,C$CC04
+
+	INC	C
+	DEC	C
+	CALL	C$CF0F
+
+	ADC	A,0EH	; 14 
+	LD	A,(BC)
+	JP	Z,J$0BCB
+
+	RET
+
+
+?.4F37:	ADD	HL,BC
+	EX	AF,AF'
+	RET	Z
+	RET	C
+	JR	J$4F56
+
+
+?.4F3D:	EXX
+	DEC	DE
+	IN	A,(0DAH)
+	LD	A,(DE)
+	LD	E,0DEH
+	RST	18H
+
+	RRA
+	DEFB	0DDH		; << Illegal Op Code Byte >>
+
+
+	DEC	E
+	INC	E
+	CALL	C,C$D414
+J$4F4B	EQU	$-1
+
+	PUSH	DE
+	DEC	D
+	RST	10H
+
+	RLA
+	LD	D,0D6H
+	JP	NC,J$1312
+
+	OUT	(11H),A
+J$4F56	EQU	$-1
+	POP	DE
+	RET	NC
+
+	DJNZ	J$4F4B
+
+	JR	NC,J$4F8E
+
+	POP	AF
+	INC	SP
+	DI
+	JP	P,J$3632
+
+	OR	0F7H
+	SCF
+	PUSH	AF
+	DEC	(HL)
+	INC	(HL)
+	CALL	P,C$FC3C
+
+	DEFB	0FDH		; << Illegal Op Code Byte >>
+
+
+	DEC	A
+	RST	38H
+	CCF
+	LD	A,0FEH
+	JP	M,J$3B3A
+
+	EI
+	ADD	HL,SP
+	LD	SP,HL
+	RET	M
+
+	JR	C,J$4FA3
+
+	RET	PE
+
+	JP	(HL)
+
+
+?.4F7D:	ADD	HL,HL
+	EX	DE,HL
+	DEC	HL
+	LD	HL,(D$EEEA)
+	LD	L,2FH	; "/"
+	RST	28H
+
+	DEC	L
+	DEFB	0EDH		; << Illegal Op Code Byte >>
+
+
+	CALL	PE,C$E42C
+
+	INC	H
+	DEC	H
+	PUSH	HL
+J$4F8E:	DAA
+	RST	20H
+
+	AND	26H	; "&"
+	LD	(D$E3E2),HL
+	INC	HL
+	POP	HL
+	LD	HL,I$E020
+	AND	B
+	LD	H,B
+	LD	H,C
+	AND	C
+	LD	H,E
+	AND	E
+	AND	D
+	LD	H,D
+	LD	H,(HL)
+J$4FA3:	AND	(HL)
+	AND	A
+	LD	H,A
+	AND	L
+	LD	H,L
+	LD	H,H
+	AND	H
+	LD	L,H
+	XOR	H
+	XOR	L
+	LD	L,L
+	XOR	A
+	LD	L,A
+	LD	L,(HL)
+	XOR	(HL)
+	XOR	D
+	LD	L,D
+	LD	L,E
+	XOR	E
+	LD	L,C
+	XOR	C
+	XOR	B
+	LD	L,B
+	LD	A,B
+	CP	B
+	CP	C
+	LD	A,C
+	CP	E
+	LD	A,E
+	LD	A,D
+	CP	D
+	CP	(HL)
+	LD	A,(HL)
+	LD	A,A
+	CP	A
+	LD	A,L
+	CP	L
+	CP	H
+	LD	A,H
+	OR	H
+	LD	(HL),H
+	LD	(HL),L
+	OR	L
+	LD	(HL),A
+	OR	A
+	OR	(HL)
+	HALT
+
+
+?.4FD2:	LD	(HL),D
+	OR	D
+	OR	E
+	LD	(HL),E
+	OR	C
+	LD	(HL),C
+	LD	(HL),B
+	OR	B
+	LD	D,B
+	SUB	B
+	SUB	C
+	LD	D,C
+	SUB	E
+	LD	D,E
+	LD	D,D
+	SUB	D
+	SUB	(HL)
+	LD	D,(HL)
+	LD	D,A
+	SUB	A
+	LD	D,L
+	SUB	L
+	SUB	H
+	LD	D,H
+	SBC	A,H
+	LD	E,H
+	LD	E,L
+	SBC	A,L
+	LD	E,A
+	SBC	A,A
+	SBC	A,(HL)
+	LD	E,(HL)
+	LD	E,D
+	SBC	A,D
+	SBC	A,E
+	LD	E,E
+	SBC	A,C
+	LD	E,C
+	LD	E,B
+	SBC	A,B
+	ADC	A,B
+	LD	C,B
+	LD	C,C
+	ADC	A,C
+	LD	C,E
+	ADC	A,E
+	ADC	A,D
+	LD	C,D
+	LD	C,(HL)
+	ADC	A,(HL)
+	ADC	A,A
+	LD	C,A
+	ADC	A,L
+	LD	C,L
+	LD	C,H
+	ADC	A,H
+	LD	B,H
+	ADD	A,H
+	ADD	A,L
+	LD	B,L
+	ADD	A,A
+	LD	B,A
+	LD	B,(HL)
+	ADD	A,(HL)
+	ADD	A,D
+	LD	B,D
+	LD	B,E
+	ADD	A,E
+	LD	B,C
+	ADD	A,C
+	ADD	A,B
+	LD	B,B
+I$501A:	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+	LD	BC,I.80C0
+	LD	B,C
+	LD	BC,I.80C0
+	LD	B,C
+	NOP
+	POP	BC
+	ADD	A,C
+	LD	B,B
+
+	  Subroutine open for append
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$511A:	CALL	C.4792                  ; TMPFCB to diskdrive file ?
+	JR	C,J$512F		; yep,
+	CALL	C.47F3                  ; sender must stop sending
+	LD	E,8			; file mode = sequential append
+	CALL	C.4980			; open I/O channel
+	DEC	A
+	LD	(D.62E5),A		; set file is open flag
+	CALL	C.47DA			; sender may start sending
+	RET
+
+J$512F:	CALL	C.4882			; open file (with stop/start sending)
+J.5132:	POP	HL
+	RET	C			; error, quit
+	PUSH	HL
+	CALL	C.4ED2			; initialize I/O channel buffer
+	LD	HL,1
+	LD	(TMPFCB+14),HL
+	LD	DE,TMPFCB+33
+	LD	HL,TMPFCB+16
+	LD	BC,4
+	LDIR
+	LD	HL,TMPFCB+33
+	LD	B,4
+	XOR	A
+J$514F:	OR	(HL)
+	INC	HL
+	DJNZ	J$514F			; file size = 0 ?
+	RET	Z			; yep, quit
+	LD	A,(TMPFCB+33)
+	AND	7FH			; file size multiply of 128 ?
+	LD	B,A
+	JR	NZ,J$518E		; nope,
+	CALL	C.51D2
+	CALL	C.47F3                  ; sender must stop sending
+	LD	DE,128
+	CALL	C.48D9			; read random block from file
+	JR	C,J.5132
+	CALL	C.47DA			; sender may start sending
+	LD	HL,(NULBUF)
+	LD	B,128
+J$5172:	LD	A,(D.6048)
+	AND	10H			; raw mode ?
+	JR	NZ,J$517E		; yep,
+	LD	A,(HL)
+	CP	1AH
+	JR	Z,J$5182
+J$517E:	INC	HL
+	DJNZ	J$5172
+	RET
+
+J$5182:	PUSH	HL
+	PUSH	BC
+	CALL	C.51D2
+	POP	BC
+	POP	HL
+	POP	IX
+	JP	J.4507
+
+J$518E:	LD	A,(TMPFCB+33)
+	AND	80H
+	LD	(TMPFCB+33),A		; record number = multiply of 128
+	PUSH	AF
+	PUSH	BC
+	CALL	C.47F3                  ; sender must stop sending
+	LD	D,B
+	LD	E,0
+	CALL	C.48D9			; read random block from file
+	JR	C,J$51CB
+	CALL	C.47DA			; sender may start sending
+	LD	HL,(NULBUF)
+	POP	BC
+	LD	C,128
+J$51AC:	LD	A,(D.6048)
+	AND	10H			; raw mode ?
+	JR	NZ,J$51B8		; yep,
+	LD	A,(HL)
+	CP	1AH
+	JR	Z,J$51C8
+J$51B8:	DEC	C
+	INC	HL
+	DJNZ	J$51AC
+	INC	C
+	LD	B,C
+	DEC	HL
+J$51BF:	POP	AF
+	LD	(TMPFCB+33),A
+	POP	IX
+	JP	J.4507
+
+J$51C8:	LD	B,C
+	JR	J$51BF
+
+J$51CB:	POP	IX
+	POP	IX
+	JP	J.5132
+
+	  Subroutine __________________________
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.51D2:	LD	HL,(TMPFCB+33+0)
+	LD	DE,(TMPFCB+33+2)
+	LD	A,H
+	ADD	A,A
+	RL	L
+	LD	L,0
+	ADC	A,L
+	LD	L,A
+	LD	A,E
+	ADD	A,A
+	RL	H
+	LD	H,0
+	ADC	A,H
+	LD	H,A
+	RL	E
+	LD	A,0
+	ADC	A,A
+	LD	E,A
+	LD	D,0
+	DEC	HL
+	LD	A,H
+	SRA	A
+	AND	7FH
+	LD	E,A
+	LD	A,H
+	AND	01H	; 1 
+	LD	A,0
+	JR	Z,J$5201
+	LD	A,80H
+J$5201:	PUSH	AF
+	LD	A,L
+	SRA	A
+	AND	7FH
+	LD	H,A
+	POP	AF
+	ADD	A,H
+	LD	H,A
+	LD	A,L
+	AND	01H
+	LD	A,0
+	JR	Z,J$5214
+	LD	A,80H
+J$5214:	LD	L,A
+	LD	(TMPFCB+33+0),HL
+	LD	(TMPFCB+33+2),DE
+	RET
+
+	  Subroutine update and show block number
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.521D:	PUSH	HL
+	PUSH	AF
+	LD	HL,(D.62EE)
+	INC	HL
+	LD	(D.62EE),HL		; update block number
+	LD	A,H
+	RL	A			; =32768 ?
+	JR	NC,J$522E		; nope,
+	LD	HL,0			; block number = 0
+J$522E:	LD	(D.62EE),HL		; update block number
+	CALL	C$5237			; show block number
+	POP	AF
+	POP	HL
+	RET
+
+	  Subroutine show block number
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$5237:	PUSH	HL
+	PUSH	BC
+	PUSH	DE
+	PUSH	AF
+	PUSH	IX
+	LD	B,4
+J$523F:	PUSH	BC
+	CALL	C$5268			; divide by 10
+	LD	A,L
+	CALL	C$525F			; to ascii hex
+	PUSH	BC
+	POP	HL
+	POP	BC
+	PUSH	AF
+	DJNZ	J$523F
+	CALL	C$5278			; move cursor left 4 positions
+	LD	B,4
+J$5252:	POP	AF
+	CALL	C.4621			; echo character
+	DJNZ	J$5252
+	POP	IX
+	POP	AF
+	POP	DE
+	POP	BC
+	POP	HL
+	RET
+
+	  Subroutine to ascii hex
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$525F:	CP	9+1
+	JR	C,J$5265
+	ADD	A,7
+J$5265:	ADD	A,"0"
+	RET
+
+	  Subroutine divide by 10
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$5268:	LD	DE,10
+	LD	BC,0
+J$526E:	OR	A
+	SBC	HL,DE
+	JR	C,J$5276
+	INC	BC
+	JR	J$526E
+
+J$5276:	ADD	HL,DE
+	RET
+
+	  Subroutine move cursor left 4 positions
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C$5278:	LD	HL,I$527F
+	CALL	C.5284			; echo string
+	RET
+
+
+I$527F:	DEFB	27,"[4D",0
+
+	  Subroutine echo string
+	     Inputs  ________________________
+	     Outputs ________________________
+
+C.5284:	LD	A,(HL)
+	AND	A
+	RET	Z
+	INC	HL
+	CALL	C.4621			; echo character
+	JR	C.5284
+
+	END

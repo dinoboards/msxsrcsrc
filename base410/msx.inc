@@ -1,6 +1,3 @@
-
-
-
 MSXVER  EQU     3                       ; MSX version
 MSXMID  EQU     1                       ; MSX Midi
 
@@ -213,7 +210,7 @@ CHRVLN  EQU     "&"
         ENDIF
 
         IF      (BASVER EQ 1) AND (CNTRY EQ 3)
-CHRCUR  EQU     0ACH            ; pound sign
+CHRCUR  EQU     09CH            ; pound sign
 CHRFLN  EQU     "\"
 CHRVLN  EQU     "&"
         ENDIF

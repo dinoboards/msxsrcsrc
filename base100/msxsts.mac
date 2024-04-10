@@ -1,0 +1,2114 @@
+; MSXSTS.MAC
+
+; MSX BASIC statements, MSX 1 version (version 1.0)
+
+; Source re-created by Z80DIS 2.2
+; Z80DIS was written by Kenneth Gielow, Palo Alto, CA
+
+; Code Copyrighted by ASCII and maybe others
+; Source comments by Arjen Zeilemaker
+
+; Sourcecode supplied for STUDY ONLY
+; Recreation NOT permitted without authorisation of the copyrightholders
+
+
+        .Z80
+        ASEG
+        ORG     73B7H
+
+
+        INCLUDE MSX.INC
+
+
+SYNCHR  EQU     0008H
+CHRGTR  EQU     0010H
+OUTDO   EQU     0018H
+DCOMPR  EQU     0020H
+WRTVDP  EQU     0047H
+WRTVRM  EQU     004DH
+RDVRM   EQU     004AH
+FILVRM  EQU     0056H
+LDIRMV  EQU     0059H
+LDIRVM  EQU     005CH
+CHGMOD  EQU     005FH
+CHGCLR  EQU     0062H
+CLRSPR  EQU     0069H
+SETTXT  EQU     0078H
+SETGRP  EQU     007EH
+SETMLT  EQU     0081H
+CALPAT  EQU     0084H
+CALATR  EQU     0087H
+GSPSIZ  EQU     008AH
+GICINI  EQU     0090H
+WRTPSG  EQU     0093H
+STRTMS  EQU     0099H
+CNVCHR  EQU     00ABH
+POSIT   EQU     00C6H
+FNKSB   EQU     00C9H
+ERAFNK  EQU     00CCH
+DSPFNK  EQU     00CFH
+GTSTCK  EQU     00D5H
+GTTRIG  EQU     00D8H
+GTPAD   EQU     00DBH
+GTPDL   EQU     00DEH
+STMOTR  EQU     00F3H
+LFTQ    EQU     00F6H
+PUTQ    EQU     00F9H
+GETVCP  EQU     0150H
+GETVC2  EQU     0153H
+
+LINLEN  EQU     0F3B0H
+TXTNAM  EQU     0F3B3H
+CLIKSW  EQU     0F3DBH
+CSRY    EQU     0F3DCH
+RG0SAV  EQU     0F3DFH
+RG1SAV  EQU     0F3E0H
+FORCLR  EQU     0F3E9H
+BAKCLR  EQU     0F3EAH
+BDRCLR  EQU     0F3EBH
+ATRBYT  EQU     0F3F2H
+CS1200  EQU     0F3FCh
+LOW.    EQU     0F406h
+NTMSXP  EQU     0F417H
+DSCTMP  EQU     0F698H
+FNKSTR  EQU     0F87FH
+MCLTAB  EQU     0F956H
+MCLFLG  EQU     0F958H
+PRSCNT  EQU     0FB35H
+SAVSP   EQU     0FB36H
+VOICEN  EQU     0FB38H
+SAVVOL  EQU     0FB39H
+MCLLEN  EQU     0FB3BH
+MCLPTR  EQU     0FB3CH
+MUSICF  EQU     0FB3FH
+PLYCNT  EQU     0FB40H
+FNKFLG  EQU     0FBCEH
+TRPTBL  EQU     0FC4CH
+INTFLG  EQU     0FC9BH
+JIFFY   EQU     0FC9EH
+INTVAL  EQU     0FCA0H
+INTCNT  EQU     0FCA2H
+SCRMOD  EQU     0FCAFH
+
+H.ONGO  EQU     0FDEAH
+H.DSKO  EQU     0FDEFH
+H.SETS  EQU     0FDF4H
+H.NAME  EQU     0FDF9H
+H.KILL  EQU     0FDFEH
+H.IPL   EQU     0FE03H
+H.COPY  EQU     0FE08H
+H.CMD   EQU     0FE0DH
+H.DSKF  EQU     0FE12H
+H.DSKI  EQU     0FE17H
+H.ATTR  EQU     0FE1CH
+H.LSET  EQU     0FE21H
+H.RSET  EQU     0FE26H
+H.FIEL  EQU     0FE2BH
+H.MKI$  EQU     0FE30H
+H.MKS$  EQU     0FE35H
+H.MKD$  EQU     0FE3AH
+H.CVI   EQU     0FE3FH
+H.CVS   EQU     0FE44H
+H.CVD   EQU     0FE49H
+H.SCRE  EQU     0FFC0H
+H.PLAY  EQU     0FFC5H
+
+
+        PUBLIC  SETGSB
+        PUBLIC  PLYEOS
+        PUBLIC  GETCSP
+        PUBLIC  CSRLIN
+        PUBLIC  PLAYS
+        PUBLIC  PLAYF
+        PUBLIC  TIMES
+        PUBLIC  TIMEF
+        PUBLIC  SPRITE
+        PUBLIC  SPRITF
+        PUBLIC  VDPS
+        PUBLIC  VDPF
+        PUBLIC  BASES
+        PUBLIC  BASEF
+        PUBLIC  DSKO$
+        PUBLIC  SETS
+        PUBLIC  NAME
+        PUBLIC  KILL
+        PUBLIC  IPL
+        PUBLIC  COPY
+        PUBLIC  CMD
+        PUBLIC  DSKF
+        PUBLIC  DSKI$
+        PUBLIC  ATTR$
+        PUBLIC  LSET
+        PUBLIC  RSET
+        PUBLIC  FIELD
+        PUBLIC  MKI$
+        PUBLIC  MKS$
+        PUBLIC  MKD$
+        PUBLIC  CVI
+        PUBLIC  CVS
+        PUBLIC  CVD
+        PUBLIC  MOTOR
+        PUBLIC  SOUND
+        PUBLIC  PUTS
+        PUBLIC  GETS
+        PUBLIC  LOCATE
+        PUBLIC  STOPT
+        PUBLIC  INTS
+        PUBLIC  STRIGS
+        PUBLIC  ONGOT
+        PUBLIC  KEYS
+        PUBLIC  STICK
+        PUBLIC  TRIG
+        PUBLIC  PDL
+        PUBLIC  PAD
+        PUBLIC  COLOR
+        PUBLIC  SCREEN
+        PUBLIC  VPOKE
+        PUBLIC  VPEEK
+
+        EXTRN   DECDIV
+        EXTRN   MOVFM
+        IF      OPTM EQ 0
+        EXTRN   MOVRM
+        ELSE
+        EXTRN   GETBCD
+        ENDIF
+        EXTRN   VMOVAF
+        EXTRN   FRCINT
+        EXTRN   UMULT
+        EXTRN   FCERR
+        EXTRN   SNERR
+        EXTRN   FRMEVL
+        EXTRN   GETBYT
+        EXTRN   GETUIN
+        EXTRN   FRMEQL
+        EXTRN   CONINT
+        EXTRN   FRESTR
+        EXTRN   BLTUC
+        EXTRN   STRINI
+        EXTRN   ONTRP
+        EXTRN   OFFTRP
+        EXTRN   STPTRP
+        EXTRN   SNGFLT
+        EXTRN   PUTNEW
+        EXTRN   CRDO
+        EXTRN   MCLSCN
+        EXTRN   FETCHR
+        EXTRN   DECFET
+        EXTRN   VALSC2
+        EXTRN   MCLXEQ
+        EXTRN   CONIA
+        EXTRN   CONSUI
+        EXTRN   MORCP2
+        EXTRN   CONSIH
+        EXTRN   GETPUT
+        EXTRN   NEWSTN
+        EXTRN   SCAN1
+
+
+_RST    MACRO   X
+        IFIDN   <X>,<SYNCHR>
+        RST     08H
+        ENDIF
+        IFIDN   <X>,<CHRGTR>
+        RST     10H
+        ENDIF
+        IFIDN   <X>,<OUTDO>
+        RST     18H
+        ENDIF
+        IFIDN   <X>,<DCOMPR>
+        RST     20H
+        ENDIF
+        IFIDN   <X>,<GETYPR>
+        RST     28H
+        ENDIF
+        IFIDN   <X>,<CALLF>
+        RST     30H
+        ENDIF
+        ENDM
+
+_MSXCP	MACRO	X,Y
+	X EQU $
+	IF2
+	IF	($ NE Y)
+	.PRINTX	"ERROR: MSX incompatible, subroutine &X not aligned to &Y"
+	ENDIF
+	ENDIF
+	ENDM
+
+
+; START SUBTTL  MSXSTS
+
+        SUBTTL  MSXSTS
+
+;       Subroutine      MOTOR statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+MOTOR:
+C73B7:  ld      e,0FFH                  ; default = toggle
+        jr      z,A73C6                 ; end of statement, toggle
+        sub     0EBH                    ; OFF token ?
+        ld      e,a                     ; off
+        jr      z,A73C5                 ; yep, off
+        _RST    SYNCHR
+        defb    095H                    ; check for ON token
+        ld      e,1                     ; on
+        defb    03EH                    ; LD A,xx: trick to skip next instruction
+A73C5:  _RST    CHRGTR
+A73C6:  ld      a,e
+        jp      STMOTR                  ; change cassette motor status
+
+;       Subroutine      SOUND statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SOUND:
+C73CA:  CALL    GETBYT                  ; evaluate byte operand
+        CP      13+1                    ; register 0-13 ?
+        JP      NC,FCERR                ; nope, illegal function call
+        PUSH    AF                      ; store register
+        _RST    SYNCHR
+        DEFB    ','                     ; check for ,
+        CALL    GETBYT                  ; evaluate byte operand
+        POP     AF                      ; restore register
+        CP      7                       ; register 7 ?
+        JR      NZ,J73E1                ; nope, write PSG register
+        RES     6,E
+        SET     7,E                     ; make sure PSG I/O port definition is not changed
+J73E1:  JP      WRTPSG                  ; write PSG register
+
+I73E4:  DEFB    ' '
+
+; PSG VCB structure:
+;
+;       +0,2    timer
+;       +2      size of macro string
+;       +3,2    pointer to macro string
+;       +5,2    top of stack
+;       +7      size music packet
+;       +8,7    music packet
+;               +0, high byte duration counter + music packet size (b7-b5)
+;               +1, low byte duration counter
+;               +2, music data. b7+b6 = type
+;                       type 00hhhhhh = frequency packet, h = high byte frequency, next byte = low byte frequency
+;                       type 1x0svvvv = volume/envelope specified, s = shape bit, vvvv = volume/shape
+;                       type x10svvvv = envelope period specified, next byte = low byte period, next byte = high byte period
+;       +15     octave
+;       +16     note length
+;       +17     tempo
+;       +18     volume
+;       +19,2   envelope period
+;       +21,16  stack (8 words, maximium of 3 macro sub strings)
+
+;       Subroutine      PLAY statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+PLAYS:
+C73E5:  CALL    H.PLAY
+        PUSH    HL                      ; store BASIC pointer
+        LD      HL,I752E
+        LD      (MCLTAB),HL             ; macro language command table = play macro language
+        LD      A,0                     ; voice = 0
+        LD      (PRSCNT),A              ; no macro string of any voice finished, music dequeueing not in progress
+        LD      HL,-10
+        ADD     HL,SP
+        LD      (SAVSP),HL              ; during PLAY, 5 words extra are on stack
+        POP     HL                      ; restore BASIC pointer
+        PUSH    AF                      ; store voice
+J73FD:  CALL    FRMEVL                  ; evaluate expression
+        EX      (SP),HL                 ; store BASIC pointer, restore voice
+        PUSH    HL                      ; store voice
+        CALL    FRESTR                  ; free temporary string with type check
+
+        IF      OPTM EQ 0
+        CALL    MOVRM                   ; load from HL
+        LD      A,E
+        OR      A                       ; stringsize zero ?
+        JR      NZ,J7413                ; nope,
+        LD      E,1                     ; string size = 1
+        LD      BC,I73E4                ; string with space
+        LD      D,C
+        LD      C,B
+J7413:  POP     AF                      ; restore voice
+        PUSH    AF                      ; store voice
+        CALL    GETVCP                  ; get pointer to macro string info voice buffer
+        LD      (HL),E                  ; size of macro string
+        INC     HL
+        LD      (HL),D
+        INC     HL
+        LD      (HL),C                  ; pointer to macro string
+
+        ELSE
+        CALL    GETBCD                  ; load from HL
+        LD      A,D
+        OR      A                       ; stringsize zero ?
+        JR      NZ,J7413                ; nope,
+        LD      D,1                     ; string size = 1
+        LD      BC,I73E4                ; string with space
+J7413:  POP     AF                      ; restore voice
+        PUSH    AF                      ; store voice
+        CALL    GETVCP                  ; get pointer to macro string info voice buffer
+        LD      (HL),D                  ; size of macro string
+        INC     HL
+        LD      (HL),C
+        INC     HL
+        LD      (HL),B                  ; pointer to macro string
+        ENDIF
+
+        INC     HL
+        LD      D,H
+        LD      E,L                     ; pointer to top of stack
+        LD      BC,36-3-5
+        ADD     HL,BC
+        EX      DE,HL                   ; null pointer macor string and dummy size of macro string on stack
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D                  ; initialize stack
+        POP     BC                      ; restore voice
+        POP     HL                      ; restore BASIC pointer
+        INC     B                       ; update voice
+        LD      A,B
+        CP      2+1                     ; done all voices ?
+        JR      NC,J7446                ; yep, finish
+        DEC     HL
+        _RST    CHRGTR                  ; end of statement ?
+        JR      Z,J7439			; yep,
+        PUSH    BC                      ; store voice
+        _RST    SYNCHR
+        DEFB    ','                     ; check for ,
+        JR      J73FD                   ; next voice
+
+J7439:  LD      A,B
+        LD      (VOICEN),A              ; update current voice
+        CALL    C7507                   ; end of queue mark in current voice queue
+        INC     B                       ; update voice
+        LD      A,B
+        CP      2+1                     ; done all voices ?
+        JR      C,J7439                 ; nope, next voice
+J7446:  DEC     HL
+        _RST    CHRGTR                  ; end of statement ?
+        JP      NZ,SNERR                ; nope, syntax error
+        PUSH    HL                      ; store BASIC pointer
+
+; start processing macro strings
+
+J744C:  XOR     A                       ; voice = 0
+J744D:  PUSH    AF                      ; store voice
+        LD      (VOICEN),A              ; update current voice
+        LD      B,A                     ; store voice
+        CALL    C7521                   ; current voice queue full ?
+        JP      C,J74D6                 ; yep, skip to next voice
+        LD      A,B                     ; restore voice
+        CALL    GETVCP                  ; get pointer to macro string info voice buffer
+        LD      A,(HL)
+        OR      A                       ; macro string size = 0 ?
+        JP      Z,J74D6                 ; yep, skip to next voice
+        LD      (MCLLEN),A              ; update macro string size
+        INC     HL
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)                  ; pointer to macro string
+        INC     HL
+        LD      (MCLPTR),DE             ; update macro string pointer
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)                  ; source start = top of stack
+        INC     HL
+        PUSH    HL                      ; store pointer to size of packet
+        LD      L,36                    ; offset = start of stack
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        PUSH    HL
+        LD      HL,(SAVSP)
+        DEC     HL                      ; destination end = below current Z80 stack
+        POP     BC                      ; source end =
+        DI                              ; no interrupts during stack manupilation
+        CALL    BLTUC                   ; move data (copy stack data from VCB to Z80 stack)
+        POP     DE                      ; restore pointer to size of packet
+        LD      H,B
+        LD      L,C
+        LD      SP,HL                   ; stack pointer = destination start
+        EI                              ; finished stack manupilation
+        LD      A,0FFH
+        LD      (MCLFLG),A              ; MCL = music
+        JP      MCLSCN                  ; execute macro command (if any)
+
+; queue is full
+
+J748E:  LD      A,(MCLLEN)
+        OR      A                       ; end of macro string ?
+        JR      NZ,J7497                ; nope, skip end of queue marker
+
+; end of macro string
+
+PLYEOS:
+J7494:  CALL    C7507                   ; end of queue mark in current voice queue
+
+; update VCB, remove VCB stack and continue with next voice
+
+J7497:  LD      A,(VOICEN)              ; current voice
+        CALL    GETVCP                  ; get pointer to macro string info voice buffer
+        LD      A,(MCLLEN)
+        LD      (HL),A                  ; update size of macro string
+        INC     HL
+        LD      DE,(MCLPTR)
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D                  ; update pointer to macro string
+        LD      HL,0
+        ADD     HL,SP
+        EX      DE,HL                   ; source start = top of stack
+        LD      HL,(SAVSP)
+        DI                              ; no interrupts during stack manupilation
+        LD      SP,HL                   ; restore to Z80 stack
+        POP     BC
+        POP     BC
+        POP     BC                      ; cleanup stack
+        PUSH    HL                      ; store stack pointer
+        OR      A
+        SBC     HL,DE                   ; stack empty ?
+        JR      Z,J74D4                 ; yep, continue with next voice
+        LD      A,0F0H
+        AND     L
+        OR      H                       ; size on stack < 16 bytes ?
+        JP      NZ,FCERR                ; nope, illegal function call
+        LD      L,36                    ; offset = start of stack
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        POP     BC                      ; source end = start of stack
+        DEC     BC
+        CALL    BLTUC                   ; move data (copy stack data from Z80 stack to VCB)
+        POP     HL                      ; restore pointer to size of packet
+        DEC     HL
+        LD      (HL),B
+        DEC     HL
+        LD      (HL),C                  ; update top of stack
+        JR      J74D6                   ; next voice
+
+J74D4:  POP     BC
+        POP     BC                      ; clean up stack
+
+; next voice
+
+J74D6:  EI                              ; finished stack manupilation
+        POP     AF                      ; restore voice
+        INC     A                       ; update voice
+        CP      2+1                     ; done all voices ?
+        JP      C,J744D                 ; nope, next voice
+        DI                              ; no interrupts
+        LD      A,(INTFLG)
+        CP      3                       ; CTRL/STOP pressed ?
+        JR      Z,J7502                 ; yep, silence PSG and quit
+        LD      A,(PRSCNT)
+        RLCA                            ; music dequeueing in progress ?
+        JR      C,J74F3                 ; yep, skip start music dequeueing
+        LD      HL,PLYCNT
+        INC     (HL)                    ; increase number of play sequences
+        CALL    STRTMS                  ; start music dequeuing
+J74F3:  EI
+        LD      HL,PRSCNT
+        LD      A,(HL)
+        OR      80H
+        LD      (HL),A                  ; set music dequeueing in progress flag
+        CP      80H+3                   ; macro strings of all voices finished ?
+        JP      NZ,J744C                ; nope, continue processing macro strings
+J7500:  POP     HL                      ; restore BASIC pointer
+        RET
+
+J7502:  CALL    GICINI                  ; initialize PSG (silence)
+        JR      J7500                   ; restore BASIC pointer and quit
+
+;       Subroutine      end of queue mark in current voice queue
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7507:  LD      A,(PRSCNT)
+        INC     A
+        LD      (PRSCNT),A              ; increase macro string voice finished
+        LD      E,0FFH                  ; end of queue mark
+
+;       Subroutine      put in current voice queue
+;       Inputs          E = byte
+;       Outputs         ________________________
+
+C7510:  PUSH    HL
+        PUSH    BC
+J7512:  PUSH    DE
+        LD      A,(VOICEN)              ; current voice
+        DI                              ; no interrupts during queue operation
+        CALL    PUTQ                    ; put byte in queue
+        EI                              ; queue operation finished, allow interrupts
+        POP     DE
+        JR      Z,J7512                 ; queue is full, retry
+        POP     BC
+        POP     HL
+        RET
+
+;       Subroutine      current voice queue full ?
+;       Inputs          ________________________
+;       Outputs         Cx set if queue full
+
+C7521:  LD      A,(VOICEN)              ; current voice
+        PUSH    BC
+        DI                              ; no interrupts during queue operation
+        CALL    LFTQ
+        EI                              ; queue operation finished, allow interrupts
+        POP     BC
+        CP      8
+        RET
+
+I752E:  DEFB    'A'                     ; note A
+        DEFW    PLYNOT
+        DEFB    'B'                     ; note B
+        DEFW    PLYNOT
+        DEFB    'C'                     ; note C
+        DEFW    PLYNOT
+        DEFB    'D'                     ; note D
+        DEFW    PLYNOT
+        DEFB    'E'                     ; note E
+        DEFW    PLYNOT
+        DEFB    'F'                     ; note F
+        DEFW    PLYNOT
+        DEFB    'G'                     ; note G
+        DEFW    PLYNOT
+        DEFB    'M'+128                 ; change envelope period, numeric operand
+        DEFW    PENVLP
+        DEFB    'V'+128                 ; change volume, numeric operand
+        DEFW    PVOLUM
+        DEFB    'S'+128                 ; change shape, numeric operand
+        DEFW    PSHAPE
+        DEFB    'N'+128                 ; note number, numeric operand
+        DEFW    PLYNUM
+        DEFB    'O'+128                 ; change octave, numeric operand
+        DEFW    POCTAV
+        DEFB    'R'+128                 ; rest note, numeric operand
+        DEFW    PLYRST
+        DEFB    'T'+128                 ; change tempo, numeric operand
+        DEFW    PTEMPO
+        DEFB    'L'+128                 ; change note length, numeric operand
+        DEFW    PLYLEN
+        DEFB    'X'                     ; macro substring
+        DEFW    MCLXEQ
+        DEFB    0
+
+NOTXLT:
+I755F:  DEFB    8*2                     ; A-
+        DEFB    9*2                     ; A
+        DEFB    10*2                    ; A# or B-
+        DEFB    11*2                    ; B or C-
+        DEFB    0*2                     ; B#
+        DEFB    0*2                     ; C
+        DEFB    1*2                     ; C# or D-
+        DEFB    2*2                     ; D
+        DEFB    3*2                     ; D# or E-
+        DEFB    4*2                     ; E or F-
+        DEFB    5*2                     ; E#
+        DEFB    5*2                     ; F
+        DEFB    6*2                     ; F# or G-
+        DEFB    7*2                     ; G
+        DEFB    8*2                     ; G#
+
+NOTTAB:
+I756E:  DEFW    00D5DH                  ; C
+        DEFW    00C9CH                  ; C#
+        DEFW    00BE7H                  ; D
+        DEFW    00B3CH                  ; D#
+        DEFW    00A9BH                  ; E
+        DEFW    00A02H                  ; F
+        DEFW    00973H                  ; F#
+        DEFW    008EBH                  ; G
+        DEFW    0086BH                  ; G#
+        DEFW    007F2H                  ; A
+        DEFW    00780H                  ; A#
+        DEFW    00714H                  ; B
+
+;       Subroutine      change volume
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+PVOLUM:
+C7586:  JR      C,J758A                 ; value specified,
+        LD      E,8                     ; use default volume
+J758A:  LD      A,15
+        CP      E                       ; valid volume ?
+        JR      C,J75DF                 ; nope, illegal function call
+J758F:  XOR     A
+        OR      D                       ; volume > 255 ?
+        JR      NZ,J75DF                ; yep, illegal function call
+        LD      L,18                    ; offset = volume
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        LD      A,40H
+        AND     (HL)                    ; clear volume bits, clear must include volume, keep envelope flag
+        OR      E
+        LD      (HL),A
+        RET
+
+;       Subroutine      change envelope period
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+PENVLP:
+C759E:  LD      A,E
+        JR      C,J75A4                 ; value specified,
+        CPL
+        INC     A
+        LD      E,A                     ; use default envelope period = 255
+J75A4:  OR      D
+        JR      Z,J75DF                 ; illegal function call
+        LD      L,19                    ; offset = envelope period
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        PUSH    HL
+        LD      A,(HL)
+        INC     HL
+        LD      H,(HL)
+        LD      L,A                     ; get current envelope period
+        _RST    DCOMPR                  ; same envelope periode ?
+        POP     HL
+        RET     Z                       ; yep, quit
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D                  ; update envelope period
+        DEC     HL
+        DEC     HL
+        LD      A,40H
+        OR      (HL)
+        LD      (HL),A                  ; set envelope flag
+        RET
+
+;       Subroutine      change shape
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+PSHAPE:
+C75BE:  LD      A,E
+        CP      15+1                    ; valid shape value ?
+        JR      NC,J75DF                ; nope, illegal function call
+        OR      10H                     ; set MODE bit
+        LD      E,A
+        JR      J758F                   ; continue in volume
+
+;       Subroutine      change note length
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+PLYLEN:
+C75C8:  JR      C,J75CC                 ; value specified,
+        LD      E,4                     ; use default note length
+J75CC:  LD      A,E
+        CP      64+1                    ; valid note length ?
+        JR      NC,J75DF                ; nope, illegal function call
+        LD      L,16                    ; offset = note length
+
+; get pointer in current voice buffer, check for <256 and <>0, update value
+
+J75D3:  CALL    GETVC2                  ; get pointer in current voice buffer
+        XOR     A
+        OR      D                       ; value > 255 ?
+        JR      NZ,J75DF                ; yep, illegal function call
+        OR      E                       ; value = 0 ?
+        JR      Z,J75DF                 ; yep, illegal function call
+        LD      (HL),A                  ; update value
+        RET
+
+; illegal function call
+
+J75DF:
+        IF      OPTM EQ 0
+        CALL    FCERR                   ; illegal function call
+        ELSE
+        JP      FCERR
+        ENDIF
+
+;       Subroutine      change tempo
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+PTEMPO:
+C75E2:  JR      C,J75E6                 ; value specified,
+        LD      E,120                   ; use default tempo
+J75E6:  LD      A,E
+        CP      32                      ; valid tempo ?
+        JR      C,J75DF                 ; nope, illegal function call
+        LD      L,17                    ; offset = tempo
+        JR      J75D3                   ; get pointer in current voice buffer, check for <256 and <>0, update value
+
+;       Subroutine      change octave
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+POCTAV:
+C75EF:  JR      C,J75F3                 ; value specified,
+        LD      E,4                     ; use default octave
+J75F3:  LD      A,E
+        CP      8+1                     ; valid octave ?
+        JR      NC,J75DF                ; nope, illegal function call
+        LD      L,15                    ; offset = octave
+        JR      J75D3                   ; get pointer in current voice buffer, check for <256 and <>0, update value
+
+;       Subroutine      rest note
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+PLYRST:
+C75FC:  JR      C,J7600                 ; value specified,
+        LD      E,4                     ; use default rest length
+J7600:  XOR     A
+        OR      D                       ; rest value > 255 ?
+        JR      NZ,J75DF                ; yep, illegal function call
+        OR      E                       ; rest value = 0 ?
+        JR      Z,J75DF                 ; yep, illegal function call
+        CP      64+1                    ; valid rest value ?
+        JR      NC,J75DF                ; nope, illegal function call
+
+; rest note
+
+J760B:  LD      HL,0                    ; frequency = 0 (rest note)
+        PUSH    HL                      ; store frequency
+        LD      L,16                    ; offset = note length
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        PUSH    HL                      ; store pointer to note length
+        INC     HL
+        INC     HL
+        LD      A,(HL)                  ; current volume
+        LD      (SAVVOL),A              ; store current volume
+        LD      (HL),80H                ; update volume = 0, must include volume in packet
+        DEC     HL
+        DEC     HL
+        JR      J769C
+
+;       Subroutine      play note number
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+PLYNUM:
+C7621:  JR      NC,J75DF                ; value not specified, illegal function call
+        XOR     A
+        OR      D                       ; note number > 255 ?
+        JR      NZ,J75DF                ; yep, illegal function call
+        OR      E                       ; note number = 0 ?
+        JR      Z,J760B                 ; yep, rest note
+        CP      96+1                    ; valid note number ?
+        JR      NC,J75DF                ; nope, illegal function call
+        LD      A,E
+        LD      B,0                     ; high byte frequency offset = 0
+        LD      E,B                     ; octave = 0
+J7632:  SUB     12
+        INC     E
+        JR      NC,J7632
+        ADD     A,12
+        ADD     A,A
+        LD      C,A                     ; frequency offset
+        JP      J7673                   ; continue with play frequency
+
+;       Subroutine      play note
+;       Inputs          DE = value, Cx set if value specified
+;       Outputs         ________________________
+
+PLYNOT:
+C763E:  LD      B,C                     ; store note letter
+        LD      A,C
+        SUB     'A'-1
+        ADD     A,A
+        LD      C,A                     ; note letter to note table offset (assumes sharp)
+        CALL    FETCHR                  ; fetch macro string character
+        JR      Z,J7665                 ; end of macro string,
+        CP      '#'                     ; sharp ?
+        JR      Z,J7666                 ; yep, note offset is already sharp
+        CP      '+'                     ; plus ?
+        JR      Z,J7666                 ; yep, note offset is already sharp
+        CP      '-'                     ; minus ?
+        JR      Z,J765A                 ; yep, adjust note offset
+        CALL    DECFET                  ; to previous macro string character
+        JR      J7665                   ; no note extender
+
+J765A:  DEC     C                       ; decrease note table offset
+        LD      A,B                     ; restore note letter
+        CP      'C'                     ; C- ?
+        JR      Z,J7664                 ; yep, from C# to C- is note table offset -3
+        CP      'F'                     ; F- ?
+        JR      NZ,J7665                ; nope, note table offset -2
+J7664:  DEC     C
+J7665:  DEC     C
+J7666:  LD      L,15                    ; offset = octave
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        LD      E,(HL)                  ; store current octave
+        LD      B,0
+        LD      HL,NOTXLT               ; note table
+        ADD     HL,BC                   ; + note offset
+        LD      C,(HL)                  ; frequency offset
+
+; play frequency
+
+J7673:  LD      HL,NOTTAB               ; frequency table
+        ADD     HL,BC
+        LD      A,E                     ; restore current octave
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)                  ; base frequency
+J767B:  DEC     A                       ; done octaves ?
+        JR      Z,J7687                 ; yep,
+        SRL     D
+        RR      E                       ; frequency = frequency / 2
+        JR      J767B
+
+J7684:
+        IF      OPTM EQ 0
+        CALL    FCERR                   ; illegal function call
+        ELSE
+        JP      FCERR
+        ENDIF
+
+J7687:  ADC     A,E
+        LD      E,A
+        ADC     A,D
+        SUB     E
+        LD      D,A                     ; frequency +1 if Cx
+        PUSH    DE                      ; store frequency
+        LD      L,16                    ; offset = note length
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        LD      C,(HL)                  ; store current note length
+        PUSH    HL                      ; store pointer to note length
+        CALL    FETCHR                  ; fetch macro string character
+        JR      Z,J76A9                 ; end of macro string,
+        CALL    VALSC2                  ; parse optional numeric constant value in macro string
+J769C:  LD      A,63+1
+        CP      E                       ; valid note length ?
+        JR      C,J7684                 ; nope, illegal function call
+        XOR     A
+        OR      D                       ; note length > 255 ?
+        JR      NZ,J7684                ; yep, illegal function call
+        OR      E                       ; note length = 0 ?
+        JR      Z,J76A9                 ; yep, use current note length
+        LD      C,E                     ; note length
+J76A9:  POP     HL                      ; restore pointer to note length
+        LD      D,0
+        LD      B,D                     ; BC = note length
+        INC     HL
+        LD      E,(HL)                  ; current tempo
+        PUSH    HL                      ; store pointer to tempo
+        CALL    UMULT                   ; unsigned integer multiply
+        EX      DE,HL
+        CALL    CONSIH                  ; convert to single precision real
+        CALL    VMOVAF                  ; ARG = DAC
+        LD      HL,I7754                ; number of ticks * tempo (120) * note length (4) *0.5 seconds
+        CALL    MOVFM                   ; DAC = (single)
+        CALL    DECDIV                  ; DAC / ARG
+        CALL    FRCINT                  ; convert DAC to integer
+        LD      D,H
+        LD      E,L                     ; store duration (ticks)
+J76C8:  CALL    FETCHR                  ; fetch macro string character
+        JR      Z,J76E3                 ; end of macro string,
+        CP      '.'                     ; dot ?
+        JR      NZ,J76E0                ; nope, duration determined
+        SRL     D
+        RR      E
+        ADC     HL,DE                   ; duration = duration*1.5
+        LD      A,0E0H
+        AND     H                       ; duration high byte still fits in b4-b0 ?
+        JR      Z,J76C8                 ; yep, continue
+        XOR     H
+        LD      H,A                     ; clear b7-b5
+        JR      J76E3                   ; duration is determined
+
+J76E0:  CALL    DECFET                  ; to previous macro string character
+J76E3:  LD      DE,5
+        _RST    DCOMPR                  ; duration < 5 ?
+        JR      C,J76EA                 ; yep, use duration = 5
+        EX      DE,HL                   ; duration in DE
+J76EA:  LD      BC,8-17
+        POP     HL                      ; restore pointer to tempo
+        PUSH    HL                      ; store pointer to tempo
+        ADD     HL,BC
+        LD      (HL),D                  ; high byte duration counter
+        INC     HL
+        LD      (HL),E                  ; low byte duration counter
+        INC     HL
+        LD      C,2                     ; packet length = 2 bytes (duration bytes)
+        EX      (SP),HL                 ; store pointer in packet, restore pointer to tempo
+        INC     HL
+        LD      E,(HL)                  ; store current volume
+        LD      A,E
+        AND     0BFH
+        LD      (HL),A                  ; clear must include volume in packet flag
+        EX      (SP),HL                 ; store pointer to volume, restore pointer in packet
+        LD      A,80H                   ; volume specified in packet
+        OR      E
+        LD      (HL),A                  ; packet has volume specified
+        INC     HL
+        INC     C                       ; packet size +1
+        EX      (SP),HL                 ; store pointer in packet, restore pointer to volume
+        LD      A,E
+        AND     40H                     ; envelope specified ?
+        JR      Z,J7716                 ; nope, skip envelope
+        INC     HL
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)                  ; envelop period
+        POP     HL                      ; restore pointer in packet
+        LD      (HL),D
+        INC     HL
+        LD      (HL),E
+        INC     HL                      ; put envelop period in packet
+        INC     C
+        INC     C                       ; packet size +2
+        DEFB    0FEH                    ; CP xx, trick to skip next instruction
+J7716:  POP     HL                      ; restore pointer in packet
+        POP     DE                      ; restore frequency
+        LD      A,D
+        OR      E                       ; rest note ?
+        JR      Z,J7721                 ; yep, skip frequency
+        LD      (HL),D
+        INC     HL
+        LD      (HL),E                  ; put frequency in packet
+        INC     C
+        INC     C                       ; packet size +2
+J7721:  LD      L,7                     ; offset = size of packet
+        CALL    GETVC2                  ; get pointer in current voice buffer
+        LD      (HL),C                  ; update size of packet
+        LD      A,C
+        SUB     2                       ; size with duration bytes
+        RRCA
+        RRCA
+        RRCA                            ; put in b7-b5
+        INC     HL
+        OR      (HL)
+        LD      (HL),A                  ; include in high byte duration
+        DEC     HL
+        LD      A,D
+        OR      E                       ; rest note ?
+        JR      NZ,J7741                ; nope, skip volume restore
+        PUSH    HL                      ; store pointer to size of packet
+        LD      A,(SAVVOL)
+        OR      80H                     ; include volume in packet
+        LD      BC,18-7
+        ADD     HL,BC
+        LD      (HL),A                  ; restore volume before rest
+        POP     HL                      ; restore pointer to size of packet
+J7741:  POP     DE                      ; restore
+        LD      B,(HL)                  ; size of packet
+        INC     HL
+J7744:  LD      E,(HL)
+        INC     HL
+        CALL    C7510                   ; put in current voice queue
+        DJNZ    J7744
+        CALL    C7521                   ; current voice queue full ?
+        JP      C,J748E                 ; yep, wait for the queue to empty
+        JP      MCLSCN                  ; execute next macro command (if any)
+
+
+        IF INTHZ EQ 60
+
+I7754:  DEFB    040H,000H,045H,014H             ; 14400 (60*120*4*0.5)
+
+        ELSE
+
+I7754:  DEFB    000H,000H,045H,012H             ; 12000 (50*120*4*0.5)
+
+        ENDIF
+
+
+;       Subroutine      PUT statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+PUTS:
+C7758:  LD      B,80H                   ; PUT
+        DEFB    011H                    ; LD DE,xxxx, trick to skip next instruction
+
+;       Subroutine      GET statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+GETS:
+C775B:  LD      B,0                     ; GET
+        CP      0C7H                    ; SPRITE token follows ?
+        JP      Z,J7AAF                 ; yep, handle PUT SPRITE
+J7762:  LD      A,B                     ; GET/PUT flag
+        JP      GETPUT                  ; do random input/output
+
+;       Subroutine      LOCATE statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+LOCATE:
+C7766:  LD      DE,(CSRY)
+        PUSH    DE                      ; store current coordinates as default
+        CP      ','                     ; X coordinate not specified ?
+        JR      Z,J777A                 ; yep, use current
+        CALL    GETBYT                  ; evaluate byte operand
+        INC     A                       ; X coordinate (1 based)
+        POP     DE                      ; restore current coordinates
+        LD      D,A                     ; update X
+        PUSH    DE                      ; store coordinates
+        DEC     HL
+        _RST    CHRGTR                  ; end of statement ?
+        JR      Z,J779F                 ; yep, set cursor position and quit
+J777A:  _RST    SYNCHR
+        DEFB    ','                     ; check for ,
+        CP      ','                     ; Y coordinate not specified ?
+        JR      Z,J778B                 ; yep, use current
+        CALL    GETBYT                  ; evaluate byte operand
+        INC     A                       ; Y coordinate (1 based)
+        POP     DE                      ; restore current coordinates
+        LD      E,A                     ; update Y
+        PUSH    DE                      ; store coordinates
+        DEC     HL
+        _RST    CHRGTR                  ; end of statement ?
+        JR      Z,J779F                 ; yep, set cursor position and quit
+J778B:  _RST    SYNCHR
+        DEFB    ','                     ; check for ,
+        CALL    GETBYT                  ; evaluate byte operand
+        AND     A                       ; 0 (cursor off) ?
+        LD      A,'y'
+        JR      NZ,J7796                ; nope, cursor on (ESC y 5)
+        DEC     A                       ; yep, cursor off (ESC x 5)
+J7796:  PUSH    AF
+        LD      A,1BH
+        _RST    OUTDO                   ; ESC to interpreter output
+        POP     AF
+        _RST    OUTDO                   ; "x" or "y" to interpreter output
+        LD      A,'5'
+        _RST    OUTDO                   ; "5" to interpreter output
+J779F:  EX      (SP),HL                 ; store BASIC pointer, restore cursor coordinates
+        CALL    POSIT                   ; set cursor position
+        POP     HL                      ; restore BASIC pointer
+        RET
+
+;       Subroutine      STOP statement (trap)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+STOPT:
+J77A5:  PUSH    HL                      ; store BASIC pointer
+        LD      HL,TRPTBL+10*3          ; STOP entry
+        JR      J77CF                   ; handle trap keyword
+
+;       Subroutine      SPRITE statement (trap)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SPRITT:
+J77AB:  PUSH    HL                      ; store BASIC pointer
+        LD      HL,TRPTBL+11*3          ; SPRITE entry
+        JR      J77CF                   ; handle trap keyword
+
+;       Subroutine      INTERVAL statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+INTS:
+J77B1:  _RST    SYNCHR
+        DEFB    'E'
+        _RST    SYNCHR
+        DEFB    'R'
+        _RST    SYNCHR
+        DEFB    0FFH
+        _RST    SYNCHR
+        DEFB    094H                    ; check for ERVAL
+        PUSH    HL                      ; store BASIC pointer
+        LD      HL,TRPTBL+17*3          ; INTERVAL entry
+        JR      J77CF                   ; handle trap keyword
+
+;       Subroutine      STRIG statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+STRIGS:
+J77BF:  LD      A,4                     ; max is 4 
+        CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
+        DEC     HL
+        _RST    CHRGTR                  ; get next BASIC character
+        PUSH    HL                      ; store BASIC pointer
+        LD      D,0
+        LD      HL,TRPTBL+12*3
+        ADD     HL,DE
+        ADD     HL,DE
+        ADD     HL,DE                   ; STRIG entry
+
+; handle trap keyword
+
+J77CF:  CALL    C77FE                   ; check for trap tokens and act upon
+        JR      J77E2                   ; new statement without CTRL-STOP and trap check
+
+;       Subroutine      KEY statement (trap)
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+KEYT:
+J77D4:  CALL    GETBYT                  ; evaluate byte operand
+        DEC     A
+        CP      9+1                     ; functionkeynumber 1-10 ?
+        JP      NC,FCERR                ; nope, illegal function call
+        LD      A,(HL)                  ; ?? function key number already in A ??
+        PUSH    HL                      ; store BASIC pointer
+        CALL    C77E8                   ; set trap entry of functionkey
+J77E2:  POP     HL                      ; restore BASIC pointer
+        POP     AF                      ; dispose return address
+        _RST    CHRGTR                  ; get next BASIC character
+        JP      NEWSTN                  ; new statement without CTRL-STOP and trap check
+
+;       Subroutine      set trap entry of functionkey
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C77E8:  LD      D,0
+        LD      HL,FNKFLG-1
+        ADD     HL,DE
+        PUSH    HL                      ; store FNKFLG pointer
+        LD      HL,TRPTBL+0*3-(1*3)
+        ADD     HL,DE
+        ADD     HL,DE
+        ADD     HL,DE                   ; KEY entry
+        CALL    C77FE                   ; check for trap tokens and act upon
+        LD      A,(HL)
+        AND     01H                     ; functionkey trap enabled ?
+        POP     HL                      ; restore FNKFLG pointer
+        LD      (HL),A                  ; set FNKFLG if trap enabled
+        RET
+
+;       Subroutine      check for trap tokens and act upon
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C77FE:  CP      95H                     ; ON token ?
+        JP      Z,ONTRP                 ; yep, enable trap
+        CP      0EBH                    ; OFF token ?
+        JP      Z,OFFTRP                ; yep, disable trap
+        CP      90H                     ; STOP token ?
+        JP      Z,STPTRP                ; yep, pause trap
+        JP      SNERR                   ; syntax error
+
+;       Subroutine      trap token ?
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+	_MSXCP	ONGOT,7810H
+
+C7810:  CALL    H.ONGO
+        LD      BC,0*256+10             ; trap base number = 0, maximum number of traps = 10
+        CP      0CCH                    ; KEY token ?
+        RET     Z                       ; yep, quit (trap token)
+        LD      BC,10*256+1             ; trap base number = 10, maximum number of traps = 1
+        CP      90H                     ; STOP token ?
+        RET     Z                       ; yep, quit (trap token)
+        INC     B                       ; trap base number = 11, maximum number of traps = 1
+        CP      0C7H                    ; SPRITE token ?
+        RET     Z                       ; yep, quit (trap token)
+        CP      0FFH                    ; function token ?
+        RET     C                       ; nope, quit (no trap token)
+        PUSH    HL                      ; store BASIC pointer
+        _RST    CHRGTR                  ; get next BASIC character
+        CP      0A3H                    ; TRIG token ?
+        JR      Z,J7833                 ; yep, quit (trap token)
+        CP      85H                     ; INT token ?
+        JR      Z,J7838                 ; yep, on INTERVAL
+J7830:  POP     HL                      ; restore BASIC pointer
+        SCF                             ; no trap token
+        RET
+
+J7833:  POP     BC                      ; dispose stored BASIC pointer
+        LD      BC,12*256+5             ; trap base number = 12, maximum number of traps = 5
+        RET
+
+J7838:  _RST    CHRGTR                  ; get next BASIC character
+        CP      'E'
+        JR      NZ,J7830
+        POP     BC                      ; dispose stored BASIC pointer
+        _RST    CHRGTR                  ; get next BASIC character
+        _RST    SYNCHR
+        DEFB    'R'
+        _RST    SYNCHR
+        DEFB    0FFH
+        _RST    SYNCHR
+        DEFB    094H
+        _RST    SYNCHR
+        DEFB    0EFH                    ; check for RVAL=
+        CALL    GETUIN                  ; evaluate address operand
+        LD      A,D
+        OR      E                       ; interval value = 0 ?
+        JP      Z,FCERR                 ; yep, illegal function call
+        EX      DE,HL
+        LD      (INTVAL),HL             ; update interval value
+        LD      (INTCNT),HL             ; reset interval counter
+        EX      DE,HL
+        LD      BC,256*17+1             ; trap base number = 17, maximum number of traps = 1
+        DEC     HL
+        RET
+
+;       Subroutine      update trap handler line number
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SETGSB:
+C785C:  PUSH    HL
+        LD      B,A
+        ADD     A,A
+        ADD     A,B
+        LD      L,A
+        LD      H,0			; *3
+        LD      BC,TRPTBL+1
+        ADD     HL,BC
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D
+        POP     HL
+        RET
+
+;       Subroutine      KEY statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+KEYS:
+C786C:  CP      93H                     ; LIST token ?
+        JR      NZ,J78AE                ; nope, other KEY statement variants
+
+; KEY LIST
+
+        _RST    CHRGTR                  ; get next BASIC character
+        PUSH    HL                      ; store BASIC pointer
+        LD      HL,FNKSTR
+        LD      C,10                    ; 10 function keys
+J7877:  LD      B,16                    ; maximum function definition length
+J7879:  LD      A,(HL)                  ; get character
+        INC     HL
+        CALL    CNVCHR                  ; graphic header character ?
+        JR      C,J7891                 ; nope,
+        DEC     B
+        JR      Z,J789E                 ; no more characters, ignore graphic header and finish this definition
+        LD      A,(HL)                  ; get character
+        INC     HL
+        LD      E,A                     ; store character
+        CALL    CNVCHR                  ; graphic character ?
+        JR      Z,J7891                 ; nope,
+        LD      A,1                     ; graphic character header
+        _RST    OUTDO                   ; MSX to interpreter output
+        LD      A,E                     ; restore graphic character
+        JR      J789B
+
+J7891:  CP      7FH                     ; DEL ?
+        JR      Z,J7899                 ; yep, display space
+        CP      20H                     ; control character ?
+        JR      NC,J789B                ; nope, display character
+J7899:  LD      A,' '
+J789B:  _RST    OUTDO                   ; char to interpreter output
+        DJNZ    J7879                   ; next definition character
+J789E:  CALL    CRDO                    ; newline to interpreter output
+        DEC     C                       ; done all function keys ?
+        JR      NZ,J7877                ; nope, next
+        POP     HL                      ; restore BASIC pointer
+        RET
+
+; function key display on
+
+J78A6:  _RST    CHRGTR                  ; get next BASIC character
+        JP      DSPFNK
+
+; function key display off
+
+J78AA:  _RST    CHRGTR                  ; get next BASIC character
+        JP      ERAFNK
+
+; other KEY statement variants
+
+J78AE:  CP      '('
+        JP      Z,KEYT                  ; yep, KEY statement (trap)
+        CP      95H                     ; ON token ?
+        JR      Z,J78A6                 ; yep, enable display functionkeys
+        CP      0EBH                    ; OFF token ?
+        JR      Z,J78AA                 ; yep, disable display functionkeys
+        CALL    GETBYT                  ; evaluate byte operand
+        DEC     A
+        CP      9+1                     ; functionkeynumber 1-10 ?
+        JP      NC,FCERR                ; nope, illegal function call
+        EX      DE,HL                   ; store BASIC pointer
+        LD      L,A
+        LD      H,0
+        ADD     HL,HL
+        ADD     HL,HL
+        ADD     HL,HL
+        ADD     HL,HL                   ; * 16
+        LD      BC,FNKSTR
+        ADD     HL,BC
+        PUSH    HL                      ; store pointer in function key definition
+        EX      DE,HL                   ; restore BASIC pointer
+        _RST    SYNCHR
+        DEFB    ','                     ; check for ,
+        CALL    FRMEVL                  ; evaluate expression
+        PUSH    HL                      ; store BASIC pointer
+        CALL    FRESTR                  ; free temporary string with type check
+        LD      B,(HL)
+        INC     HL
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)
+        POP     HL                      ; restore BASIC pointer
+        EX      (SP),HL                 ; store BASIC pointer, restore pointer in function key definition
+        LD      C,16-1                  ; maximum defintion length
+        LD      A,B
+        AND     A                       ; empty defintion string ?
+        JR      Z,J78F5                 ; yep,
+J78E8:  LD      A,(DE)
+        AND     A                       ; NULL character ?
+        JP      Z,FCERR                 ; yep, illegal function call
+        LD      (HL),A
+        INC     DE
+        INC     HL
+        DEC     C                       ; decrease length left
+        JR      Z,J78FA                 ; definition length reached, ignore remainer and put end marker
+        DJNZ    J78E8                   ; next definition character
+J78F5:  LD      (HL),B
+        INC     HL
+        DEC     C
+        JR      NZ,J78F5                ; fill remainer of defintion with end markers
+J78FA:  LD      (HL),C                  ; put end marker
+        CALL    FNKSB                   ; update function key display
+        POP     HL                      ; restore BASIC pointer
+        RET
+
+;       Subroutine      TIME function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+TIMEF:
+J7900:  _RST    CHRGTR                  ; get next BASIC character
+        PUSH    HL                      ; store BASIC pointer
+        LD      HL,(JIFFY)              ; current JIFFY value
+        CALL    CONSUI                  ; convert unsigned integer to single real
+        POP     HL                      ; restore BASIC pointer
+        RET
+
+;       Subroutine      CSRLIN function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+CSRLIN:
+J790A:  _RST    CHRGTR                  ; get next BASIC character
+        PUSH    HL                      ; store BASIC pointer
+        LD      A,(CSRY)
+        JR      J7932                   ; decrease, convert signed byte to integer and store in DAC, restore BASIC pointer and quit
+
+;       Subroutine      TIME statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+TIMES:
+C7911:  _RST    SYNCHR
+        DEFB    0EFH                    ; check for =
+        CALL    GETUIN                  ; evaluate address operand
+        LD      (JIFFY),DE              ; update JIFFY
+        RET
+
+;       Subroutine      PLAY function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+PLAYF:
+J791B:  _RST    CHRGTR                  ; get next BASIC character
+        LD      A,3                     ; max is 3
+        CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
+        PUSH    HL                      ; store BASIC pointer
+        LD      A,(MUSICF)              ; voice active flags
+        DEC     E                       ; operand = 0 ?
+        JP      M,J7938                 ; yep,
+J7929:  RRCA                            ; this voice active ?
+        DEC     E                       ; this voice ?
+        JP      P,J7929                 ; nope, next
+        LD      A,0
+        JR      NC,J7933                ; voice not active, return 0
+J7932:  DEC     A
+J7933:  CALL    CONIA                   ; convert signed byte to integer and store in DAC
+        POP     HL                      ; restore BASIC pointer
+        RET
+
+J7938:  AND     07H                     ; all voices inactive ?
+        JR      Z,J7933                 ; yep, return 0
+        LD      A,0FFH
+        JR      J7933                   ; return 255
+
+;       Subroutine      STICK function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+STICK:
+C7940:  CALL    CONINT                  ; check for byte value
+        CP      03H
+        JR      NC,J7951
+        CALL    GTSTCK
+        JR      J7966
+
+;       Subroutine      TRIG function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+TRIG:
+C794C:  CALL    CONINT                  ; check for byte value
+        CP      05H
+J7951:  JP      NC,FCERR                ; illegal function call
+        CALL    GTTRIG
+J7957:  JP      CONIA                   ; convert signed byte to integer and store in DAC
+
+;       Subroutine      PDL function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+PDL:
+C795A:  CALL    CONINT                  ; check for byte value
+        DEC     A
+        CP      0CH
+        JR      NC,J7951
+        INC     A
+        CALL    GTPDL
+J7966:  JP      SNGFLT                  ; byte to DAC
+
+;       Subroutine      PAD function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+PAD:
+C7969:  CALL    CONINT                  ; check for byte value
+        CP      8
+        JR      NC,J7951
+        PUSH    AF
+        CALL    GTPAD
+        LD      B,A
+        POP     AF
+        AND     03H                     ; ignore port bit
+        DEC     A                       ; 0 and 3 are boolean
+        CP      2
+        LD      A,B
+        JR      C,J7966
+        JR      J7957           ; 0 or -1
+
+;       Subroutine      COLOR statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+COLOR:
+C7980:  ld      bc,FCERR
+        push    bc
+        ld      de,(FORCLR)
+        push    de
+        cp      02CH
+        jr      z,A799A
+        call    GETBYT
+        pop     de
+        cp      010H
+        ret     nc
+        ld      e,a
+        push    de
+        dec     hl
+        _RST    CHRGTR                  ; end of statement ?
+        jr      z,A79BC			; yep,
+A799A:  _RST    SYNCHR
+        defb    ','
+        jr      z,A79BC
+        cp      02CH
+        jr      z,A79AF
+        call    GETBYT
+        pop     de
+        cp      010H
+        ret     nc
+        ld      d,a
+        push    de
+        dec     hl
+        _RST    CHRGTR                  ; end of statement ?
+        jr      z,A79BC			; yep,
+A79AF:  _RST    SYNCHR
+        defb    ','
+        call    GETBYT
+        pop     de
+        cp      010H
+        ret     nc
+        ld      (BDRCLR),a
+        push    de
+A79BC:  pop     de
+        pop     af
+        push    hl
+        ex      de,hl
+        ld      (FORCLR),hl
+        ld      a,l
+        ld      (ATRBYT),a
+        call    CHGCLR
+        pop     hl
+        ret
+
+;       Subroutine      SCREEN statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SCREEN:
+C79CC:  call    H.SCRE
+        cp      02CH
+        jr      z,A79EA
+        call    GETBYT
+        cp      004H
+        jp      nc,FCERR
+        push    hl
+        call    CHGMOD
+        ld      a,(LINLEN)
+        ld      e,a
+        call    MORCP2
+        pop     hl
+        dec     hl
+        _RST    CHRGTR                  ; end of statement ?
+        ret     z			; yep, quit
+A79EA:  _RST    SYNCHR
+        defb    ','
+        cp      ','
+        jr      z,A7A09
+        call    GETBYT
+        cp      004H
+        jp      nc,FCERR
+        ld      a,(RG1SAV)
+        and     0FCH
+        or      e
+        ld      (RG1SAV),a
+        push    hl
+        call    CLRSPR
+        pop     hl
+        dec     hl
+        _RST    CHRGTR                  ; end of statement ?
+        ret     z			; yep, quit
+A7A09:  _RST    SYNCHR
+        defb    ','
+        cp      02CH
+        jr      z,A7A18
+        call    GETBYT
+        ld      (CLIKSW),a
+        dec     hl
+        _RST    CHRGTR                  ; end of statement ?
+        ret     z			; yep, quit
+A7A18:  _RST    SYNCHR
+        defb    ','
+        cp      02CH
+        jr      z,A7A24
+        call    GETCSP
+        dec     hl
+        _RST    CHRGTR                  ; end of statement ?
+        ret     z			; yep, quit
+A7A24:  _RST    SYNCHR
+        defb    ','
+        call    GETBYT
+        ld      (NTMSXP),a
+        ret
+
+GETCSP:
+A7A2D:  call    GETBYT
+        dec     a
+        cp      002H
+        jp      nc,FCERR
+        push    hl
+        ld      bc,5
+        and     a
+        ld      hl,CS1200
+        jr      z,A7A41
+        add     hl,bc
+A7A41:  ld      de,LOW.
+        ldir
+        pop     hl
+        ret
+
+;       Subroutine      SPRITE statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SPRITE:
+C7A48:  CP      '$'
+        JP      NZ,SPRITT
+        LD      A,(SCRMOD)
+        AND     A
+        JP      Z,FCERR                 ; illegal function call
+        CALL    C7AA0
+        PUSH    DE
+        CALL    FRMEQL                  ; evaluate = expression
+        EX      (SP),HL
+        PUSH    HL
+        CALL    FRESTR                  ; free temporary string with type check
+        INC     HL
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)
+        CALL    GSPSIZ
+        LD      C,A
+        LD      B,00H
+        DEC     HL
+        DEC     HL
+        DEC     A
+        CP      (HL)
+        LD      A,(HL)
+        JR      C,J7A7D
+        POP     HL
+        PUSH    HL
+        PUSH    AF
+        XOR     A
+        CALL    FILVRM
+        POP     AF
+        AND     A
+        LD      C,A
+        LD      B,00H
+J7A7D:  EX      DE,HL
+        POP     DE
+        CALL    NZ,LDIRVM
+        POP     HL
+        RET
+
+;       Subroutine      SPRITE function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SPRITF:
+J7A84:  CALL    C7A9F
+        PUSH    HL
+        PUSH    DE
+        CALL    GSPSIZ
+        LD      C,A
+        LD      B,00H
+        PUSH    BC
+        CALL    STRINI                  ; allocate temporary string
+        LD      HL,(DSCTMP+1)
+        EX      DE,HL
+        POP     BC
+        POP     HL
+        CALL    LDIRMV
+        JP      PUTNEW                  ; push temporary descriptor to temporary descriptor heap and quit
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7A9F:  _RST    CHRGTR                  ; get next BASIC character
+
+;       Subroutine      __________________________
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+C7AA0:  _RST    SYNCHR
+        DEFB    '$'                     ; check for $
+        LD      A,255                   ; max is 255
+        CALL    C7C08                   ; evaluate parenthesized byte operand with a maximum
+        PUSH    HL
+        LD      A,E
+        CALL    CALPAT
+        EX      DE,HL
+        POP     HL
+        RET
+
+;       Subroutine      PUT/GET SPRITE
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J7AAF:  DEC     B                       ; PUT ?
+        JP      M,FCERR                 ; nope, illegal function call
+        ld      a,(scrmod)
+        and     a
+        JP      Z,FCERR                 ; illegal function call
+        _RST    CHRGTR                  ; get next BASIC character
+        CALL    GETBYT                  ; evaluate byte operand
+        CP      32                      ; planenumber 0-31 ?
+        JP      NC,FCERR                ; nope, illegal function call
+        PUSH    HL
+        CALL    CALATR
+        EX      (SP),HL
+        _RST    SYNCHR
+        DEFB    ','                     ; check for ,
+        CP      ','
+        JR      Z,J7AF9
+        CALL    SCAN1                   ; evaluate complex graphic coordinatepair
+        EX      (SP),HL
+        LD      A,E
+        CALL    WRTVRM
+        LD      A,B
+        ADD     A,A
+        LD      A,C
+        LD      B,00H
+        JR      NC,J7AE1
+        ADD     A,20H
+        LD      B,80H
+J7AE1:  INC     HL
+        CALL    WRTVRM
+        INC     HL
+        INC     HL
+        CALL    RDVRM
+        AND     0FH
+        OR      B
+        CALL    WRTVRM
+        DEC     HL
+        DEC     HL
+        DEC     HL
+        EX      (SP),HL
+        DEC     HL
+        _RST    CHRGTR                  ; end of statement ?
+        POP     BC
+        RET     Z			; yep, quit
+        PUSH    BC
+J7AF9:  _RST    SYNCHR
+        DEFB    ','                     ; check for ,
+        CP      ','
+        JR      Z,J7B1D
+        CALL    GETBYT                  ; evaluate byte operand
+        CP      16                      ; colornumber 0-15 ?
+        JP      NC,FCERR                ; nope, illegal function call
+        EX      (SP),HL
+        INC     HL
+        INC     HL
+        INC     HL
+        CALL    RDVRM
+        AND     80H
+        OR      E
+        CALL    WRTVRM
+        DEC     HL
+        DEC     HL
+        DEC     HL
+        EX      (SP),HL
+        DEC     HL
+        _RST    CHRGTR                  ; end of statement ?
+        POP     BC
+        RET     Z			; yep, quit
+        PUSH    BC
+J7B1D:  _RST    SYNCHR
+        DEFB    ','                     ; check for ,
+        CALL    GETBYT                  ; evaluate byte operand
+        CALL    GSPSIZ
+        LD      A,E
+        JR      NC,J7B2F                ; 8x8 sprite, spritenumber ok
+        CP      64                      ; 16x16 sprite, sprite number 0-63 ?
+        JP      NC,FCERR                ; nope, illegal function call
+        ADD     A,A
+        ADD     A,A                     ; *4 = spritenumber used by the VDP
+J7B2F:  EX      (SP),HL
+        INC     HL
+        INC     HL
+        CALL    WRTVRM
+        POP     HL
+        RET
+
+;       Subroutine      VDP statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+VDPS:
+C7B37:  ld      a,7
+        call    C7C08
+        push    de
+        _RST    SYNCHR
+        defb    0EFH			; check for =
+        call    GETBYT
+        pop     bc
+        ld      b,a
+        jp      WRTVDP
+
+;       Subroutine      VDP function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+VDPF:
+J7B47:  _RST    CHRGTR
+        ld      a,8
+        call    C7C08
+        push    hl
+        ld      d,000H
+        ld      hl,RG0SAV
+        add     hl,de
+        ld      a,(hl)
+        call    SNGFLT
+        pop     hl
+        ret
+
+;       Subroutine      BASE statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+BASES:
+C7B5A:  ld      a,19
+        call    C7C08
+        ld      d,000H
+        push    de
+        _RST    SYNCHR
+        defb    0EFH			; check for =
+        call    FRMEVL                  ; evaluate expression
+        ex      (sp),hl
+        push    hl
+        call    A7BFE
+        ld      c,l
+        ld      b,h
+        pop     hl
+        ld      a,l
+        push    af
+        add     hl,hl
+        ex      de,hl
+        ld      hl,T7BA3
+        add     hl,de
+        ld      a,c
+        and     (hl)
+        jr      nz,A7B7E
+        inc     hl
+        ld      a,b
+        and     (hl)
+A7B7E:  jp      nz,FCERR
+        ld      hl,TXTNAM
+        add     hl,de
+        ld      (hl),c
+        inc     hl
+        ld      (hl),b
+        pop     af
+        ld      e,0FFH
+A7B8B:  inc     e
+        sub     005H
+        jr      nc,A7B8B
+        ld      a,(SCRMOD)
+        cp      e
+        call    z,A7B99
+        pop     hl
+        ret
+
+A7B99:  dec     a
+        jp      m,SETTXT
+        jp      z,SETGRP
+        jp      SETMLT
+
+T7BA3:  dw      003FFH
+        dw      0003FH
+        dw      007FFH
+        dw      0007FH
+        dw      007FFH
+        dw      003FFH
+        dw      0003FH
+        dw      007FFH
+        dw      0007FH
+        dw      007FFH
+        dw      003FFH
+        dw      01FFFH
+        dw      01FFFH
+        dw      0007FH
+        dw      007FFH
+        dw      003FFH
+        dw      0003FH
+        dw      007FFH
+        dw      0007FH
+        dw      007FFH
+
+;       Subroutine      BASE function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+BASEF:
+J7BCB:  _RST    CHRGTR
+        ld      a,19
+        call    C7C08
+        push    hl
+        ld      d,000H
+        ld      hl,TXTNAM
+        add     hl,de
+        add     hl,de
+A7BD9:  ld      a,(hl)
+        inc     hl
+        ld      h,(hl)
+        ld      l,a
+        call    CONSUI
+        pop     hl
+        ret
+
+;       Subroutine      VPOKE statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+VPOKE:
+C7BE2:  call    FRMEVL                  ; evaluate expression
+        push    hl
+        call    A7BFE
+        ex      (sp),hl
+        _RST    SYNCHR
+        defb    ','			; check for ,
+        call    GETBYT
+        ex      (sp),hl
+        call    WRTVRM
+        pop     hl
+        ret
+
+;       Subroutine      VPEEK function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+VPEEK:
+C7BF5:  call    A7BFE
+        call    RDVRM
+        jp      SNGFLT
+
+A7BFE:  call    FRCINT
+        ld      de,04000H
+        _RST    DCOMPR
+        ret     c
+        jr      J7C73
+
+;       Subroutine      evaluate parenthesized byte operand with a maximum
+;       Inputs          A = maximum
+;       Outputs         A = value, E = value
+
+C7C08:  PUSH    AF
+        _RST    SYNCHR
+        DEFB    '('                     ; check for (
+        CALL    GETBYT                  ; evaluate byte operand
+        POP     AF
+        CP      E
+        JR      C,J7C73
+        _RST    SYNCHR
+        DEFB    ')'                     ; check for )
+        LD      A,E
+        RET
+
+;       Subroutine      DSKO$ statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+DSKO$:
+C7C16:  CALL    H.DSKO
+        JR      J7C73
+
+;       Subroutine      SET statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+SETS:
+C7C1B:  CALL    H.SETS
+        JR      J7C73
+
+;       Subroutine      NAME statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+NAME:
+C7C20:  CALL    H.NAME
+        JR      J7C73
+
+;       Subroutine      KILL statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+KILL:
+C7C25:  CALL    H.KILL
+        JR      J7C73
+
+;       Subroutine      IPL statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+IPL:
+C7C2A:  CALL    H.IPL
+        JR      J7C73
+
+;       Subroutine      COPY statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+COPY:
+C7C2F:  CALL    H.COPY
+        JR      J7C73
+
+;       Subroutine      CMD statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+CMD:
+C7C34:  CALL    H.CMD
+        JR      J7C73
+
+;       Subroutine      DSKF function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+DSKF:
+C7C39:  CALL    H.DSKF
+        JR      J7C73
+
+;       Subroutine      DSKI$ function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+DSKI$:
+J7C3E:  CALL    H.DSKI
+        JR      J7C73
+
+;       Subroutine      ATTR$ function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+ATTR$:
+J7C43:  CALL    H.ATTR
+        JR      J7C73
+
+;       Subroutine      LSET statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+LSET:
+C7C48:  CALL    H.LSET
+        JR      J7C73
+
+;       Subroutine      RSET statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+RSET:
+C7C4D:  CALL    H.RSET
+        JR      J7C73
+
+;       Subroutine      FIELD statement
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+FIELD:
+C7C52:  CALL    H.FIEL
+        JR      J7C73
+
+;       Subroutine      MKI$ function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+MKI$:
+C7C57:  CALL    H.MKI$
+        JR      J7C73
+
+;       Subroutine      MKS$ function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+MKS$:
+C7C5C:  CALL    H.MKS$
+        JR      J7C73
+
+;       Subroutine      MKD$ function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+MKD$:
+C7C61:  CALL    H.MKD$
+        JR      J7C73
+
+;       Subroutine      CVI function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+CVI:
+C7C66:  CALL    H.CVI
+        JR      J7C73
+
+;       Subroutine      CVS function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+CVS:
+C7C6B:  CALL    H.CVS
+        JR      J7C73
+
+;       Subroutine      CVD function
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+CVD:
+C7C70:  CALL    H.CVD
+J7C73:  JP      FCERR                   ; illegal function call
+
+; END   SUBTTL  MSXSTS
+
+        END
+

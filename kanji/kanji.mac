@@ -17,9 +17,10 @@
         ASEG
         ORG	4000H
 
-M0D0C	EQU	0D0CH	; bios: pop af, pop bc, pop de, pop hl, ret
-D0004	EQU	0004H	; address pattern generator
-D0006	EQU	0006H	; address vdp dataport (read)
+INTRET  EQU     0D02H
+
+CGTABL	EQU	0004H	; address pattern generator
+VDP.DR	EQU	0006H	; address vdp dataport (read)
 CALSLT	EQU	001CH
 IDBYT2	EQU	002DH
 WRTVDP	EQU	0047H
@@ -44,28 +45,27 @@ KILBUF	EQU	0156H
 CALBAS	EQU	0159H
 EXTROM	EQU	015FH
 
-M406F	EQU     406FH                   ; BASIC error
-M409B   EQU     409BH                   ; warm start BASIC
-M4601   EQU     4601H                   ; execution loop
-M4666   EQU     4666H                   ; get next BASIC character
-M4C64   EQU     4C64H                   ; evaluate expression
-M517A   EQU     517AH                   ; convert DAC to new type
-M521C   EQU     521CH                   ; evaluate byte operand
-M5284   EQU     5284H                   ; decode BASIC line
-M5EA4   EQU     5EA4H                   ; locate variable
-M6627   EQU     6627H                   ; allocate temporary string
-M67D0   EQU     67D0H                   ; free temporary string with type check
-M6C1C   EQU     6C1CH                   ; close all i/o channels
-
+ERROR   equ     0406FH                  ; BASIC error
+READYR  equ     0409BH                  ; restart BASIC
+NEWSTT  equ     04601H                  ; execution loop
+CHRGTR  equ     04666H                  ; CHRGTR
+FRMEVL  equ     04C64H                  ; evaluate expression
+DOCNVF  equ     0517AH                  ; convert DAC to other type
+GETBYT  equ     0521CH                  ; evaluate byte operand
+BUFLIN  EQU     05284H                  ; decode BASIC line
+PTRGET  equ     05EA4H                  ; get address of variable
+STRINI  equ     06627H                  ; allocate temp string
+FRESTR  equ     067D0H                  ; free temporary string
+CLSALL  equ     06C1CH                  ; close all i/o channels
 
 CBFF0	EQU	0BFF0H
 
 S.PUTCHR	EQU	0139H
 
 
-DF30F	EQU	0F30FH	; double byte header definition used by the disksystem
-DF349	EQU	0F349H	; bottom of disksystem
-DF36B	EQU	0F36BH	; enable tpa (ram) on page 1
+KANJTA	EQU	0F30FH	; double byte header definition used by the disksystem
+HIMSAV	EQU	0F349H	; bottom of disksystem
+$DOSOF	EQU	0F36BH	; enable tpa (ram) on page 1
 
 WRPRIM  EQU     0F385H
 LINL40	EQU	0F3AEH
@@ -313,11 +313,11 @@ C40CB:	LD	A,(HOKVLD)
         LD	DE,EXTBIO+1
         LD	BC,3*5-1
         LD	(HL),0C9H
-        LDIR
+        LDIR                            ; initialize EXTBIO, DISINT and ENAINT
 J40E4:	LD	A,(EXTBIO+1)
-        LD	(SLTWRK+1),A
+        LD	(SLTWRK+1),A            ; store slot id EXTBIO handler
         LD	HL,(EXTBIO+2)
-        LD	(SLTWRK+2),HL
+        LD	(SLTWRK+2),HL           ; store address EXTBIO handler
         CALL	C44EB			; get slotid
         LD	H,A
         LD	L,0F7H
@@ -404,12 +404,12 @@ C4150:	DEC	A
 ;	     Outputs ________________________
 
 C4159:	LD	A,(SLTWRK+4)
-        AND	A
-        RET	NZ
+        AND	A                       ; interrupt handler in use ?
+        RET	NZ                      ; yep, quit
         LD	A,(H.TIMI+1)
-        LD	(SLTWRK+4),A
+        LD	(SLTWRK+4),A            ; store slot id interrupt handler
         LD	HL,(H.TIMI+2)
-        LD	(SLTWRK+5),HL
+        LD	(SLTWRK+5),HL           ; store address interrupt handler
         CALL	C44EB			; get slotid
         LD	H,A
         LD	L,0F7H
@@ -433,9 +433,9 @@ C417C:	CALL	C44EB			; get slotid
         SBC	HL,DE			; my H.TIMI handler ?
         RET	NZ			; nope, quit
         LD	A,(SLTWRK+4)
-        CP	0C9H
-        JR	Z,J419D
-        LD	HL,(SLTWRK+5)
+        CP	0C9H                    ; any chained interrupt handler ?
+        JR	Z,J419D                 ; nope,
+        LD	HL,(SLTWRK+5)           ; address chained interrupt handler
         DI
         LD	(H.TIMI+1),A
         JR	J41A2
@@ -446,7 +446,7 @@ J419D:	LD	L,A
 J41A2:	EI
         LD	(H.TIMI+2),HL
         XOR	A
-        LD	(SLTWRK+4),A
+        LD	(SLTWRK+4),A            ; interrupt handler not in use
         RET
 
 A41AB:	EI
@@ -524,12 +524,31 @@ I41D4:	DEFB	"PALETTE",0
         DEFW	A43FE
         DEFB	0
 
+;	  Subroutine CALL KANJI/KANJI0
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A4260:	XOR	A			; kanji mode 0, 8*16 characters
         DEFB	001H
+
+;	  Subroutine CALL KANJI1
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A4262:	LD	A,040H			; kanji mode 1, 6*16 characters
         DEFB	001H
+
+;	  Subroutine CALL KANJI2
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A4265:	LD	A,080H			; kanji mode 2, 8*8 characters
         DEFB	001H
+
+;	  Subroutine CALL KANJI3
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A4268:	LD	A,0C0H			; kanji mode 3, 6*8 characters
 J426A:	PUSH	HL
         PUSH	AF
@@ -540,7 +559,7 @@ J426A:	PUSH	HL
         POP	BC
         LD	A,(IX+0)
         AND	A
-        PUSH	AF
+        PUSH	AF                      ;
         LD	(IX+0),B		; kanji mode
         LD	A,24
         LD	(LINTTB),A
@@ -631,9 +650,9 @@ J4323:	LD	A,(H.PHYD+0)
         CP	0C9H			; disk system active ?
         JR	Z,J4336
         LD	HL,0A080H
-        LD	(DF30F+0),HL
+        LD	(KANJTA+0),HL
         LD	HL,0FDE0H
-        LD	(DF30F+2),HL		; yep, fill double byte header table disk system
+        LD	(KANJTA+2),HL		; yep, enable double byte support
 J4336:	CALL	C43AD			; calculate and set kanji screenwidth
         CALL	C4159			; hook H.TIMI if not already done
         POP	AF
@@ -641,7 +660,7 @@ J4336:	CALL	C43AD			; calculate and set kanji screenwidth
         JR	NZ,C4398		; reset CHPUT variables and quit
         LD	(SWPTMP),HL		; save BASIC pointer
         CALL	C40CB			; hook EXTBIO
-        LD	IX,M6C1C
+        LD	IX,CLSALL
         CALL	CALBAS			; close all i/o channels
         CALL	C67A5			; initialize MSX-JE if available
         CALL	C,C7951			; not available, own 'MSX-JE'
@@ -672,7 +691,7 @@ J4336:	CALL	C43AD			; calculate and set kanji screenwidth
         LD	(BUF+0),HL		; i/o channel 0 control block
         LD	(HL),A			; i/o channel 0 is not open
         LD	HL,HOLD8
-        LD	IX,M4601
+        LD	IX,NEWSTT
         JP	CALBAS			; execute new statement
 
 ;	  Subroutine reset CHPUT variables
@@ -690,7 +709,7 @@ C4398:	XOR	A
 C43A0:	LD	A,(H.PHYD+0)
         CP	0C9H			; disk system active ?
         JR	Z,C43AD			; nope, calculate and set kanji screenwidth and quit
-        LD	A,(DF36B)
+        LD	A,($DOSOF+0)
         CP	0C3H			; in DOS environment ?
         RET	Z			; yep, quit
 
@@ -722,8 +741,8 @@ J43C3:	JR	NZ,J43D3		; character width = 8, use screenwidth previous textmode
 J43CF:	ADD	HL,DE
         INC	A
         JR	C,J43CF			; /5
-J43D3:	LD	(LINLEN),A		; set screenwidth
-        LD	(IX+6),A
+J43D3:	LD	(LINLEN),A		; update screen width
+        LD	(IX+6),A                ; update screen width text mode
         POP	HL
         RET
 
@@ -761,6 +780,10 @@ I43F6:	DEFB	000H
         DEFB	002H
         DEFB	001H
 
+;	  Subroutine CALL ANK
+;	     Inputs  ________________________
+;	     Outputs ________________________
+
 A43FE:	CALL	C4099			; get my SLTWRK entry
         BIT	5,(IX+1)
         RET	Z			; kanji driver already deactived, quit
@@ -788,8 +811,8 @@ J4423:	LD	(IY+8),0
         CP	0C9H			; disk system active ?
         JR	Z,J4451
         LD	HL,0
-        LD	(DF30F+0),HL
-        LD	(DF30F+2),HL		; yep, clear double byte header table
+        LD	(KANJTA+0),HL
+        LD	(KANJTA+2),HL		; disable double byte support
 J4451:	POP	HL
         RET
 
@@ -970,7 +993,7 @@ J4527:	ADD	HL,SP
 
 A452E:	EI
         NOP
-        LD	DE,M0D0C+1
+        LD	DE,INTRET+11
         CALL	C451A			; replace return address with other routine
         CALL	C4099			; get my SLTWRK entry
         XOR	A
@@ -1000,9 +1023,9 @@ A454E:	EI
         BIT	7,A			; b7 set ?
         RET	NZ			; quit doing nothing
         LD	A,(OLDSCR)
-        LD	(SCRMOD),A
+        LD	(SCRMOD),A              ; restore previous text mode
         LD	A,(IX+6)
-        LD	(LINLEN),A
+        LD	(LINLEN),A              ; restore previous text mode width
 
 ;	  Subroutine __________________________
 ;	     Inputs  ________________________
@@ -1139,10 +1162,10 @@ J4655:	LD	B,A
         CP	2
         LD	A,B
         JR	NC,J4661
-        LD	(IX+6),A
+        LD	(IX+6),A                ; update screen width text mode
 J4661:	INC	HL
         LD	A,(HL)
-        LD	(CRTCNT),A		; srceenlength
+        LD	(CRTCNT),A		; srceen length
 	LD	A,(IDBYT2)
         AND	A			; msx 1 ?
         JR	Z,J46AE			; yep, skip interlace
@@ -1273,7 +1296,7 @@ A4746:	EI
         CALL	C4099			; get my SLTWRK entry
         CALL	C456D			; setup kanji screenmode if needed
         LD	C,A
-        LD	DE,M0D0C
+        LD	DE,INTRET+10
         CALL	C451A			; replace return address with other routine
         LD	A,C
 
@@ -1588,7 +1611,7 @@ J48E5:	LD	A,L
         RET	C
         LD	A,C
         CALL	C4908			; double byte header character ?
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         IN	C,(C)
         INC	H
@@ -2381,7 +2404,7 @@ J4CB3:	POP	HL
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4CB9:	LD	A,(D0006)
+C4CB9:	LD	A,(VDP.DR)
         LD	C,A
         LD	A,H
         RES	6,H
@@ -2391,7 +2414,7 @@ C4CB9:	LD	A,(D0006)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C4CC2:	LD	A,(D0006)
+C4CC2:	LD	A,(VDP.DR)
         LD	C,A
         LD	A,H
         SET	6,H
@@ -3369,7 +3392,7 @@ C52C6:	LD	E,(HL)
         CALL	C5334
         POP	HL
         PUSH	IX
-        LD	IX,M5284
+        LD	IX,BUFLIN
         CALL	CALBAS			; decode BASIC line
         POP	IX
         LD      HL,SWPTMP-1
@@ -3503,7 +3526,7 @@ C5370:	LD	A,(NORUSE)
 ;	     Outputs ________________________
 
 I5381:	EI
-        PUSH	AF
+        PUSH	AF                      ; store VDP status
         LD	A,(H.TOTE+0)
         CP	0C9H			; kanji mode enabled ?
         JR	Z,J5391			; nope, use orginal keyboard handler
@@ -3514,9 +3537,9 @@ J5391:	LD	A,(SLTWRK+4)
         CP	0C9H			; need to pass control to a other H.TIMI handler ?
         JR	Z,J53A3			; nope, quit
         PUSH	AF
-        POP	IY
-        LD	IX,(SLTWRK+5)
-        POP	AF
+        POP	IY                      ; slot id interrupt handler
+        LD	IX,(SLTWRK+5)           ; address chained interrupt handler
+        POP	AF                      ; restore VDP status
         JP	CALSLT			; pass control to a other H.TIMI handler
 
 J53A3:	POP	AF
@@ -3616,7 +3639,7 @@ J5435:	LD	A,C
         LD	A,(NEWKEY+6)
         CP	0E8H
         JR	NZ,J5453
-        LD	IX,M409B
+        LD	IX,READYR
         JP	CALBAS			; warm start MSX BASIC
 
 J5453:	LD	DE,OLDKEY+11
@@ -3736,6 +3759,10 @@ I550E:  DEFB	0,0,0,0,0,0,0,0
         DEFB	" ",00CH,012H,07FH,01DH,01EH,01FH,01CH
         DEFB    "+/*0123456789-,."
 
+;	Subroutine	KEYCOD
+;	Inputs		C = scancode
+;	Outputs		________________________
+
 C5536:  LD      A,C
         CP	0FFH
         RET	Z
@@ -3764,6 +3791,10 @@ J555C:	RET	C
         POP	DE
         JR	J5555
 
+;	Subroutine	handler keys 0,1,2,3,4,5,6,7,8,9
+;	Inputs		A = C = scancode (000H-009H)
+;	Outputs		________________________
+
 C5560:	ADD	A,30H	; "0"
         LD	B,A
         LD	A,(NEWKEY+6)
@@ -3776,7 +3807,16 @@ J556C:	LD	HL,I54C4
         LD	A,(HL)
         CP	0FFH
         RET	Z
+
+;         Subroutine put in keyboardbuffer
+;            Inputs  ________________________
+;            Outputs ________________________
+
 J5574:	JP	C5658
+
+;	Subroutine	handler keys a-z
+;	Inputs		C = scancode (016H-02FH)
+;	Outputs		________________________
 
 C5577:	LD	A,(NEWKEY+6)
         AND	03H	; 3 
@@ -3793,7 +3833,16 @@ C5577:	LD	A,(NEWKEY+6)
         SUB	15H
         JP	(HL)
 
+;	Subroutine	handler keys a-z, SHIFT pressed, CTRL not pressed
+;	Inputs		A = lettercode (001H-01AH)
+;	Outputs		________________________
+
 C558C:	ADD	A,20H	; " "
+
+;	Subroutine	handler keys a-z, SHIFT and CTRL not pressed
+;	Inputs		A = lettercode (001H-01AH)
+;	Outputs		________________________
+
 C558E:  LD	B,A
         LD	A,(CAPST)
         CPL
@@ -3801,6 +3850,10 @@ C558E:  LD	B,A
         XOR	B
         ADD	A,40H	; "@"
         JR	J5574
+
+;	Subroutine	handler keys -,^,yen,@,[,;,:,],komma,.,/,_
+;	Inputs		C = scancode (00AH-015H)
+;	Outputs		________________________
 
 C559A:	LD	HL,I54D6
         LD	A,(NEWKEY+6)
@@ -3819,6 +3872,10 @@ C559A:	LD	HL,I54D6
         CP	0FFH
         JP	NZ,C5658
         RET
+
+;	Subroutine	handler functionkeys
+;	Inputs		C = scancode (035H-039H)
+;	Outputs		________________________
 
 C55B4:	LD	A,(NEWKEY+6)
         RRCA
@@ -3865,9 +3922,9 @@ J55D5:	LD	A,(DE)
 J55F4:	CALL	C55F9
         JR	J55D5
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;         Subroutine put in keyboardbuffer
+;            Inputs  ________________________
+;            Outputs ________________________
 
 C55F9:	CALL	C5658
 I55FC:	RET
@@ -3881,30 +3938,39 @@ J55FD:	LD	HL,(CURLIN)
         ADD	HL,DE
         ADD	HL,DE
         ADD	HL,DE
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+
+;         Subroutine raise trap
+;            Inputs  ________________________
+;            Outputs ________________________
 
 C560B:	LD	A,(HL)
-        AND	01H	; 1 
+        AND	01H
         RET	Z
         LD	A,(HL)
-        OR	04H	; 4 
+        OR	04H
         CP	(HL)
         RET	Z
         LD	(HL),A
-        XOR	05H	; 5 
+        XOR	05H
         RET	NZ
         LD	A,(ONGSBF)
         INC	A
         LD	(ONGSBF),A
         RET
 
+;	Subroutine	handler HOME key
+;	Inputs		-
+;	Outputs		________________________
+
 C5620:	LD	A,(NEWKEY+6)
         RRCA
         LD	A,0CH	; 12 
         SBC	A,00H
         JR	C5658
+
+;	Subroutine	handler easily converted keys
+;	Inputs		A = scancode (030H-015H)
+;	Outputs		________________________
 
 C562A:	CALL	H.KEYA
         LD	E,A
@@ -3915,6 +3981,10 @@ C562A:	CALL	H.KEYA
         AND	A
         RET	Z
         JR	C5658
+
+;	Subroutine	handler CAPS key
+;	Inputs		-
+;	Outputs		________________________
 
 C5639:	LD	HL,CAPST
         LD	A,(HL)
@@ -3928,6 +3998,10 @@ C5639:	LD	HL,CAPST
 J5646:	OUT	(0ABH),A
         RET
 
+;	Subroutine	handler STOP key
+;	Inputs		-
+;	Outputs		________________________
+
 C5649:	LD	A,(NEWKEY+6)
         RRCA
         RRCA
@@ -3936,9 +4010,10 @@ C5649:	LD	A,(NEWKEY+6)
         INC	A
 J5653:	LD	(INTFLG),A
         JR	C,C5666
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+
+;         Subroutine put in keyboardbuffer
+;            Inputs  ________________________
+;            Outputs ________________________
 
 C5658:	POP	HL
         PUSH	HL
@@ -3950,9 +4025,9 @@ C5658:	POP	HL
         POP	DE
         RET
 
-;	  Subroutine __________________________
-;	     Inputs  ________________________
-;	     Outputs ________________________
+;         Subroutine keyboard click
+;            Inputs  ________________________
+;            Outputs ________________________
 
 C5666:	LD	A,(CLIKSW)
         AND	A
@@ -3960,18 +4035,22 @@ C5666:	LD	A,(CLIKSW)
         LD	A,(CLIKFL)
         AND	A
         RET	NZ
-        LD	A,0FH	; 15 
+        LD	A,0FH
         LD	(CLIKFL),A
         OUT	(0ABH),A
-        LD	A,0AH	; 10 
+        LD	A,10
 J5679:	DEC	A
         JR	NZ,J5679
         AND	A
-        LD	A,0EH	; 14 
+        LD	A,0EH
         JR	Z,J5682
         INC	A
 J5682:	OUT	(0ABH),A
         RET
+
+;	Subroutine	handle scancodes when KANA is on (and GRAPH and CTRL are not pressed)
+;	Inputs		C = scancode (000H-02FH)
+;	Outputs		________________________
 
 J5685:	LD	A,(KANAMD)
         AND	A
@@ -5664,7 +5743,7 @@ C610E:	LD	A,24H	; "$"
 ;	     Outputs ________________________
 
 C6110:	PUSH	AF
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         POP	AF
@@ -5680,7 +5759,7 @@ J6121:	OUT	(C),A
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C6123:	LD	A,(D0006)
+C6123:	LD	A,(VDP.DR)
         LD	C,A
         INC	C
 J6128:	LD	A,02H	; 2 
@@ -5976,7 +6055,7 @@ C62AA:	LD	H,0
         ADD	HL,HL
         ADD	HL,HL
         ADD	HL,HL
-        LD	BC,(D0004)
+        LD	BC,(CGTABL)
         ADD	HL,BC
         RET
 
@@ -6108,7 +6187,7 @@ J636B:	LD	A,L
         ADD	A,A
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         LD	A,E
@@ -6141,7 +6220,7 @@ J63AA:	LD	B,A
         ADD	A,B
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         LD	A,E
@@ -6296,7 +6375,7 @@ J647F:	LD	A,L
         CALL	C6744
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         DEC	E
         LD	DE,HOLD8+0
@@ -6396,7 +6475,7 @@ J6502:	CP	02H	; 2
         ADD	A,A
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         BIT	0,E
@@ -6447,7 +6526,7 @@ J6553:	LD	B,A
         ADD	A,B
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         BIT	1,E
@@ -6539,7 +6618,7 @@ J65D2:	LD	A,L
         CALL	C6744
         LD	H,L
         LD	L,A
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         LD	A,(FORCLR)
@@ -6620,7 +6699,7 @@ J6640:	PUSH	AF
         ADD	A,A
         LD	H,A
         LD	L,00H
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         POP	AF
@@ -6664,7 +6743,7 @@ J6674:	PUSH	AF
         DEC	A
         LD	H,A
         LD	L,0E0H
-        LD	A,(D0006)
+        LD	A,(VDP.DR)
         LD	C,A
         INC	C
         POP	AF
@@ -6695,7 +6774,7 @@ J66A6:	DEC	E
         JR	NZ,C6695
         RET
 
-J66AA:	LD	BC,(D0006)
+J66AA:	LD	BC,(VDP.DR)
         INC	C
         CP	02H	; 2 
         JR	Z,J66F0
@@ -6987,7 +7066,7 @@ J67FD:	PUSH	AF
         LD	A,(H.PHYD+0)
         CP	0C9H			; disk system active ?
         JR	Z,J682B
-        LD	(DF349),HL		; yep, adjust lower of disksystem
+        LD	(HIMSAV),HL		; yep, adjust lower of disksystem
 J682B:	POP	BC
         POP	DE			; adres
         POP	AF			; slotid
@@ -7083,8 +7162,8 @@ J68B2:	BIT	1,(IY+8)
         JR	C,J68F1
         BIT	0,(IY+8)
         JR	NZ,J68D6
-        LD	A,3
-        CALL	C6A19			; MSX-JE release
+        LD	A,3                     ; function = release
+        CALL	C6A19			; MSX-JE
         CALL	C6878			; restore functionkey F1-F8 definitions
         CALL	C69CC
         CALL	NC,C6AC7
@@ -7094,10 +7173,10 @@ J68D1:	CALL	C69DB
 J68D6:	CALL	C6880			; save functionkey F1-F8 definitions
         LD	E,(IY+15)
         LD	D,(IY+16)
-        LD	A,2
-        CALL	C6A19			; MSX-JE invoke
-        LD	A,4
-        CALL	C6A19			; MSX-JE clear
+        LD	A,2                     ; function = invoke
+        CALL	C6A19			; MSX-JE
+        LD	A,4                     ; function = clear
+        CALL	C6A19			; MSX-JE
         CALL	C69E8
         CALL	C6A73
         JR	J68D1
@@ -7112,8 +7191,8 @@ J68F1:	BIT	0,(IY+8)
         JR	Z,J6950
 J6903:	CALL	C6B3A
         SET	1,(IY+8)
-J690A:	LD	A,6
-        CALL	C6A19			; MSX-JE dispatch
+J690A:	LD	A,6                     ; function = dispatch
+        CALL	C6A19			; MSX-JE
         BIT	2,A
         JR	Z,J691A
         CALL	C698F
@@ -7124,8 +7203,8 @@ J691A:	RRCA
         POP	AF
         RRCA
         JP	NC,J68B2
-        LD	A,7
-        CALL	C6A19			; MSX-JE get result
+        LD	A,7                     ; function = get result
+        CALL	C6A19			; MSX-JE
         LD	A,(HL)
         AND	A
         JP	Z,J68B2
@@ -7197,7 +7276,7 @@ C698F:	PUSH	HL
         DI
         RES	5,(HL)
         LD	HL,(GETPNT)
-        LD	B,00H
+        LD	B,0
 J69A5:	LD	A,(PUTPNT)
         CP	L
         JR	Z,J69B4
@@ -8466,7 +8545,7 @@ J70D4:	LD	E,15
 J70D7:	LD	E,5
         DEFB	1
 J70DA:	LD	E,2
-        LD	IX,M406F
+        LD	IX,ERROR
         JP	CALBAS			; BASIC error
 
 ;	  Subroutine __________________________
@@ -8475,7 +8554,7 @@ J70DA:	LD	E,2
 
 C70E3:	CALL	C70FA
         DEFB	"("
-        LD	IX,M5EA4
+        LD	IX,PTRGET
         CALL	CALBAS			; locate variable
         EI
         NOP
@@ -8500,28 +8579,28 @@ C70FA:	LD	A,(HL)
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7101:	LD	IX,M4666
+C7101:	LD	IX,CHRGTR
         JR	J7117
 
 ;	  Subroutine convert to DAC to new type
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7107:	LD	IX,M517A
+C7107:	LD	IX,DOCNVF
         JR	J7117
 
 ;	  Subroutine evaluate expression
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C710D:	LD	IX,M4C64
+C710D:	LD	IX,FRMEVL
         JR	J7117
 
 ;	  Subroutine evaluate byte operand
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-C7113:	LD	IX,M521C
+C7113:	LD	IX,GETBYT
 J7117:	CALL	CALBAS
         EI
         RET
@@ -8537,7 +8616,7 @@ C711C:	CALL	C710D			; evaluate expression
 ;	     Outputs ________________________
 
 C711F:	PUSH	HL
-        LD	IX,M67D0
+        LD	IX,FRESTR
         CALL	CALBAS			; free temporary string
         EI
         LD	B,(HL)
@@ -8555,7 +8634,7 @@ C711F:	PUSH	HL
 
 C7130:	PUSH	HL
         PUSH	AF
-        LD	IX,M6627
+        LD	IX,STRINI
         CALL	CALBAS			; allocate temporary string
         EI
         NOP
@@ -8707,8 +8786,8 @@ J71E8:	OUTI
 
 C71F1:	LD	C,10H	; 16 
         CALL	WRTVDP
-        LD	A,(D0006)
-        ADD	A,02H	; 2 
+        LD	A,(VDP.DR)
+        ADD	A,2
         LD	C,A
         RET
 
@@ -9713,7 +9792,7 @@ C7951:	LD	DE,546
         LD	A,(H.PHYD+0)
         CP	0C9H			; disk system active ?
         JR	Z,J7967
-        LD	(DF349),HL		; yep, adjust lower disk system
+        LD	(HIMSAV),HL		; yep, adjust lower disk system
 J7967:	POP	BC
         LD	SP,HL
         PUSH	BC
@@ -9727,7 +9806,7 @@ J7967:	POP	BC
         LD	(IY+0),21H		; ld hl,
         LD	(IY+3),0F7H		; rst fcall
         LD	(IY+5),LOW CBFF0
-        LD	(IY+6),HIGH CBFF0	; dw BFF0
+        LD	(IY+6),HIGH CBFF0	; simple MSX-JE entry point
         LD	(IY+7),0C9H		; ret
         XOR	A
         LD	(IY+8),A
