@@ -3944,11 +3944,12 @@ J136E:  POP     AF
         RET
 
 ;       Subroutine      S.SCALXY
-;       Inputs          ________________________
-;       Outputs         ________________________
+;       Inputs          BC=X coordinate, DE=Y coordinate
+;       Outputs         Flag NC if clipped
+;	Modifies	AF
 
-C1376:  CALL    C066D
-        JP      NC,J13B7
+C1376:  CALL    C066D		; SCRMOD > 5 (MSX2 screens)
+        JP      NC,J13B7	; HANDLE SCREEN 6, 7, 8, 9, 10, ....
         PUSH    HL
         PUSH    BC
         LD      B,1
@@ -3990,42 +3991,50 @@ J13A8:  POP     DE
         POP     HL
         RET
 
-J13B7:  PUSH    HL
-        PUSH    BC
+;       Subroutine      S.SCALXY for MSX2 screens (5 and up)
+;       Inputs          BC=X coordinate, DE=Y coordinate
+;       Outputs         Flag NC if clipped
+;	Modifies	AF
+
+J13B7:	PUSH    HL		; SAVE HL
+        PUSH    BC		; PUSH X co-ord
         LD      B,1
-        EX      DE,HL
+        EX      DE,HL		; HL => y co-ord
         LD      A,H
         ADD     A,A
-        JR      NC,J13C5
+        JR      NC,J13C5	; jump if y co-ord is not negative?
         LD      HL,0
         JR      J13D7
 
 J13C5:  LD      A,(MODE)
-        AND     10H
+        AND     10H		; bit 4 - are we 212 or 256 lines?
         LD      DE,212
-        JR      Z,J13D2
+        JR      Z,J13D2		; jump if 212 lines
         LD      DE,256
 J13D2:  RST     S.DCOMPR
         JR      C,J13D9
         EX      DE,HL
         DEC     HL
+				; HL = y co-ord adjusted as required
 J13D7:  LD      B,0
-J13D9:  EX      (SP),HL
+J13D9:  EX      (SP),HL		; swap y co-ord and x co-ord
         LD      A,H
         ADD     A,A
-        JR      NC,J13E3
-        LD      HL,0
+        JR      NC,J13E3	; is x negative
+        LD      HL,0		; yes, make it zero
         JR      J13F3
 
 J13E3:  LD      A,(SCRMOD)
         AND     02H
-        LD      DE,512
-        JR      NZ,J13EE
-        DEC     D
+        LD      DE,512		; set x limit to 512
+        JR      NZ,J13EE	;
+        DEC     D		; set x limit to 256
 J13EE:  RST     S.DCOMPR
         JR      C,J13F5
         EX      DE,HL
         DEC     HL
+
+				; HL is adjust x-cord, (SP) is adjusted ycord
 J13F3:  LD      B,0
 J13F5:  LD      A,B
         RRCA
