@@ -2015,7 +2015,7 @@ C088D:  PUSH    AF
         XOR     A
         LD      H,A
         LD      L,A
-        CALL    C2C09
+        CALL    WAIT_AND_SETUP_DX_DY
         XOR     A
         CALL    C2C3F
         LD      A,(SCRMOD)
@@ -3749,7 +3749,7 @@ C1225:  CALL    C2A1D
         CALL    C2C3F
         CALL    C1430
         LD      E,A
-        CALL    C2C09
+        CALL    WAIT_AND_SETUP_DX_DY
         LD      A,E
         SUB     0CDH
         LD      L,8
@@ -3870,7 +3870,7 @@ J12EC:  CALL    C0855
         XOR     A
         CALL    C2C3F
         CALL    C1430
-        CALL    C2C09
+        CALL    WAIT_AND_SETUP_DX_DY
         LD      HL,8
         LD      DE,16
         CALL    C2C28
@@ -8106,15 +8106,15 @@ J282E:  CALL    C0262
 ;       Outputs         ________________________
 
 J2833:  PUSH    AF
-        CALL    C27B8
+        CALL    C27B8		; evaluate graphic coordinatepair (simple form)
         POP     AF
         CALL    C284F
-        CALL    C2871
+        CALL    C2871		; evaluate graphic logical operand
         PUSH    HL
-        CALL    C1376
-        JR      NC,J284A
-        CALL    C13FC
-        CALL    C146F
+        CALL    C1376		; S.SCALEXY
+        JR      NC,J284A	; NC -> clipped - do nothing???
+        CALL    C13FC		; S.MAPXYC
+        CALL    C146F		; S.SETC
 J284A:  POP     HL
         RET
 
@@ -8551,7 +8551,7 @@ C2A78:  PUSH    BC
         LD      L,C
         LD      H,B
         LD      A,E
-        CALL    C2C09
+        CALL    WAIT_AND_SETUP_DX_DY
         CALL    C28CE
         CALL    C28CB
         EX      AF,AF'
@@ -8785,7 +8785,8 @@ C2B99:  PUSH    DE
 C2BC0:  LD      B,A
         CALL    C2A1D
         LD      A,B
-        CALL    C2C09
+	CALL	WAIT_AND_SETUP_DX_DY
+
         LD      A,44
         DI
         OUT     (99H),A
@@ -8843,12 +8844,14 @@ C2C04:  PUSH    AF
 
 ;       Subroutine      setup dx,dy
 ;       Inputs          HL = dx, A = dy
+;       Inputs (SUPER)  HL = dx, DE = dy
 ;       Outputs         ________________________
 
-C2C09:  PUSH    AF
+WAIT_AND_SETUP_DX_DY:
+	PUSH    AF
         LD      A,36
 J2C0C:  PUSH    AF
-        CALL    C2BE4
+        CALL    C2BE4			; wait until VDP command is done
         DI
         POP     AF
         OUT     (99H),A
@@ -8859,11 +8862,23 @@ J2C0C:  PUSH    AF
         LD      A,H
         OUT     (9BH),A
         POP     AF
+
+	IFDEF SUPER_HDMI
+	LD	A, E
+        OUT     (9BH),A
+	LD	A, D
+        OUT     (9BH),A
+
+	ELSE
         OUT     (9BH),A
         LD      A,(ACPAGE)
         OUT     (9BH),A
+
+	ENDIF
+
         EI
         RET
+
 
 ;       Subroutine      setup nx,ny
 ;       Inputs          DE = nx, HL = ny
