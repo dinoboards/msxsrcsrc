@@ -215,11 +215,15 @@ RG11SA  EQU     0FFEAH
 RG18SA  EQU     0FFF1H
 RG23SA  EQU     0FFF6H
 D.FFF7  EQU     0FFF7H                  ; slotid of mainrom
-RG24SA  EQU     0FFF9H
+RESVRD  EQU     0FFF9H
 RG25SA  EQU     0FFFAH
 RG26SA  EQU     0FFFBH
 D.FFFF  EQU     0FFFFH  ; secundary slotreg
 
+	IFDEF SUPER_HDMI
+SUPF1	EQU	0FFF8H
+SUPF2	EQU	0FFF9H
+	ENDIF
 
         DEFB    "CD"                    ; subrom header
         DEFW    C035A                   ; subrom init routine
@@ -1007,7 +1011,7 @@ C035A:  LD      HL,I2C5A
         LD      DE,RG8SAV
         LD      C,16
         LDIR
-        LD      DE,RG24SA
+        LD      DE,RESVRD
         LD      C,4
         LDIR
         XOR     A
@@ -4001,7 +4005,15 @@ J13A8:  POP     DE
 ;       Outputs         Flag NC if clipped
 ;	Modifies	AF
 
-J13B7:	PUSH    HL		; SAVE HL
+J13B7:
+	IFDEF SUPER_HDMI
+	LD	A, (SUPF2)	;
+	SCF
+	BIT	0, A
+	RET	NZ		; if in super mode, do nothing
+	ENDIF
+
+	PUSH    HL		; SAVE HL
         PUSH    BC		; PUSH X co-ord
         LD      B,1
         EX      DE,HL		; HL => y co-ord
@@ -6369,9 +6381,32 @@ C1E82:  PUSH    AF
         RET     NC
         JP      J274A
 
-J1E8B:  CP      ","
+;       Subroutine      S.SCREEN
+;       Inputs          ________________________
+;       Outputs         ________________________
+
+J1E8B:
+	IFDEF SUPER_HDMI
+	EX	AF, AF'
+	CALL	SCREEN_SUPER_DISABLE
+	EX	AF, AF'
+	ENDIF
+
+	CP      ","
+	IFDEF SUPER_HDMI
+        JP      Z,J1F08
+        RST     S.GETBYT
+
+	CP	16
+	CALL	Z, SCREEN_SUPER_COLOR
+	CP	17
+	CALL	Z, SCREEN_SUPER_MID
+	ELSE
         JR      Z,J1F08
         RST     S.GETBYT
+
+	ENDIF
+
         CP      12+1
         JP      NC,J274A
         CP      9
@@ -12290,6 +12325,36 @@ J3E8C:  DEC     A
 ; End of PUTCHR and KYKLOK
 ; *************************************
 
+	IFDEF SUPER_HDMI
+
+SCREEN_SUPER_COLOR:
+	DI				; write 1 to R#31
+	LD	A, 1			; bit 0 -> super, bit 2:1 color
+	LD	(SUPF2), A
+	JR	WRITE_REG_31
+
+WRITE_REG_31:
+	OUT	(099H), A
+	EX	AF, AF'
+	LD	A, 080H + 31
+	OUT	(099H), A
+	EI
+
+	LD	A, 8
+	RET
+
+SCREEN_SUPER_MID:
+	DI				; write 3 to R#31
+	LD	A, 3			; bit 0 -> super, bit 2:1 -> mid
+	LD	(SUPF2), A
+	JR	WRITE_REG_31
+
+SCREEN_SUPER_DISABLE:
+	DI				; clear out R#31
+	XOR	A			; bit 0 must be off to turn off super mode
+	LD	(SUPF2), A
+	JR	WRITE_REG_31
+	ENDIF
 
         DEFS    04000H-$,0
 
