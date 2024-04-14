@@ -1992,13 +1992,13 @@ J0868:  PUSH    AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C087A:  CALL    C0667
-        JP      Z,C0926
-        JR      NC,C088D
-        CALL    C0661
-        JP      Z,C0926
-        JP      NC,C093E
-        JR      C08F5
+C087A:  CALL    C0667		; check if in screenmode 4
+        JP      Z,C0926		; dispatch to CLS for screemode 4
+        JR      NC,C088D	; dispatch for modes >= 5?
+        CALL    C0661		; check if in screenmode 2
+        JP      Z,C0926		; dispatch to CLS for screenmode 2
+        JP      NC,C093E	; dispatch to CLS for screenmode 3
+        JR      C08F5		; dispatch to S.CLRTXT
 
 ;       Subroutine      clear screen for new style MSX2 screenmodes
 ;       Inputs          ________________________
@@ -2008,16 +2008,34 @@ C088D:  PUSH    AF
         PUSH    BC
         PUSH    DE
         PUSH    HL
-        CALL    C2BE4
+        CALL    C2BE4			; wait until VDP command is done
         LD      A,(BAKCLR)
-        CALL    C08CF
-        CALL    C2C4F
+        CALL    C08CF			; calculate colorbyte
+        CALL    C2C4F			; setup vdp color
         XOR     A
         LD      H,A
         LD      L,A
+	IFDEF SUPER_HDMI
+	LD	D, A
+	LD	E, A
+	ENDIF
         CALL    WAIT_AND_SETUP_DX_DY
         XOR     A
-        CALL    C2C3F
+        CALL    C2C3F			; setup vdp argument R#45 to 0
+
+	IFDEF SUPER_HDMI
+
+	LD	A, (SUPF2)		; retrieve SUPER MODE flag
+	BIT	0, A
+
+	JR	Z, DISCOVER_MSX2_RESOLUTION
+	LD	DE, 511			; is super mode on, then just assumer
+	LD	HL, 1023		; largest possible resolution
+	JR	J08BF
+
+	ENDIF
+
+DISCOVER_MSX2_RESOLUTION:
         LD      A,(SCRMOD)
         AND     02H
         LD      DE,256
@@ -2028,10 +2046,13 @@ J08B2:  LD      A,(MODE)
         LD      HL,212
         JR      Z,J08BF
         LD      HL,256
-J08BF:  CALL    C2C28
+
+	; DE = screen width, HL = screen height
+
+J08BF:  CALL    C2C28			; setup nx, ny
         LD      A,0C0H
-        CALL    C2C47
-        CALL    C2BE4
+        CALL    C2C47			; execute VDP command
+        CALL    C2BE4			; wait until VDP command is done
         POP     HL
         POP     DE
         POP     BC
