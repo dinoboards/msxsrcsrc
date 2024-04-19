@@ -221,8 +221,8 @@ RG26SA  EQU     0FFFBH
 D.FFFF  EQU     0FFFFH  ; secundary slotreg
 
 	IFDEF SUPER_HDMI
-SUPF1	EQU	0FFF8H
-SUPF2	EQU	0FFF9H
+SUPF1	EQU	0FFF8H	; BIT 7 = 1 - SUPER HDMI FOUND AND ENABLED
+SUPF2	EQU	0FFF9H	; BIT 0 = 1 - SUPER MODE ON, BITS 2:1 -> SUPER MODE (00: COLOR, 01: MID, 10: HIGH, 11: NOT_USED)
 	ENDIF
 
         DEFB    "CD"                    ; subrom header
@@ -4030,57 +4030,27 @@ J13B7:
 	IFDEF SUPER_HDMI
 	LD	A, (SUPF2)	;
 	SCF
-	BIT	0, A
-	RET	NZ		; if in super mode, do nothing
+	BIT	0, A		; if not in super mode, do as before
+	JP	NZ, SCALXYSUPER
 	ENDIF
 
-	PUSH    HL		; SAVE HL
-        PUSH    BC		; PUSH X co-ord
-        LD      B,1
-        EX      DE,HL		; HL => y co-ord
-        LD      A,H
-        ADD     A,A
-        JR      NC,J13C5	; jump if y co-ord is not negative?
-        LD      HL,0
-        JR      J13D7
+SCALXYMSX2:
+	LD	A, (MODE)
+	AND	10H
+	LD	IY, 212
+	JR	Z, LINES_212
+	LD	IY, 256
+LINES_212:
 
-J13C5:  LD      A,(MODE)
-        AND     10H		; bit 4 - are we 212 or 256 lines?
-        LD      DE,212
-        JR      Z,J13D2		; jump if 212 lines
-        LD      DE,256
-J13D2:  RST     S.DCOMPR
-        JR      C,J13D9
-        EX      DE,HL
-        DEC     HL
-				; HL = y co-ord adjusted as required
-J13D7:  LD      B,0
-J13D9:  EX      (SP),HL		; swap y co-ord and x co-ord
-        LD      A,H
-        ADD     A,A
-        JR      NC,J13E3	; is x negative
-        LD      HL,0		; yes, make it zero
-        JR      J13F3
-
-J13E3:  LD      A,(SCRMOD)
+	LD      A,(SCRMOD)
         AND     02H
-        LD      DE,512		; set x limit to 512
-        JR      NZ,J13EE	;
-        DEC     D		; set x limit to 256
-J13EE:  RST     S.DCOMPR
-        JR      C,J13F5
-        EX      DE,HL
-        DEC     HL
+	LD	IX, 512
+        JR      NZ, X_512
+	LD	IX, 256
+X_512:
+	JP	SCALE_TO_IX_IY
 
-				; HL is adjust x-cord, (SP) is adjusted ycord
-J13F3:  LD      B,0
-J13F5:  LD      A,B
-        RRCA
-        LD      B,H
-        LD      C,L
-        POP     DE
-        POP     HL
-        RET
+	DEFS	013FCH-$
 
 ;       Subroutine      S.MAPXYC
 ;       Inputs          ________________________
@@ -12405,7 +12375,73 @@ SCREEN_SUPER_DISABLE:
 	XOR	A			; bit 0 must be off to turn off super mode
 	LD	(SUPF2), A
 	JR	WRITE_REG_31
+
+
+	; adjust X and Y for super modes (SCREEN 16 and SCREEN 17)
+	; SCREEN 16 (aka super-color) 180x144
+	; SCREEN 17 (aka super-mid) 360x288
+SCALXYSUPER:
+	AND	0110B
+	JR	NZ, SCALEXY17
+
+SCALEXY16:
+	LD	IX, 180
+	LD	IY, 144
+	JR	SCALE_TO_IX_IY
+
+SCALEXY17:
+	LD	IX, 360
+	LD	IY, 288
+
 	ENDIF
+
+SCALE_TO_IX_IY:
+	PUSH	HL
+	PUSH	BC
+	LD	B, 1
+	EX	DE, HL
+	LD	A, H
+	ADD	A, A
+	JR	NC, Y_NOT_NEG
+	LD	HL, 0
+	JR	Y_ZEROED
+
+Y_NOT_NEG:
+	PUSH	IY
+	POP	DE
+	RST	S.DCOMPR
+	JR	C, Y_OK
+	EX	DE, HL
+	DEC	HL
+
+Y_ZEROED:
+	LD	B, 0
+Y_OK:
+	EX	(SP), HL
+	LD	A, H
+	ADD	A, A
+	JR	NC, X_NOT_NEG
+	LD	HL, 0
+	JR	X_ZEROED
+
+X_NOT_NEG:
+	PUSH	IX
+	POP	DE
+	RST	S.DCOMPR
+	JR	C, X_OK
+	EX	DE, HL
+	DEC	HL
+
+X_ZEROED:
+	LD	B, 0
+X_OK:	LD	A, B
+	RRCA
+	LD	B, H
+	LD	C, L
+	POP	DE
+	POP	HL
+
+	RET
 
         DEFS    04000H-$,0
 
