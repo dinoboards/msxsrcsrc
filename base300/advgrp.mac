@@ -349,20 +349,21 @@ C5B0B:  EX      DE,HL
 ;       Outputs         ________________________
 
 CIRCLE:
-C5B11:  CALL    SCAN1                   ; evaluate complex graphic coordinatepair
+C5B11:	CALL    SCAN1                   ; evaluate complex graphic coordinatepair
+					; GRPACX and GRPACY are the center of the circle
         _RST    SYNCHR
         DEFB    ","                     ; check for ,
         CALL    GETIN2                  ; evaluate integer operand
         PUSH    HL
         EX      DE,HL
-        LD      (GXPOS),HL
+        LD      (GXPOS),HL		; radius
         CALL    MAKINT                  ; put HL in DAC
         CALL    FRCSNG                  ; convert DAC to single real
         LD      BC,7040H
         LD      DE,0771H
         CALL    SGNMUL                  ; single real muliply
         CALL    FRCINT                  ; convert DAC to integer
-        LD      (CNPNTS),HL
+        LD      (CNPNTS),HL		; = SIN(PI/4) * radius
         XOR     A
         LD      (CLINEF),A
         LD      (CSCLXY),A
@@ -431,7 +432,7 @@ J5BAF:  LD      (ASPECT),HL
         LD      (CRCSUM),DE
         LD      HL,(GXPOS)
         ADD     HL,HL
-J5BBD:  CALL    CKCNTC
+J5BBD:  CALL    CKCNTC			; circle main loop
         LD      A,E
         RRA
         JR      C,J5BDA
@@ -492,7 +493,12 @@ C5BFA:  PUSH    DE
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
+;	Description     This routine is used to by the circle mainloop to convert a coordinate pair,
+;			in register pairs HL and DE, into eight symmetric points on the screen. The Y
+;			coordinate is initially negated ([5B0BH](#5b0bh)), reflecting it about the X axis,
+;			and the first four points produced by successive clockwise rotations through ninety
+;			degrees (5C48H). The Y coordinate is then negated again ([5B0BH](#5b0bh)) and
+;			a further four points produced (5C48H).
 CPLOT8:
 C5C06:  LD      (CPCNT),DE
         PUSH    HL
@@ -507,7 +513,7 @@ C5C06:  LD      (CPCNT),DE
         LD      (CYOFF),DE
         POP     DE
         CALL    C5B0B                   ; negate DE
-        CALL    C5C48
+        CALL    C5C48			; bc = is X coordinate - but clipped!
         PUSH    HL
         PUSH    DE
         LD      HL,(CNPNTS)
@@ -636,7 +642,7 @@ C5CDC:  PUSH    DE
 ;       Outputs         ________________________
 
 SCALEY:
-C5CEB:  LD      HL,(ASPECT)
+C5CEB:  LD      HL,(ASPECT)	; multiple DE by (ASPECT)
         LD      A,L
         OR      A
         JR      NZ,J5CF6
