@@ -262,6 +262,16 @@ C15A5:	PUSH    IX
         LD      IX,S.SCALXY
         JP      SUBROM
 
+SETC_PATCH:
+	LD	A, (SCRMOD)
+	CP	8
+	JP	Z, J16DE			; handled by SUBROM
+	CP	5
+	JP	NC, J16E7
+	CP	3
+        JP      Z, J16DE                 ; handled by SUBROM
+	JP	SETCMAIN
+
 	ENDIF
 
 	DEFS	015FBH-$
@@ -440,11 +450,18 @@ J16BA:  AND     03H
 ;       Outputs         ________________________
 
 SETC:
-C16C3:  LD      A,(SCRMOD)
+C16C3:
+	IFDEF SUPER_HDMI
+	JP	SETC_PATCH
+	ELSE
+	LD      A,(SCRMOD)
         CP      5
         JR      NC,J16E7                ; new style screenmode, use VDP command
         CP      3
         JR      Z,J16DE                 ; screenmode 3 SETC handled by SUBROM
+	ENDIF
+
+SETCMAIN:
         PUSH    HL
         PUSH    BC
         PUSH    DE
@@ -461,48 +478,48 @@ J16DE:  PUSH    IX
         JP      SUBROM                  ; SUBROM
 
 J16E7:  CALL    C1428                   ; patch MSX2+, handle screen 11
-        LD      A,(CMASK)
+        LD      A,(CMASK)		; can we grab DE and use instea of CMASK/ACPAGE
         PUSH    AF
 J16EE:  DI
         LD      A,2
         OUT     (99H),A
         LD      A,8FH
-        OUT     (99H),A
+        OUT     (99H),A			; STATUS R#15 = 2
         PUSH    HL
         POP     HL
-        IN      A,(99H)
-        PUSH    AF
+        IN      A,(99H)			; READ STATUS R#15
+        PUSH    AF			; SAVE IT
         XOR     A
-        OUT     (99H),A
+        OUT     (99H),A			; STATUS R#15 = 0
         LD      A,8FH
         OUT     (99H),A
-        POP     AF
+        POP     AF			; RESTORE R#15
         EI
         RRCA
-        JR      C,J16EE
+        JR      C,J16EE			; WAIT FOR VDP TO COMPLETE ANY PENDING COMMAND
         DI
-        LD      A,24H
+        LD      A,24H			; R#17 = 36
         OUT     (99H),A
         LD      A,91H
         OUT     (99H),A
         LD      A,L
-        OUT     (9BH),A
+        OUT     (9BH),A			; R#36 = L
         LD      A,H
-        OUT     (9BH),A
+        OUT     (9BH),A			; R#37 = H
         POP     AF
-        OUT     (9BH),A
+        OUT     (9BH),A			; R#38 = CMASK
         LD      A,(ACPAGE)
-        OUT     (9BH),A
+        OUT     (9BH),A			; R#39 = ACPAGE
         LD      A,2CH
-        OUT     (99H),A
+        OUT     (99H),A			; R#17 = 44
         LD      A,91H
         OUT     (99H),A
-        LD      A,(ATRBYT)
+        LD      A,(ATRBYT)		; R#44 = ATRBYT
         OUT     (9BH),A
         XOR     A
-        OUT     (9BH),A
+        OUT     (9BH),A			; R#45 = 0
         LD      A,50H
-        OUT     (9BH),A
+        OUT     (9BH),A			; R#46 = CMD PSET
         EI
         RET
 
