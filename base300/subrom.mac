@@ -3986,11 +3986,18 @@ C1376:  CALL    C066D		; SCRMOD > 5 (MSX2 screens)
         EX      DE,HL
         LD      A,H
         ADD     A,A
-        JR      NC,J138A
+        JR      NC,J138A	; ZERO HL if negative
         LD      HL,0
         JR      J1392
 
 J138A:  LD      DE,192
+
+	IFDEF SUPER_HDMI
+        LD      A,(SCRMOD)
+        CP      5
+        CALL    NC, GET_MAX_Y                ; patch MSX2+, determine y-size
+	ENDIF
+
         RST     S.DCOMPR
         JR      C,J1394
         EX      DE,HL
@@ -4004,22 +4011,42 @@ J1394:  EX      (SP),HL
         JR      J13A6
 
 J139E:  LD      DE,256
+
+	IFDEF SUPER_HDMI
+        LD      A,(SCRMOD)
+        AND     07H
+        CP      06H
+        JR      C,J1
+        LD      D,HIGH 512              ; screenmode 6 and 7, xmax is 512
+J1:
+	ENDIF
+
         RST     S.DCOMPR
         JR      C,J13A8
         EX      DE,HL
         DEC     HL
 J13A6:  LD      B,0
 J13A8:  POP     DE
+
+	IFDEF SUPER_HDMI
+        LD      A,(SCRMOD)
+        CP      03H
+        JR      NZ,J2
+	ENDIF
+
         SRL     L
         SRL     L
         SRL     E
         SRL     E
-        LD      A,B
+
+J2:
+	LD      A,B
         RRCA
         LD      C,L
         LD      B,H
         POP     HL
         RET
+
 
 ;       Subroutine      S.SCALXY for MSX2 screens (5 and up)
 ;       Inputs          BC=X coordinate, DE=Y coordinate
@@ -12442,6 +12469,17 @@ X_OK:	LD	A, B
 	POP	HL
 
 	RET
+
+;       Subroutine      GET SCREEN'S MAX Y
+;       Inputs          ________________________
+;       Outputs         DE is 212 or 256
+
+ GET_MAX_Y:  LD      A,(MODE)
+        AND     10H
+        LD      E,212
+        RET     Z
+        LD      DE,256
+        RET
 
         DEFS    04000H-$,0
 
