@@ -2029,8 +2029,8 @@ C088D:  PUSH    AF
 	BIT	0, A
 
 	JR	Z, DISCOVER_MSX2_RESOLUTION
-	LD	DE, 511			; is super mode on, then just assumer
-	LD	HL, 1023		; largest possible resolution
+	LD	DE, 720			; is super mode on, then just assume
+	LD	HL, 576			; largest possible resolution
 	JR	J08BF
 
 	ENDIF
@@ -6392,6 +6392,8 @@ J1E8B:
 	CALL	Z, SCREEN_SUPER_COLOR
 	CP	17
 	CALL	Z, SCREEN_SUPER_MID
+	CP	18,
+	CALL	Z, SCREEN_SUPER_RES
 	ELSE
         JR      Z,J1F08
         RST     S.GETBYT
@@ -12349,7 +12351,7 @@ J3E8C:  DEC     A
 	IFDEF SUPER_HDMI
 
 SCREEN_SUPER_COLOR:
-	DI				; write 1 to R#31
+	DI				; write 001B to R#31
 	LD	A, 1			; bit 0 -> super, bit 2:1 color
 	LD	(SUPF2), A
 	JR	WRITE_REG_31
@@ -12365,8 +12367,14 @@ WRITE_REG_31:
 	RET
 
 SCREEN_SUPER_MID:
-	DI				; write 3 to R#31
+	DI				; write 011B to R#31
 	LD	A, 3			; bit 0 -> super, bit 2:1 -> mid
+	LD	(SUPF2), A
+	JR	WRITE_REG_31
+
+SCREEN_SUPER_RES:
+	DI				; write 101B to R#31
+	LD	A, 5			; bit 0 -> super, bit 2:1 -> res
 	LD	(SUPF2), A
 	JR	WRITE_REG_31
 
@@ -12380,6 +12388,8 @@ SCREEN_SUPER_DISABLE:
 	; adjust X and Y for super modes (SCREEN 16 and SCREEN 17)
 	; SCREEN 16 (aka super-color) 180x144
 	; SCREEN 17 (aka super-mid) 360x288
+	; SCREEN 18 (aka super-res) 720x576
+	; A = (SUPF2)	; BIT 0 = 1 - SUPER MODE ON, BITS 2:1 -> SUPER MODE (00: COLOR, 01: MID, 10: HIGH, 11: NOT_USED)
 SCALXYSUPER:
 	AND	0110B
 	JR	NZ, SCALEXY17
@@ -12390,8 +12400,15 @@ SCALEXY16:
 	JR	SCALE_TO_IX_IY
 
 SCALEXY17:
+	CP	0100B
+	JR	Z, SCALEXY18
 	LD	IX, 360
 	LD	IY, 288
+	JR	SCALE_TO_IX_IY
+
+SCALEXY18:
+	LD	IX, 720
+	LD	IY, 576
 	JR	SCALE_TO_IX_IY
 	ENDIF
 
@@ -12402,7 +12419,7 @@ SCALEXY17:
 
 J13B7:
 	IFDEF SUPER_HDMI
-	LD	A, (SUPF2)	;
+	LD	A, (SUPF2)
 	SCF
 	BIT	0, A		; if not in super mode, do as before
 	JR	NZ, SCALXYSUPER
