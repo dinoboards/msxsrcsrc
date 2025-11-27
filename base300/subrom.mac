@@ -1017,9 +1017,38 @@ C035A:  LD      HL,I2C5A
         LD      (H.ERRP+2),HL
         LD      A,(EXPTBL+0)
         LD      (D.FFF7),A
+
+VDP_DATA       equ     098H             ; VDP data port (VRAM read/write)
+VDP_ADDR       equ     099H             ; VDP address (write only)
+
         LD      HL,MODE
-        RES     1,(HL)
-        SET     2,(HL)
+	RES     1,(HL)			; assume at least 16K
+	RES     2,(HL)
+;       BITS 2:1 -- 00 for 16kB, 01 for 64kB, 10 for 128kB and 11 for 192Ko
+
+	DI
+
+	LD	B, 07H			; addr 01FFFFH
+	LD	A, 5AH
+	CALL    VRFFWR			; read VRAM address 01FFFFH
+
+	LD	B, 00H			; addr 013FFFH
+	LD	A, 01H
+	CALL	VRFFWR			; write VRAM address 013FFFH
+
+	LD	B, 07H			; addr 01FFFFH
+	CALL	VRFFRD			; read VRAM address 01FFFFH
+
+	CP	5AH
+	jr	z, vramsize_128K
+	set	1, (hl)			; we would have at least 64K VRAM
+	jr	vramsize_done
+vramsize_128K:
+	set	2, (hl)			; we have at least 128K VRAM
+
+vramsize_done:
+	EI
+
         LD      A,(HOKVLD)
         BIT     0,A
         JR      NZ,J03B2
@@ -1037,7 +1066,10 @@ J03B2:  LD      A,2CH
         LD      A,0D3H
         OUT     (0F7H),A
         LD      (AVCSAV),A
-        XOR     A
+
+	; exclude for rc2014 build - disable the system control initialise (port F5)
+IFDEF	EXCLUDE
+	XOR     A
         OUT     (0F5H),A
         LD      C,0FFH
         OUT     (0D8H),A
@@ -1051,24 +1083,24 @@ J03D3:  IN      A,(0D9H)
         INC     HL
         DJNZ    J03D3
         RES     0,C
-J03DD:  CALL    C04E6
+J03DD:	CALL    C04E6
         JR      NZ,J03E4
         RES     1,C
-J03E4:  IN      A,(0C0H)
+J03E4:  IN      A,(0C0H)		; test msx-audio
         CP      0FFH
         JR      Z,J03EC
         RES     2,C
-J03EC:  IN      A,(0F7H)
+J03EC:  IN      A,(0F7H)		; a/v control
         AND     77H
         CP      77H
         JR      Z,J03F6
         RES     3,C
-J03F6:  IN      A,(0C8H)
+J03F6:  IN      A,(0C8H)		; MSX INTERFACE (asynchronous serial communication interface)
         CP      0FFH
         JR      Z,J03FE
         RES     4,C
 J03FE:  XOR     A
-        OUT     (81H),A
+        OUT     (81H),A			; RS232C UART / 8251 (Spectravideo, and Sony (if enabled))
         PUSH    AF
         POP     AF
         OUT     (81H),A
@@ -1086,7 +1118,7 @@ J03FE:  XOR     A
         CP      05H
         JR      NZ,J041B
         RES     5,C
-J041B:  IN      A,(0BBH)
+J041B:  IN      A,(0BBH)		; Sanyo lightpen interface
         CP      0FFH
         JR      Z,J0423
         RES     6,C
@@ -1097,6 +1129,8 @@ J0423:  LD      A,C
         LD      HL,MODE
         SET     6,(HL)
 J0430:
+ENDIF
+
         IFDEF	RTCENA
         CALL	C1C85			; select clockchip bank 2
         LD	B,0			; register 0
@@ -1164,6 +1198,46 @@ J0480:
         CALL    C0AAA                   ; S.INIPLT (initialize palette)
         JP      J1041                   ; S.INIT32 and quit
 
+
+IFNDEF  EXCLUDE
+	; rc2014 build
+;	  Subroutine read vram at 0x1FFFF
+;	     Inputs  ________________________
+;	     Outputs ________________________
+VRFFRD:  DEFB    0F6H                    ; OR xx, skip next instruction
+
+
+;	  Subroutine write vram at 0xxxFFF
+;	     Inputs  B lower three bits - A16..A14
+;	     Outputs ________________________
+VRFFWR:	SCF
+        PUSH    AF
+
+        LD      A,B
+        OUT     (99H),A
+        LD      A,14+128
+        OUT     (99H),A
+
+        LD      A,0FFH
+        OUT     (99H),A
+
+        POP     AF
+        PUSH    AF
+        LD      A,7FH
+        JR      C,VRFF1
+        LD      A,3FH
+VRFF1:  OUT     (99H),A
+        EX      (SP),HL
+        EX      (SP),HL
+        POP     AF
+        JR      C,VRFF2
+        IN      A,(98H)
+        RET
+
+VRFF2:  OUT     (98H),A
+        RET
+ENDIF
+
 ;	  Subroutine initialize bank 2 and 3 clockchip
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
@@ -1212,6 +1286,8 @@ J04D6:  SCF
         LD      HL,M7EE4
         JP      C280C
 
+IFDEF	EXCLUDE
+	; exclude for rc2014 build
 ;       Subroutine      check for JIS2 rom
 ;       Inputs          none
 ;       Outputs         Zx set if JIS2 rom found
@@ -1229,6 +1305,7 @@ J04F2:  IN      A,(0DBH)
         CP      95H
         POP     BC
         RET
+ENDIF
 
 ;       Subroutine      S.SDFSCR (setup screen with functionkeys display disabled)
 ;       Inputs          ________________________
@@ -1379,7 +1456,10 @@ I057B:  DEFB    00AH
 
 ; JIS1 test pattern
 
+IFNDEF  EXCLUDE
+; exlude for rc2014 build
 I0586:  DEFB    00H,40H,20H,10H,08H,04H,02H,01H
+ENDIF
 
 ;       Subroutine      get my slotid
 ;       Inputs          ________________________
