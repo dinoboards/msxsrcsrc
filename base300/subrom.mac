@@ -1008,7 +1008,7 @@ C035A:  LD      HL,I2C5A
         XOR     A
         LD      (DPPAGE),A
         LD      (ACPAGE),A
-        CALL    C058E
+        CALL    C058E			; get slot it
         LD      (EXBRSA),A
         LD      H,A
         LD      L,0F7H
@@ -1018,35 +1018,47 @@ C035A:  LD      HL,I2C5A
         LD      A,(EXPTBL+0)
         LD      (D.FFF7),A
 
-VDP_DATA       equ     098H             ; VDP data port (VRAM read/write)
-VDP_ADDR       equ     099H             ; VDP address (write only)
+	CALL	VDP_REGINIT
 
         LD      HL,MODE
 	RES     1,(HL)			; assume at least 16K
 	RES     2,(HL)
-;       BITS 2:1 -- 00 for 16kB, 01 for 64kB, 10 for 128kB and 11 for 192Ko
+;       BITS 2:1 -- 00 for 16kB, 01 for 64kB, 10 for 128kB and 11 for 19kB
 
 	DI
 
-	LD	B, 07H			; addr 01FFFFH
+	LD	B, 07H			; addr $1FFFF
 	LD	A, 5AH
-	CALL    VRFFWR			; read VRAM address 01FFFFH
+	CALL    VDP_RAMFFWR			; VRAM $1FFFF=$5A
 
-	LD	B, 00H			; addr 013FFFH
-	LD	A, 01H
-	CALL	VRFFWR			; write VRAM address 013FFFH
-
-	LD	B, 07H			; addr 01FFFFH
-	CALL	VRFFRD			; read VRAM address 01FFFFH
+	LD	B, 07H			; addr $1FFFF
+	CALL	VDP_RAMFFRD			; A = VRAM $1FFFF
 
 	CP	5AH
 	jr	z, vramsize_128K
 	set	1, (hl)			; we would have at least 64K VRAM
 	jr	vramsize_done
+
 vramsize_128K:
 	set	2, (hl)			; we have at least 128K VRAM
 
+	call	VDP_RAMEXP			; enable exansion vram access
+
+	LD	B, 01H			; addr $27FFF
+	LD	A, 22H
+	CALL	VDP_RAMFFWR			; write VRAM address 013FFFH
+
+	LD	B, 01H			; addr $27FFF
+	CALL	VDP_RAMFFRD			; A = VRAM $27FFF
+
+	CP	22H
+	jr	nz, vramsize_done
+
+	set	1, (hl)			; we have at 192K VRAM
+
 vramsize_done:
+	CALL	VDP_RAMDXP			; disable expansion VRAM
+
 	EI
 
         LD      A,(HOKVLD)
@@ -1202,40 +1214,55 @@ J0480:
 IFNDEF  EXCLUDE
 	; rc2014 build
 ;	  Subroutine read vram at 0x1FFFF
-;	     Inputs  ________________________
-;	     Outputs ________________________
-VRFFRD:  DEFB    0F6H                    ; OR xx, skip next instruction
-
+;	     Inputs  B lower three bits - A16..A14
+;	     Outputs A is value read
+VDP_RAMFFRD:  DEFB    0F6H                    ; OR xx, skip next instruction
 
 ;	  Subroutine write vram at 0xxxFFF
 ;	     Inputs  B lower three bits - A16..A14
+;	     Inputs  A value to be written
 ;	     Outputs ________________________
-VRFFWR:	SCF
+VDP_RAMFFWR:	SCF
         PUSH    AF
 
         LD      A,B
-        OUT     (99H),A
+        OUT     (VDP_ADDR),A
         LD      A,14+128
-        OUT     (99H),A
+        OUT     (VDP_ADDR),A		; #R14 = B (A16..A14)
 
-        LD      A,0FFH
-        OUT     (99H),A
+        LD      A,0FFH			; A7..A0 = 1
+        OUT     (VDP_ADDR),A
 
         POP     AF
         PUSH    AF
-        LD      A,7FH
+        LD      A,7FH			; SET WR, A13..A8 = 1
         JR      C,VRFF1
-        LD      A,3FH
-VRFF1:  OUT     (99H),A
+        LD      A,3FH			; SET RD, A13..A8 = 1
+VRFF1:  OUT     (VDP_ADDR),A
         EX      (SP),HL
         EX      (SP),HL
         POP     AF
         JR      C,VRFF2
-        IN      A,(98H)
+        IN      A,(VDP_DATA)
         RET
 
-VRFF2:  OUT     (98H),A
+VRFF2:  OUT     (VDP_DATA),A
         RET
+
+;	  Subroutine enabled exansion ram
+VDP_RAMEXP:
+	ld	a, 040h
+	jr	VRXXP
+
+;	  Subroutine disable exansion ram
+VDP_RAMDXP:
+	xor	a
+VRXXP:
+	out	(VDP_ADDR), a		; disable exansion memory access
+	ld	a, 0ADH			; $80 | 45
+	out	(VDP_ADDR), a		; R#45 = $40/$00 (MXC=X, MXD,MXS,DIY,DIX,EQ,MAJ=0)
+	ret
+
 ENDIF
 
 ;	  Subroutine initialize bank 2 and 3 clockchip
@@ -1810,6 +1837,7 @@ I0724:  DEFW    C0BE6			; SETTXT ? J065F
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+VDP_REGINIT:
 J0736:  PUSH    AF
         PUSH    BC
         PUSH    DE
@@ -2466,6 +2494,7 @@ I0A63:  DEFW    C0A75
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+_S.INITXT:
 C0A75:  XOR     A
         LD      (OLDSCR),A
         CALL    C0BB2
@@ -2691,7 +2720,7 @@ J0BF4:  LD      C,10H
         ADD     A,A
         LD      HL,(TXTNAM)
         CALL    C0D7E
-        JP      J0736
+        JP      VDP_REGINIT
 
 J0C16:  LD      A,(DPPAGE)
         PUSH    AF
@@ -2712,7 +2741,7 @@ J0C16:  LD      A,(DPPAGE)
         LD      D,A
         LD      B,7
         CALL    C0D98
-        JP      J0736
+        JP      VDP_REGINIT
 
 ;       Subroutine      S.SETT32
 ;       Inputs          ________________________
@@ -2789,7 +2818,7 @@ J0C84:  CALL    C0DE1
         JR      Z,J0CC0
         LD      HL,(ATRBAS)
 J0CC0:  CALL    C0DAF
-        JP      J0736
+        JP      VDP_REGINIT
 
 ;       Subroutine      S.SETMLT
 ;       Inputs          ________________________
@@ -2843,7 +2872,7 @@ J0D03:  LD      A,(DPPAGE)
 J0D1A:  LD      E,00H
         LD      B,3
         CALL    C0DAC
-        JP      J0736
+        JP      VDP_REGINIT
 
 ;       Subroutine      setup vdp for screenmode 6
 ;       Inputs          ________________________
@@ -6686,7 +6715,7 @@ J2014:  RST     S.CHRGTR
         JR      Z,J2026
         SET     0,(HL)
 J2026:  POP     HL
-J2027:  JP      J0736
+J2027:  JP      VDP_REGINIT
 
 ;       Subroutine      S.WIDTHS
 ;       Inputs          ________________________
