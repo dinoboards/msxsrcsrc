@@ -156,7 +156,7 @@ RDSLT:	CALL	SELPRM			;Calculate bit pattern and mask code
 ;       Outputs         ________________________
 
 J0205:  CALL    C028C                   ; prm. slot 0, page 0 ?
-        JR      NZ,J021A                ; nop, use old method
+        JR      NZ,RDESLT                ; nop, use old method
         PUSH    HL			;Save target address
         CALL    C0255                   ; basicrom on page 1
         EX      (SP),HL			;Restore target address and save [HL]
@@ -175,16 +175,17 @@ J0205:  CALL    C028C                   ; prm. slot 0, page 0 ?
 CALSLT:
 	JP	CALSLT_1
 
-;       Subroutine      RDSLT for expanded slot, not slot 0 page 0
+;       Subroutine      RDESLT for expanded slot, not slot 0 page 0
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-J021A:  PUSH    HL
-        CALL    C0378                   ; adjust secundairy slotregister
-        EX      (SP),HL
+RDESLT:
+	PUSH    HL			;Save target address
+        CALL    SELEXP			;Select secondary slot
+        EX      (SP),HL			;Restore target address and save [HL]
         PUSH    BC
         CALL    RDSLT                   ; do RDSLT on only the primary slot
-        JR      J0279                   ; restore secundairy slotegister
+        JR      WRESED			;Restore old slot select register
 
 ;
 ; ------------------------------ WRSLT ------------------------------
@@ -268,24 +269,25 @@ C0255:  PUSH    AF
 
 J026E:  EX      (SP),HL
         PUSH    HL
-        CALL    C0378                   ; adjust secundairy slotregister
+        CALL    SELEXP                   ; adjust secundairy slotregister
         POP     DE
         EX      (SP),HL
         PUSH    BC
         CALL    WRSLT                   ; do WRSLT on only the primary slot
-J0279:  POP     BC
-        EX      (SP),HL
-        PUSH    AF
-        LD      A,B
-        AND     3FH
+WRESED:
+	POP     BC
+        EX      (SP),HL			;Save target address and get old [HL]
+        PUSH    AF			;Save value returned by RDSLT
+        LD      A,B			;Get current setting
+        AND     00111111B		;Cancel current setting for 0C000H..0FFFFH
         OR      C
+        OUT     (PPI.AW),A		;Enable 00000H..0FFFFH of target bank
+        LD      A,L			;Restore old setting of slot register
+        LD      (0FFFFH),A		; restore secondary slot register
+        LD      A,B			;Finally restore old primary slot register
         OUT     (PPI.AW),A
-        LD      A,L
-        LD      (D.FFFF),A              ; restore secundairy slotregister
-        LD      A,B
-        OUT     (PPI.AW),A
-        POP     AF
-        POP     HL
+        POP     AF			;Restore value returned by RDSLT
+        POP     HL			;Restore target address
         RET
 
 ;       Subroutine      check if primary slot 0,page 0
@@ -417,7 +419,7 @@ J02EF:  PUSH    AF
         AND     0C0H
         JP      Z,J01B6                 ; calslt to page 0 in some secundairy slot 0, handle special to avoid crash
 J02FA:  POP     AF
-        CALL    C0378                   ; adjust secundairy slotregister
+        CALL    SELEXP                   ; adjust secundairy slotregister
         PUSH    AF
         POP     IY
         PUSH    HL
@@ -476,7 +478,7 @@ C0333:  CALL    SELPRM                   ; calculate masks
 ;       Outputs         ________________________
 
 J0340:  PUSH    HL
-        CALL    C0378                   ; adjust secundairy slotregister
+        CALL    SELEXP                   ; adjust secundairy slotregister
         LD      C,A
         LD      B,0
         LD      A,L
@@ -538,11 +540,12 @@ SLPRM2:
         AND     A			;Set sign flag if so
         RET
 
-;       Subroutine      Adjust secundairy slotregister
+;       Subroutine      Adjust secundary slot register
 ;       Inputs          A=slotid, D=, E=
 ;       Outputs         A=slotid primairy slot
 
-C0378:  PUSH    AF			;Save target slot
+SELEXP:
+	PUSH    AF			;Save target slot
         LD      A,D			;Get bit pattern for primary slot
         AND     0C0H			;??Extract slot # for 0C000H..0FFFFH
         LD      C,A			;Save it
