@@ -350,30 +350,30 @@ J02B8:  POP     AF
 ;       Outputs         ________________________
 
 CALBAS:
-C02BF:  LD      IY,(EXPTBL+0-1)         ; slotid basicrom
-        JP      CALSLT                   ; CALSLT
+	LD      IY,(EXPTBL-1)		; slotid basicrom
+        JP      CALSLT
 
 ;       Subroutine      CALLF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 CALLF:
-C02C6:  EX      (SP),HL
-        PUSH    AF
+	EX      (SP),HL			;Get return address, save [HL]
+        PUSH    AF			;Save working registers
         PUSH    DE
-        LD      A,(HL)
+        LD      A,(HL)			;Get destination slot
         PUSH    AF
-        POP     IY
+        POP     IY			;Move it to IYH
         INC     HL
-        LD      E,(HL)
+        LD      E,(HL)			;Get destination address
         INC     HL
         LD      D,(HL)
-        INC     HL
+        INC     HL			;Prepare true return address
         PUSH    DE
-        POP     IX
-        POP     DE
+        POP     IX			;Move it to IX
+        POP     DE			;Restore working registers
         POP     AF
-        EX      (SP),HL
+        EX      (SP),HL			;Resture [HL], save true return address
 
 ; ------------------------------ CALSLT ------------------------------
 ;
@@ -461,16 +461,31 @@ J0330:  EX      AF,AF'
         EXX
         RET
 
-;       Subroutine      ENASLT
-;       Inputs          ________________________
-;       Outputs         ________________________
-
+;
+; ------------------------------ ENASLT ------------------------------
+;
+; Selects the appropriate slot according to the value given
+; through registers, and permanently enables the slot.
+;
+; Input parameters:
+;
+; A  - FxxxSSPP
+;      |   ||||
+;      |   ||++-- primary slot # (0-3)
+;      |   ++---- secondary slot # (0-3)
+;      +--------- 1 if secondary slot # specified
+;
+; HL - address of target memory
+;
+; Note: Interrupts are disabled automatically but never enabled
+;       by this routine.
+;
 ENASLT:
-C0333:  CALL    SELPRM                   ; calculate masks
-        JP      M,J0340                 ; expanded slot,
+	CALL    SELPRM			;Calculate bit pattern and mask code
+        JP      M,J0340			;Expanded slot specified
         IN      A,(PPI.AR)
-        AND     C
-        OR      B
+        AND     C			;Cancel current setting for target address
+        OR      B			;Add new setting
         OUT     (PPI.AW),A
         RET
 
@@ -478,19 +493,20 @@ C0333:  CALL    SELPRM                   ; calculate masks
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-J0340:  PUSH    HL
-        CALL    SELEXP                   ; adjust secundairy slotregister
-        LD      C,A
+J0340:  PUSH    HL			;Save target address
+        CALL    SELEXP			;Select secondary slot
+        LD      C,A			;Move primary slot # to [BC]
         LD      B,0
-        LD      A,L
-        AND     H
+        LD      A,L			;Re-calculate what is currently output
+        AND     H			;to expansion slot register
         OR      D
-        LD      HL,SLTTBL
+        LD      HL,SLTTBL		;Calculate address into SLTTBL
         ADD     HL,BC
-        LD      (HL),A                  ; update SLTTBL
-        POP     HL
-        LD      A,C
-        JR      C0333                   ; do a ENASLT on only the primary slot
+        LD      (HL),A                  ;Set current value output to expansion
+					;slot register
+        POP     HL			;Restore target address
+        LD      A,C			;Restore primary slot # to [Acc]
+        JR      ENASLT			;Enable by primary slot register
 
 ;       Subroutine      calculate masks
 ;       Inputs          A=slotid, HL=adres
