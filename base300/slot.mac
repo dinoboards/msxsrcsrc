@@ -19,7 +19,7 @@
         INCLUDE MSX.INC
 
 
-RDPRIM  equ     0F380H
+RDPRIM  equ     0F380H		; aka RAMLOW
 WRPRIM  equ     0F385H
 CLPRIM  equ     0F38CH
 CLPRM1  equ     0F398H
@@ -50,8 +50,8 @@ D.FFFF  equ     0FFFFH
 
 SUBTTL - SLOT - Slot handler stuff
 
-;PPI.AR  EQU     0A8h            ;A8H    read from PPI Port A
-;PPI.AW  EQU     0A8h            ;A8H    Write to PPI Port A
+PPI.AR	EQU	0A8h		;A8H    read from PPI Port A
+PPI.AW	EQU	0A8h		;A8H    Write to PPI Port A
 ;
 ; Every cartridge located at 0000-3FFFH must contain codes in
 ; this module which are entered via following addresses.
@@ -78,10 +78,10 @@ J01B6:  POP     AF
         RRCA
         RRCA
         LD      H,A
-        IN      A,(0A8H)
+        IN      A,(PPI.AR)
         LD      B,A
         AND     3FH
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         LD      A,(D.FFFF)
         CPL
         LD      C,A
@@ -94,7 +94,7 @@ J01B6:  POP     AF
 
 ?01D0:  LD      A,B
         AND     D
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         LD      A,E
         LD      (SLTTBL),A
         PUSH    BC
@@ -107,14 +107,14 @@ J01B6:  POP     AF
         POP     BC
         LD      A,B
         AND     3FH
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         LD      A,C
         LD      (D.FFFF),A
 
 ; from this point code returns executing from the subrom
 
 ?01EB:  LD      A,B
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         LD      A,C
         LD      (SLTTBL),A
         EX      AF,AF'
@@ -143,7 +143,7 @@ J01B6:  POP     AF
 ;
 RDSLT:	CALL	SELPRM			;Calculate bit pattern and mask code
         JP      M,J0205                 ;Expanded slot specified
-        IN      A,(0A8H)
+        IN      A,(PPI.AR)
         LD      D,A			;Save current setting
         AND     C			;Cancel current setting for target address
         OR      B			;Add new setting
@@ -208,15 +208,15 @@ J021A:  PUSH    HL
 ;       by this routine.
 ;
 WRSLT:
-C0225:  PUSH    DE
-        CALL    SELPRM                   ; calculate masks
-        JP      M,J0235                 ; expanded slot,
-        POP     DE
-        IN      A,(0A8H)
-        LD      D,A
-        AND     C
-        OR      B
-        JP      WRPRIM
+	PUSH    DE			;Save data to be written
+        CALL    SELPRM			;Calculate bit pattern and mask code
+        JP      M,J0235			;Expanded slot specified
+        POP     DE			;Restore data to be written
+        IN      A,(PPI.AR)
+        LD      D,A			;Save current setting
+        AND     C			;Cancel current setting for target address
+        OR      B			;Add new setting
+        JP      WRPRIM			;Call write primitive routine (in system area)
 
 ;       Subroutine      WRSLT for expanded slot
 ;       Inputs          ________________________
@@ -233,11 +233,11 @@ J0244:  EX      (SP),HL
         PUSH    AF
         LD      A,L
         AND     3FH
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         LD      A,H
         LD      (D.FFFF),A
         LD      A,L
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         POP     AF
         POP     HL
         RET
@@ -247,10 +247,10 @@ J0244:  EX      (SP),HL
 ;       Outputs         ________________________
 
 C0255:  PUSH    AF
-        IN      A,(0A8H)
+        IN      A,(PPI.AR)
         LD      L,A
         AND     3FH
-        OUT     (0A8H),A                ; page 3 = prm. slot 0 (for access to sec. slotreg)
+        OUT     (PPI.AW),A                ; page 3 = prm. slot 0 (for access to sec. slotreg)
         LD      A,(D.FFFF)
         CPL
         LD      H,A
@@ -258,7 +258,7 @@ C0255:  PUSH    AF
         LD      (D.FFFF),A              ; page 1 = sec. slot 0
         LD      A,L
         AND     0F3H
-        OUT     (0A8H),A                ; restore page 3 prm. slot 0, page 1 = prm. slot 0
+        OUT     (PPI.AW),A                ; restore page 3 prm. slot 0, page 1 = prm. slot 0
         POP     AF
         RET
 
@@ -272,18 +272,18 @@ J026E:  EX      (SP),HL
         POP     DE
         EX      (SP),HL
         PUSH    BC
-        CALL    C0225                   ; do WRSLT on only the primary slot
+        CALL    WRSLT                   ; do WRSLT on only the primary slot
 J0279:  POP     BC
         EX      (SP),HL
         PUSH    AF
         LD      A,B
         AND     3FH
         OR      C
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         LD      A,L
         LD      (D.FFFF),A              ; restore secundairy slotregister
         LD      A,B
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         POP     AF
         POP     HL
         RET
@@ -384,7 +384,7 @@ J02D8:  EXX
         POP     HL
         CALL    SELPRM                   ; calculate masks
         JP      M,J02EF                 ; expanded slot,
-        IN      A,(0A8H)
+        IN      A,(PPI.AR)
         PUSH    AF
         AND     C
         OR      B
@@ -430,11 +430,11 @@ J02FA:  POP     AF
         AND     3FH
         OR      C
         DI
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         LD      A,E
         LD      (D.FFFF),A              ; restore secundairy slotregister
         LD      A,B
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         LD      (HL),E                  ; restore SLTTBL
         POP     AF                      ; restore IFF2 flag
         JP      PO,J0330                ; maskable interrupts where disabled, leave disabled
@@ -450,10 +450,10 @@ J0330:  EX      AF,AF'
 ENASLT:
 C0333:  CALL    SELPRM                   ; calculate masks
         JP      M,J0340                 ; expanded slot,
-        IN      A,(0A8H)
+        IN      A,(PPI.AR)
         AND     C
         OR      B
-        OUT     (0A8H),A
+        OUT     (PPI.AW),A
         RET
 
 ;       Subroutine      ENASLT for expanded slot
@@ -534,11 +534,11 @@ C0378:  PUSH    AF
         POP     AF
         PUSH    AF
         LD      D,A
-        IN      A,(0A8H)
+        IN      A,(PPI.AR)
         LD      B,A
         AND     3FH
         OR      C
-        OUT     (0A8H),A                ; set page 3 to requested primary slot (to access sec. slotreg)
+        OUT     (PPI.AW),A                ; set page 3 to requested primary slot (to access sec. slotreg)
         LD      A,D
         RRCA
         RRCA
@@ -560,7 +560,7 @@ J0390:  ADD     A,55H
         OR      D
         LD      (D.FFFF),A
         LD      A,B
-        OUT     (0A8H),A                ; restore primary slotreg
+        OUT     (PPI.AW),A                ; restore primary slotreg
         POP     AF
         AND     03H
         RET
