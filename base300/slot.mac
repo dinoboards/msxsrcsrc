@@ -169,11 +169,11 @@ J0205:  CALL    C028C                   ; prm. slot 0, page 0 ?
 ;       Subroutine      CALSLT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-;       Remark          Just a jump at this adres to have same entry point as MSX1
+;       Remark          Just a jump at this address to have same entry point as MSX1
 ;                       early RS232 ROM version uses this (illegal entry point)
 
 CALSLT:
-C0217:  JP      J02D8
+	JP	CALSLT_1
 
 ;       Subroutine      RDSLT for expanded slot, not slot 0 page 0
 ;       Inputs          ________________________
@@ -327,7 +327,7 @@ C029B:  EXX
         EX      AF,AF'
         PUSH    IY
         LD      IY,(EXBRSA-1)           ; slotid subrom
-        CALL    C0217                   ; CALSLT
+        CALL    CALSLT                   ; CALSLT
         POP     IY
         EX      AF,AF'
         EXX
@@ -348,7 +348,7 @@ J02B8:  POP     AF
 
 CALBAS:
 C02BF:  LD      IY,(EXPTBL+0-1)         ; slotid basicrom
-        JP      C0217                   ; CALSLT
+        JP      CALSLT                   ; CALSLT
 
 ;       Subroutine      CALLF
 ;       Inputs          ________________________
@@ -372,24 +372,39 @@ C02C6:  EX      (SP),HL
         POP     AF
         EX      (SP),HL
 
-;       Subroutine      CALSLT
-;       Inputs          ________________________
-;       Outputs         ________________________
-
-J02D8:  EXX
+; ------------------------------ CALSLT ------------------------------
+;
+; Performs inter-slot call to specified address.
+;
+; Input parameters:
+; IY  - FxxxSSPP
+;       |   ||||
+;       |   ||++-- primary slot # (0-3)
+;       |   ++---- secondary slot # (0-3)
+;       +--------- 1 if secondary slot # specified
+;
+; IX  - address to call
+;
+; Note: Interrupts are disabled automatically but never enabled
+;       by this routine.
+;       You can never pass arguments via alternate registers
+;       of Z80.
+;
+CALSLT_1:
+	EXX				;Save environments
         EX      AF,AF'
         PUSH    IY
-        POP     AF
+        POP     AF			;Get target slot information
         PUSH    IX
-        POP     HL
+        POP     HL			;Get target address
         CALL    SELPRM                   ; calculate masks
-        JP      M,J02EF                 ; expanded slot,
+        JP      M,J02EF			;Call expanded slot
         IN      A,(PPI.AR)
-        PUSH    AF
-        AND     C
-        OR      B
-        EXX
-        JP      CLPRIM
+        PUSH    AF			;Save current value of primary slot register
+        AND     C			;Cancel current setting for target address
+        OR      B			;Add new setting
+        EXX				;Restore environments except PSW
+        JP      CLPRIM			;Jump to primitive routine (in system area)
 
 ;       Subroutine      CALSLT for expanded slot
 ;       Inputs          ________________________
@@ -418,7 +433,7 @@ J02FA:  POP     AF
         PUSH    HL
         EX      AF,AF'
         EXX
-        CALL    C0217                   ; do a CALSLT on only the primary slot
+        CALL    CALSLT                   ; do a CALSLT on only the primary slot
         EXX
         EX      AF,AF'
         POP     HL
@@ -527,42 +542,47 @@ SLPRM2:
 ;       Inputs          A=slotid, D=, E=
 ;       Outputs         A=slotid primairy slot
 
-C0378:  PUSH    AF
-        LD      A,D
-        AND     0C0H
-        LD      C,A
-        POP     AF
-        PUSH    AF
-        LD      D,A
+C0378:  PUSH    AF			;Save target slot
+        LD      A,D			;Get bit pattern for primary slot
+        AND     0C0H			;??Extract slot # for 0C000H..0FFFFH
+        LD      C,A			;Save it
+        POP     AF			;Restore target slot
+        PUSH    AF			;Save target slot
+        LD      D,A			;Load [D] with specified slot address
         IN      A,(PPI.AR)
-        LD      B,A
-        AND     3FH
+        LD      B,A			;Save current setting
+        AND     00111111B		;Cancel current setting for 0C000H..0FFFFH
         OR      C
-        OUT     (PPI.AW),A                ; set page 3 to requested primary slot (to access sec. slotreg)
-        LD      A,D
+        OUT     (PPI.AW),A		;Enable 0C000H..0FFFFH or target bank
+					; set page 3 to requested primary slot (to access sec. slotreg)
+        LD      A,D			;Load slot information
         RRCA
         RRCA
-        AND     03H
+        AND     00000011B		;Extract secondary slot #
         LD      D,A
-        LD      A,0ABH
-J0390:  ADD     A,55H
+        LD      A,10101011B		;Convert secondary slot # to proper
+SLEXP1:
+	ADD	A,01010101B		;bit pattern
         DEC     D
-        JP      P,J0390
-        AND     E
-        LD      D,A
-        LD      A,E
+        JP      P,SLEXP1		;	00000000    slot #0
+					;	01010101    slot #1
+					;	10101010    slot #2
+					;	11111111    slot #3
+        AND     E			;Make bit pattern to be added
+        LD      D,A			;Save this
+        LD      A,E			;Make bit pattern to strip off old value
         CPL
-        LD      H,A
-        LD      A,(D.FFFF)
+        LD      H,A			;Save this
+        LD      A,(0FFFFH)		;Read expanded slot register
         CPL
-        LD      L,A
-        AND     H
-        OR      D
-        LD      (D.FFFF),A
+        LD      L,A			;Save current setting
+        AND     H			;Strip off old bits
+        OR      D			;And set new bits
+        LD      (0FFFFH),A		;Set secondary slot register
         LD      A,B
-        OUT     (PPI.AW),A                ; restore primary slotreg
-        POP     AF
-        AND     03H
+        OUT     (PPI.AW),A		;Restore original primary port
+        POP     AF			;Restore target slot
+        AND     03H			;Fake read from primary slot
         RET
 
 ;       Subroutine      CHKSLZ
@@ -595,7 +615,7 @@ J03B9:  PUSH    HL
         LD      A,C
         PUSH    AF
         POP     IY                      ; IYH = slotid
-        CALL    NZ,C0217                ; extension has a INIT, CALSLT
+        CALL    NZ,CALSLT                ; extension has a INIT, CALSLT
         POP     BC                      ; restore extension flags, slotid
         POP     HL                      ; restore address
         CALL    RDWEXP
