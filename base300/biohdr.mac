@@ -11,13 +11,31 @@
 ; Sourcecode supplied for STUDY ONLY
 ; Recreation NOT permitted without authorisation of the copyrightholders
 
+;	(C) Copyright by ASCII Corp., 1983
+;	Proprietary information. All rights reserved.
+;
+;	File:	BIOHDR.MAC
+;	USE:	Restart calls and ROM entries table
+;	Written by Jey Suzuki, Rick Yamashita
+;		ASCII Corporation, Japan
+;
+;	Edit:	January, 1985
+;	Reason: Zilog 280 Mnemonic version and cleanup
+;	Edited by:	Steven M. Ting
+;
+;
+; Labels referenced in this listing, are the absolute locations
+; within the MSX ROM. However, "ONLY" this BIOS entry point table,
+; and RAM variables are quaranteed to be permanent.
+;
+; All other locations in the ROM, will be changed without notice.
+;
 
         .Z80
         ASEG
         ORG     0000H
 
         INCLUDE MSX.INC
-
 
         EXTRN   SYNENT
         EXTRN   RDSLT
@@ -144,50 +162,89 @@
 
 ; START SUBTTL  BIOHDR
 
-        SUBTTL  BIOHDR
+SUBTTL -BIOS header- BIOS calls (Basic Interpreter, Slot I/0)
 
+; The following RST's (RST 0 thru RST 5) are reserved for BASIC
+; interpreter, RST 6 for inter-slot calls, and RST 7 for
+; hardware interrupt
 
-        di
-        jp      CHKRAM
+BEGIN:	DI			;Fail safe
+        JP      CHKRAM		;Finds all connected RAM
+				;and cartridges
+;
+;
+; ** Special information for the VDP. **
+; Any program that accesses the VDP hardware directly
+; should read the I/O port address found here, to be certain
+; the software is compatible with future versions of the VDP.
+;
+	DW	CGTABL		;Address of character generator table,
+				;to allow use of other character ROM.
+				;
+VDP.DR: DB	98H  		;Current port address for VDP Data read
+VDP.DW: DB	98H		;   "      "    "      "   "   "   write
 
-        defw    CGTABL
-VDP.DR: defb    098H
-VDP.DW: defb    098H
-
-        jp      SYNENT
+        JP      SYNENT		;Check byte following the RST 8, see
+				;if equal to the byte pointed by HL
 
         defs    0000CH-$,0
 
-        jp      RDSLT
+        JP      RDSLT		;Read a byte from another slot
 
         defs    00010H-$,0
 
-        jp      CHRENT
+        JP      CHRENT		;Fetch next char from BASIC text
 
         defs    00014H-$,0
 
-        jp      WRSLT
+        JP      WRSLT		;Write a byte to another slot
 
         defs    00018H-$,0
 
-        jp      OUTDO
+        JP	OUTDO		;Output a char to the Console or printer
 
         defs    0001CH-$,0
 
-        jp      CALSLT
+        JP	CALSLT		;Perform Inter-slot call
 
         defs    00020H-$,0
 
-        jp      DCOMPR
+        JP	DCOMPR		;Compares [HL] to [DE]
 
         defs    00024H-$,0
 
-        jp      ENASLT
+        JP	ENASLT		;Permanently enables a slot
 
         defs    00028H-$,0
 
-        jp      GETENT
-;
+        JP      GETENT		;Returns the [FAC] type
+
+				;ID Byte (1)
+				;Format:
+				; B7 B6 B5 B4 B3 B2 Bl BO
+				; +  +  +  +  +  +  +  +
+				; +  +  +  +  - - - - - - Type of character
+				; +  +  +  +		  generator.
+				; +  +  +  +		  0:Japanese
+				; +  +  +  +		  1:International
+				; +  +  +  +		  2:Korea
+				; +  +  - - - - - - - - - Date format
+				; +  +			  0: Y-M-D  1: M-D-Y
+				; +  +			  2: D-M-Y
+				; - - - - - - - - - - - - Interrupt frequency
+				;			  0: 60 Hz  1: 50 Hz
+				;
+				;ID Byte (2)
+				;Format:
+				; B7 B6 B5 B4 B3 B2 Bl BO
+				; +  +  +  +  +  +  +  +
+				; +  +  +  +  - - - - - - Type of Keyboard
+				; +  +  +  +		  O:Japanese 2:French
+				; +  +  +  +		  1:Int      3:UK
+				; +  +  +  +		  4:DIN
+				; - - - - - - - - - - - - Version of BASIC
+				;			  0: Japanese
+				;			  1: International
 IDBYT0:
         IF      INTHZ EQ 60
         DEFB    CHRGEN+16*DATFMT
@@ -200,7 +257,7 @@ IDBYT2: DEFB    MSXVER                  ; MSX version 0 = MSX1
 
         DEFS    00030H-$
 
-        jp      CALLF
+        jp      CALLF			 ;Performs Far-call (i.e., Inter-slot)
 ;
         DEFS    00034H-$
 
@@ -210,108 +267,163 @@ IDBYT2: DEFB    MSXVER                  ; MSX version 0 = MSX1
 
 CHAR_16:defb    0,0
         defb    0,0
+;
+; Following are used for I/O initialization
+;
+	JP	KEYINT			;Handlers for hardware interrupt
+	JP	INITIO			;Do device initialization
+	JP	INIFNK			;Reset all function key's text
 
-        jp      KEYINT
-        jp      INITIO
-        jp      INIFNK
-        jp      DISSCR
-        jp      ENASCR
-        jp      WRTVDP
-        jp      RDVRM
-        jp      WRTVRM
-        jp      SETRD
-        jp      SETWRT
-        jp      FILVRM
-        jp      LDIRMV
-        jp      LDIRVM
-        jp      CHGMOD
-        jp      CHGCLR
+SUBTTL -BIOS header- BIOS calls (Video display processor )
+
+;
+; The following entry points provides control of the
+; VDP's registers, screen mode settings, and memory block
+; move between DRAM and VRAM.
+;
+	JP	DISSCR			;Disables screen display
+	JP	ENASCR			;Enables screen display
+	JP	WRTVDP			;Write a byte to any VDP register
+	JP	RDVRM			;Read VRAM addressed using [HL]
+	JP	WRTVRM			;Write VRAM addressed using [HL]
+	JP	SETRD			;Sets up VDP for read
+	JP	SETWRT			;Sets up VDP for write
+	JP	FILVRM			;Fills VRAM with specified data
+	JP	LDIRMV			;Moves block of data from VRAM to memory
+	JP	LDIRVM			;  "     "   "   "    "   memory to VRAM
+	JP	CHGMOD			;Change screen mode of VDP to [SCRMOD]
+	JP	CHGCLR			;Change Foreground, background,
+					;border, color
 
         defs    00066H-$,0              ; align to Z80 NMI entry at 0066H
 
-        jp      NMI
-        jp      CLRSPR
-        jp      INITXT
-        jp      INIT32
-        jp      INIGRP
-        jp      INIMLT
-        jp      SETTXT
-        jp      SETT32
-        jp      SETGRP
-        jp      SETMLT
-        jp      CALPAT
-        jp      CALATR
-        jp      GSPSIZ
-        jp      GRPPRT
-        jp      GICINI
-        jp      WRTPSG
-        jp      RDPSG
-        jp      STRTMS
-        jp      CHSNS
-        jp      CHGET
-        jp      CHPUT
-        jp      LPTOUT
-        jp      LPTSTT
-        jp      CNVCHR
-        jp      PINLIN
-        jp      INLIN
-        jp      QINLIN
-        jp      BREAKX
-        jp      ISCNTC
-        jp      CKCNTC
-        jp      BEEP
-        jp      CLS
-        jp      POSIT
-        jp      FNKSB
-        jp      ERAFNK
-        jp      DSPFNK
-        jp      TOTEXT
-        jp      GTSTCK
-        jp      GTTRIG
-        jp      GTPAD
-        jp      GTPDL
-        jp      TAPION
-        jp      TAPIN
-        jp      TAPIOF
-        jp      TAPOON
-        jp      TAPOUT
-        jp      TAPOOF
-        jp      STMOTR
-        jp      LFTQ
-        jp      PUTQ
-        jp      RIGHTC
-        jp      LEFTC
-        jp      UPC
-        jp      TUPC
-        jp      DOWNC
-        jp      TDOWNC
-        jp      SCALXY
-        jp      MAPXYC
-        jp      FETCHC
-        jp      STOREC
-        jp      SETATR
-        jp      READC
-        jp      SETC
-        jp      NSETCX
-        jp      GTASPC
-        jp      PNTINI
-        jp      SCANR
-        jp      SCANL
-        JP      CHGCAP
-        JP      CHGSND
-        jp      RSLREG
-        jp      WSLREG
-        jp      RDVDP
-        jp      SNSMAT
-        jp      PHYDIO
-        jp      FORMAT
-        jp      ISFLIO
-        jp      OUTDLP
-        jp      GETVCP
-        jp      GETVC2
-        jp      KILBUF
-        jp      CALBAS
-	jp	SUBROM
+	JP	NMI			;Handler for non-maskable interrupt
+	JP	CLRSPR			;Init sprite data
+	JP	INITXT			;Init VDP for 40 X 24 text mode (SCREEN 0)
+	JP	INIT32			;  "   "   "  32 X 24 text mode (SCREEN 1)
+	JP	INIGRP			;  "   "   "  High resolution mode (SCREEN 2)
+	JP	INIMLT			;  "   "   "  Multi color mode (SCREEN 3)
+	JP	SETTXT			;Sets VDP to display 40 X 24 text mode
+	JP	SETT32			; "    "  "     "    32 X 24 text mode
+	JP	SETGRP			; "    "  "     "    High-res mode
+	JP	SETMLT			; "    "  "     "    Multi color mode
+	JP	CALPAT			;Get address of sprite pattern table
+	JP	CALATR			; "     “    "    "   attribute table
+	JP	GSPSIZ			;Returns current sprite size
+	JP	GRPPRT			;Print a character on the graphic screen
+
+SUBTTL -BIOS header- BIOS calls (Programmable Sound Generator control)
+
+;
+; Following entry points are used for PSG initialization,
+; Yvread and write PSG registers, and PLAY statement execution.
+;
+	JP	GICINI			;Init PSG, and static data for PLAY
+	JP	WRTPSG			;Write data to PSG
+	JP	RDPSG			;Read data from PSG
+	JP	STRTMS			;Checks and start background task for PLAY
+
+SUBTTL -BIOS header- BIOS calls (Keyboard, CRT, and Printer)
+;
+; General INPUT and PRINT utilities.
+;
+	JP	CHSNS			;Checks status of keyboard status
+	JP	CHGET			;Return char typed, with wait
+	JP	CHPUT			;Output character to console
+	JP	LPTOUT			;  "        "     to printer, if possible
+	JP	LPTSTT			;Checks status of line printer
+	JP	CNVCHR			;Checks for graphic header byte
+					;and convert code
+	JP	PINLIN			;Read line from keyboard to buffer
+	JP	INLIN			;Same as above, except in case of
+					;AUTFLG is set
+	JP	QINLIN			;Print a "2", then jump to INLIN
+	JP	BREAKX			;[Control-STOP] pressed??
+	JP	ISCNTC			;[Shift-STOP] pressed??
+	JP	CKCNTC			;Same as ISCNTC, but used by BASIC
+	JP	BEEP			;Buzz
+	JP	CLS			;Clear screen
+	JP	POSIT			;Place cursor at Column [H], Row [L]
+	JP	FNKSB			;Display Function key, if neccessary
+	JP	ERAFNK			;Stop displaying the Function keys
+	JP	DSPFNK			;Enable Function key display
+	JP	TOTEXT			;Force screen to text mode
+
+SUBTTL -BIOS header- BIOS calls (Game and Cassette I/O, Queue handler)
+
+;
+; Following are used to read the value from Joysticks,
+; Graphic pad (tablet), and Paddles.
+;
+	JP	GTSTCK			;Return status of joystick
+	JP	GTTRIG			;Read joystick trigger button
+	JP	GTPAD			;Returns status of graphic pad
+	JP	GTPDL			;Read paddle
+;
+; Following are used to access the cassette tape,
+; data read/write, and motor on/off
+;
+	JP	TAPION			;Turn on motor and read tape header
+	JP	TAPIN			;Read tape data
+	JP	TAPIOF			;Stops reading from tape
+	JP	TAPOON			;Turn on motor and write tape header
+	JP	TAPOUT			;Write data to tape
+	JP	TAPOOF			;Stops writing to tape
+	JP	STMOTR			;Start, stop cassette motor, or
+					;flip motor(on to off, off to on)
+;
+; BASIC queues
+;
+	JP	LFTQ			;Bytes left in queue
+	JP	PUTQ			;Send a byte to queue
+
+SUBTTL -BIOS header- BIOS calls (Generalized graphics)
+
+;
+; For BASIC interpreter's GENGRP and ADVGRP modules use
+	JP	RIGHTC			;Moves one pixel right
+	JP	LEFTC			;  "    "    "   left
+	JP	UPC			;  "    "    "   up
+	JP	TUPC			;  "    "    "   "
+	JP	DOWNC			;  "    "    "   down
+	JP	TDOWNC			;  "    "    "    "
+	JP	SCALXY			;Scales X Y cordinates
+	JP	MAPXYC			;Maps cordinates to physical address
+	JP	FETCHC			;Get current physical address and
+					;mask pattern
+	JP	STOREC			;Put current physical address and
+					;mask pattern
+	JP	SETATR			;Sets the color attribute byte
+	JP	READC			;Reads attribute of current pixel
+	JP	SETC			;Sets current pixel to specified attribute
+	JP	NSETCX			;Sets pixel horizontally
+	JP	GTASPC			;Returns aspect ratio
+	JP	PNTINI			;Do paint initialization
+	JP	SCANR			;Scan pixels to the right
+	JP	SCANL			; "     "    "   "  left
+
+SUBTTL -BIOS header- BIOS calls (Misc. Entries)
+
+        JP      CHGCAP			;Turn [CAPSLOCK] light, on/off
+        JP      CHGSND			;Change status of 1 bit sound port
+	JP	RSLREG			;Return output of primary slot register
+	JP	WSLREG			;Write to primary slot register
+	JP	RDVDP			;Read VDP status register
+	JP	SNSMAT			;Read a specified row in the
+					;keyboard matrix
+	JP	PHYDIO			;Performs operation for mass storage
+					;devices (such as disks)
+	JP	FORMAT			;Initialize mass storage device
+	JP	ISFLIO			;Are we doing device I/O
+	JP	OUTDLP			;Output to line printer
+	JP	GETVCP			;Used by Music background tasking
+	JP	GETVC2			; "   "    "       "         "
+	JP	KILBUF			;Clear the keyboard buffer
+	JP	CALBAS			;Performs far-call into BASIC
+	JP	SUBROM
+
+
+
 	jp      EXTROM
 	jp      CHKSLZ
 	jp      CHKNEW
