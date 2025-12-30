@@ -48,10 +48,20 @@ D.FFFF  equ     0FFFFH
 
 	EXTRN	J1472           	; MSX2+ patch handle extension ROM
 
-; START SUBTTL 	SLOT
+SUBTTL - SLOT - Slot handler stuff
 
-        SUBTTL	SLOT
-
+;PPI.AR  EQU     0A8h            ;A8H    read from PPI Port A
+;PPI.AW  EQU     0A8h            ;A8H    Write to PPI Port A
+;
+; Every cartridge located at 0000-3FFFH must contain codes in
+; this module which are entered via following addresses.
+;
+;   000CH RDSLT
+;   0014H WRSLT
+;   001CH CALSLT
+;   0024H ENASLT
+;
+;
 
         DEFS    001B6H-$,0
 
@@ -101,7 +111,7 @@ J01B6:  POP     AF
         LD      A,C
         LD      (D.FFFF),A
 
-; from this point code returns executing from the subrom 
+; from this point code returns executing from the subrom
 
 ?01EB:  LD      A,B
         OUT     (0A8H),A
@@ -111,19 +121,34 @@ J01B6:  POP     AF
         EXX
         RET
 
-;       Subroutine      RDSLT
-;       Inputs          ________________________
-;       Outputs         ________________________
-
-RDSLT:
-C01F5:  CALL    C0353                   ; calculate masks
-        JP      M,J0205                 ; handle expanded slot
+; ------------------------------ RDSLT ------------------------------
+;
+; Selects the appropriate slot according to the value given
+; through registers, and read the content of memory from the
+; slot.
+;
+; Input parameters:
+; A  - FxxxSSPP
+;      |   ||||
+;      |   ||++-- primary slot # (0-3)
+;      |   ++---- secondary slot # (0-3)
+;      +--------- 1 if secondary slot # specified
+;
+;                 HL - address of target memory
+; Returned value
+;                 A - content of memory
+;
+; Note: Interrupts are disabled automatically but never enabled
+;       by this routine.
+;
+RDSLT:	CALL	SELPRM			;Calculate bit pattern and mask code
+        JP      M,J0205                 ;Expanded slot specified
         IN      A,(0A8H)
-        LD      D,A
-        AND     C
-        OR      B
-        CALL    RDPRIM
-        LD      A,E
+        LD      D,A			;Save current setting
+        AND     C			;Cancel current setting for target address
+        OR      B			;Add new setting
+        CALL    RDPRIM			;Call read primitive routine (in system area)
+        LD      A,E			;Return value via [Acc]
         RET
 
 ;       Subroutine      RDSLT for expanded slot
@@ -132,9 +157,9 @@ C01F5:  CALL    C0353                   ; calculate masks
 
 J0205:  CALL    C028C                   ; prm. slot 0, page 0 ?
         JR      NZ,J021A                ; nop, use old method
-        PUSH    HL
+        PUSH    HL			;Save target address
         CALL    C0255                   ; basicrom on page 1
-        EX      (SP),HL
+        EX      (SP),HL			;Restore target address and save [HL]
         CALL    C7FBE                   ; special routine, so bios does not crash
         JR      J0244
 
@@ -158,16 +183,33 @@ J021A:  PUSH    HL
         CALL    C0378                   ; adjust secundairy slotregister
         EX      (SP),HL
         PUSH    BC
-        CALL    C01F5                   ; do RDSLT on only the primary slot
+        CALL    RDSLT                   ; do RDSLT on only the primary slot
         JR      J0279                   ; restore secundairy slotegister
 
-;       Subroutine      WRSLT
-;       Inputs          ________________________
-;       Outputs         ________________________
-
+;
+; ------------------------------ WRSLT ------------------------------
+;
+; Selects the appropriate slot according to the value given
+; through registers, and write to the memory in the specified
+; slot.
+;
+; Input parameters:
+; A  - FxxxSSPP
+;      |   ||||
+;      |   ||++-- primary slot # (0-3)
+;      |   ++---- secondary slot # (0-3)
+;      +--------- 1 if secondary slot # specified
+;
+;           HL - address of target memory
+;
+;           E  - value to be written
+;
+; Note: Interrupts are disabled automatically but never enabled
+;       by this routine.
+;
 WRSLT:
 C0225:  PUSH    DE
-        CALL    C0353                   ; calculate masks
+        CALL    SELPRM                   ; calculate masks
         JP      M,J0235                 ; expanded slot,
         POP     DE
         IN      A,(0A8H)
@@ -340,7 +382,7 @@ J02D8:  EXX
         POP     AF
         PUSH    IX
         POP     HL
-        CALL    C0353                   ; calculate masks
+        CALL    SELPRM                   ; calculate masks
         JP      M,J02EF                 ; expanded slot,
         IN      A,(0A8H)
         PUSH    AF
@@ -406,7 +448,7 @@ J0330:  EX      AF,AF'
 ;       Outputs         ________________________
 
 ENASLT:
-C0333:  CALL    C0353                   ; calculate masks
+C0333:  CALL    SELPRM                   ; calculate masks
         JP      M,J0340                 ; expanded slot,
         IN      A,(0A8H)
         AND     C
@@ -436,35 +478,49 @@ J0340:  PUSH    HL
 ;       Inputs          A=slotid, HL=adres
 ;       Outputs         P set if expanded slot, A=slotid, D=PPPPPPPP, E=page select mask
 ;                       B=primairy slot or mask, C=page clear mask
-
-C0353:  DI
-        PUSH    AF
-        LD      A,H
+SELPRM:
+	DI
+        PUSH    AF			;Save slot address
+        LD      A,H			;Extract upper 2 bits
         RLCA
         RLCA
-        AND     03H
+        AND     00000011B
         LD      E,A                     ; page
-        LD      A,0C0H
-J035D:  RLCA
+        LD      A,0C0H			 ;Format mask pat; correspond to address
+SLPRM1:
+	RLCA
         RLCA
         DEC     E
-        JP      P,J035D
-        LD      E,A                     ; page select mask
+        JP      P,SLPRM1
+        LD      E,A                     ;Save mask pattern
+					;	00000011    0000-3FFF
+					;	00001100    4000-7FFF
+					;	00110000    8000-BFFF
+					;	11000000    C000-FFFF
         CPL
-        LD      C,A                     ; page clear mask
-        POP     AF
+        LD      C,A                     ;Save mask pattern
+					;	11111100    0000-3FFF
+					;	11110011    4000-7FFF
+					;	11001111    8000-BFFF
+					;	00111111    C000-FFFF
+        POP     AF			;Restore slot address
         PUSH    AF
-        AND     03H
+        AND     00000011B       	;Extract primary slot #
         INC     A
         LD      B,A
-        LD      A,0ABH
-J036E:  ADD     A,55H
-        DJNZ    J036E
-        LD      D,A                     ; PPPPPPPP
-        AND     E
-        LD      B,A                     ; prim. slot select
-        POP     AF
-        AND     A
+        LD      A,10101011B		;Convert slot # to proper bit pattern
+SLPRM2:
+	ADD     A,01010101B
+        DJNZ    SLPRM2
+        LD      D,A			;Save bit pattern for primary slot #
+					;	00000000    slot #0
+					;	01010101    slot #1
+					;	10101010    slot #2
+					;	11111111    slot #3
+        AND     E			;Extract significant bits
+        LD      B,A                     ;Set it to [B]
+        POP     AF			;Expanded slot specified
+        AND     A			;Set sign flag if so
         RET
 
 ;       Subroutine      Adjust secundairy slotregister
