@@ -232,7 +232,6 @@ H.LPTS  EQU     0FFBBH
         PUBLIC  INDJMP
 	PUBLIC	RDBTST
 	PUBLIC	WRBTST
-	PUBLIC	J0431                   ; resume from PAL patch
 	PUBLIC	C141C                   ; expansion code screen Y size
 	PUBLIC	C1428                   ; expansion code screen 11
 	PUBLIC	J1472                   ; expansion code handle extension ROMs
@@ -380,23 +379,23 @@ SUBTTL - MSXIO - Find available RAM
 ; register until the RAM is found.
 
 CHKRAM:
-J0416:  XOR     A
-        OUT     (0FFH),A                ; initalize memory mapper page 3 register (mapper page 0)
+	XOR     A
+        OUT     (0FFH),A		; initalize memory mapper page 3 register (mapper page 0)
         INC     A
-        OUT     (0FEH),A                ; initalize memory mapper page 2 register (mapper page 1)
+        OUT     (0FEH),A		; initalize memory mapper page 2 register (mapper page 1)
         INC     A
-        OUT     (0FDH),A                ; initalize memory mapper page 1 register (mapper page 2)
+        OUT     (0FDH),A		; initalize memory mapper page 1 register (mapper page 2)
         INC     A
-        OUT     (0FCH),A                ; initalize memory mapper page 0 register (mapper page 3)
+        OUT     (0FCH),A		; initalize memory mapper page 0 register (mapper page 3)
         LD      A,08H
-        OUT     (0BBH),A                ; initialize lightpen (enable interrupt)
+        OUT     (0BBH),A		; initialize lightpen (enable interrupt)
 
         LD      A,82H			;Port A - output (mode 0)
-        OUT     (PPI.CM),A                ; initialize PPI (active, group A mode 0, group A output, upper port C output, group B mode 0, group B input, lower port C output)
+        OUT     (PPI.CM),A		; initialize PPI (active, group A mode 0, group A output, upper port C output, group B mode 0, group B input, lower port C output)
         XOR     A
-        OUT     (PPI.AW),A                ; select primairy slot 0 on all pages
+        OUT     (PPI.AW),A		; select primairy slot 0 on all pages
         LD      A,50H
-        OUT     (PPI.CW),A                ; CAPS off, motor off, keyboard row 0
+        OUT     (PPI.CW),A		; CAPS off, motor off, keyboard row 0
 ;
 ; Start searching
 ;
@@ -414,71 +413,71 @@ J0416:  XOR     A
 ;     |+--- slot #1 expanded
 ;     +---- slot #0 expanded
 ;
-J0431:  LD      DE,0FFFFH       	;Initialize lowest address ever found
+	LD      DE,0FFFFH       	;Initialize lowest address ever found
         XOR     A			;Start from slot #0
         LD      C,A			;Clear bit pattern
 CKRM05:
-J0436:  OUT     (PPI.AW),A		;Select the slot (select primary slot on page 2 and 3)
+	OUT     (PPI.AW),A		;Select the slot (select primary slot on page 2 and 3)
         SLA     C			;Shift bit pattern
         LD      B,0			;Assume this slot is not expanded
         LD      HL,0FFFFH		;Read from possible expansion slot register
         LD      (HL),0F0H		;Write a binary 11110000
         LD      A,(HL)
         SUB     0FH                     ;Read back as 00001111? (is slot expanded (writen value readback inverted))
-        JR      NZ,J0451                ;Nop, this is not an expanded slot
+        JR      NZ,CKRM15                ;Nop, this is not an expanded slot
         LD      (HL),A			;Write 00000000
         LD      A,(HL)
         INC     A			;Read back as 11111111? (is slot expanded (writen value readback inverted))
-        JR      NZ,J0451		;Nop, not expanded slot
+        JR      NZ,CKRM15		;Nop, not expanded slot
         INC     B			;We're checking expanded slot
         SET     0,C			;Say this slot is expanded
 CKRM10:
 ;
 ;Start from expansion slot #0
 ;
-J044E:  LD      (0FFFFH),A		;Select the expanded slot
+	LD	(0FFFFH),A		;Select the expanded slot
 CKRM15:
-J0451:  LD      HL,0BF00H       ;Start checking from 0BF00H to 8000H
+	LD	HL,0BF00H		;Start checking from 0BF00H to 8000H
 CKRM20:
-J0454:  LD      A,(HL)
+	LD	A,(HL)
         CPL
         LD      (HL),A
         CP      (HL)                    ; RAM found (write inverted correctly read back) ?
         CPL
         LD      (HL),A                  ; restore orginal value
-        JR      NZ,J0463		;RAM not equipped in this page
+        JR      NZ,CKRM25		;RAM not equipped in this page
         INC     L			;Make sure it's not a coincidence
-        JR      NZ,J0454		;Check more
+        JR      NZ,CKRM20		;Check more
         DEC     H
-        JP      M,J0454			;Check next page
+        JP      M,CKRM20			;Check next page
 CKRM25:
-J0463:  LD      L,0
+	LD	L,0
         INC     H                       ; round up 256 bytes boundary
         LD      A,L			;Below the one ever found
         SUB     E
         LD      A,H
         SBC     A,D                     ; page 2 with more RAM ?
-        JR      NC,J0476		;No
+        JR      NC,CKRM30		;No
         EX      DE,HL			;Register this address as the lowest
         LD      A,(0FFFFH)		;Set possible secondary slot #
         CPL
         LD      L,A
-        IN      A,(0A8H)		 ;Set primary slot #
+        IN      A,(PPI.AR)		 ;Set primary slot #
         LD      H,A
         LD      SP,HL			;Register these slot #'s (save primary and secundary slot register of lowest RAM address found (page 2))
 CKRM30:
-J0476:  LD      A,B
+	LD	A,B
         AND     A			;Are we checking secondary slot
-        JR      Z,J0484	;No
+        JR      Z,CKRM35		;No
         LD      A,(0FFFFH)
         CPL
         ADD     A,10H			;Prepare to select next secondary slot
         CP      40H                     ; all secundairy slots done ?
-        JR      C,J044E			;Continue if more secondary slots remain
+        JR      C,CKRM10			;Continue if more secondary slots remain
 CKRM35:
-J0484:  IN      A,(0A8H)
+	IN      A,(PPI.AR)
         ADD     A,50H			;Prepare to select next slot
-        JR      NC,J0436		;Continue if more primary slots remain
+        JR      NC,CKRM05		;Continue if more primary slots remain
 ;
 ; Check is done, select the biggest one
 ;
@@ -498,64 +497,64 @@ J0484:  IN      A,(0A8H)
         RLCA
         LD      C,A                     ; expanded slot flags in b7-b4
         LD      DE,0FFFFH		;Initialize lowest address ever found (initialize lowest RAM address found (page 3))
-        IN      A,(0A8H)
+        IN      A,(PPI.AR)
         AND     3FH                     ; primairy slot 0 in page 3
 CKRM50:
-J04A2:  OUT     (PPI.AW),A		;Select the slot (select new primary slot in page 3)
+	OUT	(PPI.AW),A		;Select the slot (select new primary slot in page 3)
         LD      B,0			;Assume this slot is not expanded
         RLC     C			;Shift bit pattern
-        JR      NC,J04B4		;This slot is not expanded
+        JR      NC,CKRM60		;This slot is not expanded
         INC     B			;We're checking expanded slot
         LD      A,(0FFFFH)
         CPL
         AND     3FH                     ; secundary slot 0 in page 3
 CKRM55:
-J04B1:  LD      (0FFFFH),A		;Select the expanded slot (select new secondary slot in page 3)
+	LD	(0FFFFH),A		;Select the expanded slot (select new secondary slot in page 3)
 CKRM60:
-J04B4:  LD      HL,0FE00H		;Start checking from 0FE00H to 0C000H
+	LD	HL,0FE00H		;Start checking from 0FE00H to 0C000H
 					; page 3 (leave upper 256 bytes out for secondary slot register)
 CKRM65:
-J04B7:  LD      A,(HL)
+	LD      A,(HL)
         CPL
         LD      (HL),A
         CP      (HL)                    ; RAM found (write inverted correctly read back) ?
         CPL
         LD      (HL),A                  ; restore orginal value
-        JR      NZ,J04C8		;RAM not equipped in this page
+        JR      NZ,CKRM70		;RAM not equipped in this page
         INC     L			;Make sure it's not a coincidence
-        JR      NZ,J04B7		;Check more
+        JR      NZ,CKRM65		;Check more
         DEC     H
         LD      A,H
         CP      0C0H
-        JR      NC,J04B7		;Check next page
+        JR      NC,CKRM65		;Check next page
 CKRM70:
-J04C8:  LD      L,0
+	LD	L,0
         INC     H                       ; round up 256 bytes boundary
         LD      A,L			;Below the one ever found
         SUB     E
         LD      A,H
         SBC     A,D			;page 3 with more RAM ?
-        JR      NC,J04DB                ;No
+        JR      NC,CKRM75		;No
         EX      DE,HL			;Register this address as the lowest
         LD      A,(0FFFFH)		;Set possible secondary slot #
         CPL
         LD      L,A
-        IN      A,(0A8H)		;Set primary slot #
+        IN      A,(PPI.AR)		;Set primary slot #
         LD      H,A
         LD      SP,HL			;Register these slot #'s
 					; save primary and secondary slot register of lowest RAM address found (page 3)
 CKRM75:
-J04DB:  LD      A,B
+	LD	A,B
         AND     A			;Are we checking secondary slot
-        JR      Z,J04E7                 ;No
+        JR      Z,CKRM80                 ;No
         LD      A,(0FFFFH)
         CPL
         ADD     A,40H			;Prepare to select next secondary slot (slot page 3)
-        JR      NC,J04B1		;Continue if more secondary slots remain
+        JR      NC,CKRM55		;Continue if more secondary slots remain
 CKRM80:
-J04E7:  IN      A,(0A8H)
+	IN	A,(PPI.AR)
         ADD     A,40H			;Prepare to select next slot (slot page 3)
-        JR      NC,J04A2		;Continue if more primary slots remain
+        JR      NC,CKRM50		;Continue if more primary slots remain
         JP      J7B61                   ; continue with hardware intialization, part 2
 
 ;       Subroutine      ISCNTC
@@ -3262,7 +3261,7 @@ J140B:  IN      A,(99H)
 ;       Outputs         ________________________
 
 RSLREG:
-J140E:  IN      A,(0A8H)
+J140E:  IN      A,(PPI.AR)
         RET
 
 ;       Subroutine      WSLREG
