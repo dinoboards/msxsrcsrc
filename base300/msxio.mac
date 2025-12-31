@@ -568,7 +568,7 @@ EXCABO:
         JR      NC,EXABO1		;No, accept this break
         LD      HL,REQSTP		;Request STOP trap
         DI				;Since REQTRP does not change interrupt mask,
-        CALL    C0EF1                   ;REQTRP this must be enclosed by 'DI' and 'EI'
+        CALL    REQTRP			;this must be enclosed by 'DI' and 'EI'
         EI
         POP     HL			;Restore text pointer
         RET
@@ -2287,14 +2287,14 @@ J0C3C:  PUSH    HL
         LD      (STATFL),A
         AND     20H
         LD      HL,TRPTBL+11*3
-        CALL    NZ,C0EF1                ; yep, raise SPRITE trap
+        CALL    NZ,REQTRP			; yep, raise SPRITE trap
         LD      HL,(INTCNT)
         DEC     HL                      ; decrease interval counter
         LD      A,H
         OR      L
         JR      NZ,J0C73                ; not time for interval yet, skip
         LD      HL,TRPTBL+17*3
-        CALL    C0EF1                   ; raise INTERVAL trap
+        CALL    REQTRP			; raise INTERVAL trap
         LD      HL,(INTVAL)
 J0C73:  LD      (INTCNT),HL
         LD      HL,(JIFFY)
@@ -2345,20 +2345,23 @@ J0C82:  RR      C
         LD      (HL),C
         LD      C,A
         RRCA
-        LD      HL,TRPTBL+12*3
-        CALL    C,C0EF1                 ; space key pressed, raise STRIG(0) trap
+        LD      HL,TRPTBL+3*12
+        CALL    C,REQTRP			; space key pressed, raise STRIG(0) trap
         RL      C
-        LD      HL,TRPTBL+16*3
-        CALL    C,C0EF1                 ; trigger B joystick 1 pressed, raise STRIG(4) trap
+        LD      HL,TRPTBL+3*16
+        CALL    C,REQTRP			; trigger B joystick 1 pressed, raise STRIG(4) trap
         RL      C
-        LD      HL,TRPTBL+14*3
-        CALL    C,C0EF1                 ; trigger A joystick 1 pressed, raise STRIG(2) trap
+        LD      HL,TRPTBL+3*14
+        CALL    C,REQTRP			; trigger A joystick 1 pressed, raise STRIG(2) trap
         RL      C
-        LD      HL,TRPTBL+15*3
-        CALL    C,C0EF1                 ; trigger B joystick 0 pressed, raise STRIG(3) trap
+        LD      HL,TRPTBL+3*15
+        CALL    C,REQTRP			; trigger B joystick 0 pressed, raise STRIG(3) trap
         RL      C
-        LD      HL,TRPTBL+13*3
-        CALL    C,C0EF1                 ; trigger A joystick 0 pressed, raise STRIG(1) trap
+        LD      HL,TRPTBL+3*13
+        CALL    C,REQTRP			; trigger A joystick 0 pressed, raise STRIG(1) trap
+;
+; Scan keyboard
+;
         XOR     A
         LD      (CLIKFL),A
         CALL    C0D12                   ; scan keyboard and translate to keycodes
@@ -2567,20 +2570,27 @@ J0D97:  RRA
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 ;       Remark          code identical among keyboard layout versions
-
-C0EF1:  LD      A,(HL)
-        AND     01H                     ; trap enabled ?
-        RET     Z                       ; nope, quit
+REQTRP:
+;
+; Request trap (called to request trap for event devices)
+;
+;
+; Since REQTRP is mostly called from within an interrupt routine,
+; don't touch the interrupt mask through DI or EI.
+;
+	LD	A,(HL)
+        AND     1			;Trap on?
+        RET     Z			;TRAP NOT ON
         LD      A,(HL)
-        OR      04H
-        CP      (HL)                    ; trap already raised ?
-        RET     Z                       ; yep, quit
-        LD      (HL),A                  ; raise trap
-        XOR     05H                     ; trap paused ?
-        RET     NZ                      ; yep, quit
+        OR      4			;Trap request
+        CP      (HL)			; trap already raised ?
+        RET     Z			;No change
+        LD      (HL),A			; raise trap
+        XOR     5			;Trap on + Trap request
+        RET     NZ			; yep, quit
         LD      A,(ONGSBF)
         INC     A
-        LD      (ONGSBF),A              ; increase trap counter
+        LD      (ONGSBF),A		; increase trap counter
         RET
 
 
