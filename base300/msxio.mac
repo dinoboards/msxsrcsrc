@@ -592,20 +592,19 @@ CKSTTP:
 ;
 ; Check for STOP trap
 ;
-;
-	LD	A,(REQSTP)
+	LD	A,(REQSTP)		;Is STOP trap ON
         RRCA
-        RET     NC                      ; ON STOP not ON, quit
-        LD      HL,(TRPTBL+10*3+1)
+        RET     NC			;No, accept this break
+        LD      HL,(REQSTP+1)		;Is STOP trap specified
         LD      A,H
         OR      L
-        RET     Z                       ; has not STOP subroutine, quit
-        LD      HL,(CURLIN)
+        RET     Z			;No, accept this break
+        LD      HL,(CURLIN)		;Are we in direct mode
         INC     HL
         LD      A,H
         OR      L
-        RET     Z                       ; basic interpeter in direct mode, quit
-        SCF                             ; flag execute ON STOP GOSUB valid
+        RET     Z			;Yes, treat as break
+        SCF				;Set flag to indicate STOP trap active
         RET
 
 ;       Subroutine      KILBUF (clears keyboardbuffer)
@@ -613,7 +612,7 @@ CKSTTP:
 ;       Outputs         ________________________
 
 KILBUF:
-	LD	HL,(PUTPNT)
+	LD	HL,(PUTPNT)		;Empties ring buffer
         LD      (GETPNT),HL
         RET
 
@@ -622,25 +621,28 @@ KILBUF:
 ;       Outputs         ________________________
 
 BREAKX:
-C0564:  IN      A,(0AAH)
-        AND     0F0H
-        OR      07H
+;
+; Check if stop key pressed. If pressed, return with carry set.
+;
+	IN	A,(PPI.CR)
+        AND     0F0H			;Leave others unaffected
+        OR      07H			;Select 6th row
         OUT     (PPI.CW),A
-        IN      A,(0A9H)
-        AND     10H
-        RET     NZ
-        IN      A,(0AAH)
+        IN      A,(PPI.BR)
+        AND     10H			;STOP key is assigned to bit 4
+        RET     NZ			;0 when pressed
+        IN      A,(PPI.CR)
         DEC     A
         OUT     (PPI.CW),A
-        IN      A,(0A9H)
-        AND     02H
+        IN      A,(PPI.BR)
+        AND     2
         RET     NZ
         PUSH    HL
-        LD      HL,(PUTPNT)
+        LD      HL,(PUTPNT)		;Cancel any input
         LD      (GETPNT),HL             ; clear keyboardbuffer
         POP     HL
-        LD      A,(OLDKEY+7)
-        AND     0EFH
+        LD      A,(OLDKEY+7)		;STOP pressed, mark as pressed to prevent
+        AND     0EFH			; to be doubly recognized
         LD      (OLDKEY+7),A
 
         IF INTHZ EQ 60
@@ -652,6 +654,8 @@ C0564:  IN      A,(0AAH)
         LD      (REPCNT),A              ; reset REPCNT
         SCF
         RET
+
+SUBTTL - MSXIO - PSG Initialization
 
 ;       Subroutine      INITIO
 ;       Inputs          ________________________
@@ -1380,7 +1384,7 @@ TOTEXT:
         CALL    H.TOTE
         PUSH    IX			;No, change to text mode then
         LD      IX,S.CHGMDP
-        JP      SUBROM                  ; SUBROM
+        JP      SUBROM
 
 ;       Subroutine      CHGMOD
 ;       Inputs          ________________________
@@ -1398,7 +1402,7 @@ J08B1:  PUSH    IX
 LPTOUT:
 C08BA:  CALL    H.LPTO
         PUSH    AF
-J08BE:  CALL    C0564                   ; BREAKX
+J08BE:  CALL    BREAKX
         JR      C,J08D5
         CALL    C08E1                   ; LPTSTT
         JR      Z,J08BE
