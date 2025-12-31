@@ -574,13 +574,13 @@ EXCABO:
         RET
 
 EXABO1:
-	CALL	C089E                   ; TOTEXT (force textmode)
-        LD      A,(EXPTBL+0)
-        LD      H,40H
+	CALL	TOTEXT			 ;Make sure we're in text mode
+        LD      A,(EXPTBL)
+        LD      H,01000000B
         CALL    ENASLT                  ; ENASLT (basicrom on page 1)
-        POP     HL
-        XOR     A
-        LD      SP,(SAVSTK)             ; restore stack
+        POP     HL			;Restore text pointer
+        XOR     A			;Must return with carry cleared, zero set
+        LD      SP,(SAVSTK)		;LSPD restore stack
         PUSH    BC
         JP      STOP                    ; execute STOP statement
 
@@ -1371,11 +1371,14 @@ J0897:  RET     NZ
 ;       Outputs         ________________________
 
 TOTEXT:
-C089E:  CALL    CHKSCR			; check if screen is in textmode
-        RET     C                       ; yep, do nothing
+;
+; TOTEXT - Force screen to text mode
+;
+	CALL	CHKSCR			;Check current screen mode
+        RET     C			;We're in text mode
         LD      A,(OLDSCR)
         CALL    H.TOTE
-        PUSH    IX
+        PUSH    IX			;No, change to text mode then
         LD      IX,S.CHGMDP
         JP      SUBROM                  ; SUBROM
 
