@@ -519,44 +519,50 @@ CKRM80:
         JR      NC,CKRM50		;Continue if more primary slots remain
         JP      CKRM100			; continue with hardware intialization, part 2
 
+SUBTTL - MSXIO - Control-[C] processing
 ;       Subroutine      ISCNTC
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 ISCNTC:
-C04F0:  LD      A,(BASROM)
+	LD	A,(BASROM)		;Is BASIC text in ROM
         AND     A
-        RET     NZ                      ; execute extension ROM with BASIC text, quit
+        RET     NZ			;Yes, execute extension ROM with BASIC text, quit
         PUSH    HL
-        LD      HL,INTFLG
+        LD      HL,INTFLG		;Seen any interesting key
         DI
         LD      A,(HL)
         EI
         LD      (HL),0                  ; reset STOP status
         POP     HL
         AND     A
-        RET     Z                       ; STOP or CTRL/STOP not pressed, quit
-        CP      03H
-        JR      Z,J0521                 ; handle CTRL/STOP
-        PUSH    HL
+        RET     Z			;No, STOP or CTRL/STOP not pressed, quit
+        CP      03H			;Is it ctrl-stop?
+        JR      Z,EXCABO		;Yes, execution aborted
+;
+; Pause until next STOP is pressed
+;
+        PUSH    HL			;STOP pressed (pause)
         PUSH    DE
         PUSH    BC
-        CALL    C0A37                   ; display cursor when disabled
-        LD      HL,INTFLG
-J050E:  DI
+        CALL    C0A37			;Display cursor if disabled
+        LD      HL,INTFLG		;Wait for next interesting key
+WATINT:
+	DI
         LD      A,(HL)
-        EI
-        LD      (HL),0                  ; reset STOP status
-        AND     A
-        JR      Z,J050E                 ; STOP or CTRL/STOP not pressed yet, keep waiting
+        EI				;Wait for character if SELECT pressed
+        LD      (HL),0			; reset STOP status
+        AND     A			;Seen?
+        JR      Z,WATINT		;Not yet, STOP or CTRL/STOP not pressed yet, keep waiting
         PUSH    AF
-        CALL    C0A84                   ; remove cursor when disabled
+        CALL    CKERC0			;Erase cursor if disabled
         POP     AF
         POP     BC
         POP     DE
         POP     HL
         CP      03H
         RET     NZ
+EXCABO:
 J0521:  PUSH    HL
         CALL    C055D                   ; KILBUF
         CALL    C0549                   ; excute ON STOP GOSUB valid ?
@@ -1361,7 +1367,7 @@ J0897:  RET     NZ
 ;       Outputs         ________________________
 
 TOTEXT:
-C089E:  CALL    C0B4E                   ; check if screen is in textmode
+C089E:  CALL    CHKSCR			; check if screen is in textmode
         RET     C                       ; yep, do nothing
         LD      A,(OLDSCR)
         CALL    H.TOTE
@@ -1482,7 +1488,7 @@ J0919:  PUSH    HL
         PUSH    BC
         PUSH    AF
         CALL    H.CHPU
-        CALL    C0B4E                   ; check if screen is in textmode
+        CALL    CHKSCR			; check if screen is in textmode
         JR      NC,J0937                ; nope, quit
         CALL    C0A8B                   ; remove cursor when enabled
         POP     AF
@@ -1704,21 +1710,28 @@ J0A33:  LD      (CSRSW),A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
+CKDPC0:
+;
+; Display cursor if disabled
 C0A37:  LD      A,(CSRSW)
         AND     A
         RET     NZ                      ; cursor enabled, quit
-        JR      J0A43                   ; display cursor
+        JR      DSPCSR			; display cursor
 
 ;       Subroutine      display cursor when enabled
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 CKDPCS:
+;
+; Display cursor if enabled
+;
 C0A3E:  LD      A,(CSRSW)
         AND     A
         RET     Z                       ; cursor disabled, quit
-J0A43:  CALL    H.DSPC
-        CALL    C0B4E                   ; check if screen is in textmode
+DSPCSR:
+	CALL	H.DSPC
+        CALL    CHKSCR			; check if screen is in textmode
         RET     NC                      ; nope, quit
         LD      HL,(CSRY)
         PUSH    HL
@@ -1756,8 +1769,11 @@ J0A70:  LD      A,(HL)
 ;       Subroutine      remove cursor when disabled
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C0A84:  LD      A,(CSRSW)
+CKERC0:
+;
+; Erase cursor if disabled
+;
+	LD	A,(CSRSW)
         AND     A
         RET     NZ                      ; cursor enabled, quit
         JR      J0A90                   ; remove cursor from screen
@@ -1771,7 +1787,7 @@ C0A8B:  LD      A,(CSRSW)
         AND     A
         RET     Z                       ; cursor disabled, quit
 J0A90:  CALL    H.ERAC
-        CALL    C0B4E                   ; check if screen is in textmode
+        CALL    CHKSCR			; check if screen is in textmode
         RET     NC                      ; nope, quit
         LD      HL,(CSRY)               ; cursorlocation
         LD      A,(CURSAV)
@@ -1965,10 +1981,13 @@ C0B4B:  LD      (CNSDFG),A
 ;       Subroutine      check if in textmode
 ;       Inputs          ________________________
 ;       Outputs         Cx set if in textmode
-
-C0B4E:  LD      A,(SCRMOD)
+CHKSCR:
+;
+; Check current screen mode
+;
+	LD      A,(SCRMOD)
         CP      02H
-        RET
+        RET			;Return with the status
 
 ;       Subroutine      copy 8 bytes of vram to LINWRK
 ;       Inputs          HL=vram adres
@@ -2446,7 +2465,7 @@ C0D6A:  EI
         PUSH    HL
         PUSH    DE
         PUSH    BC
-        CALL    C0B4E                   ; check if screen is in textmode
+        CALL    CHKSCR			; check if screen is in textmode
         JR      NC,J0D82                ; nope, skip functionkey display
         LD      A,(FNKSWI)
         LD      HL,NEWKEY+6
@@ -2639,7 +2658,7 @@ C10CB:  PUSH    HL
         CALL    C0A37                   ; display cursor when disabled
 J10D9:  CALL    C0D6A                   ; CHSNS
         JR      Z,J10D9                 ; wait for input
-        CALL    C0A84                   ; remove cursor when disabled
+        CALL    CKERC0			; remove cursor when disabled
 J10E1:  LD      HL,INTFLG
         LD      A,(HL)
         CP      4
@@ -2657,9 +2676,12 @@ J10EB:  LD      HL,(GETPNT)
 ;       Outputs         ________________________
 
 CKCNTC:
+;
+; Check ctl-C
+;
 J10F9:  PUSH    HL
         LD      HL,0
-        CALL    C04F0                   ; ISCNTC
+        CALL    ISCNTC			;To disable CONTinuing
         POP     HL
         RET
 
