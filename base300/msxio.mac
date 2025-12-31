@@ -98,7 +98,6 @@ NEWKEY  equ     0FBE5H
 KEYBUF  EQU     0FBF0H
 LINWRK  equ     0FC18H
 PATWRK  EQU     0FC40H
-TRPTBL  equ     0FC4CH
 INTFLG  equ     0FC9BH
 PADY    equ     0FC9CH
 PADX    equ     0FC9DH
@@ -566,16 +565,16 @@ EXCABO:
 	PUSH	HL			;Save text pointer
         CALL    KILBUF			;Cancel any input
         CALL    CKSTTP			;Is STOP trap ON
-        JR      NC,J0534		;No, accept this break
-        LD      HL,TRPTBL+10*3		;Request STOP trap
+        JR      NC,EXABO1		;No, accept this break
+        LD      HL,REQSTP		;Request STOP trap
         DI				;Since REQTRP does not change interrupt mask,
         CALL    C0EF1                   ;REQTRP this must be enclosed by 'DI' and 'EI'
         EI
         POP     HL			;Restore text pointer
         RET
 
-
-J0534:  CALL    C089E                   ; TOTEXT (force textmode)
+EXABO1:
+	CALL	C089E                   ; TOTEXT (force textmode)
         LD      A,(EXPTBL+0)
         LD      H,40H
         CALL    ENASLT                  ; ENASLT (basicrom on page 1)
@@ -594,7 +593,7 @@ CKSTTP:
 ; Check for STOP trap
 ;
 ;
-	LD	A,(TRPTBL+10*3+0)
+	LD	A,(REQSTP)
         RRCA
         RET     NC                      ; ON STOP not ON, quit
         LD      HL,(TRPTBL+10*3+1)
