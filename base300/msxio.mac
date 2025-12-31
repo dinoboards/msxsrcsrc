@@ -662,26 +662,35 @@ SUBTTL - MSXIO - PSG Initialization
 ;       Outputs         ________________________
 
 INITIO:
-J0592:  LD      A,7
+;
+; Initialize I/O
+;
+	LD      A,7
         LD      E,80H
-        CALL    C1102                   ; WRTPSG
-        LD      A,15
+        CALL    WRTPSG			; WRTPSG  ;Set Port A to input mode
+        LD      A,0FH			;Port B to output mode
         LD      E,0CFH
-        CALL    C1102                   ; WRTPSG
-        LD      A,11
-        LD      E,A
-        CALL    C1102                   ; WRTPSG
+        CALL    WRTPSG                   ; WRTPSG
+        LD      A,0BH			;Dummy write cycle to wake up the PSG
+        LD      E,A			;envelope register
+        CALL    WRTPSG			; WRTPSG ;Any value is OK!
         CALL    C110C
-        AND     40H
+        AND     01000000B
         LD      (KANAMD),A              ; save kanji layout
         LD      A,0FFH
-        OUT     (90H),A
+        OUT     (LPT.SB),A
 
 ;       Subroutine      GICINI
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 GICINI:
+;
+; Initialize GI sound chip, queues, and static data.
+;
+; Entry - Interrupts must be disabled
+; Exit - All registers preserved.
+;
 C05B2:  PUSH    HL
         PUSH    DE
         PUSH    BC
@@ -703,7 +712,7 @@ J05C8:  PUSH    HL
         POP     AF
         ADD     A,8
         LD      E,0
-        CALL    C1102                   ; WRTPSG
+        CALL    WRTPSG
         SUB     08H
         PUSH    AF
         LD      L,0FH
@@ -723,7 +732,7 @@ J05C8:  PUSH    HL
         JR      C,J05C8
         LD      A,7
         LD      E,0B8H
-        CALL    C1102                   ; WRTPSG
+        CALL    WRTPSG
         JP      POPALL
 
 I05FD:  DEFB    4
@@ -2706,17 +2715,43 @@ J10F9:  PUSH    HL
         POP     HL
         RET
 
+SUBTTL - MSXIO - Music routines
+
 ;       Subroutine      WRTPSG
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
 WRTPSG:
-C1102:  DI
-        OUT     (0A0H),A
+;
+; Write data to specified register of GI sound chip
+; Entry - (E)=data,(A)=register number
+; Exit - All regs preserved
+;
+; GI Reg# - usage
+;
+; 0     voice A fine tune
+; 1     voice A coarse tune
+; 2     voice B fine tune
+; 3     voice B coarse tune
+; 4     voice C fine tune
+; 5     voice C coarse tune
+; 7 B7,B6   = Reg 14,15 Input Output flags
+;   B5,B4,B3 = voice C,B,A noise enable (0=enabled)
+;   B2,B1,B0 = voice C,B,A tone enable (0=enabled)
+; 8 voice A volume (0..15 = volume, 16=use envelope)
+; 9 voice B volume (0..15 = volume, 16=use envelope)
+; 10    voice C volume (0..15 = volume, 16=use envelope)
+; 11-12 envelope period
+; 13    envelope shape (0..15)
+; 14    joystick 1 port
+; 15    joystick 2 port
+;
+	DI
+        OUT     (PSG.LW),A			;LATCH ADDRESS
         PUSH    AF
         LD      A,E
         EI
-        OUT     (0A1H),A
+        OUT     (PSG.DW),A			;OUTPUT DATA
         POP     AF
         RET
 
@@ -2804,10 +2839,10 @@ J115C:  DEC     C
         LD      E,A
         LD      A,B
         RLCA
-        CALL    WRTPSG                  ; WRTPSG
+        CALL    WRTPSG
         INC     A
         LD      E,D
-        CALL    WRTPSG                  ; WRTPSG
+        CALL    WRTPSG
         DEC     C
         JR      J115C
 
@@ -2817,11 +2852,11 @@ J1177:  LD      H,A
         LD      E,D
         LD      A,B
         ADD     A,8
-        CALL    WRTPSG                  ; WRTPSG
+        CALL    WRTPSG
         LD      A,E
         AND     10H
         LD      A,13
-        CALL    NZ,WRTPSG               ; WRTPSG
+        CALL    NZ,WRTPSG
 J118B:  LD      A,H
         AND     40H
         JR      Z,J115C
@@ -2830,10 +2865,10 @@ J118B:  LD      A,H
         CALL    C11D8
         LD      E,A
         LD      A,11
-        CALL    WRTPSG                  ; WRTPSG
+        CALL    WRTPSG
         INC     A
         LD      E,D
-        CALL    WRTPSG                  ; WRTPSG
+        CALL    WRTPSG
         DEC     C
         DEC     C
         JR      J115C
@@ -2841,7 +2876,7 @@ J118B:  LD      A,H
 J11A6:  LD      A,B
         ADD     A,08H   ; 8
         LD      E,0
-        CALL    WRTPSG                  ; WRTPSG
+        CALL    WRTPSG
         INC     B
         LD      HL,MUSICF
         XOR     A
