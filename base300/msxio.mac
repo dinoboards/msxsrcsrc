@@ -667,13 +667,13 @@ INITIO:
 ;
 	LD      A,7
         LD      E,80H
-        CALL    WRTPSG			; WRTPSG  ;Set Port A to input mode
+        CALL    WRTPSG			;Set Port A to input mode
         LD      A,0FH			;Port B to output mode
         LD      E,0CFH
-        CALL    WRTPSG                   ; WRTPSG
+        CALL    WRTPSG
         LD      A,0BH			;Dummy write cycle to wake up the PSG
         LD      E,A			;envelope register
-        CALL    WRTPSG			; WRTPSG ;Any value is OK!
+        CALL    WRTPSG			;Any value is OK!
         CALL    INGI
         AND     01000000B
         LD      (KANAMD),A              ; save kanji layout
@@ -695,51 +695,65 @@ C05B2:  PUSH    HL
         PUSH    DE
         PUSH    BC
         PUSH    AF
+;
+; First, clear all static data
+;
         LD      HL,MUSICF
-        LD      B,71H
+        LD      B,71H			;=VCBC + VCBSIZ + MUSCIF
         XOR     A
-J05BC:  LD      (HL),A
+MUSCLL:
+	LD	(HL),A
         INC     HL
-        DJNZ    J05BC
-        LD      DE,VOICAQ
-        LD      B,7FH
-        LD      HL,0080H
-J05C8:  PUSH    HL
-        PUSH    DE
-        PUSH    BC
-        PUSH    AF
-        CALL    INITQ
+        DJNZ    MUSCLL
+;
+; Then clear music dynamic queue
+;
+        LD      DE,VOICAQ		;Address of music queue
+        LD      B,7FH			;Mask pattern, 7F = Music queue len - 1
+        LD      HL,0080H		;Queue length
+GICIN1:
+	PUSH	HL			;Save length of queue
+        PUSH    DE			;Save address of queue
+        PUSH    BC			;Save mask pattern
+        PUSH    AF			;Save queue ID
+        CALL    INITQ			;Initialize a queue by [Acc],[B],[DE]
         POP     AF
-        ADD     A,8
+        ADD     A,8			;write to regs 8,9,10
         LD      E,0
-        CALL    WRTPSG
-        SUB     08H
-        PUSH    AF
-        LD      L,0FH
-        CALL    C0C11
+        CALL    WRTPSG			;0 out amplitude (turn voice off)
+        SUB     08H			;Restore [Acc]
+        PUSH    AF			;Save queue ID
+        LD      L,0FH			;OctaveX
+        CALL    GETVC1			;[HL] points to octave for voice [A]
         EX      DE,HL
-        LD      HL,I05FD
-        LD      BC,6
-        LDIR
-        POP     AF
-        POP     BC
-        POP     HL
-        POP     DE
-        ADD     HL,DE
+        LD      HL,MUSITB		;[HL] points to default value table
+        LD      BC,6			;EMSITB - MUSITB
+        LDIR				;default variables for this voice
+        POP     AF			;Restore queue ID
+        POP     BC			;Restore mask
+        POP     HL			;Restore queue address
+        POP     DE			;Restore queue length
+        ADD     HL,DE			;Update queue address
         EX      DE,HL
-        INC     A
+        INC     A			;Next channel
         CP      03H
-        JR      C,J05C8
-        LD      A,7
-        LD      E,0B8H
-        CALL    WRTPSG
-        JP      POPALL
+        JR      C,GICIN1		;Loop till done all three voices
+        LD      A,7			;write to reg 7 mixer control
+        LD      E,0B8H			;input port A, output port B
+        CALL    WRTPSG			;disable noise, enable all 3 tones
+        JP      POPALL			;Restore environments
 
-I05FD:  DEFB    4
-        DEFB    4
-        DEFB    120
-        DEFB    8+128
-        DEFW    255
+MUSITB:
+;
+; table of default values for music variables
+;
+	DB	04H			;default octave
+	DB	04H			;default note length
+	DB	78H			;default tempo
+	DB	088H			;default volume
+	DB	0FFH			;default envelope period
+	DB	00H
+EMSITB:					;end of music table
 
 ;       Subroutine      ENASCR
 ;       Inputs          ________________________
@@ -2228,7 +2242,7 @@ J0C04:  LD      A,H
 
 GETVCP:
 C0C0A:  LD      L,2
-        JR      C0C11
+        JR      GETVC1
 
 ;       Subroutine      GETVC2
 ;       Inputs          ________________________
@@ -2236,22 +2250,26 @@ C0C0A:  LD      L,2
 
 GETVC2:
 J0C0E:  LD      A,(VOICEN)
-
-;       Subroutine      __________________________
-;       Inputs          ________________________
-;       Outputs         ________________________
-
-C0C11:  PUSH    DE
+GETVC1:
+;
+; Entry - [A] = voice id (0..2)
+; [L] = desired displacement into voice buffer
+; Exit - [HL] = pointer to desired variable for voice VOICEN
+; [A] = 0. All other registers preserved.
+;
+	PUSH	DE
         LD      DE,VCBA
         LD      H,0
         ADD     HL,DE
         OR      A
-        JR      Z,J0C22
-        LD      DE,37
-J0C1E:  ADD     HL,DE
+        JR      Z,GETVCX
+        LD      DE,25H			;VCB size
+GETVCL:
+	ADD	HL,DE
         DEC     A
-        JR      NZ,J0C1E
-J0C22:  POP     DE
+        JR      NZ,GETVCL
+GETVCX:
+	POP	DE
         RET
 
 ; The following NOP really puzzels me
