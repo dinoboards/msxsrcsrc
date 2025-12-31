@@ -560,19 +560,20 @@ WATINT:
         POP     BC
         POP     DE
         POP     HL
-        CP      03H
-        RET     NZ
+        CP      03H			;Abort?
+        RET     NZ			;No
 EXCABO:
-J0521:  PUSH    HL
-        CALL    C055D                   ; KILBUF
-        CALL    C0549                   ; excute ON STOP GOSUB valid ?
-        JR      NC,J0534                ; nope, stop basic program
-        LD      HL,TRPTBL+10*3
-        DI
-        CALL    C0EF1                   ; raise CTRL-STOP trap
+	PUSH	HL			;Save text pointer
+        CALL    KILBUF			;Cancel any input
+        CALL    CKSTTP			;Is STOP trap ON
+        JR      NC,J0534		;No, accept this break
+        LD      HL,TRPTBL+10*3		;Request STOP trap
+        DI				;Since REQTRP does not change interrupt mask,
+        CALL    C0EF1                   ;REQTRP this must be enclosed by 'DI' and 'EI'
         EI
-        POP     HL
+        POP     HL			;Restore text pointer
         RET
+
 
 J0534:  CALL    C089E                   ; TOTEXT (force textmode)
         LD      A,(EXPTBL+0)
@@ -589,7 +590,11 @@ J0534:  CALL    C089E                   ; TOTEXT (force textmode)
 ;       Outputs         ________________________
 
 CKSTTP:
-C0549:  LD      A,(TRPTBL+10*3+0)
+;
+; Check for STOP trap
+;
+;
+	LD	A,(TRPTBL+10*3+0)
         RRCA
         RET     NC                      ; ON STOP not ON, quit
         LD      HL,(TRPTBL+10*3+1)
@@ -609,7 +614,7 @@ C0549:  LD      A,(TRPTBL+10*3+0)
 ;       Outputs         ________________________
 
 KILBUF:
-C055D:  LD      HL,(PUTPNT)
+	LD	HL,(PUTPNT)
         LD      (GETPNT),HL
         RET
 
