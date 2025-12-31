@@ -1972,22 +1972,30 @@ CKRM100:
         LD      A,H
         OUT     (PPI.AW),A			;Set primary slot register (page 2 and 3)
         LD      A,L
-        LD      (D.FFFF),A                      ; if primary slot is expanded, select secundairy slot RAM in page 2 and 3
-        LD      A,C                             ; save expansion flag
-        LD      BC,0C77H
+        LD      (0FFFFH),A			;Set possible secondary slot register
+						; if primary slot is expanded, select secondary slot RAM in page 2 and 3
+        LD      A,C				;Set 'slot expanded' flag
+;
+; Clear work area with zero
+;
+        LD      BC,0C77H			;length of work area
         LD      DE,VARWRK+1
-        LD      HL,VARWRK
-        LD      (HL),0
-        LDIR                                    ; clear system variables
-        LD      C,A                             ; expansion flag
-        LD      B,4                             ; 4 primairy slots
+        LD      HL,VARWRK			;beginning of work
+        LD      (HL),0				;init first byte
+        LDIR					;transfer it to rest of area
+;
+; Set EXPTBL
+;
+        LD      C,A				;Get 'slot-expanded' flag
+        LD      B,4				;Loop 4 times for each primary slot
         LD      HL,EXPTBL+3
-J7B80:  RR      C
-        SBC     A,A
-        AND     80H                             ; 080H for expanded slot, 000H for non-expanded slot
-        LD      (HL),A                          ; set expansion flag
+SSLTLP:
+	RR	C				;Set carry if LSB is set
+        SBC     A,A				;[Acc]=255 if expanded, 0 if not expanded
+        AND     80H				;Affects only MSB (080H for expanded slot, 000H for non-expanded slot)
+        LD      (HL),A				;Set table for each slot
         DEC     HL
-        DJNZ    J7B80                           ; next slot
+        DJNZ    SSLTLP				; next slot
         IN      A,(0A8H)
         LD      C,A                             ; save current primairy slotregister
         XOR     A
