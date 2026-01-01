@@ -69,7 +69,7 @@ PPI.AW	EQU	0A8h		;A8H    Write to PPI Port A
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 ;       Remark          this is done by this special routine, otherwise calslt crashes
-;                       code to handle a interslot call to the subrom in a secundairy
+;                       code to handle a interslot call to the subrom in a secondary
 ;                       of slot 0.
 
 J01B6:  POP     AF
@@ -401,7 +401,7 @@ CALSLT_1:
         PUSH    IX
         POP     HL			;Get target address
         CALL    SELPRM                   ; calculate masks
-        JP      M,J02EF			;Call expanded slot
+        JP      M,CALESL			;Call expanded slot
         IN      A,(PPI.AR)
         PUSH    AF			;Save current value of primary slot register
         AND     C			;Cancel current setting for target address
@@ -412,52 +412,55 @@ CALSLT_1:
 ;       Subroutine      CALSLT for expanded slot
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-J02EF:  PUSH    AF
-        AND     03H                     ; primary slot 0 ?
-        JR      NZ,J02FA                ; nope, just the old methode
+CALESL:
+	PUSH	AF
+        AND     03H			; primary slot 0 ?
+        JR      NZ,CALESL10		; nope, just the old methode
         LD      A,H
         AND     0C0H
-        JP      Z,J01B6                 ; calslt to page 0 in some secundairy slot 0, handle special to avoid crash
-J02FA:  POP     AF
-        CALL    SELEXP                   ; adjust secundairy slotregister
-        PUSH    AF
+        JP      Z,J01B6			; calslt to page 0 in some secondary slot 0, handle special to avoid crash
+CALESL10:
+	POP	AF
+        CALL    SELEXP			;Select secondary slot register
+        PUSH    AF			;Move primary slot # in [IYH]
         POP     IY
-        PUSH    HL
-        PUSH    BC
-        LD      C,A
+        PUSH    HL			;Save [B,C,L] which contain information
+        PUSH    BC			;for restoring slot environments
+        LD      C,A			;Move primary slot # to [BC]
         LD      B,0
-        LD      A,L
-        AND     H
+        LD      A,L			;Re-calculate what is currently output
+        AND     H			;to expansion slot register
         OR      D
-        LD      HL,SLTTBL
+        LD      HL,SLTTBL		;Calculate address into SLTTBL
         ADD     HL,BC
-        LD      (HL),A                  ; update SLTTBL
-        PUSH    HL
-        EX      AF,AF'
-        EXX
-        CALL    CALSLT                   ; do a CALSLT on only the primary slot
-        EXX
-        EX      AF,AF'
-        POP     HL
-        POP     BC
+        LD      (HL),A			;Set current value output to expansion
+					;slot register
+	PUSH    HL			;Remember this address
+        EX      AF,AF'			;Restore possible arguments passed
+        EXX				;via registers
+        CALL    CALSLT			;Call by primary slot #
+        EXX				;Save possible values returned via
+        EX      AF,AF'			;registers
+        POP     HL			;Restore address into SLTTBL
+        POP     BC			;Restore information about old slots
         POP     DE
         LD      A,I
         PUSH    AF                      ; store IFF2 flag
-        LD      A,B
-        AND     3FH
+        LD      A,B			;Get current setting
+        AND     3FH			;Cancel current setting for 0C000H..0FFFFH
         OR      C
         DI
+        OUT     (PPI.AW),A		;Enable 0C000H..0FFFFH of target bank
+        LD      A,E			;Restore old setting of slot register
+        LD      (0FFFFH),A		; restore secondary slot register
+        LD      A,B			;Finally restore old primary slot register
         OUT     (PPI.AW),A
-        LD      A,E
-        LD      (D.FFFF),A              ; restore secundairy slotregister
-        LD      A,B
-        OUT     (PPI.AW),A
-        LD      (HL),E                  ; restore SLTTBL
-        POP     AF                      ; restore IFF2 flag
-        JP      PO,J0330                ; maskable interrupts where disabled, leave disabled
+        LD      (HL),E			;And change SLTTBL also
+        POP     AF			; restore IFF2 flag
+        JP      PO,CALESL20		; maskable interrupts where disabled, leave disabled
         EI
-J0330:  EX      AF,AF'
+CALESL20:
+	EX	AF,AF'
         EXX
         RET
 
