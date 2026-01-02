@@ -422,7 +422,7 @@ S.CHGMOD:
 
 S.INITXT:
         EI
-        JP      C0A75
+        JP      INITXT
 
 S.INIT32:
         EI
@@ -438,7 +438,7 @@ S.INIMLT:
 
 S.SETTXT:
         EI
-        JP      C0BE6
+        JP      SETTXT
 
 S.SETT32:
         EI
@@ -482,7 +482,7 @@ S.RDVRM:
 
 S.CHGCLR:
         EI
-        JP      C09E4
+        JP      CHGCLR
 
 S.CLS:
         EI
@@ -1828,7 +1828,7 @@ C0714:
         CALL    C0A59		; JUMP TO (I0724+A)
         JR      J0768
 
-I0724:  DEFW    C0BE6			; SETTXT ? J065F
+I0724:  DEFW    SETTXT			; SETTXT ? J065F
         DEFW    C0C40			; SETT32
         DEFW    C0C76			; SETGRP
         DEFW    C0CC6			; SETMLT
@@ -2214,7 +2214,7 @@ J091F:  LD      (HL),B
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C0926:  CALL    C0A2D
+C0926:  CALL    CHGBDR
         LD      BC,1800H
         PUSH    BC
         LD      HL,(GRPCOL)
@@ -2229,7 +2229,7 @@ J093B:  JP      C0A08
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C093E:  CALL    C0A2D
+C093E:  CALL    CHGBDR
         LD      HL,BAKCLR
         LD      A,(HL)
         ADD     A,A
@@ -2385,18 +2385,21 @@ J09D8:  ADD     A,A
 ;       Subroutine      S.CHGCLR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C09E4:  CALL    C066D
+CHGCLR:
+;
+; CHGCLR - changes foreground, background, and border color
+;
+	CALL	C066D
         JP      NC,J0A28
         CALL    C0A35
-        DEC     A
-        JP      M,J0A1B
+        DEC     A			;Are we in text mode
+        JP      M,CHCLTX		;Yes, change color in 40*24 text mode
         PUSH    AF
-        CALL    C0A2D
+        CALL    CHGBDR			;Change border color for all
         POP     AF
-        RET     NZ
+        RET     NZ			;No
         LD      HL,BAKCLR
-        LD      A,(FORCLR)
+        LD      A,(FORCLR)		;We're in 32*24 text mode
         ADD     A,A
         ADD     A,A
         ADD     A,A
@@ -2408,6 +2411,7 @@ C09E4:  CALL    C066D
 ;       Subroutine      fill VRAM
 ;       Inputs          HL=VRAM base address, BC=size, A=fillbyte
 ;       Outputs         ________________________
+FILVRM:
 
 C0A08:  PUSH    AF
         CALL    C0974
@@ -2416,20 +2420,20 @@ C0A08:  PUSH    AF
         JR      Z,J0A11
         INC     B
 J0A11:  POP     AF
-J0A12:  OUT     (98H),A
+J0A12:  OUT     (VDP.DRW),A
         DEC     C
         JP      NZ,J0A12
         DJNZ    J0A12
         RET
-
-J0A1B:  LD      HL,BAKCLR
+CHCLTX:
+	LD	HL,BAKCLR
         LD      A,(FORCLR)
         ADD     A,A
         ADD     A,A
         ADD     A,A
         ADD     A,A
         OR      (HL)
-        JR      J0A30
+        JR      CHGBD1
 
 J0A28:  CP      8
         CALL    NZ,C0A35
@@ -2438,8 +2442,10 @@ J0A28:  CP      8
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C0A2D:  LD      A,(BDRCLR)
-J0A30:  LD      C,7
+CHGBDR:
+	LD	A,(BDRCLR)
+CHGBD1:
+	LD	C,7
         JP      C0687
 
 ;       Subroutine      update FORCLR and BAKCLR to 4 bit colorvalues
@@ -2491,7 +2497,7 @@ J0A5A:  LD      B,00H
         LD      L,C
         JP      (HL)
 
-I0A63:  DEFW    C0A75
+I0A63:  DEFW    INITXT
         DEFW    C0AAA
         DEFW    C0AD8
         DEFW    C0B28
@@ -2505,8 +2511,8 @@ I0A63:  DEFW    C0A75
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-_S.INITXT:
-C0A75:  XOR     A
+INITXT:
+	XOR	A
         LD      (OLDSCR),A
         CALL    C0BB2
         LD      A,(LINL40)
@@ -2520,8 +2526,8 @@ C0A75:  XOR     A
         JR      C,J0A98
         LD      HL,1000H
 J0A98:  LD      (CGPBAS),HL
-        CALL    C0BE6
-J0A9E:  CALL    C09E4
+        CALL    SETTXT
+J0A9E:  CALL    CHGCLR
         CALL    C08F5
         CALL    C0806
         JP      J0673
@@ -2566,7 +2572,7 @@ J0AEE:  OUT     (98H),A
         JR      NZ,J0AEE
         DJNZ    J0AEE
         CALL    C0926
-J0AF8:  CALL    C09E4
+J0AF8:  CALL    CHGCLR
         CALL    C0790
         JP      J0673
 
@@ -2666,7 +2672,7 @@ C0B8D:  LD      A,8
         LD      DE,0F0FAH
         CALL    C0BA4
         CALL    C0D6B
-J0B98:  CALL    C09E4
+J0B98:  CALL    CHGCLR
         CALL    C088D
         CALL    C0790
         JP      J0673
@@ -2711,8 +2717,8 @@ C0BB2:  LD      (SCRMOD),A
 ;       Subroutine      S.SETTXT
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C0BE6:  CALL    C0DD1
+SETTXT:
+	CALL	C0DD1
         LD      A,(LINLEN)
         CP      40+1
         LD      B,0
@@ -6300,7 +6306,7 @@ J1DBA:  EX      (SP),HL
         LD      (FORCLR),HL
         LD      A,L
         LD      (ATRBYT),A
-        CALL    C09E4
+        CALL    CHGCLR
         POP     HL
         RET
 
@@ -7172,7 +7178,7 @@ J22AE:  INC     E
 ;       Outputs         ________________________
 
 C22BC:  DEC     A
-        JP      M,C0BE6
+        JP      M,SETTXT
         JP      Z,C0C40
         DEC     A
         JP      Z,C0C76
