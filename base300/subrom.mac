@@ -490,7 +490,7 @@ S.CLS:
 
 S.CLRTXT:
         EI
-        JP      C08F5
+        JP      CLRTXT
 
 S.DSPFNK:
         EI
@@ -1206,7 +1206,7 @@ J0480:
         LD      L,A
         LD      H,A
         LD      BC,04000H
-        CALL    C0A08                   ; fill first 16 Kb VRAM with zero's
+        CALL    FILVRM                   ; fill first 16 Kb VRAM with zero's
         CALL    C0AAA                   ; S.INIPLT (initialize palette)
         JP      J1041                   ; S.INIT32 and quit
 
@@ -1901,7 +1901,7 @@ C0779:  LD      A,(RG1SAV)
         LD      HL,(PATBAS)
         LD      BC,256*8
         XOR     A
-        CALL    C0A08
+        CALL    FILVRM
 
 ;       Subroutine      initialize spriteplanes and spritecolortable
 ;       Inputs          ________________________
@@ -1939,7 +1939,7 @@ J07B8:  LD      A,E
         LD      BC,512
         SBC     HL,BC
         LD      A,(FORCLR)
-        JP      C0A08
+        JP      FILVRM
 
 ;       Subroutine      S.CALPAT
 ;       Inputs          A=patternnumber
@@ -2108,7 +2108,7 @@ C087A:  CALL    C0667
         CALL    C0661
         JP      Z,C0926
         JP      NC,C093E
-        JR      C08F5
+        JR      CLRTXT
 
 ;       Subroutine      clear screen for new style MSX2 screenmodes
 ;       Inputs          ________________________
@@ -2185,29 +2185,34 @@ J08DD:  LD      A,(SCRMOD)
 ;       Subroutine      S.CLRTXT (clear screen for textscreenmodes)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C08F5:  LD      A,(SCRMOD)
+CLRTXT:
+;
+; Clear screen (text mode)
+;
+	LD	A,(SCRMOD)
         AND     A
-        LD      HL,(NAMBAS)
+        LD      HL,(NAMBAS)		;Set address for write
         JR      NZ,J090F
         LD      A,(LINLEN)
         CP      40+1
         JR      NC,J090A
         LD      BC,40*24
-        JR      J0912
+        JR      CLRTX1
 
 J090A:  LD      BC,80*24
-        JR      J0912
+        JR      CLRTX1
 
 J090F:  LD      BC,32*24
-J0912:  LD      A," "
-        CALL    C0A08
-        CALL    C0952
-        LD      HL,LINTTB
+CLRTX1:
+	LD	A," "			;Fill space character code
+        CALL    FILVRM
+        CALL    CSHOME
+        LD      HL,LINTTB		;Say all lines are terminated
         LD      B,24
-J091F:  LD      (HL),B
+CLRTX2:
+	LD	(HL),B			;Load non 0 value
         INC     HL
-        DJNZ    J091F
+        DJNZ    CLRTX2
         JP      J2781
 
 ;       Subroutine      clear screen for screenmode 2 and 4
@@ -2219,11 +2224,11 @@ C0926:  CALL    CHGBDR
         PUSH    BC
         LD      HL,(GRPCOL)
         LD      A,(BAKCLR)
-        CALL    C0A08
+        CALL    FILVRM
         LD      HL,(GRPCGP)
         POP     BC
         XOR     A
-J093B:  JP      C0A08
+J093B:  JP      FILVRM
 
 ;       Subroutine      clear screen for screenmode 3
 ;       Inputs          ________________________
@@ -2245,7 +2250,11 @@ C093E:  CALL    CHGBDR
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-C0952:  LD      HL,00101H
+CSHOME:
+;
+; Cursor home
+;
+	LD	HL,00101H
         LD      (CSRY),HL
         RET
 
@@ -2412,8 +2421,7 @@ CHGCLR:
 ;       Inputs          HL=VRAM base address, BC=size, A=fillbyte
 ;       Outputs         ________________________
 FILVRM:
-
-C0A08:  PUSH    AF
+	PUSH	AF
         CALL    C0974
         LD      A,C
         OR      A
@@ -2528,7 +2536,7 @@ INITXT:
 J0A98:  LD      (CGPBAS),HL
         CALL    SETTXT
 J0A9E:  CALL    CHGCLR
-        CALL    C08F5
+        CALL    CLRTXT
         CALL    C0806
         JP      J0673
 
@@ -6823,7 +6831,7 @@ J208B:  CALL    C0667
         JP      M,J274A
         LD      BC,16
         EX      (SP),HL
-        CALL    C0A08
+        CALL    FILVRM
         POP     HL
         RET
 
