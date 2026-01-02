@@ -1687,20 +1687,29 @@ C066D:  LD      A,(SCRMOD)
 ;       Outputs         ________________________
 ;       Remark          Beats me why the IE0 bit is explicitly set
 
-J0673:  CALL    C10D6
+ENASCR:
+;
+; Enable screen display
+;
+	CALL	C10D6
         LD      A,(RG1SAV)
         OR      60H
-        JR      J0685
+        JR      DISSC1
 
 ;       Subroutine      disable vdp display output
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 ;       Remark          Beats me why the b7 bit is explicitly reset
 
+DISSCR:
+;
+; Disable screen display
+;
 C067D:  CALL    C10D6
         LD      A,(RG1SAV)
         AND     3FH
-J0685:  LD      C,1
+DISSC1:
+	LD	C,1
 
 ;       Subroutine      write vdp register
 ;       Inputs          C = VDP register, A = data
@@ -1711,7 +1720,7 @@ C0687:  LD      B,A
 ;       Subroutine      S.WRTVDP
 ;       Inputs          C = VDP register, B = data
 ;       Outputs         ________________________
-
+WRTVDP:
 C0688:  LD      A,I
         PUSH    AF                      ; store IFF2 flag
         PUSH    HL
@@ -1884,7 +1893,7 @@ J0768:  POP     HL
 C076D:  CALL    C0779
         PUSH    HL
         LD      HL,0
-        CALL    C0974
+        CALL    SETWRT
         POP     HL
         RET
 
@@ -2000,31 +2009,35 @@ GSPSIZ:
         LD      A,32			;32 byte long sprite
         RET
 
-;       Subroutine      initialize patterngenerator with msx characterset
+;       Subroutine      initialize pattern generator with msx character set
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C0806:  CALL    H.INIP
-        LD      HL,(CGPBAS)
-        CALL    C0974
-        LD      A,(CGPNT+0)
-        LD      HL,(CGPNT+1)
-        LD      BC,256*8
-        PUSH    AF
-J0819:  POP     AF
-        PUSH    AF
+INIPAT:
+;
+; Set default character pattern
+;
+	CALL	H.INIP
+        LD      HL,(CGPBAS)		;Get target address of VRAM
+        CALL    SETWRT			;Set VDP for write operation
+        LD      A,(CGPNT+0)		;Get slot # of character genarator table
+        LD      HL,(CGPNT+1)		;Get address of character genarator table
+        LD      BC,256*8		;Load total length
+        PUSH    AF			;Save source slot
+INIPT1:
+	POP	AF			;Restore source slot
+        PUSH    AF			;Save source slot
         PUSH    BC
         DI
-        CALL    C278D
+        CALL    C278D			;??M.RDSLT           ;Read from specified slot
         EI
-        POP     BC
-        OUT     (98H),A
-        INC     HL
+        POP     BC			;Restore counter
+        OUT     (VDP.DRW),A
+        INC     HL			;Bump character source pointer
         DEC     BC
         LD      A,C
         OR      B
-        JR      NZ,J0819
-        POP     AF
+        JR      NZ,INIPT1
+        POP     AF			;Discard stack
         RET
 
 ;       Subroutine      transfer from VRAM to RAM
@@ -2052,7 +2065,7 @@ J0839:  INIR
 ;       Remark          UNUSED CODE
 
 ?0840:  EX      DE,HL
-        CALL    C0974
+        CALL    SETWRT
         EX      DE,HL
         LD      A,C
         OR      A
@@ -2270,7 +2283,7 @@ CSHOME:
 ;       Outputs         ________________________
 
 C095C:  PUSH    AF
-        CALL    C0974
+        CALL    SETWRT
         POP     AF
         OUT     (98H),A
         RET
@@ -2300,24 +2313,24 @@ C096D:  PUSH    AF
         POP     AF
         RET
 
-;       Subroutine      setup vdp addressregister for active screenpage (write)
+;       Subroutine      setup vdp address register for active screen page (write)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C0974:  PUSH    BC
+SETWRT:
+	PUSH	BC
         PUSH    DE
         PUSH    HL
         EX      DE,HL
         CALL    C09A5
         LD      A,H
         AND     3FH
-        OR      40H
+        OR      40H			;For write, set bit 6 high
         JR      J098C
 
-;       Subroutine      setup vdp addressregister for active screenpage (read)
+;       Subroutine      setup vdp address register for active screen page (read)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
+; SETRD:??
 C0982:  PUSH    BC
         PUSH    DE
         PUSH    HL
@@ -2332,13 +2345,13 @@ J098C:  PUSH    AF
         RLCA
         RLCA
         DI
-        OUT     (99H),A
+        OUT     (VDP.CW),A
         LD      A,14+128
-        OUT     (99H),A
+        OUT     (VDP.CW),A
         LD      A,L
-        OUT     (99H),A
+        OUT     (VDP.CW),A
         POP     AF
-        OUT     (99H),A
+        OUT     (VDP.CW),A
         EI
         POP     HL
         POP     DE
@@ -2422,7 +2435,7 @@ CHGCLR:
 ;       Outputs         ________________________
 FILVRM:
 	PUSH	AF
-        CALL    C0974
+        CALL    SETWRT
         LD      A,C
         OR      A
         JR      Z,J0A11
@@ -2535,10 +2548,10 @@ INITXT:
         LD      HL,1000H
 J0A98:  LD      (CGPBAS),HL
         CALL    SETTXT
-J0A9E:  CALL    CHGCLR
+J0A9E:  CALL    CHGCLR			;Set border/foreground/background color
         CALL    CLRTXT
-        CALL    C0806
-        JP      J0673
+        CALL    INIPAT			;Initialize character pattern
+        JP      ENASCR
 
 ;       Subroutine      S.INIT32 (screenmode 1)
 ;       Inputs          ________________________
@@ -2572,7 +2585,7 @@ C0AD8:  LD      A,2
         PUSH    HL
         CALL    C0C76
 J0AE7:  POP     HL
-        CALL    C0974
+        CALL    SETWRT
         XOR     A
         LD      B,3
 J0AEE:  OUT     (98H),A
@@ -2582,7 +2595,7 @@ J0AEE:  OUT     (98H),A
         CALL    C0926
 J0AF8:  CALL    CHGCLR
         CALL    C0790
-        JP      J0673
+        JP      ENASCR
 
 ;       Subroutine      screenmode 4
 ;       Inputs          ________________________
@@ -2626,7 +2639,7 @@ C0B28:  LD      A,3
         PUSH    HL
         CALL    C0CC6
         POP     HL
-        CALL    C0974
+        CALL    SETWRT
         LD      DE,0*256+6
 J0B50:  LD      C,4
 J0B52:  LD      A,D
@@ -2683,7 +2696,7 @@ C0B8D:  LD      A,8
 J0B98:  CALL    CHGCLR
         CALL    C088D
         CALL    C0790
-        JP      J0673
+        JP      ENASCR
 
 ;       Subroutine      setup PATBAS,ATRBAS and NAMBAS, disable display, scroll and MSX2+ colormodes
 ;       Inputs          E = highbyte ATRBAS, D = highbyte PATBAS
@@ -3423,7 +3436,7 @@ C0FAC:  PUSH    HL
 
 J0FB8:  PUSH    HL
         CALL    C0FD7
-        CALL    C0974
+        CALL    SETWRT
         LD      A,C
         OUT     (98H),A
         POP     HL
@@ -3444,7 +3457,7 @@ C0FC4:  CALL    C0982
 ;       Outputs         ________________________
 
 C0FCD:  EX      DE,HL
-        CALL    C0974
+        CALL    SETWRT
         EX      DE,HL
         LD      C,98H
         OTIR
@@ -3591,7 +3604,7 @@ C1075:  PUSH    BC
         OUT     (C),E
         PUSH    AF
         CALL    C109B
-        CALL    C0974
+        CALL    SETWRT
         EX      (SP),HL
         EX      (SP),HL
         POP     AF
