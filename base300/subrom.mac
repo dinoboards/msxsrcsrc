@@ -291,7 +291,7 @@ S.INIGRP:
 
 S.INIMLT:
         EI
-        JP      C0B28
+        JP      INIMLT
 
 S.SETTXT:
         EI
@@ -331,7 +331,7 @@ S.GETPAT:
 
 S.WRTVRM:
         EI
-        JP      C095C
+        JP      WRTVRM
 
 S.RDVRM:
         EI
@@ -1772,31 +1772,32 @@ C0779:  LD      A,(RG1SAV)
 ;       Subroutine      initialize spriteplanes and spritecolortable
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C0790:  LD      A,(FORCLR)
+ERASPR:
+C0790:  LD      A,(FORCLR)		;Load foreground color (default) to [E]
         LD      E,A
         LD      HL,(ATRBAS)
-        LD      BC,32*256+0             ; 32 spriteplanes, begin with pattern 0
+        LD      BC,32*256+0             ;Set number of sprite plane to [B]  32 sprite planes, begin with pattern 0
 J079A:  CALL    C0667
         LD      A,208+1
         JR      C,J07A3
         LD      A,216+1
-J07A3:  CALL    C095C
+J07A3:  CALL    WRTVRM
         INC     HL
         INC     HL
         LD      A,C
-        CALL    C095C
+        CALL    WRTVRM
         INC     HL
         INC     C
         LD      A,(RG1SAV)
         RRCA
         RRCA
-        JR      NC,J07B8
+        JR      NC,CLSPR3
         INC     C
         INC     C
         INC     C
-J07B8:  LD      A,E
-        CALL    C095C
+CLSPR3:
+	LD      A,E
+        CALL    WRTVRM
         INC     HL
         DJNZ    J079A
         CALL    C0667
@@ -1977,7 +1978,7 @@ C087A:  CALL    C0667
         JR      NC,C088D
         CALL    C0661
         JP      Z,C0926
-        JP      NC,C093E
+        JP      NC,CLSMLT
         JR      CLRTXT
 
 ;       Subroutine      clear screen for new style MSX2 screenmodes
@@ -2103,18 +2104,18 @@ J093B:  JP      FILVRM
 ;       Subroutine      clear screen for screenmode 3
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C093E:  CALL    CHGBDR
-        LD      HL,BAKCLR
+CLSMLT:
+C093E:  CALL    CHGBDR			;Set border color
+        LD      HL,BAKCLR		;Set all pixels to background color
         LD      A,(HL)
         ADD     A,A
         ADD     A,A
         ADD     A,A
         ADD     A,A
         OR      (HL)
-        LD      HL,(MLTCGP)
+        LD      HL,(MLTCGP)		;Set up address for write
         LD      BC,00600H
-        JR      J093B
+        JR      J093B			;Clear sprites (except sprite pattern)
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
@@ -2138,11 +2139,14 @@ CSHOME:
 ;       Subroutine      S.WRTVRM
 ;       Inputs          HL=VRAM base address
 ;       Outputs         ________________________
-
-C095C:  PUSH    AF
+WRTVRM:
+;
+; Write a byte to VRAM
+;
+	PUSH	AF			;Save data to be written
         CALL    SETWRT
         POP     AF
-        OUT     (98H),A
+        OUT     (VDP.DRW),A
         RET
 
 ;       Subroutine      MSX1 compatible RDVRM
@@ -2378,7 +2382,7 @@ J0A5A:  LD      B,00H
 I0A63:  DEFW    INITXT
         DEFW    INIT32
         DEFW    C0AD8
-        DEFW    C0B28
+        DEFW    INIMLT
         DEFW    C0B01
         DEFW    C0B66
         DEFW    C0B73
@@ -2485,8 +2489,8 @@ C0B12:  LD      (ATRBAS),HL
 ;       Subroutine      S.INIMLT (screenmode 3)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C0B28:  LD      A,3
+INIMLT:
+	LD	A,3
         CALL    C0BB2
         LD      HL,(MLTPAT)
         LD      (PATBAS),HL
@@ -2501,18 +2505,21 @@ C0B28:  LD      A,3
         POP     HL
         CALL    SETWRT
         LD      DE,0*256+6
-J0B50:  LD      C,4
-J0B52:  LD      A,D
-        LD      B,32
-J0B55:  OUT     (98H),A
+INIML1:
+	LD	C,4
+INIML2:
+	LD	A,D
+        LD      B,' '
+INIML3:
+	OUT	(VDP.DRW),A
         INC     A
-        DJNZ    J0B55
+        DJNZ    INIML3
         DEC     C
-        JR      NZ,J0B52
+        JR      NZ,INIML2
         LD      D,A
         DEC     E
-        JR      NZ,J0B50
-        CALL    C093E
+        JR      NZ,INIML1
+        CALL    CLSMLT			;Clear pattern table
         JR      J0AF8
 
 ;       Subroutine      screenmode 5
@@ -4187,7 +4194,7 @@ J1484:  LD      B,A
         ADD     A,A
         ADD     A,A
 J1499:  OR      C
-        CALL    C095C
+        CALL    WRTVRM
         POP     HL
         POP     DE
         POP     BC
@@ -7165,7 +7172,7 @@ J235E:  CALL    C2818
         DEFB    ","
         RST     S.GETBYT
         EX      (SP),HL
-        CALL    C095C
+        CALL    WRTVRM
         LD      HL,0
         CALL    C0967
         POP     HL
