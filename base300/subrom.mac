@@ -341,9 +341,9 @@ S.CHGCLR:
         EI
         JP      CHGCLR
 
-S.CLS:
+S.CLSSUB:
         EI
-        JP      C087A
+        JP      CLSSUB
 
 S.CLRTXT:
         EI
@@ -1512,22 +1512,30 @@ J0658:  LD      A,2
 ;       Subroutine      change functionkey displaystatus and check if in textmode
 ;       Inputs          ________________________
 ;       Outputs         Cx set when in textmode
+SUBTTL - MSXIO - Low level routines
 
+SETCHK:
+;
+; Set CNSDFG and check current screen mode
+;
 C065E:  LD      (CNSDFG),A
 
 ;       Subroutine      check if in screenmode 2
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C0661:  LD      A,(SCRMOD)
+CHKSCR:
+;
+; Check current screen mode
+;
+	LD	A,(SCRMOD)
         CP      2
         RET
 
-;       Subroutine      check if in screenmode 4
+;       Subroutine      check if in screenmode 4 (msx2)
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C0667:  LD      A,(SCRMOD)
+CHKSCR4:
+	LD	A,(SCRMOD)
         CP      4
         RET
 
@@ -1769,7 +1777,7 @@ C0779:  LD      A,(RG1SAV)
         XOR     A
         CALL    FILVRM
 
-;       Subroutine      initialize spriteplanes and spritecolortable
+;       Subroutine      initialize sprite planes and sprite color table
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 ERASPR:
@@ -1777,31 +1785,32 @@ C0790:  LD      A,(FORCLR)		;Load foreground color (default) to [E]
         LD      E,A
         LD      HL,(ATRBAS)
         LD      BC,32*256+0             ;Set number of sprite plane to [B]  32 sprite planes, begin with pattern 0
-J079A:  CALL    C0667
-        LD      A,208+1
+CLSPR2:
+	CALL	CHKSCR4			; check if MSX2 Screen modes
+        LD      A,208+1			; MSX1 modes
         JR      C,J07A3
-        LD      A,216+1
+        LD      A,216+1			; MSX2 modes
 J07A3:  CALL    WRTVRM
         INC     HL
         INC     HL
-        LD      A,C
+        LD      A,C			;Load default sprite name
         CALL    WRTVRM
         INC     HL
-        INC     C
+        INC     C			;Prepare for next
         LD      A,(RG1SAV)
         RRCA
-        RRCA
-        JR      NC,CLSPR3
-        INC     C
+        RRCA				;16*16?
+        JR      NC,CLSPR3		;No
+        INC     C			;Yes, C=C+4
         INC     C
         INC     C
 CLSPR3:
-	LD      A,E
+	LD      A,E			;Load default color
         CALL    WRTVRM
         INC     HL
-        DJNZ    J079A
-        CALL    C0667
-        RET     C
+        DJNZ    CLSPR2
+        CALL    CHKSCR4			;check if MSX2 screen modes
+        RET     C			;return if MSX1 modes
         LD      HL,(ATRBAS)
         LD      BC,512
         SBC     HL,BC
@@ -1969,17 +1978,17 @@ J0868:  PUSH    AF
         DJNZ    J0868
         RET
 
-;       Subroutine      S.CLS
+;       Subroutine      S.CLSSUB
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C087A:  CALL    C0667
-        JP      Z,C0926
-        JR      NC,C088D
-        CALL    C0661
-        JP      Z,C0926
-        JP      NC,CLSMLT
-        JR      CLRTXT
+CLSSUB:
+	CALL	CHKSCR4			;check if MSX2 screen modes
+        JP      Z,CLSHRS		;jp if screen mode 4?
+        JR      NC,C088D		;jp if screen mode 5 or up
+        CALL    CHKSCR			;Check current screen mode
+        JP      Z,CLSHRS		;Hires
+        JP      NC,CLSMLT		;Multi-color
+        JR      CLRTXT			;text modes
 
 ;       Subroutine      clear screen for new style MSX2 screenmodes
 ;       Inputs          ________________________
@@ -2089,23 +2098,25 @@ CLRTX2:
 ;       Subroutine      clear screen for screenmode 2 and 4
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-C0926:  CALL    CHGBDR
-        LD      BC,1800H
-        PUSH    BC
+CLSHRS:
+;
+	CALL	CHGBDR			;Set border color
+        LD      BC,1800H		;Initialize color
+        PUSH    BC			;Save this for future use
         LD      HL,(GRPCOL)
-        LD      A,(BAKCLR)
+        LD      A,(BAKCLR)		;Load background color
         CALL    FILVRM
         LD      HL,(GRPCGP)
-        POP     BC
+        POP     BC			;Load 6144
         XOR     A
-J093B:  JP      FILVRM
+JFLVRM:
+	JP	FILVRM
 
 ;       Subroutine      clear screen for screenmode 3
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 CLSMLT:
-C093E:  CALL    CHGBDR			;Set border color
+	CALL    CHGBDR			;Set border color
         LD      HL,BAKCLR		;Set all pixels to background color
         LD      A,(HL)
         ADD     A,A
@@ -2115,7 +2126,7 @@ C093E:  CALL    CHGBDR			;Set border color
         OR      (HL)
         LD      HL,(MLTCGP)		;Set up address for write
         LD      BC,00600H
-        JR      J093B			;Clear sprites (except sprite pattern)
+        JR      JFLVRM			;Clear sprites (except sprite pattern)
 
 ;       Subroutine      __________________________
 ;       Inputs          ________________________
@@ -2348,11 +2359,13 @@ C0A35:  PUSH    AF
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 ;       Remark          UNUSED CODE
-
-?0A48:  RET     NZ
-        PUSH    HL
-        CALL    C087A
-        POP     HL
+;
+; CLS - clears screen
+;
+?0A48:  RET     NZ			;Statement not ending
+        PUSH    HL			;Save text pointer
+        CALL    CLSSUB
+        POP     HL			;Restore text pointer
         RET
 
 ;       Subroutine      S.CHGMDP (setup screenmode with paletteinit)
@@ -2456,7 +2469,7 @@ J0AEE:  OUT     (98H),A
         INC     A
         JR      NZ,J0AEE
         DJNZ    J0AEE
-        CALL    C0926
+        CALL    CLSHRS
 J0AF8:  CALL    CHGCLR
         CALL    C0790
         JP      ENASCR
@@ -6702,7 +6715,7 @@ C207E:  SUB     14
 ;       Inputs          ________________________
 ;       Outputs         ________________________
 
-J208B:  CALL    C0667
+J208B:  CALL    CHKSCR4			;check if MSX2 screen modes
         JP      C,J274A
         RST     S.CHRGTR
         CP      "$"
@@ -8107,7 +8120,7 @@ C284C:  LD      A,(FORCLR)
 C284F:  PUSH    BC
         PUSH    DE
         LD      E,A
-        CALL    C0661
+        CALL    CHKSCR
         JP      C,J274A
         DEC     HL
         RST     S.CHRGTR
