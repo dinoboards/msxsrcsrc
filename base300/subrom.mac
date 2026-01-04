@@ -494,7 +494,7 @@ S.CLRTXT:
 
 S.DSPFNK:
         EI
-        JP      J0DF4
+        JP      DSPFNK
 
 S.DELLNO:
         EI
@@ -3096,27 +3096,32 @@ C0DE1:  LD      A,(RG0SAV)
 ;       Subroutine      S.DSPFNK
 ;       Inputs          ________________________
 ;       Outputs         ________________________
-
-J0DF4:  LD      A,0FFH
+DSPFNK:
+;
+; Display function key
+;
+	LD	A,0FFH			;Say function key is displayed
         CALL    C065E
-        RET     NC
-        PUSH    HL
+        RET     NC			;We're not in text mode, just set flag
+        PUSH    HL			;Save possible text pointer
         LD      A,(CSRY)
         LD      HL,CRTCNT
         CP      (HL)
-        LD      A,10
-        JR      NZ,J0E07
+        LD      A,10			;Scroll up if we're at the bottom of screen
+        JR      NZ,NTBOTM
         RST     S.OUTDO
-J0E07:  LD      A,(NEWKEY+6)
+NTBOTM:
+	LD	A,(NEWKEY+6)		;SFTKEY Get current shift status
         RRCA
-        LD      HL,FNKSTR+0*16
+        LD      HL,FNKSTR+0*16		;Assume shift not pressed
         LD      A,1
-        JR      C,J0E16
-        LD      HL,FNKSTR+5*16
+        JR      C,DSPFK1		;Good assumption
+        LD      HL,FNKSTR+5*16		;Shift is being pressed
         XOR     A
-J0E16:  LD      (FNKSWI),A
+DSPFK1:
+	LD	(FNKSWI),A		;Mark which part of function key is displayed
         CALL    C0E84
-        LD      C,5
+        LD      C,5			;Total number of keys
         LD      A,(LINLEN)
         CP      40+1
         JR      NC,J0E44
