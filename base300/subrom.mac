@@ -563,13 +563,13 @@ J01C1:  LD      A,B
         EXX
         RET
 
-S.REDCLK:
+	ds	REDCLK - $,0C9H
         EI
-        JP      J1C96
+        JP      I.REDCLK
 
-S.WRTCLK:
+	ds	WRTCLK - $,0C9H
         EI
-        JP      J1C9E
+        JP      I.WRTCLK
 
 
 ;       Subroutine      S.RDSLT
@@ -1135,14 +1135,14 @@ J049C:	LD	B,13			; clockchip MODE register
         LD	B,13
 J04A6:	LD	A,13
         SUB	B
-        OUT	(0B4H),A		; select clockchip register
+        OUT	(RTC.ADDR),A		; select clockchip register
         LD	A,(HL)
         INC	HL
         CP	0FFH
         JR	NZ,J04B3
         DEC	HL
         XOR	A
-J04B3:	OUT	(0B5H),A		; write clockchip register
+J04B3:	OUT	(RTC.DATA),A		; write clockchip register
         DJNZ	J04A6
         DEC	C
         JR	NZ,J049C		; next bank
@@ -4838,8 +4838,8 @@ J1802:  LD      A,(DE)
         JR      Z,J180B
         DEC     A
         IFDEF	RTCENA
-        OUT     (0B4H),A
-        IN      A,(0B5H)
+        OUT     (RTC.ADDR),A
+        IN      A,(RTC.DATA)
         ELSE
         LD	A,0
         ENDIF
@@ -5336,11 +5336,11 @@ C1A3C:	LD	A,13			; MODE register
 
 C1A3E:
         IFDEF	RTCENA
-        OUT	(0B4H),A
-        IN      A,(0B5H)
+        OUT	(RTC.ADDR),A
+        IN      A,(RTC.DATA)
         AND     C
         OR      B
-        OUT     (0B5H),A
+        OUT     (RTC.DATA),A
         RET
         ELSE
         RET
@@ -5603,10 +5603,10 @@ C1B41:  PUSH    AF
 
 C1B4A:  PUSH    AF
         LD      A,B
-        OUT     (0B4H),A
+        OUT     (RTC.ADDR),A
         INC     B
         POP     AF
-        OUT     (0B5H),A
+        OUT     (RTC.DATA),A
         RET
 
 ;       Subroutine      S.BEEP
@@ -5851,9 +5851,9 @@ C1C5E:  LD      B,0
 ;       Outputs         A = nibble, B = pos nr (updated)
 
 C1C60:  LD      A,B
-        OUT     (0B4H),A
+        OUT     (RTC.ADDR),A
         INC     B
-        IN      A,(0B5H)
+        IN      A,(RTC.DATA)
         AND     0FH
         RET
 
@@ -5911,31 +5911,37 @@ C1C87:	PUSH	BC
         AND	0CH			; keep running and alarm
         POP	BC
         OR	B
-        OUT	(0B5H),A		; write MODE register
+        OUT	(RTC.DATA),A		; write MODE register
         POP	BC
         RET
 
 
         IFDEF	RTCENA
 
-;       Subroutine      S.REDCLK
-;       Inputs          C = pos nr (b3-b0), bank nr (b5-b4)
-;       Outputs         ________________________
-
-J1C96:  CALL    C1CA8
-        IN      A,(0B5H)
+;       Subroutine      REDCLK
+; Function:  Read clock-RAM
+; Input:     C  - clock-RAM address
+;                 xxBBAAAA
+;                   ||++++-- address
+;                   ++------ Block-number
+; Output:    A  - Read value in lowest four bits
+; Registers: F
+I.REDCLK:
+	CALL	C1CA8
+        IN      A,(RTC.DATA)
         AND     0FH
         RET
 
-;       Subroutine      S.WRTCLK
+;       Subroutine      WRTCLK
 ;       Inputs          C = pos nr (b3-b0), bank nr (b5-b4)
 ;       Outputs         ________________________
 
-J1C9E:  PUSH    AF
+I.WRTCLK:
+	PUSH	AF
         CALL    C1CA8
         POP     AF
         AND     0FH
-        OUT     (0B5H),A
+        OUT     (RTC.DATA),A
         RET
 
 ;       Subroutine      select bank and pos clockchip
@@ -5952,7 +5958,7 @@ C1CA8:  LD      A,C
         CALL    C1C87
         POP     AF
         AND     0FH
-        OUT     (0B4H),A
+        OUT     (RTC.ADDR),A
         RET
         ELSE
 
@@ -5960,7 +5966,8 @@ C1CA8:  LD      A,C
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J1C96:	PUSH	HL
+I.REDCLK:
+	PUSH	HL
         LD	A,C
         AND	03FH
         ADD	A,LOW RTCTAB
@@ -6024,7 +6031,8 @@ RTCTAB:	DEFB	00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,00H,08H,00H,00H
 ;	     Inputs  ________________________
 ;	     Outputs ________________________
 
-J1C9E:	AND	0FH
+I.WRTCLK:
+	AND	0FH
         RET
 
         ENDIF
